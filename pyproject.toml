@@ -1,0 +1,35 @@
+[project]
+name = "generic_poker"
+version = "0.1.0"
+description = "A generic poker game engine supporting multiple variants"
+authors = []
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "src"
+]
+testpaths = [
+    "tests",
+    "src/generic_poker/tests"
+]
+addopts = "-v --cov=generic_poker"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/generic_poker"]
+
+[tool.setuptools]
+packages = ["generic_poker"]
+package-dir = {"" = "src"}
