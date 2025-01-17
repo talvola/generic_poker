@@ -11,6 +11,32 @@ SUIT_ORDER = {
     Suit.JOKER: 4  # Keep joker at end
 }
 
+# Standard rank ordering (A high)
+BASE_RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2']
+
+# A-5 Low rank ordering (A is low, high cards left)
+LOW_A5_RANKS = ['K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2', 'A']
+
+# 2-7 Low rank ordering (2 is low)
+LOW_27_RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2']
+
+# Map evaluation types to rank orderings
+RANK_ORDERS = {
+    # High hand games use base ordering
+    'high': BASE_RANKS,
+    'high_wild': BASE_RANKS,
+    '36card_ffh_high': BASE_RANKS,
+    '20card_high': BASE_RANKS,
+    
+    # Lowball games
+    'a5_low': LOW_A5_RANKS,
+    'a5_low_high': LOW_A5_RANKS,
+    '27_low': LOW_27_RANKS,
+    
+    # Keep existing hand size mappings...
+    # [rest of constants.py content remains the same]
+}
+
 # Mapping of evaluation types to required hand sizes
 HAND_SIZES = {
     'high': 5,

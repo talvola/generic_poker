@@ -1,7 +1,7 @@
 """Main poker hand evaluation interface."""
 from enum import Enum
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Type, Any
+from typing import List, Dict, Optional, Type, Any, cast
 from pathlib import Path
 
 from generic_poker.core.card import Card
@@ -48,6 +48,14 @@ class HandResult:
     cards_used: Optional[List[Card]] = None
     sources: Optional[List[str]] = None
 
+    @classmethod
+    def from_ranking(cls, ranking: HandRanking) -> 'HandResult':
+        """Convert HandRanking to HandResult."""
+        return cls(
+            rank=ranking.rank,
+            ordered_rank=ranking.ordered_rank,
+            description=ranking.description
+        )
 
 class HandEvaluator:
     """
@@ -78,89 +86,92 @@ class HandEvaluator:
         if eval_type not in self._evaluators:
             evaluator_class = self._get_evaluator_class(eval_type)
             self._evaluators[eval_type] = evaluator_class(
-                self._rankings_dir / f'all_card_hands_ranked_{eval_type}.csv'
+                self._rankings_dir / f'all_card_hands_ranked_{eval_type}.csv',
+                eval_type
             )
         return self._evaluators[eval_type]
         
     def evaluate_hand(
-        self,
-        cards: List[Card],
-        eval_type: EvaluationType,
-        wild_cards: Optional[List[Card]] = None,
-        qualifier: Optional[List[int]] = None
-    ) -> HandResult:
-        """
-        Evaluate a poker hand.
-        
-        Args:
-            cards: Cards to evaluate
-            eval_type: Type of evaluation to use
-            wild_cards: Any wild cards in effect
-            qualifier: Minimum hand requirement [rank, ordered_rank]
+            self,
+            cards: List[Card],
+            eval_type: EvaluationType,
+            wild_cards: Optional[List[Card]] = None,
+            qualifier: Optional[List[int]] = None
+        ) -> HandResult:
+            """
+            Evaluate a poker hand.
             
-        Returns:
-            Evaluation result
+            Args:
+                cards: Cards to evaluate
+                eval_type: Type of evaluation to use
+                wild_cards: Any wild cards in effect
+                qualifier: Minimum hand requirement [rank, ordered_rank]
+                
+            Returns:
+                HandResult with evaluation details
+            """
+            evaluator = self.get_evaluator(eval_type)
+            ranking = evaluator.evaluate(cards, wild_cards)
             
-        Raises:
-            ValueError: If hand cannot be evaluated
-        """
-        evaluator = self.get_evaluator(eval_type)
-        result = evaluator.evaluate(cards, wild_cards)
-        
-        if qualifier and not self._meets_qualifier(result, qualifier):
-            return None
+            # Convert HandRanking to HandResult
+            result = HandResult.from_ranking(ranking) if ranking else HandResult(rank=0)
             
-        return result
+            # Check qualifier using HandResult
+            if qualifier and not self._meets_qualifier(result, qualifier):
+                return HandResult(rank=0)  # Return an invalid hand result
+
+            return result
         
     def compare_hands(
-        self,
-        hand1: List[Card],
-        hand2: List[Card],
-        eval_type: EvaluationType,
-        qualifier: Optional[List[int]] = None
-    ) -> int:
-        """
-        Compare two poker hands.
-        
-        Args:
-            hand1: First hand to compare
-            hand2: Second hand to compare
-            eval_type: Type of evaluation to use
-            qualifier: Minimum hand requirement
+            self,
+            hand1: List[Card],
+            hand2: List[Card],
+            eval_type: EvaluationType,
+            qualifier: Optional[List[int]] = None
+        ) -> int:
+            """
+            Compare two poker hands.
             
-        Returns:
-            1 if hand1 wins, -1 if hand2 wins, 0 if tie
-        """
-        result1 = self.evaluate_hand(hand1, eval_type, qualifier=qualifier)
-        result2 = self.evaluate_hand(hand2, eval_type, qualifier=qualifier)
-        
-        if not result1 and not result2:
-            return 0  # Neither hand qualifies
-        if not result1:
-            return -1  # Only hand2 qualifies
-        if not result2:
-            return 1  # Only hand1 qualifies
-            
-        # Compare ranks (some games reverse order - lower is better)
-        multiplier = -1 if eval_type.startswith('low') else 1
-        
-        if result1.rank != result2.rank:
-            return multiplier * (1 if result1.rank < result2.rank else -1)
-            
-        # If primary ranks equal, compare secondary ordering
-        if result1.ordered_rank is not None and result2.ordered_rank is not None:
-            if result1.ordered_rank != result2.ordered_rank:
-                return multiplier * (
-                    1 if result1.ordered_rank < result2.ordered_rank else -1
-                )
+            Args:
+                hand1: First hand to compare
+                hand2: Second hand to compare
+                eval_type: Type of evaluation to use
+                qualifier: Minimum hand requirement
                 
-        return 0  # Completely tied
+            Returns:
+                1 if hand1 wins, -1 if hand2 wins, 0 if tie
+                
+            Note:
+                Rankings are always ordered with best hands first (rank=1),
+                regardless of whether it's a high or low game. This ordering
+                is encoded in the ranking files themselves.
+            """
+            result1 = self.evaluate_hand(hand1, eval_type, qualifier=qualifier)
+            result2 = self.evaluate_hand(hand2, eval_type, qualifier=qualifier)
+            
+            if not result1 and not result2:
+                return 0  # Neither hand qualifies
+            if not result1:
+                return -1  # Only hand2 qualifies
+            if not result2:
+                return 1  # Only hand1 qualifies
+            
+            # Lower rank = better hand (for both high and low games)
+            if result1.rank != result2.rank:
+                return 1 if result1.rank < result2.rank else -1
+                
+            # If primary ranks equal, compare secondary ordering
+            if result1.ordered_rank is not None and result2.ordered_rank is not None:
+                if result1.ordered_rank != result2.ordered_rank:
+                    return 1 if result1.ordered_rank < result2.ordered_rank else -1
+                    
+            return 0  # Completely tied
         
     def _meets_qualifier(self, result: Optional[HandResult], qualifier: List[int]) -> bool:
         """Check if hand meets qualifier requirements."""
         if not result:
             return False
-            
+
         rank, ordered_rank = qualifier
         if result.rank > rank:
             return False
@@ -171,10 +182,18 @@ class HandEvaluator:
         
     def _get_evaluator_class(self, eval_type: EvaluationType) -> Type[BaseEvaluator]:
         """Get appropriate evaluator class for eval type."""
-        # For now, we only have high hand evaluation
         from generic_poker.evaluation.eval_types.high import HighHandEvaluator
-        return HighHandEvaluator  # TODO: Add other evaluator types
+        from generic_poker.evaluation.eval_types.low import A5LowEvaluator
         
+        evaluator_map = {
+            EvaluationType.HIGH: HighHandEvaluator,
+            EvaluationType.LOW_A5: A5LowEvaluator
+        }
+        
+        if eval_type not in evaluator_map:
+            raise ValueError(f"No evaluator available for type: {eval_type}")
+        
+        return evaluator_map[eval_type]
         
 # Global instance
 evaluator = HandEvaluator()

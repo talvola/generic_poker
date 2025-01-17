@@ -9,13 +9,10 @@ from generic_poker.core.hand import PlayerHand
 
 
 class Position(Enum):
-    """Player positions at the table."""
+    """Core player positions that affect game mechanics."""
+    BUTTON = "BTN"
     SMALL_BLIND = "SB"
     BIG_BLIND = "BB"
-    UNDER_THE_GUN = "UTG"
-    MIDDLE_POSITION = "MP"
-    CUTOFF = "CO"
-    BUTTON = "BTN"
 
 
 @dataclass
@@ -43,7 +40,20 @@ class Player:
         if self.hand is None:
             self.hand = PlayerHand()
 
+@dataclass
+class PlayerPosition:
+    """Represents a player's position(s) at the table."""
+    positions: List[Position]  # A player can have multiple positions in heads-up
 
+    @property
+    def value(self) -> str:
+        """Return primary position value."""
+        return self.positions[0].value if self.positions else 'NA'
+
+    def has_position(self, position: Position) -> bool:
+        """Check if player has a specific position."""
+        return position in self.positions
+    
 class Table:
     """
     Manages the state of a poker table.
@@ -108,8 +118,13 @@ class Table:
             del self.players[player_id]
             
     def move_button(self) -> None:
-        """Move the dealer button to the next position."""
-        active_players = [p for p in self.players.values() if p.is_active]
+        """
+        Move the dealer button to the next position.
+        
+        The button moves clockwise (left) around the table,
+        so each player gets a chance to be on the button.
+        """
+        active_players = list(self.players.values())
         if not active_players:
             return
             
@@ -119,35 +134,48 @@ class Table:
         """
         Get players in position order for betting.
         
-        Returns list in BTN->SB->BB order, which means:
-        - For blind posting: players are in order
-        - For betting: start with player after BB (BTN)
+        In 3+ player games:
+            - BTN, SB, BB are distinct positions
+        In heads-up (2 player) games:
+            - First player is both BTN and SB
+            - Second player is BB
+        Single player or empty table:
+            - Returns list with no positions assigned
         """
         active_players = list(self.players.values())
-        if not active_players:
+        num_players = len(active_players)
+        
+        if num_players == 0:
             return []
+            
+        # Single player - no positions assigned
+        if num_players == 1:
+            active_players[0].position = None
+            return active_players
+            
+        # Rotate list so button_pos is first
+        rotated_players = (
+            active_players[self.button_pos:] + 
+            active_players[:self.button_pos]
+        )
+            
+        # For heads-up play
+        if num_players == 2:
+            rotated_players[0].position = PlayerPosition([Position.BUTTON, Position.SMALL_BLIND])
+            rotated_players[1].position = PlayerPosition([Position.BIG_BLIND])
+            return rotated_players
         
-        # Organize positions
-        if len(active_players) <= 3:
-            # Heads up or 3-handed
-            active_players[0].position = Position.BUTTON
-            active_players[1].position = Position.SMALL_BLIND
-            if len(active_players) > 2:
-                active_players[2].position = Position.BIG_BLIND
+        # For 3+ players
         else:
-            # Full ring
-            positions = [
-                Position.BUTTON,
-                Position.SMALL_BLIND,
-                Position.BIG_BLIND,
-                Position.UNDER_THE_GUN,
-                Position.MIDDLE_POSITION,
-                Position.CUTOFF,
-            ]
-            for i, player in enumerate(active_players):
-                player.position = positions[min(i, len(positions) - 1)]
-        
-        return active_players
+            rotated_players[0].position = PlayerPosition([Position.BUTTON])
+            rotated_players[1].position = PlayerPosition([Position.SMALL_BLIND])
+            rotated_players[2].position = PlayerPosition([Position.BIG_BLIND])
+            
+            # Clear any existing positions for other players
+            for player in rotated_players[3:]:
+                player.position = None
+                    
+            return rotated_players
         
     def get_player_to_act(self, round_start: bool = False) -> Optional[Player]:
         """
@@ -159,14 +187,22 @@ class Table:
         Returns:
             Next player to act or None if no one can act
         """
-        active_players = [p for p in self.players.values() if p.is_active]
-        if not active_players:
+        positions = self.get_position_order()
+        if not positions:
             return None
             
+        # Heads-up play has special betting order
+        if len(positions) == 2:
+            if round_start:
+                # Preflop: Button/SB acts first
+                return positions[0]
+            else:
+                # Postflop: BB acts first
+                return positions[1]
+                
+        # 3+ players: UTG or next position after BB acts first
         if round_start:
-            # UTG or next position after BB acts first
-            positions = self.get_position_order()
-            return positions[2] if len(positions) > 2 else positions[0]
+            return positions[3] if len(positions) > 3 else positions[0]
         else:
             # TODO: Implement getting next player in order
             # Need to track last actor

@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 
 from generic_poker.config.loader import BettingStructure
+from generic_poker.game.pot import Pot
 
 import logging 
 
@@ -36,45 +37,6 @@ class PlayerBet:
         self.posted_blind: bool = False  # True if this bet was a blind
         self.is_all_in: bool = False
 
-class Pot:
-    """
-    Tracks chips in the pot.
-
-    For all-in situations, maintains side pots.
-    """
-
-    def __init__(self):
-        """Initialize empty pot."""
-        self.main_pot: int = 0
-        self.side_pots: List[Dict[str, int]] = []  # player_id -> amount eligible
-        
-    def add_bet(self, player_id: str, amount: int, is_all_in: bool = False) -> None:
-        """
-        Add a bet to the pot.
-        
-        Args:
-            player_id: ID of betting player
-            amount: Amount being bet
-            is_all_in: Whether player is all in
-        """
-        self.main_pot += amount
-        
-        if is_all_in:
-            # Create new side pot
-            self.side_pots.append({player_id: self.main_pot})
-            
-    def get_player_eligible_amount(self, player_id: str) -> int:
-        """Get amount player is eligible to win."""
-        # Player is eligible for main pot plus any side pots they're in
-        eligible = self.main_pot
-        
-        for side_pot in self.side_pots:
-            if player_id not in side_pot:
-                eligible -= max(side_pot.values())
-                
-        return max(0, eligible)
-
-
 class BettingManager(ABC):
     """
     Abstract base class for betting managers.
@@ -88,6 +50,7 @@ class BettingManager(ABC):
         self.pot = Pot()
         self.current_bets: Dict[str, PlayerBet] = {}  # player_id -> bet info
         self.current_bet: int = 0  # Highest bet in current round
+        self.betting_round: int = 0  # Track which betting round we're in
         
     @abstractmethod
     def get_min_bet(self, player_id: str, bet_type: BetType) -> int:
@@ -105,47 +68,48 @@ class BettingManager(ABC):
         pass
         
     def place_bet(self, player_id: str, amount: int, stack: int, is_forced: bool = False) -> None:
-            """
-            Place a bet for a player.
-            
-            Args:
-                player_id: ID of betting player
-                amount: Total amount player will have bet after this action
-                stack: Player's current stack
-                is_forced: Whether this is a forced bet (blind/ante)
-            """
-            # Get current amount player has bet
-            current_bet = self.current_bets.get(player_id, PlayerBet()).amount
-            amount_to_add = amount - current_bet
-            
-            logger.debug(f"Processing bet: player={player_id}, new_total={amount}, "
-                        f"current_amount={current_bet}, to_add={amount_to_add}")
-            
-            # Skip validation for forced bets
-            if not is_forced and not self.validate_bet(player_id, amount):
-                raise ValueError(f"Invalid bet: {amount}")
-                
-            is_all_in = amount_to_add >= stack
-            
-            # Update player bet tracking
-            new_bet = PlayerBet()
-            new_bet.amount = amount  # Total amount after this bet
-            new_bet.has_acted = not is_forced  # Only mark as acted if not a forced bet
-            new_bet.posted_blind = is_forced or current_bet > 0  # Keep track if they posted a blind
-            new_bet.is_all_in = is_all_in
-            
-            self.current_bets[player_id] = new_bet
-            
-            # Update pot with just the additional amount
-            if amount_to_add > 0:
-                self.pot.add_bet(player_id, amount_to_add, is_all_in)
-            
-            # Update current bet if this is highest
-            self.current_bet = max(self.current_bet, amount)
-            
-            logger.debug(f"After bet: current_bet={self.current_bet}, "
-                        f"pot={self.pot.main_pot}, "
-                        f"player_bets={[(pid, bet.amount) for pid, bet in self.current_bets.items()]}")
+        """
+        Place a bet for a player.
+        
+        Args:
+            player_id: ID of betting player
+            amount: Total amount player will have bet after this action
+            stack: Player's current stack
+            is_forced: Whether this is a forced bet (blind/ante)
+        """
+        # Get current amount from player if any
+        current_bet = self.current_bets.get(player_id, PlayerBet()).amount
+        amount_to_add = amount - current_bet
+        
+        logger.debug(f"Processing bet: player={player_id}, new_total={amount}, "
+                    f"current_amount={current_bet}, to_add={amount_to_add}")
+        
+        # Skip validation for forced bets
+        if not is_forced and not self.validate_bet(player_id, amount):
+            raise ValueError(f"Invalid bet: {amount}") 
+           
+        is_all_in = amount_to_add >= stack
+        
+        # Update player bet tracking
+        new_bet = PlayerBet()
+        new_bet.amount = amount
+        new_bet.has_acted = not is_forced  # Only mark as acted if not a forced bet
+        new_bet.posted_blind = is_forced or self.current_bets.get(player_id, PlayerBet()).posted_blind
+        new_bet.is_all_in = is_all_in
+        
+        self.current_bets[player_id] = new_bet
+        
+        # Update pot with the additional amount
+        if amount_to_add > 0:
+            self.pot.add_bet(player_id, amount_to_add, is_all_in)
+        
+        # Update current bet if this is highest
+        self.current_bet = max(self.current_bet, amount)
+        
+        logger.debug(f"After bet: current_bet={self.current_bet}, "
+                    f"pot={self.pot.total}, "
+                    f"player_bets={[(pid, bet.amount) for pid, bet in self.current_bets.items()]}")
+
         
     def get_required_bet(self, player_id: str) -> int:
         """Get amount player needs to bet to call."""
@@ -205,9 +169,10 @@ class BettingManager(ABC):
             # Reset everything
             self.current_bets.clear()
             current = 0
+            self.betting_round += 1  # Increment round counter
             
         self.current_bet = current
-        logger.debug(f"Starting new betting round: preserve_bet={preserve_current_bet}, "
+        logger.debug(f"Starting betting round {self.betting_round}: preserve_bet={preserve_current_bet}, "
                     f"current_bet={self.current_bet}, "
                     f"current_bets={[(pid, bet.amount, 'acted' if bet.has_acted else 'not acted', 'blind' if bet.posted_blind else 'not blind') for pid, bet in self.current_bets.items()]}")
         
@@ -228,8 +193,19 @@ class LimitBettingManager(BettingManager):
         self.big_bet = big_bet
         
     def get_min_bet(self, player_id: str, bet_type: BetType) -> int:
-        """Get minimum bet (same as max in limit games)."""
-        if bet_type in [BetType.SMALL, BetType.BLIND]:
+        """
+        Get minimum bet size.
+        
+        In limit games with blinds:
+        - First two betting rounds use small bet
+        - Later rounds use big bet
+        - Blinds and antes always use small bet
+        """
+        if bet_type in [BetType.BLIND, BetType.ANTE]:
+            return self.small_bet
+            
+        # First two betting rounds use small bet
+        if self.betting_round < 2:  # 0-based, so rounds 0 and 1
             return self.small_bet
         return self.big_bet
         
@@ -266,9 +242,10 @@ class LimitBettingManager(BettingManager):
             logger.debug(f"Completing partial bet from {current_amount} to {amount} - valid")
             return True
             
-        # For raises, must be exactly double current bet in limit
+        # For raises, must be current bet plus one bet size
         if amount > self.current_bet:
-            expected = self.current_bet * 2
+            bet_size = self.small_bet  # Use small bet for first betting round
+            expected = self.current_bet + bet_size
             if amount != expected:
                 logger.debug(f"Invalid raise: {amount} != {expected}")
                 return False

@@ -5,31 +5,18 @@ from pathlib import Path
 from typing import List, Dict, Optional, Tuple, Set
 import csv
 
-from generic_poker.core.card import Card
-
-
-@dataclass
-class HandRanking:
-    """
-    Ranking data for a specific hand combination.
-    
-    Attributes:
-        hand_str: String representation of hand
-        rank: Primary rank (e.g., straight flush = 1)
-        ordered_rank: Secondary ordering within rank
-        description: Optional human-readable description
-    """
-    hand_str: str
-    rank: int
-    ordered_rank: Optional[int] = None
-    description: Optional[str] = None
-
+from generic_poker.core.card import Card, Rank, Suit
+from generic_poker.evaluation.types import HandRanking
+from generic_poker.evaluation.constants import (
+    SUIT_ORDER, RANK_ORDERS, HAND_SIZES, RANK_ONLY_TYPES
+)
+from generic_poker.evaluation.cache import HandRankingsCache
 
 class BaseEvaluator(ABC):
     """Base class for hand evaluators."""
-    
-    RANK_ONLY_TYPES = {'49', 'zero', '6', '21', 'low_pip_6_cards', '58', '21_6', 'zero_6'}
-    
+
+    _rankings_cache = HandRankingsCache()
+
     def __init__(self, rankings_file: Path, eval_type: str):
         """
         Initialize evaluator.
@@ -38,22 +25,53 @@ class BaseEvaluator(ABC):
             rankings_file: Path to CSV file with hand rankings
             eval_type: Type of evaluation (used to determine rank-only status)
         """
-        self.rankings: Dict[str, HandRanking] = {}
-        self.rank_only = eval_type in self.RANK_ONLY_TYPES
-        self._load_rankings(rankings_file)
+        self.eval_type = eval_type
+        self.required_size = HAND_SIZES[eval_type]
+        self.rank_order = RANK_ORDERS[eval_type]
+        self.rank_only = eval_type in RANK_ONLY_TYPES
+        self.rankings = self._rankings_cache.get_rankings(eval_type, rankings_file)
         
     def _cards_to_string(self, cards: List[Card]) -> str:
         """
         Convert cards to string for ranking lookup.
         
-        For rank-only formats: "AAAT8"
+        For rank-only formats (like '49', 'zero'): "AAAT8"
         For regular formats: "AsKsQsJsTs"
         """
         if self.rank_only:
             return ''.join(card.rank.value for card in cards)
         else:
             return ''.join(f"{card.rank.value}{card.suit.value}" for card in cards)
+
+    def _validate_hand_size(self, cards: List[Card]) -> None:
+        """Ensure hand has correct number of cards."""
+        if len(cards) != self.required_size:
+            raise ValueError(
+                f"{self.eval_type} evaluation requires exactly {self.required_size} cards"
+            )
+                
+    def _sort_cards(self, cards: List[Card]) -> List[Card]:
+        """
+        Sort cards based on evaluation type's rank ordering.
+        
+        Args:
+            cards: List of cards to sort
             
+        Returns:
+            Sorted list of cards according to evaluation type's rules
+        """
+        def get_rank_index(card: Card) -> int:
+            """Get index in rank ordering list for sorting."""
+            return self.rank_order.index(card.rank.value)
+            
+        return sorted(
+            cards,
+            key=lambda c: (
+                get_rank_index(c),  # Primary sort by rank position
+                SUIT_ORDER[c.suit]   # Secondary sort by suit
+            )
+        )
+              
     @abstractmethod
     def evaluate(
         self,
@@ -62,39 +80,4 @@ class BaseEvaluator(ABC):
     ) -> Optional[HandRanking]:
         """Evaluate a poker hand."""
         pass
-        
-    @abstractmethod
-    def _sort_cards(self, cards: List[Card]) -> List[Card]:
-        """Sort cards in canonical order for this game type."""
-        pass
-        
-    def _load_rankings(self, rankings_file: Path) -> None:
-        """Load rankings from CSV file and store in optimized format."""
-        if not rankings_file.exists():
-            raise ValueError(f"Rankings file not found: {rankings_file}")
-            
-        with open(rankings_file) as f:
-            # Skip header
-            next(f)
-            
-            # Each line is hand_str,rank,ordered_rank
-            for line in f:
-                parts = line.strip().rsplit(',', 2)
-                if len(parts) != 3:
-                    continue
-                    
-                # Convert "As,Ks,Qs,Js,Ts" to "AsKsQsJsTs"
-                # or "A,A,A,T,8" to "AAAT8" for rank-only
-                hand_str = parts[0].replace(',', '')
-                
-                try:
-                    rank = int(parts[1])
-                    ordered_rank = int(parts[2])
-                except ValueError:
-                    continue
-                    
-                self.rankings[hand_str] = HandRanking(
-                    hand_str=hand_str,
-                    rank=rank,
-                    ordered_rank=ordered_rank
-                )
+               

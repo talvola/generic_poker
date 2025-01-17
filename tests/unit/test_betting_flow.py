@@ -236,3 +236,69 @@ def test_split_pot_scenario():
     assert game.table.players["BTN"].stack == initial_stacks["BTN"] - 10 + expected_win
     assert game.table.players["SB"].stack == initial_stacks["SB"] - 10 + expected_win
     assert game.table.players["BB"].stack == initial_stacks["BB"] - 10  # Lost their bet
+
+def test_all_fold_to_one():
+    """Test when all players fold to one player - no showdown needed."""
+    game = create_test_game()
+    
+    # Get initial stacks before blinds
+    initial_stacks = {pid: player.stack for pid, player in game.table.players.items()}
+    
+    game.start_hand()
+    
+    # BTN folds
+    result = game.player_action("BTN", PlayerAction.FOLD, 0)
+    assert result.success
+    assert not result.state_changed
+    assert game.current_player == "SB"
+    
+    # SB folds
+    result = game.player_action("SB", PlayerAction.FOLD, 0)
+    assert result.success
+    assert result.state_changed  # Should end hand when all but one fold
+    
+    # BB should win the pot without showdown
+    assert game.state == GameState.COMPLETE
+    pot_size = 15  # Just the blinds
+    assert game.table.players["BB"].stack == initial_stacks["BB"] - 10 + pot_size
+    assert game.table.players["BTN"].stack == initial_stacks["BTN"]  # Didn't put any money in
+    assert game.table.players["SB"].stack == initial_stacks["SB"] - 5  # Lost small blind
+
+
+def test_raise_and_calls(test_hands):
+    """Test raising scenario where everyone calls."""
+    game = create_test_game(test_hands)
+    
+    # Get initial stacks before blinds
+    initial_stacks = {pid: player.stack for pid, player in game.table.players.items()}
+    
+    game.start_hand()
+    
+    # BTN raises to 20
+    result = game.player_action("BTN", PlayerAction.RAISE, 20)
+    assert result.success
+    assert not result.state_changed
+    assert game.betting.current_bet == 20
+    
+    # SB calls 20
+    result = game.player_action("SB", PlayerAction.CALL, 20)
+    assert result.success
+    assert not result.state_changed
+    
+    # BB calls additional 10
+    result = game.player_action("BB", PlayerAction.CALL, 20)
+    assert result.success
+    assert result.state_changed  # Round should complete
+    
+    # Verify pot and stacks after the raise round
+    assert game.betting.pot.main_pot == 60  # Everyone put in 20
+    
+    # BTN should win with royal flush
+    assert game.state == GameState.COMPLETE
+    winner_stack = game.table.players["BTN"].stack
+    expected_win = 60  # Everyone put in 20
+    assert winner_stack == initial_stacks["BTN"] - 20 + expected_win
+    
+    # Others should have lost their bets
+    assert game.table.players["SB"].stack == initial_stacks["SB"] - 20
+    assert game.table.players["BB"].stack == initial_stacks["BB"] - 20

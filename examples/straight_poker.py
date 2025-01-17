@@ -14,7 +14,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from generic_poker.config.loader import GameRules, BettingStructure
 from generic_poker.game.game import Game, GameState, PlayerAction
@@ -113,27 +113,24 @@ def setup_test_game() -> Game:
 def get_player_action(game: Game, player_id: str) -> tuple[PlayerAction, int]:
     """Get action from player (or simulate it for testing)."""
     player = game.table.players[player_id]
-    required_bet = game.betting.get_required_bet(player_id)
-    current_bet = game.betting.current_bets.get(player_id, PlayerBet()).amount
+    valid_actions = game.get_valid_actions(player_id)
+    
+    if not valid_actions:
+        raise ValueError("No valid actions available")
     
     print(f"\n{player.name}'s turn")
     print(f"Stack: ${player.stack}")
     print(f"Cards: {' '.join(str(c) for c in player.hand.get_cards())}")
-    if required_bet > 0:
-        print(f"To call: ${required_bet}")
-    else:
-        print("No bet to call")
-    
+  
     # Show available actions
     print("\nAvailable actions:")
-    if required_bet == 0:
-        print("1: Check")
-        print("2: Bet")
-    else:
-        print("1: Fold")
-        print("2: Call")
-        if player.stack > required_bet:
-            print("3: Raise")
+    for i, (action, min_amount, max_amount) in enumerate(valid_actions, 1):
+        if min_amount is None:
+            print(f"{i}: {action.value}")
+        elif min_amount == max_amount:
+            print(f"{i}: {action.value} ${min_amount}")
+        else:
+            print(f"{i}: {action.value} (${min_amount}-${max_amount})")
     
     while True:
         choice = input("\nEnter choice number: ")
@@ -142,22 +139,23 @@ def get_player_action(game: Game, player_id: str) -> tuple[PlayerAction, int]:
             continue
             
         choice = int(choice)
-        if required_bet == 0:
-            if choice == 1:
-                return PlayerAction.CHECK, 0
-            elif choice == 2:
-                amount = game.betting.get_min_bet(player_id, None)
-                return PlayerAction.BET, amount
-        else:
-            if choice == 1:
-                return PlayerAction.FOLD, 0
-            elif choice == 2:
-                # For calls, tell betting system we want to bet exactly current_bet
-                # It will handle the fact that we might have already contributed some
-                return PlayerAction.CALL, game.betting.current_bet
-            elif choice == 3 and player.stack > required_bet:
-                # For limit, raise is double current bet
-                return PlayerAction.RAISE, game.betting.current_bet * 2
+        if 1 <= choice <= len(valid_actions):
+            action, min_amount, max_amount = valid_actions[choice - 1]
+            
+            # For raises in no-limit, need to get amount
+            if action in (PlayerAction.BET, PlayerAction.RAISE) and min_amount != max_amount:
+                while True:
+                    amount = input(f"Enter amount (${min_amount}-${max_amount}): ")
+                    try:
+                        amount = int(amount)
+                        if min_amount <= amount <= max_amount:
+                            return action, amount
+                    except ValueError:
+                        pass
+                    print("Invalid amount")
+            else:
+                # For limit bets or non-betting actions
+                return action, min_amount or 0
                 
         print("Invalid choice")
 
