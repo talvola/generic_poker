@@ -174,27 +174,24 @@ class Game:
             # Check if player can raise/bet
             if player.stack > required_bet:
                 current_total = self.betting.current_bet
-                min_raise = self.betting.get_min_bet(player_id, None)  # TODO: Pass bet type
+                min_bet = self.betting.get_min_bet(player_id, BetType.BIG)
+                max_bet = self.betting.get_max_bet(player_id, BetType.BIG, player.stack)
                 
                 if current_total == 0:
                     # No bet yet - this would be a bet
                     action = PlayerAction.BET
+                    # Minimum bet is usually BB in NL/PL
+                    min_amount = min_bet
+                    max_amount = max_bet                    
                 else:
                     # Raising existing bet
                     action = PlayerAction.RAISE
-                    min_raise = current_total + min_raise
-                    
-                # Determine maximum based on betting structure
-                if isinstance(self.betting, LimitBettingManager):
-                    # In limit, min and max are the same
-                    max_raise = min_raise
-                else:
-                    # In no limit, max is entire stack
-                    max_raise = player.stack
-                    # TODO: Handle pot limit
-                    
-                if player.stack >= min_raise:
-                    valid_actions.append((action, min_raise, max_raise))
+                    min_amount = current_total + min_bet
+                    # Max raise is either stack size or pot limit
+                    max_amount = max_bet                 
+                  
+                if player.stack >= min_amount and min_amount <= max_amount:
+                    valid_actions.append((action, min_amount, max_amount))
                     
             return valid_actions        
         
@@ -249,46 +246,26 @@ class Game:
                         self._handle_fold_win(active_players)
                         return ActionResult(success=True, state_changed=True)
                         
-                    # Find next active player that isn't the folding player
-                    next_player = None
-                    current_idx = next(i for i, p in enumerate(players) if p.id == player_id)
-                    
-                    # Look for next active player after current position
-                    for i in range(current_idx + 1, len(players)):
-                        if players[i].is_active:
-                            next_player = players[i]
-                            break
-                            
-                    # If none found after, wrap to start
-                    if not next_player:
-                        for i in range(current_idx):
-                            if players[i].is_active:
-                                next_player = players[i]
-                                break
-                                
-                    if next_player:
-                        self.current_player = next_player.id
-                        logger.debug(f"After fold, action moves to {next_player.name}")
-                    
+                    self._next_player()
                     return ActionResult(success=True)
                     
                 elif action == PlayerAction.CHECK:
                     # Get player's current bet amount
                     current_bet = self.betting.current_bets.get(player_id, PlayerBet())
                     required_bet = self.betting.get_required_bet(player_id)
-                    
+
                     logger.debug(f"Check validation for {player.name}:")
                     logger.debug(f"  - Player has bet: ${current_bet.amount}")
                     logger.debug(f"  - Current table bet: ${self.betting.current_bet}")
                     logger.debug(f"  - Required additional bet: ${required_bet}")
                     logger.debug(f"  - Bet details: acted={current_bet.has_acted}, blind={current_bet.posted_blind}")
-                    
-                    if current_bet.amount < self.betting.current_bet:
+
+                    if required_bet > 0:
                         logger.warning(f"{player.name} cannot check - must call ${required_bet}")
                         return ActionResult(
                             success=False,
                             error="Cannot check - must call or fold"
-                        )
+                        )                    
                         
                     logger.info(f"{player.name} checks")
                     current_bet.has_acted = True  # Mark them as having acted
@@ -306,55 +283,80 @@ class Game:
                     
                 elif action == PlayerAction.CALL:
                     call_amount = self.betting.get_required_bet(player_id)
+                    current_bet = self.betting.current_bets.get(player_id, PlayerBet())
                     total_bet = self.betting.current_bet  # Target amount
                     
                     logger.debug(f"Processing call: required={call_amount}, total={total_bet}")
                     
+                    # Handle all-in calls
                     if call_amount > player.stack:
-                        call_amount = player.stack  # All-in
+                        call_amount = player.stack
+                        total_bet = current_bet.amount + call_amount
                         logger.info(f"{player.name} calls all-in for ${call_amount}")
                     else:
                         logger.info(f"{player.name} calls ${call_amount}")
-                
+                  
                     # Place the total bet amount
                     self.betting.place_bet(player_id, total_bet, player.stack)
                     player.stack -= call_amount  # Deduct only the additional amount needed
                     
                 elif action in [PlayerAction.BET, PlayerAction.RAISE]:
-                    # Get current amount player has bet
-                    current_bet = self.betting.current_bets.get(player_id, PlayerBet()).amount
+                    # Validate bet/raise amount
+                    valid_actions = self.get_valid_actions(player_id)
+                    valid_raise = next(
+                        (a for a in valid_actions if a[0] == action),
+                        None
+                    )
                     
-                    # Calculate additional amount needed
-                    additional_amount = amount - current_bet
+                    if not valid_raise:
+                        return ActionResult(
+                            success=False,
+                            error=f"Invalid {action.value}"
+                        )
+                        
+                    _, min_amount, max_amount = valid_raise
+                    if amount < min_amount or amount > max_amount:
+                        return ActionResult(
+                            success=False,
+                            error=f"Invalid {action.value} amount: ${amount}"
+                        )
                     
-                    if additional_amount > player.stack:
-                        logger.warning(f"{player.name} cannot bet ${amount} - only has ${player.stack}")
+                    # Amount is total bet, calculate how much more needed
+                    current_bet = self.betting.current_bets.get(player_id, PlayerBet())
+                    additional = amount - current_bet.amount
+                    
+                    if additional > player.stack:
                         return ActionResult(
                             success=False,
                             error="Not enough chips"
                         )
-                    logger.info(f"{player.name} {action.value}s to ${amount} (adding ${additional_amount})")
+                        
+                    logger.info(f"{player.name} {action.value}s to ${amount}")
                     self.betting.place_bet(player_id, amount, player.stack)
-                    player.stack -= additional_amount  # Only deduct what they need to add
+                    player.stack -= additional
+
+                    if action == PlayerAction.RAISE:
+                        # Update last raise size for minimum raise tracking
+                        self.betting.last_raise_size = additional                    
+                              
+                # Move to next player
+                self._next_player()
+                
+                # Check if betting round complete
+                if self.betting.round_complete():
+                    logger.info("Betting round complete")
+                    if self.auto_progress:
+                        self._next_step()
+                    return ActionResult(success=True, state_changed=True)
                     
+                return ActionResult(success=True)
+            
             except ValueError as e:
                 logger.error(f"Error processing {player.name}'s action: {e}")
                 return ActionResult(
                     success=False,
                     error=str(e)
-                )
-            
-            # Move to next player
-            self._next_player()
-            
-            # Check if betting round complete
-            if self.betting.round_complete():
-                logger.info("Betting round complete")
-                if self.auto_progress:
-                    self._next_step()
-                return ActionResult(success=True, state_changed=True)
-                
-            return ActionResult(success=True)
+                )            
         
     def process_current_step(self) -> None:
             """
