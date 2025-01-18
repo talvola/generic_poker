@@ -94,3 +94,57 @@ def test_card_from_string_invalid(invalid_str):
     """Test error handling for invalid card strings."""
     with pytest.raises(ValueError):
         Card.from_string(invalid_str)
+
+def test_make_wild_on_joker():
+    """Test that making a Joker wild does not change its wild type."""
+    joker = Card(Rank.JOKER, Suit.JOKER, is_wild=True, wild_type=WildType.NATURAL)
+
+    joker.make_wild(WildType.MATCHING)  # This should have no effect
+
+    assert joker.is_wild
+    assert joker.wild_type == WildType.NATURAL  # Should remain NATURAL
+
+def test_joker_visibility_flip():
+    """Test flipping Joker's visibility."""
+    joker = Card(Rank.JOKER, Suit.JOKER)
+    
+    assert joker.visibility == Visibility.FACE_DOWN
+    joker.flip()
+    assert joker.visibility == Visibility.FACE_UP
+    joker.flip()
+    assert joker.visibility == Visibility.FACE_DOWN
+
+def test_clear_wild_on_non_wild_card():
+    """Test clearing wild on a non-wild card does nothing."""
+    card = Card(Rank.FIVE, Suit.HEARTS)
+    
+    card.clear_wild()  # Should not change anything
+    assert not card.is_wild
+    assert card.wild_type is None
+
+@pytest.mark.parametrize("card_str", ["as", "AS", "As", "aS"])
+def test_card_from_string_case_insensitivity(card_str):
+    """Test that from_string is case-insensitive."""
+    card = Card.from_string(card_str)
+    assert card.rank == Rank.ACE
+    assert card.suit == Suit.SPADES
+
+def test_wild_card_equality():
+    """Test equality of wild cards with different wild types."""
+    card1 = Card(Rank.FOUR, Suit.CLUBS, is_wild=True, wild_type=WildType.NAMED)
+    card2 = Card(Rank.FOUR, Suit.CLUBS, is_wild=True, wild_type=WildType.MATCHING)
+    
+    assert card1 == card2  # Equality ignores wild_type
+
+def test_invalid_joker_creation():
+    """Test that invalid Joker strings raise errors."""
+    with pytest.raises(ValueError):
+        Card.from_string("*h")  # Joker must be '*j'
+
+def test_wild_card_string_representation():
+    """Test string output of non-Joker wild cards."""
+    card = Card(Rank.FIVE, Suit.HEARTS)
+    card.make_wild(WildType.NAMED)
+    
+    assert str(card) == "5h"  # Wild status shouldn't affect string output
+

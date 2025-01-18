@@ -37,11 +37,12 @@ def load_test_rules() -> GameRules:
 def create_test_game(
     num_players: int = 3,
     structure: BettingStructure = BettingStructure.LIMIT,
-    small_bet: int = 10,
+    small_bet: int = 10, # for Limit games, maps to min_bet for No/Pot-Limit
     big_bet: Optional[int] = None,
     starting_stack: int = 500,
     player_stacks: Optional[Dict[str, int]] = None,
-    mock_hands: Optional[Dict[str, List[Card]]] = None
+    mock_hands: Optional[Dict[str, List[Card]]] = None,
+    auto_progress: bool = False
 ) -> Game:
     """
     Create a test game with specified configuration.
@@ -68,7 +69,8 @@ def create_test_game(
         small_bet=small_bet,
         big_bet=big_bet or (small_bet * 2),
         min_buyin=min(20, min_stack),  # Allow small stacks for testing
-        max_buyin=1000
+        max_buyin=1000,
+        auto_progress=auto_progress
     )
     
     # Add players with specified stacks

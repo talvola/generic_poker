@@ -7,6 +7,25 @@ from generic_poker.game.betting import BettingStructure
 
 import json 
 
+import logging
+import sys
+
+@pytest.fixture(autouse=True)
+def setup_logging():
+    """Set up logging for all tests."""
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ],
+        force=True  # Force reconfiguration of logging
+    )
+
 @pytest.fixture
 def test_hands():
     """Fixed test hands for different scenarios."""
@@ -271,9 +290,18 @@ def test_raise_and_calls(test_hands):
     
     # Get initial stacks before blinds
     initial_stacks = {pid: player.stack for pid, player in game.table.players.items()}
+    print(initial_stacks)
     
     game.start_hand()
     
+    print(game.table.players["BTN"].stack)
+    print(game.state)    
+    print(game.get_valid_actions("BTN"))
+
+    # Get stacks after blinds
+    post_blinds_stacks = {pid: player.stack for pid, player in game.table.players.items()}
+    print(post_blinds_stacks)
+
     # BTN raises to 20
     result = game.player_action("BTN", PlayerAction.RAISE, 20)
     assert result.success

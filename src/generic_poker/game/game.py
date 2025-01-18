@@ -154,45 +154,53 @@ class Game:
                 return []  # Not betting phase
                 
             player = self.table.players[player_id]
-            current_bet = self.betting.current_bets.get(player_id, PlayerBet())
+            current_bet = self.betting.current_bets.get(player_id, PlayerBet()).amount
             required_bet = self.betting.get_required_bet(player_id)
+
+            logger.debug(f"Player: {player_id}, Required Bet: {required_bet}, Current Bet: {current_bet}")
+            logger.debug(f"  Stack: {player.stack}")   
             
             valid_actions = []
+
+            # Always allow folding (even if player could check)
+            valid_actions.append((PlayerAction.FOLD, None, None))            
             
-            # Can always fold unless you can check for free
+            # CALL if player has enough chips
             if required_bet > 0:
-                valid_actions.append((PlayerAction.FOLD, None, None))
-                
-                # Can call if have enough chips
                 if player.stack >= required_bet:
                     valid_actions.append((PlayerAction.CALL, required_bet, required_bet))
-                    
+                elif player.stack > 0:
+                    # ✅ Allow all-in call for less than required bet
+                    valid_actions.append((PlayerAction.CALL, player.stack, player.stack))
             else:
-                # No bet to call - can check
                 valid_actions.append((PlayerAction.CHECK, None, None))
                 
-            # Check if player can raise/bet
+             # Determine possible BET or RAISE
             if player.stack > required_bet:
                 current_total = self.betting.current_bet
-                min_bet = self.betting.get_min_bet(player_id, BetType.BIG)
-                max_bet = self.betting.get_max_bet(player_id, BetType.BIG, player.stack)
+                current_bet = self.betting.current_bets.get(player_id, PlayerBet()).amount
+
+                # ✅ Correct minimum raise: last raise size or small bet
+                min_amount = self.betting.get_min_bet(player_id, BetType.BIG)
+                max_amount = self.betting.get_max_bet(player_id, BetType.BIG, player.stack)
+
+                logger.debug(f"Player: {player_id}, Required Bet: {required_bet}, Current Total: {current_total}")
+                logger.debug(f"Min Amount: {min_amount}, Max Amount: {max_amount}")                
                 
                 if current_total == 0:
-                    # No bet yet - this would be a bet
                     action = PlayerAction.BET
-                    # Minimum bet is usually BB in NL/PL
-                    min_amount = min_bet
-                    max_amount = max_bet                    
                 else:
-                    # Raising existing bet
                     action = PlayerAction.RAISE
-                    min_amount = current_total + min_bet
-                    # Max raise is either stack size or pot limit
-                    max_amount = max_bet                 
-                  
-                if player.stack >= min_amount and min_amount <= max_amount:
+
+                # ✅ Normal raise if player has enough chips
+                if player.stack + current_bet >= min_amount:
                     valid_actions.append((action, min_amount, max_amount))
-                    
+                else:
+                    # All-in raise if stack can't meet min raise
+                    all_in_amount = player.stack + current_bet
+                    valid_actions.append((action, all_in_amount, all_in_amount))        
+                  
+            logger.debug(f"Valid actions for {player_id}: {valid_actions}")
             return valid_actions        
         
     def player_action(
@@ -303,11 +311,14 @@ class Game:
                 elif action in [PlayerAction.BET, PlayerAction.RAISE]:
                     # Validate bet/raise amount
                     valid_actions = self.get_valid_actions(player_id)
+
+                    logger.debug(f"Valid actions: {valid_actions}")
+
                     valid_raise = next(
                         (a for a in valid_actions if a[0] == action),
                         None
                     )
-                    
+                   
                     if not valid_raise:
                         return ActionResult(
                             success=False,
@@ -315,29 +326,43 @@ class Game:
                         )
                         
                     _, min_amount, max_amount = valid_raise
-                    if amount < min_amount or amount > max_amount:
+
+                    logger.debug(f"Attempting action: {action}, Amount: {amount}, Min: {min_amount}, Max: {max_amount}")
+
+                    if (min_amount is not None and amount < min_amount) or (max_amount is not None and amount > max_amount):
                         return ActionResult(
                             success=False,
                             error=f"Invalid {action.value} amount: ${amount}"
                         )
                     
-                    # Amount is total bet, calculate how much more needed
                     current_bet = self.betting.current_bets.get(player_id, PlayerBet())
-                    additional = amount - current_bet.amount
                     
+                    # Adjust for all-in
+                    if amount >= player.stack:  # Changed from > to >=
+                        logger.info(f"{player.name} is going all-in with ${player.stack}")
+                        amount = player.stack + current_bet.amount  # Include what's already in
+                        additional = player.stack  # Take entire remaining stack   
+                    else:
+                        # Normal raise
+                        additional = amount - current_bet.amount                        
+
                     if additional > player.stack:
                         return ActionResult(
                             success=False,
-                            error="Not enough chips"
+                            error="Not enough chips to complete this action"
                         )
                         
+                    # ✅ Place the bet and deduct from stack
                     logger.info(f"{player.name} {action.value}s to ${amount}")
                     self.betting.place_bet(player_id, amount, player.stack)
                     player.stack -= additional
 
-                    if action == PlayerAction.RAISE:
-                        # Update last raise size for minimum raise tracking
-                        self.betting.last_raise_size = additional                    
+                    logger.debug(f"{player.name}'s remaining stack: ${player.stack}")
+
+                    # 🔄 Update last_raise_size only if not all-in
+                    if action == PlayerAction.RAISE and amount != player.stack:
+                        self.betting.last_raise_size = additional
+                        logger.debug(f"Updated last raise size to ${self.betting.last_raise_size}")                 
                               
                 # Move to next player
                 self._next_player()
@@ -419,28 +444,47 @@ class Game:
         for p in players:
             logger.debug(f"  {p.name}: {p.id} ({p.position.value if p.position else 'NA'})")
             
-        # Small blind is half the small bet
+        logger.debug(f"Small Bet: {self.betting.small_bet}")
+        assert self.betting.small_bet is not None and self.betting.small_bet > 0, "small_bet must be set before posting blinds"
+
         sb_amount = self.betting.small_bet // 2
         bb_amount = self.betting.small_bet
         
         # Find SB and BB players - handle both regular and heads-up cases
-        sb_player = next(p for p in players if hasattr(p.position, 'has_position') 
-                        and p.position.has_position(Position.SMALL_BLIND))
-        bb_player = next(p for p in players if hasattr(p.position, 'has_position') 
-                        and p.position.has_position(Position.BIG_BLIND))
-        
+        sb_player = next(
+            (p for p in players if (pos := p.position) and pos.has_position(Position.SMALL_BLIND)),
+            None
+        )
+        bb_player = next(
+            (p for p in players if (pos := p.position) and pos.has_position(Position.BIG_BLIND)),
+            None
+        )
+
+        # Ensure Small Blind player exists
+        if (sb_player := next((p for p in players if (pos := p.position) and pos.has_position(Position.SMALL_BLIND)), None)) is None:
+            logger.error("Small Blind player not found. Cannot post blinds.")
+            return  # Or handle the error appropriately
+
+        # Ensure Big Blind player exists
+        if (bb_player := next((p for p in players if (pos := p.position) and pos.has_position(Position.BIG_BLIND)), None)) is None:
+            logger.error("Big Blind player not found. Cannot post blinds.")
+            return  # Or handle the error appropriately        
+       
         # Post small blind
         sb_player.stack -= sb_amount
         self.betting.place_bet(sb_player.id, sb_amount, sb_player.stack, is_forced=True)
-        logger.info(f"{sb_player.name} posts small blind of ${sb_amount}")
+        logger.info(f"{sb_player.name} posts small blind of ${sb_amount} (Remaining stack: ${sb_player.stack})")
         
         # Post big blind
         bb_player.stack -= bb_amount
         self.betting.place_bet(bb_player.id, bb_amount, bb_player.stack, is_forced=True)
-        logger.info(f"{bb_player.name} posts big blind of ${bb_amount}")
+        logger.info(f"{bb_player.name} posts big blind of ${bb_amount} (Remaining stack: ${bb_player.stack})")
         
         # Update current bet to BB amount
         self.betting.current_bet = bb_amount
+
+        # Initialize last_raise_size to the big blind
+        self.betting.last_raise_size = bb_amount
             
         logger.debug("After posting blinds:")
         for player_id, bet in self.betting.current_bets.items():
@@ -465,7 +509,7 @@ class Game:
             
             logger.debug("Current active players and positions:")
             for p in active_players:
-                logger.debug(f"  {p.name}: {p.position.value}")
+                logger.debug(f"  {p.name}: {(pos.value if (pos := p.position) else 'NA')}")
             
             # Check if this is the first betting round after blinds
             is_first_bet = (
@@ -475,7 +519,11 @@ class Game:
             
             logger.debug(f"Is first betting round: {is_first_bet}")
             
-            if is_first_bet and not self.betting.current_bets.get(self.current_player, PlayerBet()).has_acted:
+            if (
+                is_first_bet and 
+                (player_id := self.current_player) and 
+                not self.betting.current_bets.get(player_id, PlayerBet()).has_acted
+            ):
                 # First action of the round goes to BTN
                 for player in players:
                     if player.position == Position.BUTTON:

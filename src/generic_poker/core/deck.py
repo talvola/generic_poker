@@ -5,6 +5,12 @@ import random
 from .card import Card, Rank, Suit, Visibility
 from .containers import CardContainer
 
+from enum import Enum, auto
+
+class DeckType(Enum):
+    STANDARD = auto()
+    SHORT_TA = auto()   # for games like Royal Hold'em (T, J, Q, K, A)
+    SHORT_6A = auto()   # for games like Six-Plus Hold'em (6 - A)
 
 class Deck(CardContainer):
     """
@@ -15,7 +21,7 @@ class Deck(CardContainer):
         include_jokers: Whether deck includes jokers
     """
     
-    def __init__(self, include_jokers: bool = False):
+    def __init__(self, include_jokers: bool = False, deck_type: DeckType = DeckType.STANDARD):
         """
         Initialize a new deck.
         
@@ -23,13 +29,21 @@ class Deck(CardContainer):
             include_jokers: Whether to include joker cards
         """
         self.cards: List[Card] = []
-        self._initialize_deck(include_jokers)
+        self._initialize_deck(include_jokers, deck_type)
         
-    def _initialize_deck(self, include_jokers: bool) -> None:
-        """Create a fresh deck of cards."""
+    def _initialize_deck(self, include_jokers: bool, deck_type: DeckType) -> None:
+        """Create a fresh deck of cards based on the deck type."""
+
+        if deck_type == DeckType.SHORT_TA:
+            ranks = [Rank.TEN, Rank.JACK, Rank.QUEEN, Rank.KING, Rank.ACE]
+        elif deck_type == DeckType.SHORT_6A:
+            ranks = [r for r in Rank if r not in {Rank.TWO, Rank.THREE, Rank.FOUR, Rank.FIVE, Rank.JOKER}]
+        else:  # STANDARD
+            ranks = [r for r in Rank if r != Rank.JOKER]
+
         # Add standard cards
         for suit in [s for s in Suit if s != Suit.JOKER]:
-            for rank in [r for r in Rank if r != Rank.JOKER]:
+            for rank in ranks:
                 self.cards.append(Card(rank=rank, suit=suit))
                 
         # Add jokers if requested

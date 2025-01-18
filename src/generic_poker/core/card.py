@@ -89,7 +89,9 @@ class Card:
         )
     
     def make_wild(self, wild_type: WildType) -> None:
-        """Make this card wild."""
+        """Make this card wild, but prevent Jokers from changing their wild type."""
+        if self.rank == Rank.JOKER and self.suit == Suit.JOKER:
+            return  # Prevent modifying Joker's wild type
         self.is_wild = True
         self.wild_type = wild_type
     
@@ -118,12 +120,9 @@ class Card:
             
         # Handle Jokers
         if card_str == '*j':
-            return cls(
-                rank=Rank.JOKER,
-                suit=Suit.JOKER,
-                is_wild=True,
-                wild_type=WildType.NATURAL
-            )
+            return cls(rank=Rank.JOKER, suit=Suit.JOKER, is_wild=True, wild_type=WildType.NATURAL)
+        elif card_str[0] == '*' and card_str[1] != 'j':
+            raise ValueError(f"Invalid joker format: {card_str}")
             
         rank_str, suit_str = card_str[0], card_str[1]
         

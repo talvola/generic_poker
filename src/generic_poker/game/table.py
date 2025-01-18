@@ -1,5 +1,5 @@
 """Table implementation managing game state."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 from enum import Enum
 
@@ -14,7 +14,20 @@ class Position(Enum):
     SMALL_BLIND = "SB"
     BIG_BLIND = "BB"
 
+@dataclass
+class PlayerPosition:
+    """Represents a player's position(s) at the table."""
+    positions: List[Position]  # A player can have multiple positions in heads-up
 
+    @property
+    def value(self) -> str:
+        """Return primary position value."""
+        return self.positions[0].value if self.positions else 'NA'
+
+    def has_position(self, position: Position) -> bool:
+        """Check if player has a specific position."""
+        return position in self.positions
+    
 @dataclass
 class Player:
     """
@@ -31,28 +44,17 @@ class Player:
     id: str
     name: str
     stack: int
-    position: Optional[Position] = None
-    hand: Optional[PlayerHand] = None
+    position: Optional[PlayerPosition] = None
+    hand: PlayerHand = field(default_factory=PlayerHand)  # Always initialized
     is_active: bool = True
 
     def __post_init__(self):
         """Initialize player's hand if not provided."""
         if self.hand is None:
             self.hand = PlayerHand()
-
-@dataclass
-class PlayerPosition:
-    """Represents a player's position(s) at the table."""
-    positions: List[Position]  # A player can have multiple positions in heads-up
-
-    @property
-    def value(self) -> str:
-        """Return primary position value."""
-        return self.positions[0].value if self.positions else 'NA'
-
-    def has_position(self, position: Position) -> bool:
-        """Check if player has a specific position."""
-        return position in self.positions
+    
+def has_position(player, pos):
+    return player.position is not None and player.position.has_position(pos)
     
 class Table:
     """
