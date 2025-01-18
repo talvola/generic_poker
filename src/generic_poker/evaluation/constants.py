@@ -17,24 +17,50 @@ BASE_RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2']
 # A-5 Low rank ordering (A is low, high cards left)
 LOW_A5_RANKS = ['K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2', 'A']
 
-# 2-7 Low rank ordering (2 is low)
-LOW_27_RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2']
+# Badugi 
+BADUGI_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K']
+
+# Short decks
+RANKS_36_CARD = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6']
+RANKS_20_CARD = ['A', 'K', 'Q', 'J', 'T']
+
+# Special for 6-card low pip count games
+BASE_RANKS_PADDED = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2', 'X']
 
 # Map evaluation types to rank orderings
 RANK_ORDERS = {
     # High hand games use base ordering
     'high': BASE_RANKS,
     'high_wild': BASE_RANKS,
-    '36card_ffh_high': BASE_RANKS,
-    '20card_high': BASE_RANKS,
+    # 2-7 Lowball can use same ranks
+    '27_low': BASE_RANKS,
+    # Pip games can also use the same ranks
+    '49': BASE_RANKS,
+    '6': BASE_RANKS,
+    'zero': BASE_RANKS,
+    '21': BASE_RANKS,
+    '58': BASE_RANKS,
+    'zero_6': BASE_RANKS,
+    '21_6': BASE_RANKS,
+    # Hi-Dugi can use standard ranks
+    'hidugi': BASE_RANKS,
+
+    # 36-card deck
+    '36card_ffh_high': RANKS_36_CARD,
+    # 20-card deck
+    '20card_high': RANKS_20_CARD,
     
-    # Lowball games
+    # A-5 Lowball games always have Ace low
     'a5_low': LOW_A5_RANKS,
     'a5_low_high': LOW_A5_RANKS,
-    '27_low': LOW_27_RANKS,
+
+    # Badugi
+    'badugi': BADUGI_RANKS,
     
-    # Keep existing hand size mappings...
-    # [rest of constants.py content remains the same]
+    # 6-card low pip count
+    'low_pip_6_cards': BASE_RANKS_PADDED
+
+    # leaving out the stud bring-in hands for now, such as two_card_high, etc.
 }
 
 # Mapping of evaluation types to required hand sizes
