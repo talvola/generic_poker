@@ -93,70 +93,87 @@ class Pot:
                     f"Player {player_id} has bet but isn't eligible for any pot"
                 
     def _handle_all_in_below_current(self, bet: BetInfo) -> bool:
-        """
-        Handle case where player goes all-in for less than current bet.
-        
-        Example:
-        - P1 has bet 100
-        - P2 goes all-in for 50
-        Should:
-        1. Move excess 50 from P1 to side pot
-        2. Set main pot at 100 (50 each)
-        3. Side pot has P1's excess 50
-        
-        Returns True if case was handled.
-        """
-        # Check if this is an all-in below current bet
+        """Handle case where player goes all-in for less than current bet."""
         max_bet = max(self.total_bets.values(), default=0)
         if not bet.is_all_in or bet.new_total >= max_bet:
             return False
                 
         logger.debug(f"Handling all-in below current bet: {bet.new_total} < {max_bet}")
+        logger.debug(f"Current total_bets: {self.total_bets}")
         
-        # First, move excess from higher bets to side pot
-        excess_total = 0
-        for pid, existing_bet in list(self.total_bets.items()):  # Use list to allow modification
-            if existing_bet > bet.new_total:
-                excess = existing_bet - bet.new_total
-                excess_total += excess
-                # Reduce main pot contribution to match all-in amount
-                self.main_pot.amount -= excess
-                # Track that this player has excess
-                if not self.side_pots:
-                    side_pot = ActivePot(
-                        amount=excess,
-                        current_bet=excess,
-                        eligible_players={pid},
-                        active_players=set()
-                    )
-                    self.side_pots.append(side_pot)
-                    logger.debug(f"Created side pot with {excess} from {pid}")
+        # Calculate main pot amount at new all-in level
+        main_pot_amount = 0
+        # Include the all-in player's contribution first
+        main_pot_amount += bet.new_total
+        logger.debug(f"Adding {bet.new_total} from {bet.player_id} to main pot (all-in)")
+        
+        # Track excess amounts for side pot
+        excess_amounts = {}
+        all_ins_above = set()  # Track all-in bets above this one
+        
+        # Handle other players' contributions
+        for pid, existing_bet in self.total_bets.items():
+            if pid != bet.player_id:  # Skip all-in player
+                if existing_bet <= bet.new_total:
+                    main_pot_amount += existing_bet
+                    logger.debug(f"Adding {existing_bet} from {pid} to main pot (under all-in)")
                 else:
-                    self.side_pots[0].amount += excess
-                    self.side_pots[0].eligible_players.add(pid)
-                    logger.debug(f"Added {excess} from {pid} to side pot")
+                    # Add all-in amount to main pot
+                    main_pot_amount += bet.new_total
+                    logger.debug(f"Adding {bet.new_total} from {pid} to main pot (capped)")
+                    # Track excess for side pot
+                    excess = existing_bet - bet.new_total
+                    excess_amounts[pid] = excess
+                    logger.debug(f"Tracking excess {excess} from {pid} for side pot")
+                    # Track if this was from an all-in
+                    if pid in self.is_all_in:
+                        all_ins_above.add(pid)
+                        logger.debug(f"Player {pid} was all-in above current")
         
-        # Now add all-in amount to main pot
-        self.main_pot.amount += bet.amount
+        # Set up main pot
+        self.main_pot.amount = main_pot_amount
         self.main_pot.eligible_players.add(bet.player_id)
         self.main_pot.current_bet = bet.new_total
-        logger.debug(f"Added {bet.amount} to main pot")
-
-        
-        # Cap the main pot at the all-in amount
         self.main_pot.capped = True
-        self.main_pot.cap_amount = bet.new_total   
-        logger.debug(f"Main pot capped at {bet.new_total}")
-                
+        self.main_pot.cap_amount = bet.new_total
+        logger.debug(f"Set main pot to {main_pot_amount} capped at {bet.new_total}")
+        
+        # Create single side pot for all excess
+        self.side_pots = []
+        if excess_amounts:
+            side_pot_amount = sum(excess_amounts.values())
+            eligible_players = set(excess_amounts.keys())
+            
+            side_pot = ActivePot(
+                amount=side_pot_amount,
+                current_bet=max(excess_amounts.values()),
+                eligible_players=eligible_players,
+                active_players=set()
+            )
+            
+            # Side pot should be capped if all contributors were all-in
+            if all(pid in all_ins_above for pid in eligible_players):
+                logger.debug(f"Capping side pot as all contributors were all-in")
+                side_pot.capped = True
+                side_pot.cap_amount = max(excess_amounts.values())
+            
+            self.side_pots.append(side_pot)
+            logger.debug(f"Created side pot with {side_pot_amount} total excess from {eligible_players}")
+            if side_pot.capped:
+                logger.debug(f"Side pot capped at {side_pot.cap_amount}")
+        
         # Update status
         self.is_all_in[bet.player_id] = True
         if bet.player_id in self.main_pot.active_players:
             self.main_pot.active_players.remove(bet.player_id)
-            
+        
         logger.debug("\nAfter handling all-in below current:")
         logger.debug(f"Main pot: {self.main_pot.amount} (bet: {self.main_pot.current_bet})")
+        logger.debug(f"Main pot eligible players: {self.main_pot.eligible_players}")
         for i, pot in enumerate(self.side_pots):
-            logger.debug(f"Side pot {i}: {pot.amount} (eligible: {pot.eligible_players})")   
+            logger.debug(f"Side pot {i}: {pot.amount} (eligible: {pot.eligible_players})")
+            if pot.capped:
+                logger.debug(f"  Capped at {pot.cap_amount}")
         
         return True
 
@@ -269,78 +286,6 @@ class Pot:
             logger.debug(f"  Active players: {pot.active_players}")
             if pot.capped:
                 logger.debug(f"  Capped at ${pot.cap_amount} per player")
-
-    def _distribute_to_pots(self, bet: BetInfo) -> None:
-        """
-        Distribute a bet across main pot and side pots, respecting caps.
-        Creates new side pots as needed.
-        """
-        remaining = bet.amount
-        
-        # Add to main pot up to its cap
-        if self.main_pot.capped:
-            main_contribution = min(remaining, max(0, self.main_pot.cap_amount - bet.prev_total))
-            if main_contribution > 0:
-                self.main_pot.amount += main_contribution
-                self.main_pot.eligible_players.add(bet.player_id)
-                remaining -= main_contribution
-                logger.debug(f"Added {main_contribution} to main pot (capped at {self.main_pot.cap_amount})")
-        
-        # If we have remaining chips after main pot
-        if remaining > 0:
-            logger.debug(f"Have {remaining} remaining after main pot")
-            
-            if not self.side_pots:
-                # Create first side pot
-                side_pot = ActivePot(
-                    amount=remaining,
-                    current_bet=remaining,
-                    eligible_players={bet.player_id},
-                    active_players=set()
-                )
-                if bet.is_all_in:
-                    logger.debug(f"Capping new side pot at {remaining} since {bet.player_id} is all-in")
-                    side_pot.capped = True
-                    side_pot.cap_amount = remaining
-                self.side_pots.append(side_pot)
-                logger.debug(f"Created new side pot with {remaining}")
-            else:
-                # Process through existing side pots
-                for pot in list(self.side_pots):  # Use list to allow modification
-                    if remaining <= 0:
-                        break
-                    
-                    if pot.capped:
-                        contribution = min(remaining, pot.cap_amount)
-                        if contribution > 0:
-                            pot.amount += contribution
-                            pot.eligible_players.add(bet.player_id)
-                            remaining -= contribution
-                            logger.debug(f"Added {contribution} to capped side pot")
-                    else:
-                        contribution = remaining
-                        pot.amount += contribution
-                        pot.eligible_players.add(bet.player_id)
-                        remaining = 0
-                        if bet.is_all_in:
-                            logger.debug(f"Player {bet.player_id} all-in, capping side pot at {contribution}")
-                            pot.capped = True
-                            pot.cap_amount = contribution
-                
-                # If we still have chips, create new side pot
-                if remaining > 0:
-                    new_pot = ActivePot(
-                        amount=remaining,
-                        current_bet=remaining,
-                        eligible_players={bet.player_id},
-                        active_players=set()
-                    )
-                    if bet.is_all_in:
-                        logger.debug(f"Capping new side pot at {remaining} since {bet.player_id} is all-in")
-                        new_pot.capped = True
-                        new_pot.cap_amount = remaining
-                    self.side_pots.append(new_pot)
-                    logger.debug(f"Created new side pot with {remaining}")
 
     def _distribute_to_pots(self, bet: BetInfo) -> None:
             """Distribute a bet across main pot and side pots, respecting caps."""

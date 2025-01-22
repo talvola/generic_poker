@@ -158,8 +158,91 @@ SCENARIOS = [
         expected_pot=30,
         num_players=2,
         pot_progression=[15, 30, 30]
-    )
+    ),
+
+    BettingScenario(
+        name="Simple all-in and call",
+        actions=[
+            ("BTN", PlayerAction.ALL_IN, 100),  # Button goes all-in
+            ("SB", PlayerAction.CALL, 100),     # SB calls all-in
+            ("BB", PlayerAction.FOLD, 0),       # BB folds
+        ],
+        expected_stacks={
+            "BTN": 0,    # Started 500, all-in for 100
+            "SB": 400,   # Started 500, -5 (blind), -95 (call)
+            "BB": 490,   # Started 500, lost 10 blind
+        },
+        expected_pot=205,  # 100 + 100 + 5
+        pot_progression=[15, 115, 205, 205]
+    ),
+
+    BettingScenario(
+        name="Sequential all-ins creating side pots",
+        actions=[
+            ("BTN", PlayerAction.ALL_IN, 25),   # Button all-in for 25
+            ("SB", PlayerAction.ALL_IN, 50),    # SB all-in for 50
+            ("BB", PlayerAction.ALL_IN, 75),    # BB all-in for 75
+        ],
+        expected_stacks={
+            "BTN": 0,    # Started with 25
+            "SB": 0,     # Started with 50
+            "BB": 0,     # Started with 75
+        },
+        expected_pot=150,  # 25 + 50 + 75
+        pot_progression=[15, 40, 90, 150]  # Track main pot growth
+    ),
+
+    BettingScenario(
+        name="Active betting then all-in",
+        actions=[
+            ("BTN", PlayerAction.RAISE, 20),    # BTN raises to 20
+            ("SB", PlayerAction.RAISE, 40),     # SB raises to 40
+            ("BB", PlayerAction.ALL_IN, 60),    # BB all-in for 60
+            ("BTN", PlayerAction.CALL, 60),     # BTN calls
+            ("SB", PlayerAction.CALL, 60),      # SB calls
+        ],
+        expected_stacks={
+            "BTN": 440,  # Started 500, -60
+            "SB": 440,   # Started 500, -5 blind, -55
+            "BB": 0,     # Started 60, all-in
+        },
+        expected_pot=180,  # 60 + 60 + 60
+        pot_progression=[15, 35, 75, 135, 175, 180]
+    ),
+
+    BettingScenario(
+        name="Multiple all-ins with side pot betting",
+        actions=[
+            ("BTN", PlayerAction.ALL_IN, 40),   # BTN all-in for 40
+            ("SB", PlayerAction.RAISE, 80),     # SB raises to 80
+            ("BB", PlayerAction.ALL_IN, 60),    # BB all-in for less
+            ("SB", PlayerAction.CALL, 60),      # SB matches BB's all-in
+        ],
+        expected_stacks={
+            "BTN": 0,    # Started with 40
+            "SB": 440,   # Started 500, -60
+            "BB": 0,     # Started with 60
+        },
+        expected_pot=160,  # 40 + 60 + 60
+        pot_progression=[15, 55, 135, 155, 160]
+    )    
 ]
+
+def verify_pot_state(game: Game, expected_total: int, step_description: str):
+    """Verify pot amounts and structure."""
+    actual_total = game.betting.pot.total
+    assert actual_total == expected_total, \
+        f"{step_description}: Expected total pot {expected_total}, got {actual_total}"
+    
+    # Log detailed pot structure
+    print(f"\nPot structure after {step_description}:")
+    print(f"Main pot: ${game.betting.pot.main_pot}")
+    for i, side_pot in enumerate(game.betting.pot.side_pots):
+        print(f"Side pot {i}: ${side_pot.amount}")
+        print(f"  Eligible players: {side_pot.eligible_players}")
+        print(f"  Capped: {side_pot.capped}")
+        if side_pot.capped:
+            print(f"  Cap amount: {side_pot.cap_amount}")
 
 @pytest.mark.parametrize("scenario", SCENARIOS, ids=[s.name for s in SCENARIOS])
 def test_betting_scenario(scenario: BettingScenario):
@@ -167,38 +250,24 @@ def test_betting_scenario(scenario: BettingScenario):
     game = create_test_game(scenario.num_players)
     game.start_hand()
     
-    # Manually progress through initial steps until betting
     while game.state != GameState.BETTING:
         game._next_step()
     
     # Verify initial pot
-    assert game.betting.pot.main_pot == scenario.pot_progression[0], \
-        f"Initial pot: expected {scenario.pot_progression[0]}, got {game.betting.pot.main_pot}"
+    verify_pot_state(game, scenario.pot_progression[0], "Initial state")
     
-    # Execute each action in sequence
     for i, (player_id, action, amount) in enumerate(scenario.actions):
-        # Debug output
         print(f"\nExecuting {player_id} {action.value} {amount}")
-        print(f"Pot before action: ${game.betting.pot.main_pot}")
-        for pid, player in game.table.players.items():
-            print(f"Player {pid} stack: ${player.stack}")
         
-        # Verify it's the expected player's turn
         assert game.current_player == player_id, \
             f"Expected {player_id}'s turn, but was {game.current_player}'s"
         
-        # Take action
         result = game.player_action(player_id, action, amount)
         assert result.success, f"Action failed: {result.error}"
         
-        print(f"Pot after action: ${game.betting.pot.main_pot}")
-        for pid, player in game.table.players.items():
-            print(f"Player {pid} stack: ${player.stack}")
-            
-        # Verify pot amount after this action
-        expected_pot = scenario.pot_progression[i + 1]  # +1 because first value was initial pot
-        assert game.betting.pot.main_pot == expected_pot, \
-            f"After {player_id} {action.value}: Expected pot of {expected_pot}, got {game.betting.pot.main_pot}"
+        # Verify pot state after this action
+        expected_pot = scenario.pot_progression[i + 1]
+        verify_pot_state(game, expected_pot, f"After {player_id} {action.value}")
         
         if action != PlayerAction.FOLD:
             current_bet = game.betting.current_bets.get(player_id, None)
@@ -206,14 +275,16 @@ def test_betting_scenario(scenario: BettingScenario):
             if action != PlayerAction.CHECK:
                 assert current_bet.amount == amount, \
                     f"Expected bet of {amount} for {player_id}, got {current_bet.amount}"
+                if current_bet.is_all_in:
+                    print(f"Player {player_id} is all-in")
         
-        # Record if this was the last action
         last_action = i == len(scenario.actions) - 1
-        
         if result.state_changed or last_action:
-            # Verify final stacks
+            # Verify final stacks and pot structure
             for player_id, expected_stack in scenario.expected_stacks.items():
                 actual_stack = game.table.players[player_id].stack
                 assert actual_stack == expected_stack, \
                     f"Expected {player_id} to have {expected_stack}, got {actual_stack}"
+            
+            verify_pot_state(game, scenario.expected_pot, "Final state")
             break
