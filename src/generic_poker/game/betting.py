@@ -82,12 +82,33 @@ class BettingManager(ABC):
     def place_bet(self, player_id: str, amount: int, stack: int, is_forced: bool = False) -> None:
         """
         Place a bet for a player.
-        
+
+        This method uses total amount betting style - the amount parameter represents
+        the total amount this player will have bet after this action is complete,
+        not just the amount being added.
+
+        For example:
+        - If P1 has already bet 100 and wants to raise to 300
+        call place_bet("P1", 300, stack_before)
+        - If P2 then wants to call the 300
+        call place_bet("P2", 300, stack_before)
+
         Args:
             player_id: ID of betting player
-            amount: Total amount player will have bet after this action
-            stack: Player's current stack before this bet
+            amount: Total amount player will have bet after this action.
+                NOT the amount being added - use get_amount_to_add() for that.
+            stack_before: Player's chip stack before this bet
             is_forced: Whether this is a forced bet (blind/ante)
+
+        Examples:
+            # P1 opens for 100
+            betting.place_bet("P1", 100, 1000)  # P1 adds 100, stack becomes 900
+            
+            # P2 raises to 300
+            betting.place_bet("P2", 300, 1000)  # P2 adds 300, stack becomes 700
+            
+            # P1 re-raises to 600
+            betting.place_bet("P1", 600, 900)   # P1 adds 500 more, stack becomes 400
         """
         # Get current amount from player if any
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
@@ -129,6 +150,46 @@ class BettingManager(ABC):
                     f"last_raise_size={self.last_raise_size}, "
                     f"pot={self.pot.total}, "
                     f"player_bets={[(pid, bet.amount) for pid, bet in self.current_bets.items()]}")
+
+    def get_amount_to_add(self, player_id: str, proposed_total: int) -> int:
+        """
+        Calculate how much more a player needs to add to reach a proposed total bet.
+
+        Args:
+            player_id: ID of player
+            proposed_total: Total amount player wants to bet
+
+        Returns:
+            Amount player needs to add to reach proposed total
+
+        Example:
+            # P1 has bet 100, wants to know how much to add to bet 300 total
+            amount_to_add = betting.get_amount_to_add("P1", 300)  # Returns 200
+        """
+        current_bet = self.current_bets.get(player_id, PlayerBet()).amount
+        return proposed_total - current_bet
+
+    def get_stack_impact(self, player_id: str, proposed_total: int) -> tuple[int, int]:
+        """
+        Calculate impact on player's stack for a proposed bet.
+
+        Args:
+            player_id: ID of player
+            proposed_total: Total amount player wants to bet
+
+        Returns:
+            Tuple of (amount_to_add, new_stack)
+            where amount_to_add is how much more needs to be bet
+            and new_stack is what their stack will be after the bet
+
+        Example:
+            # P1 has stack of 1000, has bet 100, wants to bet 300 total
+            amount_to_add, new_stack = betting.get_stack_impact("P1", 300)
+            # Returns (200, 800)
+        """
+        amount_to_add = self.get_amount_to_add(player_id, proposed_total)
+        current_stack = self.table.get_player_stack(player_id)  # Need to add this method
+        return amount_to_add, current_stack - amount_to_add
         
     def get_required_bet(self, player_id: str) -> int:
         """Get amount player needs to bet to call."""
