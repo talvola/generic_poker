@@ -1,5 +1,5 @@
 import pytest
-from generic_poker.game.pot import Pot, ActivePot, BetInfo
+from generic_poker.game.pot import Pot, ActivePotNew, BetInfo
 
 import logging
 import sys

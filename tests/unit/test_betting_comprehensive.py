@@ -225,6 +225,8 @@ class TestTwoPlayersP2Short:
         assert nl_betting.pot.main_pot.cap_amount == 100
         assert nl_betting.pot.main_pot.current_bet == 100
         assert nl_betting.pot.main_pot.eligible_players == {"P1", "P2"}
+        print ("main pot player bets is:")
+        print (nl_betting.pot.main_pot.player_bets)
         assert nl_betting.pot.main_pot.player_bets == [PotBet("P1",100),PotBet("P2",100)]
 
         # side bet has the extra $900 from P1's original bet
