@@ -1,6 +1,6 @@
 """Unit tests for Pot class."""
 import pytest
-from generic_poker.game.pot import Pot, PotBet, ActivePotNew, BetInfo
+from generic_poker.game.pot import Pot, ActivePotNew, BetInfo
 
 import logging
 import sys
@@ -45,7 +45,7 @@ class TestContributeToPot:
         empty_pot._contribute_to_pot(pot, bet, 100)
         
         assert pot.amount == 100
-        assert pot.player_bets == [PotBet("P1", 100)]
+        assert pot.player_bets == {"P1": 100}
         assert pot.eligible_players == {"P1"}
         assert pot.active_players == {"P1"}
         assert len(empty_pot.round_pots) == 1  # Should still be in first round
@@ -66,7 +66,7 @@ class TestContributeToPot:
         empty_pot._contribute_to_pot(pot, bet, 100)
         
         assert pot.amount == 100
-        assert pot.player_bets == [PotBet("P1", 100)]
+        assert pot.player_bets == {"P1": 100}
         assert pot.eligible_players == {"P1"}
         assert not pot.active_players  # All-in player not active
         assert len(empty_pot.round_pots) == 1  # Should still be in first round
@@ -95,7 +95,7 @@ class TestHandleBetToCappedPot:
         
         assert remaining == 0
         assert pot.amount == 100
-        assert pot.player_bets == [PotBet("P2", 100)]
+        assert pot.player_bets == {"P2": 100}
         assert len(empty_pot.round_pots) == 1  # Should still be in first round
         
     def test_bet_exceeds_cap(self, empty_pot):
@@ -119,7 +119,7 @@ class TestHandleBetToCappedPot:
         
         assert remaining == 200  # Should return excess
         assert pot.amount == 100  # Should only take cap amount
-        assert pot.player_bets == [PotBet("P2", 100)]
+        assert pot.player_bets == {"P2": 100}
         assert len(empty_pot.round_pots) == 1  # Should still be in first round
 
     def test_short_bet_triggers_restructure(self, empty_pot):
@@ -129,7 +129,7 @@ class TestHandleBetToCappedPot:
         pot.current_bet = 300
         pot.cap_amount = 300
         pot.capped = True
-        pot.player_bets = [PotBet("P1", 300)]
+        pot.player_bets = {"P1": 300}
         pot.amount = 300
         
         bet = BetInfo(
@@ -163,7 +163,7 @@ class TestDistributeExcessToSidePots:
             eligible_players={"P1"},
             active_players={"P1"},
             excluded_players=set(),
-            player_bets=[PotBet("P1", 300)],
+            player_bets={"P1": 300},
             order=1
         )
         current.side_pots.append(side_pot)
@@ -181,7 +181,7 @@ class TestDistributeExcessToSidePots:
         
         assert remaining == 0
         assert side_pot.amount == 600  # 300 each from P1 and P2
-        assert side_pot.player_bets == [PotBet("P1", 300), PotBet("P2", 300)]
+        assert side_pot.player_bets == {"P1": 300, "P2": 300}
         assert side_pot.eligible_players == {"P1", "P2"}
         
     def test_multiple_uncapped_side_pots(self, empty_pot):
@@ -195,7 +195,7 @@ class TestDistributeExcessToSidePots:
             eligible_players={"P1"},
             active_players={"P1"},
             excluded_players=set(),
-            player_bets=[PotBet("P1", 200)],
+            player_bets={"P1": 200},
             order=1
         )
         side_pot2 = ActivePotNew(
@@ -204,7 +204,7 @@ class TestDistributeExcessToSidePots:
             eligible_players={"P1"},
             active_players={"P1"},
             excluded_players=set(),
-            player_bets=[PotBet("P1", 100)],
+            player_bets={"P1": 100},
             order=2
         )
         current.side_pots.extend([side_pot1, side_pot2])
@@ -223,8 +223,8 @@ class TestDistributeExcessToSidePots:
         assert remaining == 0
         assert side_pot1.amount == 400  # 200 each
         assert side_pot2.amount == 200  # 100 each
-        assert side_pot1.player_bets == [PotBet("P1", 200), PotBet("P2", 200)]
-        assert side_pot2.player_bets == [PotBet("P1", 100), PotBet("P2", 100)]
+        assert side_pot1.player_bets == {"P1": 200, "P2": 200}
+        assert side_pot2.player_bets == {"P1": 100, "P2": 100}
 
 class TestCreateNewSidePot:
     """Test cases for _create_new_side_pot method."""
@@ -251,7 +251,7 @@ class TestCreateNewSidePot:
         assert side_pot.eligible_players == {"P1"}
         assert side_pot.active_players == {"P1"}  # Not all-in
         assert not side_pot.capped
-        assert side_pot.player_bets == [PotBet("P1", 300)]
+        assert side_pot.player_bets == {"P1": 300}
         
     def test_all_in_side_pot(self, empty_pot):
         """Create capped side pot from all-in bet."""
@@ -276,94 +276,239 @@ class TestCreateNewSidePot:
         assert not side_pot.active_players  # All-in
         assert side_pot.capped
         assert side_pot.cap_amount == 300
-        assert side_pot.player_bets == [PotBet("P1", 300)]
+        assert side_pot.player_bets == {"P1": 300}
 
-class TestRestructurePot:
-    """Test cases for _restructure_pot method."""
-    
+class TestRestructuredPot:
     def test_simple_restructure(self, empty_pot):
-        """Simple pot restructure with one short stack."""
         current = empty_pot.round_pots[-1]
-
         pot = current.main_pot
+        # Initialize the pot
         pot.current_bet = 300
-        pot.amount = 400     # P1 has put in 100, P2 has put in 300
-        pot.player_bets = [
-            PotBet("P1", 100),  # P1 had bet 100
-            PotBet("P2", 300)   # P2 had bet 300
-        ]
+        pot.amount = 400  # Initial state: 100 from P1 + 300 from P2
+        pot.player_bets = {"P1": 100, "P2": 300}
         pot.eligible_players = {"P1", "P2"}
         pot.active_players = {"P1", "P2"}
-        
-        bet = BetInfo(
-            player_id="P1",
-            amount=100,  # Can only add 100 more
-            is_all_in=False,
-            stack_before=100,
-            prev_total=100,
-            new_total=200
-        )
-        
-        empty_pot._restructure_pot(pot, bet, 100)
-        
-        # Main pot: P1: 200, P2: 200
-        assert pot.amount == 400
-        assert pot.current_bet == 200
-        assert pot.cap_amount == 200
-        assert pot.capped
-        assert len(pot.player_bets) == 2
-        assert any(pb.player_id == "P1" and pb.amount == 200 for pb in pot.player_bets)
-        assert any(pb.player_id == "P2" and pb.amount == 200 for pb in pot.player_bets)
-        
-        # Side pot: P2's excess 100
-        assert len(empty_pot.round_pots[-1].side_pots) == 1
-        side_pot = current.side_pots[0]
+
+        target_amount = 200
+        side_pot = empty_pot._restructure_pot(pot, target_amount)
+        current.side_pots.append(side_pot)
+
+        # Corrected assertions
+        assert pot.amount == 300  # 100 from P1 + 200 from P2
+        assert pot.current_bet == 200  # Reflects the target_amount
+        assert pot.player_bets == {"P1": 100, "P2": 200}
+        assert pot.capped  # Since restructured to a target
         assert side_pot.amount == 100
-        assert side_pot.eligible_players == {"P2"}
-        assert not side_pot.capped
+        assert side_pot.player_bets == {"P2": 100}
+
+    def test_simple_restructure_add_bet(self, empty_pot):
+        empty_pot.add_bet("P1", 100, False, 200)
+        empty_pot.add_bet("P2", 300, False, 1000)
+
+        # After first two bets
+        current = empty_pot.round_pots[-1]
+        assert current.main_pot.amount == 400  # 100 from P1 + 300 from P2
+        assert current.main_pot.current_bet == 300  # P2 raised to 300
+        assert not current.main_pot.capped
+        assert current.main_pot.player_bets == {"P1": 100, "P2": 300}
+
+        empty_pot.add_bet("P1", 200, True, 100)  # P1 adds 100 (total 200), all-in
+
+        # After P1’s all-in
+        assert current.main_pot.amount == 400  # 200 from P1 + 200 from P2
+        assert current.main_pot.current_bet == 200  # Capped at P1’s all-in amount
+        assert current.main_pot.capped
+        assert current.main_pot.player_bets == {"P1": 200, "P2": 200}
+        assert len(current.side_pots) == 1
+        assert current.side_pots[0].amount == 100  # P2’s excess
+        assert current.side_pots[0].player_bets == {"P2": 100}
+
 
     def test_restructure_with_multiple_excess(self, empty_pot):
-        """Restructure when multiple players have excess amounts."""
+        """
+        Test restructuring a pot with multiple players contributing excess.
+        P1 has bet 100, P2 and P3 have bet 300 each. Target amount is 200.
+        Main pot caps at 200 per player where possible, excess from P2 and P3 goes to a side pot.
+        """
         current = empty_pot.round_pots[-1]
-
         pot = current.main_pot
+        # Initialize the pot
         pot.current_bet = 300
-        pot.amount = 700  # P1: 100, P2: 300, P3: 300
-        pot.player_bets = [
-            PotBet("P1", 100),
-            PotBet("P2", 300),
-            PotBet("P3", 300)
-        ]
+        pot.amount = 700  # 100 from P1 + 300 from P2 + 300 from P3
+        pot.player_bets = {"P1": 100, "P2": 300, "P3": 300}
         pot.eligible_players = {"P1", "P2", "P3"}
         pot.active_players = {"P1", "P2", "P3"}
         
-        bet = BetInfo(
-            player_id="P1",
-            amount=100,
-            is_all_in=False,
-            stack_before=100,
-            prev_total=100,
-            new_total=200
-        )
+        # Define target_amount directly
+        target_amount = 200
         
-        empty_pot._restructure_pot(pot, bet, 100)
+        # Call the method and capture the returned side pot
+        side_pot = empty_pot._restructure_pot(pot, target_amount)
+        current.side_pots.append(side_pot)
         
-        # Main pot: P1,P2,P3 all 200
-        assert pot.amount == 600
+        # Assertions for the main pot
+        assert pot.amount == 500  # 100 from P1 + 200 from P2 + 200 from P3
         assert pot.current_bet == 200
         assert pot.cap_amount == 200
         assert pot.capped
-        assert len(pot.player_bets) == 3
-        assert any(pb.player_id == "P1" and pb.amount == 200 for pb in pot.player_bets)
-        assert any(pb.player_id == "P2" and pb.amount == 200 for pb in pot.player_bets)
-        assert any(pb.player_id == "P3" and pb.amount == 200 for pb in pot.player_bets)
+        assert pot.player_bets == {"P1": 100, "P2": 200, "P3": 200}
         
-        # Side pot: P2,P3 excess 100 each
+        # Assertions for the side pot
         assert len(empty_pot.round_pots[-1].side_pots) == 1
         side_pot = current.side_pots[0]
-        assert side_pot.amount == 200
+        assert side_pot.amount == 200  # 100 from P2 + 100 from P3
         assert side_pot.eligible_players == {"P2", "P3"}
         assert not side_pot.capped
+
+# new set of tests
+
+class TestTutorialCase01:
+    """Test betting patterns with add_bet based on walkthrough."""
+
+    def test_two_players_no_all_in(self, empty_pot):
+        """Case 0 - Create pot with P1 betting 100."""
+        empty_pot.add_bet("P1", 100, False, 1000)
+        # Basic assertions
+        current = empty_pot.round_pots[-1]
+        assert current.main_pot.amount == 100
+        assert not current.main_pot.capped
+        assert len(empty_pot.round_pots[-1].side_pots) == 0
+        assert current.main_pot.active_players == {"P1"}  
+        assert current.main_pot.eligible_players == {"P1"} 
+        assert current.main_pot.player_bets == {"P1": 100}  
+        """ then P2 calls 100 """
+        empty_pot.add_bet("P2", 100, False, 1000)
+        assert current.main_pot.amount == 200
+        assert not current.main_pot.capped
+        assert len(empty_pot.round_pots[-1].side_pots) == 0
+        assert current.main_pot.active_players == {"P1", "P2"}
+        assert current.main_pot.eligible_players == {"P1", "P2"}
+        assert current.main_pot.player_bets == {"P1": 100, "P2": 100}   
+
+    def test_two_players_P1_all_in_P2_call(self, empty_pot):
+        """Case 1a - Create pot with P1 betting 100, which is all-in"""
+        empty_pot.add_bet("P1", 100, True, 100)
+        # Basic assertions
+        current = empty_pot.round_pots[-1]
+        assert current.main_pot.amount == 100
+        assert current.main_pot.capped
+        assert current.main_pot.cap_amount == 100
+        assert len(current.side_pots) == 0
+        assert current.main_pot.active_players == set()     # not sure if this is correct
+        assert current.main_pot.eligible_players == {"P1"}
+        assert current.main_pot.player_bets == {"P1": 100}
+        """ then P2 calls 100, not all-in"""
+        empty_pot.add_bet("P2", 100, False, 1000)
+        assert current.main_pot.amount == 200
+        assert current.main_pot.capped
+        assert current.main_pot.cap_amount == 100
+        assert len(current.side_pots) == 0
+        assert current.main_pot.active_players == {"P2"}
+        assert current.main_pot.eligible_players == {"P1", "P2"}
+        assert current.main_pot.player_bets == {"P1": 100, "P2": 100}
+        
+    def test_two_players_P1_all_in_P2_raise(self, empty_pot):
+        """Case 1b - Create pot with P1 betting 100, which is all-in"""
+        empty_pot.add_bet("P1", 100, True, 100)
+        # Basic assertions
+        current = empty_pot.round_pots[-1]
+        assert current.main_pot.amount == 100
+        assert current.main_pot.capped
+        assert current.main_pot.cap_amount == 100
+        assert len(current.side_pots) == 0
+        assert current.main_pot.active_players == set()
+        assert current.main_pot.eligible_players == {"P1"}
+        assert current.main_pot.player_bets == {"P1": 100}
+        """ then P2 raises to 200, not all-in, creating side-pot"""
+        empty_pot.add_bet("P2", 200, False, 1000)
+        assert current.main_pot.amount == 200
+        assert current.main_pot.capped
+        assert current.main_pot.cap_amount == 100
+        assert len(current.side_pots) == 1
+        assert current.main_pot.active_players == {'P2'}     # not sure if this is correct - or whether if it's capped it even matters
+        assert current.main_pot.eligible_players == {"P1", "P2"}
+        assert current.main_pot.player_bets == {"P1": 100, "P2": 100}
+        assert current.side_pots[0].amount == 100
+        assert not current.side_pots[0].capped
+        assert current.side_pots[0].active_players == {"P2"}
+        assert current.side_pots[0].eligible_players == {"P2"}
+        assert current.side_pots[0].player_bets == {"P2": 100}
+
+    def test_two_players_P1_all_in_P2_call_less(self, empty_pot):
+        """Case 1c - Create pot with P1 betting 100, which is all-in"""
+        empty_pot.add_bet("P1", 100, True, 100)
+        # Basic assertions
+        current = empty_pot.round_pots[-1]
+        assert current.main_pot.amount == 100
+        assert current.main_pot.capped
+        assert current.main_pot.cap_amount == 100
+        assert len(current.side_pots) == 0
+        assert current.main_pot.active_players == set()
+        assert current.main_pot.eligible_players == {"P1"}
+        assert current.main_pot.player_bets == {"P1": 100}
+        """ then P2 calls 50 all-in, meaning we need to split up the main pot, creating side-pot"""
+        empty_pot.add_bet("P2", 50, True, 50)
+        assert current.main_pot.amount == 100  # 50 from each
+        assert current.main_pot.capped
+        assert current.main_pot.cap_amount == 50
+        assert len(current.side_pots) == 1
+        assert current.main_pot.active_players == set()  
+        assert current.main_pot.eligible_players == {"P1", "P2"}
+        assert current.main_pot.player_bets == {"P1": 50, "P2": 50}
+        assert current.side_pots[0].amount == 50
+        assert current.side_pots[0].capped
+        assert current.side_pots[0].active_players == {"P1"}
+        assert current.side_pots[0].eligible_players == {"P1"}
+        assert current.side_pots[0].player_bets == {"P1": 50}
+
+class TestTutorialCase2:
+    def test_two_players_P1_bet_P2_call_allin(self, empty_pot):
+        """Case 2a - Create pot with P1 betting 100"""
+        empty_pot.add_bet("P1", 100, False, 1000)
+        # Basic assertions
+        current = empty_pot.round_pots[-1]
+        assert current.main_pot.amount == 100
+        assert not current.main_pot.capped
+        assert len(current.side_pots) == 0
+        assert current.main_pot.active_players == {"P1"}
+        assert current.main_pot.eligible_players == {"P1"}
+        assert current.main_pot.player_bets == {"P1": 100}
+        """ then P2 calls 100, all-in"""
+        empty_pot.add_bet("P2", 100, True, 100)
+        assert current.main_pot.amount == 200
+        assert current.main_pot.capped
+        assert current.main_pot.cap_amount == 100
+        assert len(current.side_pots) == 0
+        assert current.main_pot.active_players == {"P1"}
+        assert current.main_pot.eligible_players == {"P1", "P2"}
+        assert current.main_pot.player_bets == {"P1": 100, "P2": 100}
+
+    def test_two_players_P1_bet_P2_call_less(self, empty_pot):
+        """Case 2a - Create pot with P1 betting 100"""
+        empty_pot.add_bet("P1", 100, False, 1000)
+        # Basic assertions
+        current = empty_pot.round_pots[-1]
+        assert current.main_pot.amount == 100
+        assert not current.main_pot.capped
+        assert len(current.side_pots) == 0
+        assert current.main_pot.active_players == {"P1"}
+        assert current.main_pot.eligible_players == {"P1"}
+        assert current.main_pot.player_bets == {"P1": 100}
+        """ then P2 calls for less $50, all-in"""
+        empty_pot.add_bet("P2", 50, True, 50)
+        assert current.main_pot.amount == 100
+        assert current.main_pot.capped
+        assert current.main_pot.cap_amount == 50
+        assert len(current.side_pots) == 1   
+        assert current.main_pot.active_players == {"P1"}
+        assert current.main_pot.eligible_players == {"P1", "P2"}
+        assert current.main_pot.player_bets == {"P1": 50, "P2": 50}
+        assert current.side_pots[0].amount == 50
+        assert not current.side_pots[0].capped
+        assert current.side_pots[0].active_players == {"P1"}
+        assert current.side_pots[0].eligible_players == {"P1"}
+        assert current.side_pots[0].player_bets == {"P1": 50}
+        
 
 class TestBasicBettingPatterns:
     """Test basic betting patterns with add_bet."""
