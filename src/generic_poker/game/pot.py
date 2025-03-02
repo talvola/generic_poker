@@ -2,11 +2,12 @@
 from dataclasses import dataclass, field
 from typing import List, Set, Dict, Optional
 import logging
+import copy
 
 logger = logging.getLogger(__name__)
 
 @dataclass
-class ActivePotNew:
+class ActivePot:
     """Represents a pot (main or side) that can receive bets."""
     amount: int                # Total amount in this pot
     current_bet: int          # Current bet that must be called
@@ -43,11 +44,9 @@ class BetInfo:
 
 @dataclass
 class RoundPots:
-    main_pot: ActivePotNew
-    side_pots: List[ActivePotNew]
+    main_pot: ActivePot
+    side_pots: List[ActivePot]
     round_number: int
-    round_total: int = 0
-    round_bets: Dict[str, Dict[str, int]] = field(default_factory=lambda: {})
 
 class Pot:
     """Manages poker pot structure including main pot and side pots."""
@@ -55,6 +54,7 @@ class Pot:
     def __init__(self):
         """Initialize empty pot structure."""
         self.current_round = 1
+
         self.round_pots: List[RoundPots] = []
         self.total_bets: Dict[str, int] = {}  # Track total contributed by each player
         self.is_all_in: Dict[str, bool] = {}  # Track all-in status
@@ -63,40 +63,40 @@ class Pot:
         self._create_new_round()
 
     def _create_new_round(self):
-        """Create pots for a new betting round."""
         last_round = self.round_pots[-1] if self.round_pots else None
         
-        # If there are previous pots, carry them forward
         if last_round:
             new_round = RoundPots(
-                main_pot=last_round.main_pot,  # Keep existing pots
-                side_pots=last_round.side_pots,
-                round_number=self.current_round,
-                round_total=0  # New round starts with 0 total
+                main_pot=copy.deepcopy(last_round.main_pot),
+                side_pots=[copy.deepcopy(pot) for pot in last_round.side_pots],
+                round_number=self.current_round
             )
-            
-            # Update active players for new round
+            eligible_players = set(last_round.main_pot.eligible_players)
             new_round.main_pot.active_players = {
-                p for p in last_round.main_pot.active_players 
-                if not self.is_all_in[p]
+                p for p in eligible_players if not self.is_all_in.get(p, False)
             }
-            new_round.main_pot.eligible_players = new_round.main_pot.active_players.copy()
-            
+            new_round.main_pot.eligible_players = eligible_players
+            for side_pot in new_round.side_pots:
+                side_pot.active_players = {
+                    p for p in side_pot.eligible_players if not self.is_all_in.get(p, False)
+                }
         else:
-            # First round - create new empty pots
             new_round = RoundPots(
-                main_pot=ActivePotNew(
+                main_pot=ActivePot(
                     amount=0,
                     current_bet=0,
                     eligible_players=set(),
                     active_players=set(),
                     excluded_players=set(),
                     player_bets={},
-                    main_pot=True
+                    main_pot=True,
+                    capped=False,
+                    cap_amount=0,
+                    order=0,
+                    closed=False
                 ),
                 side_pots=[],
-                round_number=self.current_round,
-                round_total=0
+                round_number=self.current_round
             )
         
         self.round_pots.append(new_round)
@@ -105,32 +105,7 @@ class Pot:
         """End current betting round and prepare for next."""
         current = self.round_pots[-1]
         
-        # Calculate total just for this round's betting
-        round_bets = current.round_bets
-        logger.debug(f"\nCalculating round total:")
-        logger.debug(f"  Round bets: {round_bets}")
-        
-        # Main pot totals
-        main_pot_total = sum(amount for amount in round_bets.get('main_pot', {}).values())
-        logger.debug(f"  Main pot betting total: {main_pot_total}")
-        logger.debug(f"    Bets: {round_bets.get('main_pot', {})}")
-        
-        # Side pot totals
-        side_pots_total = 0
-        for i in range(len(current.side_pots)):
-            pot_id = f'side_pot_{i}'
-            pot_total = sum(amount for amount in round_bets.get(pot_id, {}).values())
-            side_pots_total += pot_total
-            logger.debug(f"  Side pot {i+1} betting total: {pot_total}")
-            logger.debug(f"    Bets: {round_bets.get(pot_id, {})}")
-        
-        logger.debug(f"  Side pots combined total: {side_pots_total}")
-        
-        # Set round total
-        current.round_total = main_pot_total + side_pots_total
-        logger.debug(f"  Final round total: {current.round_total}")
-        
-        # Log current state before new round
+        # Log final state of the round
         logger.debug("\nPot state at end of round:")
         logger.debug(f"  Main pot: {current.main_pot}")
         for i, pot in enumerate(current.side_pots):
@@ -141,10 +116,11 @@ class Pot:
         self._create_new_round()
         logger.debug(f"\nStarting round {self.current_round}")
         
-    @property 
+    @property
     def total(self):
-        """Total amount across all rounds and pots."""
-        return sum(round_pots.round_total for round_pots in self.round_pots)
+        """Total amount in the current round's pots."""
+        current = self.round_pots[-1]
+        return current.main_pot.amount + sum(side_pot.amount for side_pot in current.side_pots)
     
     @property
     def active_players(self) -> Set[str]:
@@ -152,7 +128,7 @@ class Pot:
         current = self.round_pots[-1]
         return current.main_pot.active_players    
 
-    def _contribute_to_pot(self, pot: ActivePotNew, bet: BetInfo, amount: int) -> None:
+    def _contribute_to_pot(self, pot: ActivePot, bet: BetInfo, amount: int) -> None:
         if amount <= 0 or (pot.closed and pot.capped):
             return
         logger.debug(f"Contributing to {pot.name()}:")
@@ -169,60 +145,50 @@ class Pot:
                 pot.active_players.discard(bet.player_id)
             else:
                 pot.active_players.add(bet.player_id)
-        # Track contribution in round_bets
-        current = self.round_pots[-1]
-        pot_id = 'main_pot' if pot.main_pot else f'side_pot_{pot.order}'
-        if pot_id not in current.round_bets:
-            current.round_bets[pot_id] = {}
-        current.round_bets[pot_id][bet.player_id] = amount
         logger.debug(f"  After: {pot}")
-        logger.debug(f"  Round bets for {pot_id}: {current.round_bets[pot_id]}")
 
-    def _handle_bet_to_capped_pot(self, pot: ActivePotNew, bet: BetInfo, remaining_amount: int) -> int:
-        """Handle adding a bet to a capped pot."""
-
-        # If pot is closed and capped, all money goes to side pots
+    def _handle_bet_to_capped_pot(self, pot: ActivePot, bet: BetInfo, remaining_amount: int) -> int:
         if pot.closed and pot.capped:
             return remaining_amount
-            
-        # If pot is closed but not capped, can still accept bets
-             
+        
         player_current = pot.player_bets.get(bet.player_id, 0)
-
         will_have = player_current + remaining_amount
         
         logger.debug(f"    Contribution analysis:")
         logger.debug(f"      Already in pot: {player_current}")
         logger.debug(f"      Adding now: {remaining_amount}")
         logger.debug(f"      Will have total: {will_have}")
-        logger.debug(f"      Need to match: {pot.cap_amount}")  # Updated to pot.cap_amount for clarity
+        logger.debug(f"      Need to match: {pot.cap_amount}")
         
-        if will_have >= pot.cap_amount:  # Changed from remaining_amount >= pot.current_bet
-            logger.debug(f"    Will exceed cap")
-            # Contribute only what's needed to reach cap
-            can_add = max(0, pot.cap_amount - player_current)  # In case already at/over cap
+        if will_have >= pot.cap_amount:
+            logger.debug(f"    Will exceed or match cap")
+            can_add = max(0, pot.cap_amount - player_current)
+            logger.debug(f"      can_add is ${can_add}")
             if can_add > 0:
                 logger.debug(f"         contributing can_add of {can_add}")
                 self._contribute_to_pot(pot, bet, can_add)
+                pot.player_bets[bet.player_id] = min(will_have, pot.cap_amount)
+            if not bet.is_all_in:
+                # Only reduce remaining_amount if we added something
+                logger.debug(f"    Not all-in - returning {remaining_amount - can_add}")
+                return remaining_amount - can_add
             logger.debug(f"      Returning: {remaining_amount - can_add}")
             return remaining_amount - can_add
-                
-        if will_have < pot.cap_amount:  # 100 < 300
+        
+        if will_have < pot.cap_amount:
             logger.debug("    Cannot meet cap - restructuring")
-            # Add P2’s bet to the pot
             pot.player_bets[bet.player_id] = will_have
             pot.eligible_players.add(bet.player_id)
-            pot.amount = sum(pot.player_bets.values())  # Temporary update: 300 + 100 = 400
-            # Restructure with target_amount = will_have
+            pot.amount = sum(pot.player_bets.values())
             side_pot = self._restructure_pot(pot, will_have)
-            if side_pot:  # Only append if a side pot is created
+            if side_pot:
                 if bet.is_all_in:
                     side_pot.capped = True
-                    side_pot.cap_amount = side_pot.amount  # Total excess, e.g., 50      
+                    side_pot.cap_amount = side_pot.amount
                 self.round_pots[-1].side_pots.append(side_pot)
             if bet.is_all_in:
                 pot.active_players.discard(bet.player_id)
-        return 0
+            return 0
 
     def _distribute_excess_to_side_pots(self, bet: BetInfo, amount: int) -> int:
         """Distribute excess chips to existing side pots.
@@ -272,7 +238,7 @@ class Pot:
         current_round = self.round_pots[-1]
 
         logger.debug(f"    Creating new side pot with remaining {amount}")
-        side_pot = ActivePotNew(
+        side_pot = ActivePot(
             amount=0,
             current_bet=amount,  # Set current bet to the amount being bet
             eligible_players={bet.player_id},
@@ -290,7 +256,7 @@ class Pot:
             
         current_round.side_pots.append(side_pot)
 
-    def _restructure_pot(self, pot: ActivePotNew, target_amount: int) -> ActivePotNew:
+    def _restructure_pot(self, pot: ActivePot, target_amount: int) -> ActivePot:
         """
         Restructure the given pot by creating a side pot for contributions exceeding the target amount.
         
@@ -326,11 +292,10 @@ class Pot:
             logger.debug(f"    No excess contributions to create a side pot")
             return None        
 
-        logger.debug(f"    Creating new side pot with for excess amount {sum(side_pot_contributions.values())} for bets {side_pot_contributions}")
-        # Create side pot for excess
-        side_pot = ActivePotNew(
+        logger.debug(f"    Creating new side pot with excess amount {sum(side_pot_contributions.values())} for bets {side_pot_contributions}")
+        side_pot = ActivePot(
             amount=sum(side_pot_contributions.values()),
-            current_bet=max(side_pot_contributions.values()) if side_pot_contributions else 0,
+            current_bet=max(side_pot_contributions.values()),
             eligible_players=side_pot_eligible,
             active_players=set(side_pot_eligible),
             excluded_players=set(),
@@ -341,7 +306,6 @@ class Pot:
             cap_amount=0,
             closed=False
         )
-        
         return side_pot
 
     def add_bet(self, player_id: str, total_amount: int, is_all_in: bool, stack_before: int) -> None:
@@ -368,19 +332,20 @@ class Pot:
         elif player_id not in current.main_pot.active_players:
             raise ValueError(f"Player {player_id} is not active in current round")
                 
-        # Calculate amount being added
-        prev_total = self.total_bets.get(player_id, 0)  # Get player's previous contribution
-        amount_to_add = total_amount - prev_total  # Calculate incremental amount
+        # Use round-specific key for prev_total
+        round_key = f"round_{self.current_round}_{player_id}"
+        prev_total = self.total_bets.get(round_key, 0)
+        amount_to_add = total_amount - prev_total
 
-        if total_amount < prev_total:
-            raise ValueError(f"Total amount {total_amount} cannot be less than previous total {prev_total} for player {player_id}")        
-        
+        if amount_to_add < 0:
+            raise ValueError(f"Total amount {total_amount} cannot be less than previous total {prev_total} for player {player_id} in round {self.current_round}")
+    
         bet = BetInfo(
             player_id=player_id,
             amount=amount_to_add,
             is_all_in=is_all_in,
             stack_before=stack_before,
-            prev_total=self.total_bets.get(player_id, 0),
+            prev_total=prev_total,
             new_total=total_amount
         )
         
@@ -417,12 +382,19 @@ class Pot:
                     logger.debug(f"    Player {player_id} is excluded from this pot")
                     continue
                 
+                prev_remaining = remaining_amount
                 remaining_amount = self._handle_bet_to_capped_pot(pot, bet, remaining_amount)
                 logger.debug(f"  After _handle_bet_to_capped_pot")
                 logger.debug(f"    Remaining amount: {remaining_amount}")
+                if remaining_amount > 0 and not is_all_in:
+                    current_in_pot = pot.player_bets.get(player_id, 0)
+                    if current_in_pot < pot.cap_amount:
+                        additional = min(remaining_amount, pot.cap_amount - current_in_pot)
+                        logger.debug(f"    Adding additional {additional} to match cap")
+                        self._contribute_to_pot(pot, bet, additional)
+                        remaining_amount -= additional
                 processed_pots.append(pot)
-                
-                if remaining_amount == 0:
+                if remaining_amount <= 0:
                     break
                     
         # Handle uncapped pots
@@ -445,8 +417,8 @@ class Pot:
                     logger.debug(f"    Player's total contribution is {player_total}")
                     logger.debug(f"    Restructuring pot with target_amount={player_total}")
                     side_pot = self._restructure_pot(pot, player_total)
-                    if side_pot:  # Only append if a side pot is created
-                        current.side_pots.append(side_pot)
+                    if side_pot:
+                        current.side_pots.append(side_pot)        
                 elif player_total > pot.current_bet:
                     pot.current_bet = player_total
                     logger.debug(f"    Updated current bet to {player_total}")
@@ -462,7 +434,7 @@ class Pot:
                 logger.debug("  No remaining amount to create new side pot")
         
         # Update player tracking
-        self.total_bets[player_id] = total_amount
+        self.total_bets[round_key] = total_amount
         self.is_all_in[player_id] = is_all_in
         
         logger.debug(f"\nFinal pot state after bet:")

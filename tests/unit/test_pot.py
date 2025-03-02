@@ -1,6 +1,6 @@
 """Unit tests for Pot class."""
 import pytest
-from generic_poker.game.pot import Pot, ActivePotNew, BetInfo
+from generic_poker.game.pot import Pot, ActivePot, BetInfo
 
 import logging
 import sys
@@ -157,7 +157,7 @@ class TestDistributeExcessToSidePots:
         current = empty_pot.round_pots[-1]
 
         # Create existing side pot
-        side_pot = ActivePotNew(
+        side_pot = ActivePot(
             amount=300,
             current_bet=300,
             eligible_players={"P1"},
@@ -189,7 +189,7 @@ class TestDistributeExcessToSidePots:
         current = empty_pot.round_pots[-1]
 
         # Create two side pots with different bet levels
-        side_pot1 = ActivePotNew(
+        side_pot1 = ActivePot(
             amount=200,
             current_bet=200,
             eligible_players={"P1"},
@@ -198,7 +198,7 @@ class TestDistributeExcessToSidePots:
             player_bets={"P1": 200},
             order=1
         )
-        side_pot2 = ActivePotNew(
+        side_pot2 = ActivePot(
             amount=100,
             current_bet=100,
             eligible_players={"P1"},
@@ -979,24 +979,26 @@ class TestComplexScenarios:
         assert current.main_pot.amount == 900
         assert not current.main_pot.capped
 
+class TestMultipleRounds:
+
     def test_multiple_betting_rounds(self, empty_pot):
         """Test betting across multiple rounds.
-        
+
         Starting stacks:
         P1: 1000
         P2: 500
         P3: 1000
-        
+
         Round 1:
         P1 bets 500
         P2 calls 500 (all-in)
-        P3 raises to 750 
+        P3 raises to 750
         P1 calls 750
-        
+
         End of Round 1:
         - Main pot: $1500 ($500 each) - capped
         - Side pot: $500 ($250 each P1/P3) - uncapped
-        
+
         Round 2:
         P1 bets 200 (into uncapped side pot)
         P3 calls 200
@@ -1004,36 +1006,143 @@ class TestComplexScenarios:
         # Round 1
         empty_pot.add_bet("P1", 500, False, 1000)  # Open
         assert empty_pot.round_pots[-1].main_pot.amount == 500
-        
+
         empty_pot.add_bet("P2", 500, True, 500)   # Call all-in
         assert empty_pot.round_pots[-1].main_pot.amount == 1000
         assert empty_pot.round_pots[-1].main_pot.capped
         assert empty_pot.round_pots[-1].main_pot.cap_amount == 500
-        
+
         empty_pot.add_bet("P3", 750, False, 1000)  # Raise
         assert empty_pot.round_pots[-1].main_pot.amount == 1500  # $500 each
         assert len(empty_pot.round_pots[-1].side_pots) == 1
         assert empty_pot.round_pots[-1].side_pots[0].amount == 250  # P3's extra $250
-        
+
         empty_pot.add_bet("P1", 750, False, 500)   # Call raise
         assert empty_pot.round_pots[-1].main_pot.amount == 1500
         assert empty_pot.round_pots[-1].side_pots[0].amount == 500  # $250 each P1/P3
         assert not empty_pot.round_pots[-1].side_pots[0].capped  # Side pot still uncapped
-        
+
+        round1_main = empty_pot.round_pots[-1].main_pot.amount
+        round1_side = empty_pot.round_pots[-1].side_pots[0].amount
+
         empty_pot.end_betting_round()
-        round1_total = empty_pot.round_pots[0].round_total
-        
+
         # Round 2
-        empty_pot.add_bet("P1", 950, False, 250)   # Bet 200 more into side pot
+        empty_pot.add_bet("P1", 200, False, 250)  # Bet 200 into side pot
         assert empty_pot.round_pots[-1].main_pot.amount == 1500  # Main pot unchanged
         assert empty_pot.round_pots[-1].side_pots[0].amount == 700  # Previous 500 + 200 from P1
-        
-        empty_pot.add_bet("P3", 950, False, 250)   # Call 200
-        assert empty_pot.round_pots[-1].main_pot.amount == 1500  # Main pot unchanged
+
+        empty_pot.add_bet("P3", 200, False, 250)  # Call 200
+        assert empty_pot.round_pots[-1].main_pot.amount == 1500
         assert empty_pot.round_pots[-1].side_pots[0].amount == 900  # Previous 700 + 200 from P3
+
+        assert empty_pot.round_pots[0].main_pot.amount == round1_main
+        assert empty_pot.round_pots[0].side_pots[0].amount == round1_side
+        assert empty_pot.total == 2400  # 1500 + 500 + 400
+
+    def test_pots_preserved_across_rounds(self, empty_pot):
+        """Ensure previous round pots are unchanged by new round bets."""
+        # Round 1: P1 all-in, P2 raises
+        empty_pot.add_bet("P1", 1000, True, 1000)  # P1 all-in
+        empty_pot.add_bet("P2", 2000, False, 3000)  # P2 calls and raises
+        assert empty_pot.round_pots[-1].main_pot.amount == 2000
+        assert len(empty_pot.round_pots[-1].side_pots) == 1
+        assert empty_pot.round_pots[-1].side_pots[0].amount == 1000
+        assert empty_pot.total == 3000  # 2000 + 1000
         
-        # Verify Round 1 remained unchanged
-        assert empty_pot.round_pots[0].round_total == round1_total
+        round1_main = empty_pot.round_pots[-1].main_pot.amount
+        round1_side = empty_pot.round_pots[-1].side_pots[0].amount
+        
+        empty_pot.end_betting_round()
+        
+        # Round 2: P2 bets 500 more
+        empty_pot.add_bet("P2", 500, False, 1000)  # Additional 500
+        assert empty_pot.round_pots[-1].main_pot.amount == 2000  # Unchanged
+        assert empty_pot.round_pots[-1].side_pots[0].amount == 1500  # 1000 + 500
+        assert empty_pot.total == 3500  # 2000 + 500 + 1000
+        
+        assert empty_pot.round_pots[0].main_pot.amount == round1_main
+        assert empty_pot.round_pots[0].side_pots[0].amount == round1_side    
+
+    def test_multiple_side_pots_across_rounds(self, empty_pot):
+        """Test preservation with multiple side pots across rounds."""
+        # Round 1
+        empty_pot.add_bet("P1", 100, False, 1000)
+        empty_pot.add_bet("P2", 50, True, 50)
+        empty_pot.add_bet("P3", 150, False, 1000)
+        assert empty_pot.round_pots[-1].main_pot.amount == 150
+        assert len(empty_pot.round_pots[-1].side_pots) == 1
+        assert empty_pot.round_pots[-1].side_pots[0].amount == 150
+        assert empty_pot.total == 300
+        
+        round1_main = empty_pot.round_pots[-1].main_pot.amount
+        round1_side = empty_pot.round_pots[-1].side_pots[0].amount
+        
+        empty_pot.end_betting_round()
+        
+        # Round 2
+        empty_pot.add_bet("P1", 200, False, 900)  # Bet 200
+        empty_pot.add_bet("P3", 300, False, 800)  # Bet 300 total (call 200 + raise 100)
+        assert empty_pot.round_pots[-1].main_pot.amount == 150
+        assert empty_pot.round_pots[-1].side_pots[0].amount == 650  # 150 + 200 P1 + 300 P3
+        assert empty_pot.total == 800  # 150 + 650
+        
+        assert empty_pot.round_pots[0].main_pot.amount == round1_main
+        assert empty_pot.round_pots[0].side_pots[0].amount == round1_side
+
+    def test_empty_round_after_all_ins(self, empty_pot):
+        """Test a new round with no active players after all-ins."""
+        # Round 1: All players all-in
+        empty_pot.add_bet("P1", 100, True, 100)
+        empty_pot.add_bet("P2", 100, True, 100)
+        assert empty_pot.round_pots[-1].main_pot.amount == 200
+        assert empty_pot.round_pots[-1].main_pot.capped
+        assert empty_pot.round_pots[-1].main_pot.active_players == set()
+        assert empty_pot.total == 200
+        
+        round1_main = empty_pot.round_pots[-1].main_pot.amount
+        
+        empty_pot.end_betting_round()
+        
+        # Round 2: No active players
+        assert empty_pot.round_pots[-1].main_pot.amount == 200
+        assert empty_pot.round_pots[-1].main_pot.active_players == set()
+        assert len(empty_pot.round_pots[-1].side_pots) == 0
+        assert empty_pot.total == 200
+        
+        # Verify Round 1
+        assert empty_pot.round_pots[0].main_pot.amount == round1_main
+
+    def test_multiple_rounds_with_side_pot_capping(self, empty_pot):
+        """Test side pot capping across rounds."""
+        # Round 1
+        empty_pot.add_bet("P1", 300, False, 1000)
+        empty_pot.add_bet("P2", 100, True, 100)
+        empty_pot.add_bet("P3", 400, True, 400)
+        empty_pot.add_bet("P1", 400, False, 700)
+        assert empty_pot.round_pots[-1].main_pot.amount == 300
+        assert len(empty_pot.round_pots[-1].side_pots) == 1
+        assert empty_pot.round_pots[-1].side_pots[0].amount == 600
+        assert empty_pot.round_pots[-1].side_pots[0].capped
+        assert empty_pot.total == 900
+        
+        round1_main = empty_pot.round_pots[-1].main_pot.amount
+        round1_side = empty_pot.round_pots[-1].side_pots[0].amount
+        
+        empty_pot.end_betting_round()
+        
+        # Round 2
+        empty_pot.add_bet("P1", 600, True, 600)
+        assert empty_pot.round_pots[-1].main_pot.amount == 300
+        assert empty_pot.round_pots[-1].side_pots[0].amount == 600
+        assert len(empty_pot.round_pots[-1].side_pots) == 2
+        assert empty_pot.round_pots[-1].side_pots[1].amount == 600
+        assert empty_pot.round_pots[-1].side_pots[1].capped
+        assert empty_pot.total == 1500
+        
+        assert empty_pot.round_pots[0].main_pot.amount == round1_main
+        assert empty_pot.round_pots[0].side_pots[0].amount == round1_side
+
 
 class TestDifferentPotStates:
     """Test betting with different pot states."""
