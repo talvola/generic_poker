@@ -440,5 +440,5 @@ class Pot:
         logger.debug(f"\nFinal pot state after bet:")
         logger.debug(f"  Total: {self.total}")
         logger.debug(f"  Main pot: {current.main_pot}")
-        for pot in current.side_pots:
-            logger.debug(f"  {pot}")
+        for i, pot in enumerate(current.side_pots):
+            logger.debug(f"  Side Pot {i + 1}: {pot}")
