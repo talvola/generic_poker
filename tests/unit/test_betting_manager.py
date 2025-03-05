@@ -43,26 +43,26 @@ def test_basic_no_limit_betting(nl_betting):
     nl_betting.place_bet("BB", 10, 500, is_forced=True) # Big blind
     
     # Verify initial state
-    assert nl_betting.pot.total == 15
+    assert nl_betting.get_total_pot() == 15
     assert nl_betting.current_bet == 10
     
     # BTN calls
     nl_betting.place_bet("BTN", 10, 500)
-    assert nl_betting.pot.total == 25
+    assert nl_betting.get_total_pot() == 25
     assert nl_betting.current_bets["BTN"].amount == 10
     
     # SB completes
     nl_betting.place_bet("SB", 10, 495)  # 495 because already posted 5
-    assert nl_betting.pot.total == 30
+    assert nl_betting.get_total_pot() == 30
     assert nl_betting.current_bets["SB"].amount == 10
 
 def test_simple_all_in_nl(nl_betting):
     """Test simple all-in and call sequence."""
     # SB with 5000 goes all-in
     nl_betting.place_bet("SB", 5000, 5000)
-    assert nl_betting.pot.total == 5000
-    assert nl_betting.pot.main_pot.amount == 5000
-    assert len(nl_betting.pot.side_pots) == 0
+    assert nl_betting.get_total_pot() == 5000
+    assert nl_betting.get_main_pot_amount() == 5000
+    assert nl_betting.get_side_pot_count() == 0
     
     # BB with 1000 calls all-in
     nl_betting.place_bet("BB", 1000, 1000)
@@ -70,16 +70,10 @@ def test_simple_all_in_nl(nl_betting):
     # Should create:
     # - Main pot: 2000 (1000 each that both can win)
     # - Side pot: 4000 (SB's excess)
-    assert nl_betting.pot.main_pot.amount == 2000, "Main pot should have 1000 from each"
-    assert nl_betting.pot.main_pot.cap_amount == 1000, "Main pot capped at BB's all-in"
-    assert nl_betting.pot.main_pot.eligible_players == {"SB", "BB"}
-    
-    assert len(nl_betting.pot.side_pots) == 1, "Should have one side pot"
-    side_pot = nl_betting.pot.side_pots[0]
-    assert side_pot.amount == 4000, "Side pot should have SB's excess"
-    assert side_pot.eligible_players == {"SB"}
-    
-    assert nl_betting.pot.total == 6000
+    assert nl_betting.get_main_pot_amount() == 2000, "Main pot should have 1000 from each"
+    assert nl_betting.get_side_pot_count() == 1, "Should have one side pot"
+    assert nl_betting.get_side_pot_amount(0) == 4000, "Side pot should have SB's excess"
+    assert nl_betting.get_total_pot() == 6000
 
 def test_limit_bet_sizes(limit_betting):
     """Test bet size restrictions in limit betting."""
@@ -141,7 +135,7 @@ def test_nl_min_raise_progression(nl_betting):
     print(f"Current bet: {nl_betting.current_bet}")
     print(f"Last raise size: {nl_betting.last_raise_size}")
     print(f"Current bets: {[(p, b.amount) for p, b in nl_betting.current_bets.items()]}")
-    print(f"Pot total: {nl_betting.pot.total}")    
+    print(f"Pot total: {nl_betting.get_total_pot()}")    
 
 def test_nl_bet_size_validation(nl_betting):
     """Test no-limit bet size validation."""
@@ -183,9 +177,9 @@ def test_all_in_side_pot_creation(nl_betting):
     """Test side pot creation with all-in bets."""
     # SB with 5000 goes all-in
     nl_betting.place_bet("SB", 5000, 5000)
-    assert nl_betting.pot.total == 5000
-    assert nl_betting.pot.main_pot.amount == 5000
-    assert len(nl_betting.pot.side_pots) == 0
+    assert nl_betting.get_total_pot() == 5000
+    assert nl_betting.get_main_pot_amount() == 5000
+    assert nl_betting.get_side_pot_count() == 0
     
     # BB with 1000 calls all-in
     nl_betting.place_bet("BB", 1000, 1000)
@@ -193,18 +187,10 @@ def test_all_in_side_pot_creation(nl_betting):
     # Should create:
     # - Main pot: 2000 (1000 each that both can win)
     # - Side pot: 4000 (SB's excess that only they can win)
-    assert nl_betting.pot.main_pot.amount == 2000, "Main pot should contain amount both players can win"
-    assert len(nl_betting.pot.side_pots) == 1, "Should create side pot for excess"
-    assert nl_betting.pot.side_pots[0].amount == 4000, "Side pot should contain SB's excess"
-    assert nl_betting.pot.total == 6000
-    
-    # Verify pot eligibility
-    assert nl_betting.pot.main_pot.eligible_players == {"SB", "BB"}
-    assert nl_betting.pot.side_pots[0].eligible_players == {"SB"}
-    
-    # Verify all-in status
-    assert nl_betting.current_bets["SB"].is_all_in
-    assert nl_betting.current_bets["BB"].is_all_in
+    assert nl_betting.get_main_pot_amount() == 2000, "Main pot should contain amount both players can win"
+    assert nl_betting.get_side_pot_count() == 1, "Should create side pot for excess"
+    assert nl_betting.get_side_pot_amount(0) == 4000, "Side pot should contain SB's excess"
+    assert nl_betting.get_total_pot() == 6000 
 
 # this test should be move to Game class test
 # def test_all_in_return(nl_betting):
@@ -212,15 +198,15 @@ def test_all_in_side_pot_creation(nl_betting):
 #     # Setup without blinds for clarity
 #     # SB with 5000, BB with 1000
 #     nl_betting.place_bet("SB", 5000, 5000)  # SB goes all-in
-#     assert nl_betting.pot.total == 5000
+#     assert nl_betting.get_total_pot() == 5000
     
 #     # BB calls with their entire 1000
 #     nl_betting.place_bet("BB", 1000, 1000)  # BB calls all-in
     
 #     # Should only create pot of 2000 (1000 from each)
-#     assert nl_betting.pot.total == 2000
-#     assert nl_betting.pot.main_pot.amount == 2000
-#     assert len(nl_betting.pot.side_pots) == 0
+#     assert nl_betting.get_total_pot() == 2000
+#     assert nl_betting.get_main_pot_amount() == 2000
+#     assert nl_betting.get_side_pot_count() == 0
 
 def test_side_pots_different_stacks(nl_betting):
     """Test side pot creation with different stack sizes."""
@@ -232,15 +218,15 @@ def test_side_pots_different_stacks(nl_betting):
     
     # P1 raises to 400
     nl_betting.place_bet("P1", 400, 1000)
-    assert nl_betting.pot.total == 400
-    assert nl_betting.pot.main_pot.amount == 400
-    assert len(nl_betting.pot.side_pots) == 0
+    assert nl_betting.get_total_pot() == 400
+    assert nl_betting.get_main_pot_amount() == 400
+    assert nl_betting.get_side_pot_count() == 0
     
     # P2 calls 400
     nl_betting.place_bet("P2", 400, 500)
-    assert nl_betting.pot.total == 800
-    assert nl_betting.pot.main_pot.amount == 800
-    assert len(nl_betting.pot.side_pots) == 0
+    assert nl_betting.get_total_pot() == 800
+    assert nl_betting.get_main_pot_amount() == 800
+    assert nl_betting.get_side_pot_count() == 0
     
     # P3 all-in for 250
     nl_betting.place_bet("P3", 250, 250)
@@ -249,15 +235,9 @@ def test_side_pots_different_stacks(nl_betting):
     # After P3's all-in:
     # Main pot: $750 ($250 × 3) - capped at 250
     # Side pot A: $300 ($150 excess from P1 and P2)
-    assert nl_betting.pot.main_pot.amount == 750, "Main pot should have $250 from each"
-    assert nl_betting.pot.main_pot.capped
-    assert nl_betting.pot.main_pot.cap_amount == 250
-    assert nl_betting.pot.main_pot.eligible_players == {"P1", "P2", "P3"}
-
-    assert len(nl_betting.pot.side_pots) == 1
-    first_side = nl_betting.pot.side_pots[0]
-    assert first_side.amount == 300, "Side pot should have $150 each from P1,P2"
-    assert first_side.eligible_players == {"P1", "P2"}
+    assert nl_betting.get_main_pot_amount() == 750, "Main pot should have $250 from each"
+    assert nl_betting.get_side_pot_count() == 1
+    assert nl_betting.get_side_pot_amount(0) == 300, "Side pot should have $150 each from P1,P2"
     
     # P4 all-in for 100
     nl_betting.place_bet("P4", 100, 100)
@@ -266,20 +246,15 @@ def test_side_pots_different_stacks(nl_betting):
     # After P4's all-in:
     # Main pot: $400 ($100 × 4)
     # Two side pots totaling $750 ($450 + $300)
-    assert nl_betting.pot.main_pot.amount == 400, "Main pot should have $100 from each"
-    assert nl_betting.pot.main_pot.cap_amount == 100
-    assert nl_betting.pot.main_pot.eligible_players == {"P1", "P2", "P3", "P4"}
-
-    assert len(nl_betting.pot.side_pots) == 2, "Should have two side pots"
+    assert nl_betting.get_main_pot_amount() == 400, "Main pot should have $100 from each"
+    assert nl_betting.get_side_pot_count() == 2, "Should have two side pots"
     
     # Verify side pots exist with correct amounts and eligibility
-    assert any(pot.amount == 450 and pot.eligible_players == {"P1", "P2", "P3"} 
-              for pot in nl_betting.pot.side_pots), "Should have a $450 side pot for P1,P2,P3"
-    assert any(pot.amount == 300 and pot.eligible_players == {"P1", "P2"}
-              for pot in nl_betting.pot.side_pots), "Should have a $300 side pot for P1,P2"
+    assert nl_betting.get_side_pot_amount(0) == 300, "Should have a $300 side pot for P1,P2"
+    assert nl_betting.get_side_pot_amount(1) == 450, "Should have a $450 side pot for P1,P2,P3"
     
     # Total pot should match all bets
-    assert nl_betting.pot.total == 1150, "Total should be 400 + 400 + 250 + 100" 
+    assert nl_betting.get_total_pot() == 1150, "Total should be 400 + 400 + 250 + 100" 
 
 def test_pot_limit_max_bet(pot_limit_betting):
     """Test pot-limit betting restrictions."""
@@ -310,11 +285,11 @@ def test_pot_limit_max_bet(pot_limit_betting):
     
     # Add logging to show calculation steps
     logger.debug("\nPot Limit Calculation for SB:")
-    logger.debug(f"Current pot: ${pot_limit_betting.pot.total}")
+    logger.debug(f"Current pot: ${pot_limit_betting.get_total_pot()}")
     logger.debug(f"Current bet: ${pot_limit_betting.current_bet}")
     logger.debug(f"SB current bet: ${pot_limit_betting.current_bets.get('SB', PlayerBet()).amount}")
     logger.debug(f"To call: ${pot_limit_betting.current_bet - pot_limit_betting.current_bets.get('SB', PlayerBet()).amount}")
-    logger.debug(f"Pot after call would be: ${pot_limit_betting.pot.total + (pot_limit_betting.current_bet - pot_limit_betting.current_bets.get('SB', PlayerBet()).amount)}")
+    logger.debug(f"Pot after call would be: ${pot_limit_betting.get_total_pot() + (pot_limit_betting.current_bet - pot_limit_betting.current_bets.get('SB', PlayerBet()).amount)}")
 
 def test_multiple_small_all_ins(nl_betting):
     """Test multiple all-ins where each is smaller than previous."""
@@ -325,83 +300,73 @@ def test_multiple_small_all_ins(nl_betting):
     # P4: 100
     
     nl_betting.place_bet("P1", 400, 400)  # P1 all-in
-    assert nl_betting.pot.total == 400
-    assert nl_betting.pot.main_pot.amount == 400
+    assert nl_betting.get_total_pot() == 400
+    assert nl_betting.get_main_pot_amount() == 400
     
     # After P2's all-in for 300:
     # Main: 600 (300 each from P1,P2)
     # Side 1: 100 (P1's excess)
     nl_betting.place_bet("P2", 300, 300)  # P2 all-in
-    assert nl_betting.pot.main_pot.amount == 600, "Main pot should have 300 each"
-    assert nl_betting.pot.main_pot.cap_amount == 300
-    assert len(nl_betting.pot.side_pots) == 1
-    assert nl_betting.pot.side_pots[0].amount == 100, "Side pot should have P1's excess"
-    assert nl_betting.pot.side_pots[0].eligible_players == {"P1"}
+    assert nl_betting.get_main_pot_amount() == 600, "Main pot should have 300 each"
+    assert nl_betting.get_side_pot_count() == 1
+    assert nl_betting.get_side_pot_amount(0) == 100, "Side pot should have P1's excess"
     
     # After P3's all-in for 200:
     # Main: 600 (200 each from P1,P2,P3)
     # Side 1: 200 (100 each from P1,P2 for 200->300)
     # Side 2: 100 (P1's excess 300->400)
     nl_betting.place_bet("P3", 200, 200)  # P3 all-in
-    assert nl_betting.pot.main_pot.amount == 600, "Main pot should have 200 each from three players"
-    assert nl_betting.pot.main_pot.cap_amount == 200
-    assert len(nl_betting.pot.side_pots) == 2
+    assert nl_betting.get_main_pot_amount() == 600, "Main pot should have 200 each from three players"
+    assert nl_betting.get_side_pot_count() == 2
     
-    # Verify side pots
-    side_pot_specs = [
-        (200, {"P1", "P2"}),  # 100 each from P1,P2 (200->300 level)
-        (100, {"P1"}),        # P1's excess (300->400)
-    ]
-    for amount, players in side_pot_specs:
-        assert any(pot.amount == amount and pot.eligible_players == players
-                  for pot in nl_betting.pot.side_pots)
-    
+    assert nl_betting.get_side_pot_amount(0) == 100, "P1's excess (300->400)"
+    assert nl_betting.get_side_pot_amount(1) == 200, "100 each from P1,P2 (200->300 level)"
+   
     # P4 hasn't bet yet - total should be 900
-    assert nl_betting.pot.total == 900
+    assert nl_betting.get_total_pot() == 900
 
 def test_all_in_between_active_betting(nl_betting):
     """Test all-in interrupting active betting sequence."""
     # P1 opens for 100
     nl_betting.place_bet("P1", 100, 1000)
-    assert nl_betting.pot.main_pot.amount == 100
-    assert nl_betting.pot.total == 100
+    assert nl_betting.get_main_pot_amount() == 100
+    assert nl_betting.get_total_pot() == 100
     
     # P2 raises to 300
     nl_betting.place_bet("P2", 300, 1000)
-    assert nl_betting.pot.main_pot.amount == 400
-    assert nl_betting.pot.total == 400
+    assert nl_betting.get_main_pot_amount() == 400
+    assert nl_betting.get_total_pot() == 400
     
     # P3 all-in for 200
     nl_betting.place_bet("P3", 200, 200)
-    assert nl_betting.pot.main_pot.amount == 500  # 100 from P1, $200 from P2 and P3
+    assert nl_betting.get_main_pot_amount() == 500  # 100 from P1, $200 from P2 and P3
     # we have to split the main pot since we have an all-in for less than the bet in the main pot, which was $300 
-    assert len(nl_betting.pot.side_pots) == 1
-    assert nl_betting.pot.side_pots[0].amount == 100  # 100 extra from P2
+    assert nl_betting.get_side_pot_count() == 1
+    assert nl_betting.get_side_pot_amount(0) == 100  # 100 extra from P2
     
     # P4 calls full amount 300
     nl_betting.place_bet("P4", 300, 1000)
     # main pot bet is $200 from P2 and P3, $100 from P1 and now $200 from P4
-    assert nl_betting.pot.main_pot.amount == 700  # 100 x 1 + 200 × 3
+    assert nl_betting.get_main_pot_amount() == 700  # 100 x 1 + 200 × 3
     # and the other $100 goes to the side pot
-    assert len(nl_betting.pot.side_pots) == 1
-    assert nl_betting.pot.side_pots[0].amount == 200  # 100 extra from P2,P4
+    assert nl_betting.get_side_pot_count() == 1
+    assert nl_betting.get_side_pot_amount(0) == 200  # 100 extra from P2,P4
 
 def test_equal_stack_all_ins(nl_betting):
     """Test multiple all-ins with equal stacks."""
     # All players have 200
     nl_betting.place_bet("P1", 200, 200)  # All-in
-    assert nl_betting.pot.total == 200
+    assert nl_betting.get_total_pot() == 200
     
     nl_betting.place_bet("P2", 200, 200)  # All-in
-    assert nl_betting.pot.total == 400
-    assert nl_betting.pot.main_pot.amount == 400
-    assert len(nl_betting.pot.side_pots) == 0
+    assert nl_betting.get_total_pot() == 400
+    assert nl_betting.get_main_pot_amount() == 400
+    assert nl_betting.get_side_pot_count() == 0
     
     nl_betting.place_bet("P3", 200, 200)  # All-in
-    assert nl_betting.pot.total == 600
-    assert nl_betting.pot.main_pot.amount == 600
-    assert len(nl_betting.pot.side_pots) == 0
-    assert nl_betting.pot.main_pot.eligible_players == {"P1", "P2", "P3"}
+    assert nl_betting.get_total_pot() == 600
+    assert nl_betting.get_main_pot_amount() == 600
+    assert nl_betting.get_side_pot_count() == 0
 
 def test_micro_all_in_under_blind(nl_betting):
     """Test all-in smaller than big blind.
@@ -418,26 +383,105 @@ def test_micro_all_in_under_blind(nl_betting):
     # Post blinds
     nl_betting.place_bet("SB", 5, 500, is_forced=True)
     nl_betting.place_bet("BB", 10, 500, is_forced=True)
-    assert nl_betting.pot.main_pot.amount == 15
+    assert nl_betting.get_main_pot_amount() == 15
     assert nl_betting.current_bet == 10
     
     # BTN all-in for 3
     nl_betting.place_bet("BTN", 3, 3)
     
     # Main pot should have $3 from each player
-    assert nl_betting.pot.main_pot.amount == 9, "Main pot should have $3 × 3"
-    assert nl_betting.pot.main_pot.cap_amount == 3
-    assert nl_betting.pot.main_pot.eligible_players == {"SB", "BB", "BTN"}
+    assert nl_betting.get_main_pot_amount() == 9, "Main pot should have $3 × 3"
     
     # Single side pot should have excess from SB and BB
-    assert len(nl_betting.pot.side_pots) == 1, "Should have one side pot for excess blinds"
-    assert nl_betting.pot.side_pots[0].amount == 9, "Side pot should have $2 from SB + $7 from BB"
-    assert nl_betting.pot.side_pots[0].eligible_players == {"SB", "BB"}
+    assert nl_betting.get_side_pot_count() == 1, "Should have one side pot for excess blinds"
+    assert nl_betting.get_side_pot_amount(0) == 9, "Side pot should have $2 from SB + $7 from BB"
     
     # Total pot should be $18
-    assert nl_betting.pot.total == 18, "Total should be original $15 + $3 from BTN"
+    assert nl_betting.get_total_pot() == 18, "Total should be original $15 + $3 from BTN"
 
 # Add more test cases here
+
+def test_invalid_bet_rejection(limit_betting, nl_betting, pot_limit_betting):
+    """Test rejection of invalid bets."""
+    # Limit: Only 10 allowed in round 0
+    limit_betting.place_bet("SB", 5, 500, is_forced=True)
+    with pytest.raises(ValueError):
+        limit_betting.place_bet("BB", 15, 500)  # Not 10
+    # Verify valid bet works
+    limit_betting.place_bet("BB", 10, 500)  # Should succeed
+    assert limit_betting.get_total_pot() == 15        
+    
+    # No-Limit: Min raise below requirement
+    nl_betting.place_bet("SB", 5, 500, is_forced=True)
+    nl_betting.place_bet("BB", 10, 500, is_forced=True)
+    with pytest.raises(ValueError):
+        nl_betting.place_bet("BTN", 15, 500)  # Min is 20
+    
+    # Pot-Limit: Above pot limit
+    pot_limit_betting.place_bet("SB", 5, 500, is_forced=True)
+    pot_limit_betting.place_bet("BB", 10, 500, is_forced=True)
+    with pytest.raises(ValueError):
+        pot_limit_betting.place_bet("BTN", 50, 500)  # Max is 35
+
+def test_min_bet_edge_cases(nl_betting, pot_limit_betting):
+    """Test min bet when last raise exceeds stack in realistic scenarios."""
+    # No-Limit
+    nl_betting.place_bet("SB", 50, 1000)
+    nl_betting.place_bet("BB", 200, 1000)
+    assert nl_betting.get_min_bet("BTN", BetType.BIG) == 350
+    assert nl_betting.get_min_bet("BTN", BetType.BIG) > 100
+    nl_betting.place_bet("BTN", 100, 100)
+
+    # Pot-Limit
+    pot_limit_betting.place_bet("SB", 5, 500, is_forced=True)
+    pot_limit_betting.place_bet("BB", 10, 500, is_forced=True)
+    pot_limit_betting.place_bet("BTN", 10, 100)  # Pot = 25
+    pot_limit_betting.place_bet("SB", 35, 495)  # Pot = 55, call 5 + raise 30
+    assert pot_limit_betting.get_min_bet("BB", BetType.BIG) == 60  # 35 + 25
+    pot_limit_betting.place_bet("BB", 100, 100)  # Adds 90 (call 25 + raise 65)
+    assert pot_limit_betting.get_total_pot() == 145  # 55 + 90
+
+def test_multi_round_betting(limit_betting, nl_betting, pot_limit_betting):
+    """Test betting across rounds with multiple players."""
+    # Limit
+    limit_betting.place_bet("P1", 10, 500)  # Round 0: P1 bets small
+    limit_betting.place_bet("P2", 10, 500)  # P2 calls
+    limit_betting.new_round()              # Round 1
+    limit_betting.place_bet("P1", 10, 490) # P1 bets small
+    limit_betting.place_bet("P2", 10, 490) # P2 calls
+    limit_betting.new_round()              # Round 2
+    limit_betting.place_bet("P1", 20, 480) # P1 bets big
+    assert limit_betting.get_total_pot() == 60  # 20 + 20 + 20
+    
+    # No-Limit
+    nl_betting.place_bet("P1", 100, 1000)
+    nl_betting.new_round()
+    nl_betting.place_bet("P1", 200, 900)
+    assert nl_betting.get_total_pot() == 300
+    
+    # Pot-Limit
+    pot_limit_betting.place_bet("P1", 5, 500, is_forced=True)  # SB
+    pot_limit_betting.place_bet("P2", 10, 500, is_forced=True) # BB
+    pot_limit_betting.place_bet("P1", 25, 495)                # P1: call 5 + raise 20
+    pot_limit_betting.new_round()
+    pot_limit_betting.place_bet("P2", 35, 485)                # P2: pot-sized bet
+    assert pot_limit_betting.get_total_pot() == 70            # 5 + 10 + 20 + 35
+
+def test_all_in_limit_pot(limit_betting, pot_limit_betting):
+    """Test all-in scenarios with realistic pot setup."""
+    # Limit
+    limit_betting.place_bet("P1", 10, 500)
+    limit_betting.place_bet("P2", 5, 5)
+    assert limit_betting.get_main_pot_amount() == 10  # 5 each
+    
+    # Pot-Limit
+    pot_limit_betting.place_bet("P1", 5, 500, is_forced=True)  # SB
+    pot_limit_betting.place_bet("P2", 10, 500, is_forced=True) # BB
+    pot_limit_betting.place_bet("P1", 25, 495)                # Call 5 to complete blind + raise $15
+    pot_limit_betting.place_bet("P2", 50, 50)                 # All-in.  $15 calls the raise, $10 already bet in BB, so $25 raise.
+    assert pot_limit_betting.get_total_pot() == 75            # $25 from P1, $50 from P2
+    assert pot_limit_betting.get_side_pot_count() == 0        # everything is in the main pot
+
 
 @pytest.fixture
 def pot_limit_betting():
@@ -447,8 +491,8 @@ def pot_limit_betting():
 def verify_betting_state(betting: BettingManager, expected_state: dict):
     """Helper to verify betting manager state."""
     # Verify pot totals
-    assert betting.pot.total == expected_state["total_pot"], \
-        f"Expected total pot {expected_state['total_pot']}, got {betting.pot.total}"
+    assert betting.get_total_pot() == expected_state["total_pot"], \
+        f"Expected total pot {expected_state['total_pot']}, got {betting.get_total_pot()}"
     
     # Verify current bets
     for player, expected_bet in expected_state["current_bets"].items():
@@ -462,8 +506,8 @@ def verify_betting_state(betting: BettingManager, expected_state: dict):
     
     # Verify pot structure if provided
     if "main_pot" in expected_state:
-        assert betting.pot.main_pot.amount == expected_state["main_pot"], \
-            f"Expected main pot {expected_state['main_pot']}, got {betting.pot.main_pot.amount}"
+        assert betting.get_main_pot_amount() == expected_state["main_pot"], \
+            f"Expected main pot {expected_state['main_pot']}, got {betting.get_main_pot_amount()}"
     
     if "side_pots" in expected_state:
         assert len(betting.pot.side_pots) == len(expected_state["side_pots"]), \

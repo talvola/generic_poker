@@ -51,9 +51,24 @@ class BettingManager(ABC):
         self.current_bet: int = 0  # Highest bet in current round
         self.betting_round: int = 0  # Track which betting round we're in
         self.last_raise_size = 0 # Track minimum raise rules (still needed?)
-
         self.small_bet: int = 0  
         
+    def get_main_pot_amount(self) -> int:
+        """Get the amount in the current round's main pot."""
+        return self.pot.round_pots[-1].main_pot.amount
+
+    def get_side_pot_count(self) -> int:
+        """Get the number of side pots in the current round."""
+        return len(self.pot.round_pots[-1].side_pots)
+
+    def get_side_pot_amount(self, index: int) -> int:
+        """Get the amount in the specified side pot for the current round."""
+        return self.pot.round_pots[-1].side_pots[index].amount
+
+    def get_total_pot(self) -> int:
+        """Get the total pot amount across all pots in the current round."""
+        return self.pot.total
+
     @abstractmethod
     def get_min_bet(self, player_id: str, bet_type: BetType) -> int:
         """Get minimum bet allowed for player."""
@@ -83,32 +98,23 @@ class BettingManager(ABC):
         """
         Place a bet for a player.
 
-        This method uses total amount betting style - the amount parameter represents
-        the total amount this player will have bet after this action is complete,
-        not just the amount being added.
-
-        For example:
-        - If P1 has already bet 100 and wants to raise to 300
-        call place_bet("P1", 300, stack_before)
-        - If P2 then wants to call the 300
-        call place_bet("P2", 300, stack_before)
-
         Args:
             player_id: ID of betting player
-            amount: Total amount player will have bet after this action.
-                NOT the amount being added - use get_amount_to_add() for that.
-            stack_before: Player's chip stack before this bet
+            amount: Total amount player will have bet in this round after this action.
+                    This is the total for the current round only, not across all rounds.
+                    Use get_amount_to_add() to compute the incremental chips needed.
+            stack: Player's chip stack before this bet
             is_forced: Whether this is a forced bet (blind/ante)
 
         Examples:
-            # P1 opens for 100
-            betting.place_bet("P1", 100, 1000)  # P1 adds 100, stack becomes 900
+            # Round 1: P1 opens for 100
+            betting.place_bet("P1", 100, 1000)  # Adds 100, stack becomes 900
             
-            # P2 raises to 300
-            betting.place_bet("P2", 300, 1000)  # P2 adds 300, stack becomes 700
+            # Round 1: P2 raises to 300
+            betting.place_bet("P2", 300, 1000)  # Adds 300, stack becomes 700
             
-            # P1 re-raises to 600
-            betting.place_bet("P1", 600, 900)   # P1 adds 500 more, stack becomes 400
+            # Round 2: P1 bets 200 anew
+            betting.place_bet("P1", 200, 900)  # Adds 200, stack becomes 700
         """
         # Get current amount from player if any
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
@@ -141,7 +147,7 @@ class BettingManager(ABC):
         
         # Update pot with the additional amount
         if amount_to_add > 0:
-            self.pot.add_bet(player_id, amount_to_add, is_all_in, stack)
+            self.pot.add_bet(player_id, amount, is_all_in, stack)
        
         # Update current bet if this is highest
         self.current_bet = max(self.current_bet, amount)
@@ -252,6 +258,7 @@ class BettingManager(ABC):
             self.betting_round += 1  # Increment round counter
             
         self.current_bet = current
+        self.pot.end_betting_round()  # Sync Pot’s round with BettingManager
         logger.debug(f"Starting betting round {self.betting_round}: preserve_bet={preserve_current_bet}, "
                     f"current_bet={self.current_bet}, "
                     f"current_bets={[(pid, bet.amount, 'acted' if bet.has_acted else 'not acted', 'blind' if bet.posted_blind else 'not blind') for pid, bet in self.current_bets.items()]}")
@@ -300,56 +307,91 @@ class LimitBettingManager(BettingManager):
         """
         return self.get_min_bet(player_id, bet_type)
         
-    def validate_bet(self, player_id: str, amount: int, player_stack: int) -> bool:
-        """
-        Validate bet is correct size for limit game.
+    # def validate_bet(self, player_id: str, amount: int, player_stack: int) -> bool:
+    #     """
+    #     Validate bet is correct size for limit game.
         
-        Args:
-            player_id: ID of betting player
-            amount: Total amount player will have bet
-            player_stack: Player's current stack
+    #     Args:
+    #         player_id: ID of betting player
+    #         amount: Total amount player will have bet
+    #         player_stack: Player's current stack
             
-        Returns:
-            True if bet is valid, False otherwise
-        """
+    #     Returns:
+    #         True if bet is valid, False otherwise
+    #     """
+    #     logger.debug(f"Validating limit bet: player={player_id}, amount={amount}, "
+    #                 f"current_bet={self.current_bet}, stack={player_stack}")
+        
+    #     if amount == 0:  # Check/fold always valid
+    #         return True
+            
+    #     current_bet = self.current_bets.get(player_id, PlayerBet()).amount
+    #     to_call = self.current_bet - current_bet
+        
+    #     # All-in for less than call amount is valid
+    #     if amount < self.current_bet and amount == current_bet + player_stack:
+    #         return True
+            
+    #     if amount == self.current_bet:  # Calling exact amount is valid
+    #         return to_call <= player_stack
+            
+    #     # For raises in limit games, must be exactly double the current bet
+    #     # (unless completing a partial bet like SB->full bet)
+    #     if current_bet > 0 and amount == self.current_bet:
+    #         return True
+            
+    #     if amount > self.current_bet:
+    #         # Must be exactly one bet size more
+    #         bet_size = self.get_min_bet(player_id, BetType.BIG)
+    #         expected = self.current_bet + bet_size
+    #         if amount != expected:
+    #             logger.debug(f"Invalid raise: {amount} != {expected}")
+    #             return False
+                
+    #         # Check stack size
+    #         additional_needed = amount - current_bet
+    #         if additional_needed > player_stack:
+    #             return False
+                
+    #         return True
+            
+    #     return False
+
+    def validate_bet(self, player_id: str, amount: int, player_stack: int) -> bool:
         logger.debug(f"Validating limit bet: player={player_id}, amount={amount}, "
                     f"current_bet={self.current_bet}, stack={player_stack}")
         
-        if amount == 0:  # Check/fold always valid
-            return True
-            
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
         to_call = self.current_bet - current_bet
+        bet_size = self.get_min_bet(player_id, BetType.BIG)  # 10 in round 0
         
-        # All-in for less than call amount is valid
-        if amount < self.current_bet and amount == current_bet + player_stack:
+        if amount == 0:  # Check/fold
             return True
-            
-        if amount == self.current_bet:  # Calling exact amount is valid
+        if amount < self.current_bet and amount == current_bet + player_stack:  # All-in
+            return True
+        if amount == self.current_bet:  # Call
             return to_call <= player_stack
-            
-        # For raises in limit games, must be exactly double the current bet
-        # (unless completing a partial bet like SB->full bet)
-        if current_bet > 0 and amount == self.current_bet:
-            return True
-            
+        
+        # First non-forced bet after blinds must be small bet
+        all_forced = all(bet.posted_blind for bet in self.current_bets.values())
+        if all_forced and len(self.current_bets) > 0:  # After blinds
+            expected = bet_size  # 10
+            if amount != expected:
+                logger.debug(f"Invalid first bet: {amount} != {expected}")
+                return False
+            return amount <= player_stack
+        
+        # Raises must increment by bet_size
         if amount > self.current_bet:
-            # Must be exactly one bet size more
-            bet_size = self.get_min_bet(player_id, BetType.BIG)
             expected = self.current_bet + bet_size
             if amount != expected:
                 logger.debug(f"Invalid raise: {amount} != {expected}")
                 return False
-                
-            # Check stack size
             additional_needed = amount - current_bet
-            if additional_needed > player_stack:
-                return False
-                
-            return True
-            
+            return additional_needed <= player_stack
+        
+        logger.debug(f"Invalid bet: {amount} not handled by rules")
         return False
-
 
 class NoLimitBettingManager(BettingManager):
     """Betting manager for no-limit games."""
