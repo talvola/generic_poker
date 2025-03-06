@@ -66,7 +66,7 @@ def print_game_state(game: Game) -> None:
     if game.state == GameState.BETTING:
         print("\nBetting Status:")
         print(f"Current Bet: ${game.betting.current_bet}")
-        print(f"Pot: ${game.betting.pot.main_pot}")
+        print(f"Pot: ${game.betting.get_total_pot()}")
         
         current_action = (
             game.rules.gameplay[game.current_step].name
@@ -83,8 +83,13 @@ def print_game_state(game: Game) -> None:
                 for pid, bet in game.betting.current_bets.items():
                     player = game.table.players[pid]
                     print(f"  {player.name}: ${bet.amount}")
-            if game.betting.pot.side_pots:
-                print("Side Pots:", game.betting.pot.side_pots)
+            if game.betting.get_side_pot_count() > 1:
+                print("\nSide Pots:")
+                for i, side_pot in enumerate(game.betting.pot.side_pots, 1):
+                    print(f"  Side Pot {i}: ${side_pot.amount}")
+                    for pid, bet in side_pot.bets.items():
+                        player = game.table.players[pid]
+                        print(f"    {player.name}: ${bet.amount}")
 
 
 def setup_test_game() -> Game:
