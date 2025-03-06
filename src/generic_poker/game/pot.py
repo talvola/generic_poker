@@ -6,6 +6,7 @@ import copy
 
 from generic_poker.game.table import Player
 
+
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -351,7 +352,7 @@ class Pot:
             new_total=total_amount
         )
         
-        logger.debug(f"\nProcessing new bet:")
+        logger.debug(f"\nProcessing new bet in round {self.current_round}:")
         logger.debug(f"  Player: {player_id}")
         logger.debug(f"  Total amount: {total_amount}")
         logger.debug(f"  Amount to add: {amount_to_add}")

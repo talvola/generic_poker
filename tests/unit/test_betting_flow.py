@@ -83,7 +83,8 @@ def create_test_game(mock_hands=None):
         small_bet=10,
         big_bet=20,
         min_buyin=100,
-        max_buyin=1000
+        max_buyin=1000,
+        auto_progress=False        
     )
     
     # Add players
@@ -107,10 +108,20 @@ def test_basic_call_sequence():
     game.start_hand()
     
     # Verify initial state
-    assert game.state == GameState.BETTING
+    assert game.current_step == 0           # Should be in post blinds step
+    assert game.state == GameState.DEALING  # Forced bets are still 'DEALING' state - maybe will change in future if confusing
+
     assert game.betting.current_bet == 10  # Big blind amount
-    assert game.betting.pot.main_pot == 15  # SB(5) + BB(10)
+    assert game.betting.get_main_pot_amount() == 15  # SB(5) + BB(10)
+    game._next_step()  # Manually move to dealing hole cards
     
+    assert game.current_step == 1           # Should be in dealing step
+    assert game.state == GameState.DEALING  # Now dealing cards
+    game._next_step()  # Manually move to dealing hole cards
+
+    assert game.current_step == 2           # Should be in Iniital Bet step
+    assert game.state == GameState.BETTING  # Now player betting occurs    
+
     # Verify first action is to Button (Alice)
     assert game.current_player == "BTN"
     
@@ -130,10 +141,12 @@ def test_basic_call_sequence():
     result = game.player_action("BB", PlayerAction.CHECK, 0)
     assert result.success
     assert result.state_changed  # Round should end
-    assert game.current_step == 3  # Should move to next step
     
     # Verify final state
-    assert game.betting.pot.main_pot == 30  # All players put in 10
+    assert game.betting.get_main_pot_amount() == 30  # All players put in 10
+
+    game._next_step()  # Manually move to showdown
+    assert game.current_step == 3    
 
 
 def test_basic_fold_sequence():
@@ -160,7 +173,7 @@ def test_basic_fold_sequence():
     assert game.current_step == 3
     
     # Verify final state
-    assert game.betting.pot.main_pot == 20  # SB(10) + BB(10)
+    assert game.betting.get_main_pot_amount() == 20  # SB(10) + BB(10)
     assert not game.table.players["BTN"].is_active
 
 def test_hand_with_showdown(test_hands):
@@ -173,7 +186,7 @@ def test_hand_with_showdown(test_hands):
     game.start_hand()
     
     # Verify blinds posted
-    assert game.betting.pot.main_pot == 15  # SB(5) + BB(10)
+    assert game.betting.get_main_pot_amount() == 15  # SB(5) + BB(10)
     assert game.table.players["SB"].stack == initial_stacks["SB"] - 5
     assert game.table.players["BB"].stack == initial_stacks["BB"] - 10
     
@@ -319,7 +332,7 @@ def test_raise_and_calls(test_hands):
     assert result.state_changed  # Round should complete
     
     # Verify pot and stacks after the raise round
-    assert game.betting.pot.main_pot == 60  # Everyone put in 20
+    assert game.betting.get_main_pot_amount() == 60  # Everyone put in 20
     
     # BTN should win with royal flush
     assert game.state == GameState.COMPLETE

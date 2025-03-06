@@ -568,7 +568,7 @@ class Game:
         """Handle pot award when all but one player folds."""
         logger.info("All but one player folded - hand complete")
         self.state = GameState.COMPLETE
-        self.betting.pot.award_to_winners(active_players)
+        self.betting.award_pots(active_players)
 
     def _handle_showdown(self) -> None:
         """
@@ -607,25 +607,19 @@ class Game:
             player_best_hands[player.id] = cards
             
         # Award any side pots first
-        for i, side_pot in enumerate(self.betting.pot.side_pots):
-            eligible_players = [
-                player for player in active_players
-                if player.id in side_pot.eligible_players
-            ]
+        for i in range(self.betting.get_side_pot_count()):
+            eligible_ids = self.betting.get_side_pot_eligible_players(i)
+            eligible_players = [p for p in active_players if p.id in eligible_ids]
             if eligible_players:
                 # Find best hand among eligible players
-                pot_winners = self._find_winners(
-                    eligible_players,
-                    player_best_hands,
-                    eval_type
-                )
+                pot_winners = self._find_winners(eligible_players, player_best_hands, eval_type)
                 if pot_winners:
-                    self.betting.pot.award_to_winners(pot_winners, i)
+                    self.betting.award_pots(pot_winners, i)
                     
         # Award main pot
         winners = self._find_winners(active_players, player_best_hands, eval_type)
         if winners:
-            self.betting.pot.award_to_winners(winners)
+            self.betting.award_pots(winners)
             
         self.state = GameState.COMPLETE
 
