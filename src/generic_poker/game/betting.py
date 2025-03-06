@@ -1,11 +1,12 @@
 """Betting management and tracking."""
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Set, Optional
 from abc import ABC, abstractmethod
 from enum import Enum
 
 from generic_poker.config.loader import BettingStructure
 from generic_poker.game.pot import Pot
+from generic_poker.game.table import Player
 
 import logging 
 
@@ -68,6 +69,30 @@ class BettingManager(ABC):
     def get_total_pot(self) -> int:
         """Get the total pot amount across all pots in the current round."""
         return self.pot.total
+    
+    def award_pots(self, winners: List[Player], side_pot_index: Optional[int] = None) -> None:
+        """Award main or specified side pot to winners, updating stacks."""
+        if not winners:
+            logger.error("No winners to award pots")
+            return
+        amount = (self.pot.round_pots[-1].side_pots[side_pot_index].amount 
+                if side_pot_index is not None 
+                else self.pot.round_pots[-1].main_pot.amount)
+        if len(winners) == 1:
+            winners[0].stack += amount
+            logger.info(f"Awarded pot of ${amount} to {winners[0].name}")
+        else:
+            amount_per_player = amount // len(winners)
+            remainder = amount % len(winners)
+            for i, winner in enumerate(winners):
+                award = amount_per_player + (1 if i < remainder else 0)
+                winner.stack += award
+                logger.info(f"Awarded ${award} to {winner.name} from split pot")
+        self.pot.award_to_winners(winners, side_pot_index)  # Clears pot
+
+    def get_side_pot_eligible_players(self, index: int) -> Set[str]:
+        """Get eligible players for a side pot."""
+        return self.pot.round_pots[-1].side_pots[index].eligible_players
 
     @abstractmethod
     def get_min_bet(self, player_id: str, bet_type: BetType) -> int:

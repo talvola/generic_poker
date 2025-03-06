@@ -4,6 +4,8 @@ from typing import List, Set, Dict, Optional
 import logging
 import copy
 
+from generic_poker.game.table import Player
+
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -442,3 +444,23 @@ class Pot:
         logger.debug(f"  Main pot: {current.main_pot}")
         for i, pot in enumerate(current.side_pots):
             logger.debug(f"  Side Pot {i + 1}: {pot}")
+
+    def award_to_winners(self, winners: List[Player], side_pot_index: Optional[int] = None) -> None:
+        if not winners:
+            return
+        current_round = self.round_pots[-1]
+        pot = current_round.side_pots[side_pot_index] if side_pot_index is not None else current_round.main_pot
+        amount = pot.amount
+        if amount <= 0:
+            return
+        pot.amount = 0
+        pot.eligible_players.clear()
+
+    def _split_pot(self, amount: int, winners: List[Player]) -> None:
+        """Split pot amount among winners, handling remainders."""
+        amount_per_player = amount // len(winners)
+        remainder = amount % len(winners)
+        for i, winner in enumerate(winners):
+            award = amount_per_player + (1 if i < remainder else 0)
+            winner.stack += award
+            logger.info(f"Awarded ${award} to {winner.name} from split pot")

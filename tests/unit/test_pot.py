@@ -1,6 +1,7 @@
 """Unit tests for Pot class."""
 import pytest
 from generic_poker.game.pot import Pot, ActivePot, BetInfo
+from generic_poker.game.table import Player
 
 import logging
 import sys
@@ -25,6 +26,15 @@ def setup_logging():
 def empty_pot():
     """Create an empty pot for testing."""
     return Pot()
+
+@pytest.fixture
+def mock_players():
+    """Create mock players for testing."""
+    return [
+        Player("P1", "Alice", 100),
+        Player("P2", "Bob", 100),
+        Player("P3", "Charlie", 100)
+    ]
 
 class TestContributeToPot:
     """Test cases for _contribute_to_pot method."""
@@ -1250,3 +1260,75 @@ class TestDifferentPotStates:
         assert current.main_pot.amount == 600  # 200 each
         assert len(empty_pot.round_pots[-1].side_pots) == 1
         assert current.side_pots[0].amount == 300  # P3's excess        
+
+def test_award_to_winners_single_main_pot(mock_players):
+    """Test awarding main pot clears it correctly."""
+    pot = Pot()
+    p1, p2, _ = mock_players
+    pot.add_bet(p1.id, 50, False, 100)
+    pot.add_bet(p2.id, 50, False, 100)
+    assert pot.total == 100
+
+    pot.award_to_winners([p1])
+    assert pot.total == 0
+    assert pot.round_pots[-1].main_pot.amount == 0
+    assert not pot.round_pots[-1].main_pot.eligible_players
+
+def test_award_to_winners_split_main_pot(mock_players):
+    """Test splitting main pot clears it."""
+    pot = Pot()
+    p1, p2, p3 = mock_players
+    pot.add_bet(p1.id, 30, False, 100)
+    pot.add_bet(p2.id, 30, False, 100)
+    pot.add_bet(p3.id, 30, False, 100)
+    assert pot.total == 90
+
+    pot.award_to_winners([p1, p2, p3])
+    assert pot.total == 0
+    assert pot.round_pots[-1].main_pot.amount == 0
+    assert not pot.round_pots[-1].main_pot.eligible_players
+
+def test_award_to_winners_side_pot(mock_players):
+    """Test awarding a side pot clears it."""
+    pot = Pot()
+    p1, p2, p3 = mock_players
+    pot.add_bet(p1.id, 100, False, 200)
+    pot.add_bet(p2.id, 100, False, 200)
+    pot.add_bet(p3.id, 50, True, 50)
+    assert pot.total == 250
+    assert pot.round_pots[-1].main_pot.amount == 150
+    assert len(pot.round_pots[-1].side_pots) == 1
+    assert pot.round_pots[-1].side_pots[0].amount == 100
+
+    pot.award_to_winners([p1], side_pot_index=0)
+    assert pot.round_pots[-1].side_pots[0].amount == 0
+    assert not pot.round_pots[-1].side_pots[0].eligible_players
+    assert pot.total == 150  # Main pot remains
+
+def test_award_to_winners_no_winners(mock_players):
+    """Test no-op when no winners provided."""
+    pot = Pot()
+    p1, _, _ = mock_players
+    pot.add_bet(p1.id, 50, False, 100)
+    pot.award_to_winners([])
+    assert pot.total == 50  # Pot unchanged
+    assert pot.round_pots[-1].main_pot.amount == 50
+
+class TestsFromBettingFlow:
+    """Tests at Pot level from Game-level unit tests."""
+
+    def test_basic_call_sequence(self, empty_pot):
+        """Test basic sequence: Button calls, SB calls, BB checks."""
+
+        current = empty_pot.round_pots[-1]      
+
+        # post blinds
+        empty_pot.add_bet("SB", 5, False, 1000)    
+        empty_pot.add_bet("BB", 10, False, 1000)    
+
+        # betting stage
+        empty_pot.add_bet("BTN", 10, False, 1000)
+        empty_pot.add_bet("SB", 10, False, 995)  # SB calling the big blind $10
+        empty_pot.add_bet("BB", 10, False, 990)  # BB checking - not necessary to call add_bet
+
+        assert current.main_pot.amount == 30  # 10 fom each

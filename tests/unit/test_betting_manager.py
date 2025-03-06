@@ -4,6 +4,7 @@ from generic_poker.game.betting import (
     PotLimitBettingManager, BetType, PlayerBet
 )
 from generic_poker.config.loader import BettingStructure
+from generic_poker.game.table import Player
 
 import logging
 import sys
@@ -518,3 +519,61 @@ def verify_betting_state(betting: BettingManager, expected_state: dict):
             if "eligible_players" in expected:
                 assert actual.eligible_players == set(expected["eligible_players"]), \
                     f"Side pot {i} eligible players don't match"
+                
+def test_award_pots_single_winner(limit_betting):
+    """Test awarding main pot to single winner via BettingManager."""
+    p1 = Player("P1", "Alice", 100)
+    p2 = Player("P2", "Bob", 100)
+    limit_betting.place_bet(p1.id, 10, 100)
+    limit_betting.place_bet(p2.id, 10, 100)
+    assert limit_betting.get_total_pot() == 20
+
+    initial_stack = p1.stack
+    limit_betting.award_pots([p1])
+    assert p1.stack == initial_stack + 20
+    assert limit_betting.get_total_pot() == 0
+
+def test_award_pots_split_pot(limit_betting):
+    """Test splitting main pot among winners."""
+    p1 = Player("P1", "Alice", 100)
+    p2 = Player("P2", "Bob", 100)
+    p3 = Player("P3", "Charlie", 100)
+    limit_betting.place_bet(p1.id, 10, 100)
+    limit_betting.place_bet(p2.id, 10, 100)
+    limit_betting.place_bet(p3.id, 10, 100)
+    assert limit_betting.get_total_pot() == 30
+
+    initial_stacks = [p.stack for p in [p1, p2, p3]]
+    limit_betting.award_pots([p1, p2])  # P3 loses
+    assert p1.stack == initial_stacks[0] + 15  # 30 // 2
+    assert p2.stack == initial_stacks[1] + 15
+    assert p3.stack == initial_stacks[2]  # No win
+    assert limit_betting.get_total_pot() == 0
+
+def test_award_pots_side_pot(limit_betting):
+    """Test awarding a side pot in Limit betting."""
+    p1 = Player("P1", "Alice", 100)
+    p2 = Player("P2", "Bob", 100)
+    p3 = Player("P3", "Charlie", 5)  # Smaller stack for all-in
+    limit_betting.place_bet(p1.id, 10, 100)  # Small bet
+    limit_betting.place_bet(p2.id, 10, 100)  # Small bet
+    limit_betting.place_bet(p3.id, 5, 5)     # All-in, less than 10
+    assert limit_betting.get_total_pot() == 25  # 10 + 10 + 5
+    assert limit_betting.get_main_pot_amount() == 15  # 5 × 3
+    assert limit_betting.get_side_pot_count() == 1
+    assert limit_betting.get_side_pot_amount(0) == 10  # (10-5) × 2
+
+    initial_stack = p1.stack  # Should be 90 after betting 10
+    limit_betting.award_pots([p1], side_pot_index=0)
+    assert p1.stack == initial_stack + 10  # Wins side pot
+    assert limit_betting.get_side_pot_amount(0) == 0
+    assert limit_betting.get_total_pot() == 15  # Main pot remains
+
+def test_award_pots_no_winners(limit_betting):
+    """Test no-op when no winners provided."""
+    p1 = Player("P1", "Alice", 100)
+    limit_betting.place_bet(p1.id, 10, 100)
+    initial_stack = p1.stack
+    limit_betting.award_pots([])
+    assert p1.stack == initial_stack
+    assert limit_betting.get_total_pot() == 10                
