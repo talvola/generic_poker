@@ -83,8 +83,8 @@ def test_limit_bet_sizes(limit_betting):
     limit_betting.place_bet("BB", 10, 500, is_forced=True)
     
     # In limit, first two rounds use small bet (10)
-    assert limit_betting.get_min_bet("BTN", BetType.BIG) == 10
-    assert limit_betting.get_max_bet("BTN", BetType.BIG, 500) == 10
+    assert limit_betting.get_min_bet("BTN", BetType.BIG) == 10  # Call
+    assert limit_betting.get_max_bet("BTN", BetType.BIG, 500) == 20  # Raise
     
     # Make some bets to get to next round
     limit_betting.place_bet("BTN", 10, 500)
@@ -94,8 +94,8 @@ def test_limit_bet_sizes(limit_betting):
     
     # Later rounds use big bet (20)
     limit_betting.betting_round = 2  # Simulate later round
-    assert limit_betting.get_min_bet("BTN", BetType.BIG) == 20
-    assert limit_betting.get_max_bet("BTN", BetType.BIG, 500) == 20
+    assert limit_betting.get_min_bet("BTN", BetType.BIG) == 0  # No call needed
+    assert limit_betting.get_max_bet("BTN", BetType.BIG, 500) == 20  # Big bet
 
 def test_nl_min_raise_progression(nl_betting):
     """Test minimum raise requirements at each step."""

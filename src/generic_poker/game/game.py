@@ -489,6 +489,10 @@ class Game:
         logger.debug("After posting blinds:")
         for player_id, bet in self.betting.current_bets.items():
             logger.debug(f"  {self.table.players[player_id].name}: ${bet.amount} (blind={bet.posted_blind})")
+
+        # Set first player to act (BTN in 3-player game)
+        self._next_player()  # Move to BTN
+        self.state = GameState.BETTING  # Ready for action            
         
     def _next_step(self) -> None:
         """Move to next step in gameplay sequence."""

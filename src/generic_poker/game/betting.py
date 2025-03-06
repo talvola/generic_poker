@@ -300,7 +300,12 @@ class LimitBettingManager(BettingManager):
         super().__init__()
         self.small_bet = small_bet
         self.big_bet = big_bet
-        
+
+    # TODO: the hard-coded '2' should instead be coming from the game definition,
+    # which lists all betting arounds and whether they are small or big.   '2' is
+    # a good default since pre-flop and flop are small bets, and turn and river are big bets,
+    # for Hold Em and similar games, but there could be other games where this is different.
+                
     def get_min_bet(self, player_id: str, bet_type: BetType) -> int:
         """
         Get minimum bet size.
@@ -310,23 +315,16 @@ class LimitBettingManager(BettingManager):
         - Later rounds use big bet
         - Blinds and antes always use small bet
         """
-        small_bet = self.small_bet if self.small_bet is not None else 0
-        big_bet = self.big_bet if self.big_bet is not None else 0
-
-        if bet_type in [BetType.BLIND, BetType.ANTE]:
-            return small_bet
-            
-        # First two betting rounds use small bet
-        if self.betting_round < 2:  # 0-based, so rounds 0 and 1
-            return small_bet
-        return big_bet
+        current_bet = self.current_bets.get(player_id, PlayerBet()).amount
+        to_call = self.current_bet - current_bet
+        return to_call  # 5 for SB
         
-    def get_max_bet(self, player_id: str, bet_type: BetType, player_stack: int) -> int:
-        """Get maximum bet (same as min in limit games).
-
-        player_stack is ignored because limit games have fixed bet sizes.
-        """
-        return self.get_min_bet(player_id, bet_type)
+    def get_max_bet(self, player_id: str, bet_type: BetType, stack: int) -> int:
+        current_bet = self.current_bets.get(player_id, PlayerBet()).amount
+        to_call = self.current_bet - current_bet
+        bet_size = self.small_bet if self.betting_round < 2 else self.big_bet  # 10
+        max_bet = to_call + bet_size  # 15 for SB
+        return min(max_bet, stack + current_bet)
         
     # def validate_bet(self, player_id: str, amount: int, player_stack: int) -> bool:
     #     """
@@ -384,34 +382,32 @@ class LimitBettingManager(BettingManager):
         
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
         to_call = self.current_bet - current_bet
-        bet_size = self.get_min_bet(player_id, BetType.BIG)  # 10 in round 0
+        bet_size = self.small_bet if self.betting_round < 2 else self.big_bet
+        total_raise = self.current_bet + bet_size  # Total bet if raising
         
-        if amount == 0:  # Check/fold
+        if amount == 0:
             return True
         if amount < self.current_bet and amount == current_bet + player_stack:  # All-in
             return True
         if amount == self.current_bet:  # Call
             return to_call <= player_stack
         
-        # First non-forced bet after blinds must be small bet
         all_forced = all(bet.posted_blind for bet in self.current_bets.values())
-        if all_forced and len(self.current_bets) > 0:  # After blinds
-            expected = bet_size  # 10
+        if all_forced and len(self.current_bets) > 0:
+            expected = bet_size if len(self.current_bets) == 1 else self.current_bet
             if amount != expected:
-                logger.debug(f"Invalid first bet: {amount} != {expected}")
+                logger.debug(f"Invalid initial bet: {amount} != {expected}")
                 return False
             return amount <= player_stack
         
-        # Raises must increment by bet_size
         if amount > self.current_bet:
-            expected = self.current_bet + bet_size
-            if amount != expected:
-                logger.debug(f"Invalid raise: {amount} != {expected}")
+            if amount != total_raise:
+                logger.debug(f"Invalid raise: {amount} != {total_raise}")
                 return False
             additional_needed = amount - current_bet
             return additional_needed <= player_stack
         
-        logger.debug(f"Invalid bet: {amount} not handled by rules")
+        logger.debug(f"Invalid bet: {amount} not handled")
         return False
 
 class NoLimitBettingManager(BettingManager):
