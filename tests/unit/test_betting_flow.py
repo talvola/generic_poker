@@ -364,13 +364,13 @@ def test_raise_and_calls(test_hands):
     result = game.player_action("BB", PlayerAction.CALL, 20)
     assert result.success
     assert result.state_changed  # Round should complete
-    
-    game._next_step()  # Move to Showdown (Step 3)
-    assert game.current_step == 3
         
     # Verify pot and stacks after the raise round
     assert game.betting.get_main_pot_amount() == 60  # Everyone put in 20
     
+    game._next_step()  # Move to Showdown (Step 3)
+    assert game.current_step == 3
+
     # BTN should win with royal flush
     assert game.state == GameState.COMPLETE
     winner_stack = game.table.players["BTN"].stack
