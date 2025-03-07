@@ -1,7 +1,7 @@
 """Card related classes and utilities."""
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Optional, Set
+from typing import Optional, Set, Dict
 
 
 class Suit(Enum):
@@ -35,7 +35,39 @@ class Rank(Enum):
     
     def __str__(self) -> str:
         return self.value
+    
+    @property
+    def full_name(self) -> str:
+        """Get the full name of the rank."""
+        return RANK_NAMES.get(self.value, self.value)
+        
+    @property
+    def plural_name(self) -> str:
+        """Get the plural form of the rank name."""
+        name = self.full_name
+        # Special cases
+        if name == "Six":
+            return "Sixes"
+        # Add 's' to all ranks
+        return f"{name}s"    
 
+# Mapping from rank symbols to full names
+RANK_NAMES: Dict[str, str] = {
+    'A': 'Ace',
+    'K': 'King',
+    'Q': 'Queen', 
+    'J': 'Jack',
+    'T': 'Ten',
+    '9': 'Nine',
+    '8': 'Eight',
+    '7': 'Seven',
+    '6': 'Six',
+    '5': 'Five',
+    '4': 'Four',
+    '3': 'Three',
+    '2': 'Two',
+    '*': 'Joker'
+}
 
 class Visibility(Enum):
     """Card visibility states."""
