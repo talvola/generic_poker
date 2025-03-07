@@ -94,14 +94,77 @@ class BettingManager(ABC):
         """Get eligible players for a side pot."""
         return self.pot.round_pots[-1].side_pots[index].eligible_players
 
+    def get_additional_required(self, player_id: str) -> int:
+        """
+        Get additional chips required for player to meet the current bet.
+        
+        This returns the number of chips that will be deducted from the player's stack
+        if they call the current bet.
+        
+        Args:
+            player_id: ID of player to check
+            
+        Returns:
+            Additional chips required to call
+        """
+        current_bet = self.current_bets.get(player_id, PlayerBet()).amount
+        return self.current_bet - current_bet    
+    
     @abstractmethod
     def get_min_bet(self, player_id: str, bet_type: BetType) -> int:
-        """Get minimum bet allowed for player."""
-        pass
+        """
+        Get minimum total bet amount required for a valid action.
         
+        This represents the total amount a player must have bet after the action,
+        not just the additional chips needed. The returned value can be directly 
+        used as the 'amount' parameter in place_bet().
+        
+        For a call, this returns the current bet amount.
+        For an initial bet (when no one has bet), this returns the minimum opening bet.
+        
+        Args:
+            player_id: ID of player to check
+            bet_type: Type of bet being made
+            
+        Returns:
+            Total minimum bet amount in chips
+        """
+        pass
+       
+    @abstractmethod
+    def get_min_raise(self, player_id: str) -> int:
+        """
+        Get minimum total bet amount for a valid raise.
+        
+        This represents the total amount a player must have bet to make a valid raise,
+        not just the additional chips needed. The returned value can be directly 
+        used as the 'amount' parameter in place_bet().
+        
+        Args:
+            player_id: ID of player to check
+            
+        Returns:
+            Total minimum raise amount in chips
+        """
+        pass
+
     @abstractmethod
     def get_max_bet(self, player_id: str, bet_type: BetType, player_stack: int) -> int:
-        """Get maximum bet allowed for player."""
+        """
+        Get maximum total bet amount allowed.
+        
+        This represents the total amount a player can bet after the action,
+        not just the additional chips needed. The returned value can be directly 
+        used as the 'amount' parameter in place_bet().
+        
+        Args:
+            player_id: ID of player to check
+            bet_type: Type of bet being made
+            player_stack: Player's available stack size
+            
+        Returns:
+            Total maximum bet amount in chips
+        """
         pass
         
     @abstractmethod
@@ -159,7 +222,7 @@ class BettingManager(ABC):
         if amount > self.current_bet:
             raise_size = amount - self.current_bet
             logger.debug(f"Tracking raise size: {raise_size}")
-            self.last_raise_size = raise_size        
+            self.last_raise_size = max(self.last_raise_size, raise_size)
         
         # Update player bet tracking
         new_bet = PlayerBet()
@@ -310,104 +373,92 @@ class LimitBettingManager(BettingManager):
         """
         Get minimum bet size.
         
-        In limit games with blinds:
-        - First two betting rounds use small bet
-        - Later rounds use big bet
-        - Blinds and antes always use small bet
+        Returns the total amount the player must have bet to make a valid bet.
+        In limit games with blinds, this is the current bet amount.
+        """
+        return self.current_bet  # The minimum total amount is always the current bet
+        
+    def get_min_raise(self, player_id: str) -> int:
+        """
+        Get minimum amount for a raise.
+        
+        In limit games:
+        - Minimum raise is fixed at current bet + one bet unit (small or big depending on round)
+        - This is also the maximum raise (only one bet size allowed in limit)
+        """
+        if self.current_bet == 0:
+            # Opening bet - use the appropriate bet size for the round
+            bet_size = self.small_bet if self.betting_round < 2 else self.big_bet
+            return bet_size
+        
+        # Raise amount is fixed in limit games
+        bet_size = self.small_bet if self.betting_round < 2 else self.big_bet
+        return self.current_bet + bet_size
+            
+    def get_max_bet(self, player_id: str, bet_type: BetType, stack: int) -> int:
+        """
+        Get maximum bet size.
+        
+        Returns the total amount the player can bet.
+        In limit games, this is the current bet plus one bet unit (small or big depending on round).
         """
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
-        to_call = self.current_bet - current_bet
-        return to_call  # 5 for SB
+        bet_size = self.small_bet if self.betting_round < 2 else self.big_bet
         
-    def get_max_bet(self, player_id: str, bet_type: BetType, stack: int) -> int:
-        current_bet = self.current_bets.get(player_id, PlayerBet()).amount
-        to_call = self.current_bet - current_bet
-        bet_size = self.small_bet if self.betting_round < 2 else self.big_bet  # 10
-        max_bet = to_call + bet_size  # 15 for SB
-        return min(max_bet, stack + current_bet)
+        # If there's already a bet, the max is current bet + one bet unit
+        if self.current_bet > 0:
+            max_bet = self.current_bet + bet_size
+        else:
+            # Otherwise just the bet unit itself
+            max_bet = bet_size
+            
+        # Can't bet more than stack
+        return min(max_bet, current_bet + stack)
         
-    # def validate_bet(self, player_id: str, amount: int, player_stack: int) -> bool:
-    #     """
-    #     Validate bet is correct size for limit game.
-        
-    #     Args:
-    #         player_id: ID of betting player
-    #         amount: Total amount player will have bet
-    #         player_stack: Player's current stack
-            
-    #     Returns:
-    #         True if bet is valid, False otherwise
-    #     """
-    #     logger.debug(f"Validating limit bet: player={player_id}, amount={amount}, "
-    #                 f"current_bet={self.current_bet}, stack={player_stack}")
-        
-    #     if amount == 0:  # Check/fold always valid
-    #         return True
-            
-    #     current_bet = self.current_bets.get(player_id, PlayerBet()).amount
-    #     to_call = self.current_bet - current_bet
-        
-    #     # All-in for less than call amount is valid
-    #     if amount < self.current_bet and amount == current_bet + player_stack:
-    #         return True
-            
-    #     if amount == self.current_bet:  # Calling exact amount is valid
-    #         return to_call <= player_stack
-            
-    #     # For raises in limit games, must be exactly double the current bet
-    #     # (unless completing a partial bet like SB->full bet)
-    #     if current_bet > 0 and amount == self.current_bet:
-    #         return True
-            
-    #     if amount > self.current_bet:
-    #         # Must be exactly one bet size more
-    #         bet_size = self.get_min_bet(player_id, BetType.BIG)
-    #         expected = self.current_bet + bet_size
-    #         if amount != expected:
-    #             logger.debug(f"Invalid raise: {amount} != {expected}")
-    #             return False
-                
-    #         # Check stack size
-    #         additional_needed = amount - current_bet
-    #         if additional_needed > player_stack:
-    #             return False
-                
-    #         return True
-            
-    #     return False
-
     def validate_bet(self, player_id: str, amount: int, player_stack: int) -> bool:
+        """
+        Validate bet is correct size for limit game.
+        
+        Args:
+            player_id: ID of betting player
+            amount: Total amount player will have bet
+            player_stack: Player's current stack
+            
+        Returns:
+            True if bet is valid, False otherwise
+        """
         logger.debug(f"Validating limit bet: player={player_id}, amount={amount}, "
                     f"current_bet={self.current_bet}, stack={player_stack}")
         
+        if amount == 0:  # Check/fold always valid
+            return True
+            
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
         to_call = self.current_bet - current_bet
-        bet_size = self.small_bet if self.betting_round < 2 else self.big_bet
-        total_raise = self.current_bet + bet_size  # Total bet if raising
         
-        if amount == 0:
+        # All-in for less than call amount is valid
+        if amount < self.current_bet and amount == current_bet + player_stack:
             return True
-        if amount < self.current_bet and amount == current_bet + player_stack:  # All-in
-            return True
-        if amount == self.current_bet:  # Call
+            
+        if amount == self.current_bet:  # Calling exact amount is valid
             return to_call <= player_stack
+            
+        # For raises in limit games:
+        # - Must be exactly the current bet plus one bet unit
+        # - Or completing a partial bet (like SB->full bet)
+        bet_size = self.small_bet if self.betting_round < 2 else self.big_bet
         
-        all_forced = all(bet.posted_blind for bet in self.current_bets.values())
-        if all_forced and len(self.current_bets) > 0:
-            expected = bet_size if len(self.current_bets) == 1 else self.current_bet
-            if amount != expected:
-                logger.debug(f"Invalid initial bet: {amount} != {expected}")
-                return False
-            return amount <= player_stack
+        # If this is the first action and there are no prior bets except blinds
+        if all(bet.posted_blind for bet in self.current_bets.values()):
+            # First bet in the round should be exactly the bet unit
+            if amount == bet_size:
+                return amount <= player_stack
         
-        if amount > self.current_bet:
-            if amount != total_raise:
-                logger.debug(f"Invalid raise: {amount} != {total_raise}")
-                return False
-            additional_needed = amount - current_bet
-            return additional_needed <= player_stack
-        
-        logger.debug(f"Invalid bet: {amount} not handled")
+        # For raises, must be exactly current bet + one bet unit
+        if amount == self.current_bet + bet_size:
+            return amount - current_bet <= player_stack
+            
+        logger.debug(f"Invalid limit bet: {amount} not equal to current bet + bet unit")
         return False
 
 class NoLimitBettingManager(BettingManager):
@@ -418,7 +469,7 @@ class NoLimitBettingManager(BettingManager):
         Initialize no-limit betting manager.
         
         Args:
-            min_bet: Minimum bet size
+            small_bet: Minimum bet size (usually equal to big blind)
         """
         assert small_bet > 0, "small_bet must be set"
         super().__init__()
@@ -429,31 +480,40 @@ class NoLimitBettingManager(BettingManager):
         """
         Get minimum bet allowed.
         
-        In no-limit:
-        - If no previous bet, minimum is BB (small_bet)
-        - If calling a bet, minimum is current bet
-        - If raising, minimum is:
-          current bet + max(BB, previous raise size)
+        Returns the total amount the player must have bet to make a valid bet.
+        In no-limit, this is either the current bet (for calls) or the small bet (for opening bets).
         """
         if self.current_bet == 0:
-            logger.debug("No prior bet, using small_bet as min bet.")
+            return self.small_bet  # Minimum opening bet
+        return self.current_bet  # Minimum to call is the current bet
+         
+    def get_min_raise(self, player_id: str) -> int:
+        """
+        Get minimum amount for a raise (not just a call).
+        
+        In no-limit:
+        - Minimum raise is current bet + max(BB, previous raise size)
+        """
+        if self.current_bet == 0:
             return self.small_bet
         
         # For raising, minimum is current bet plus at least 
         # the size of the previous raise (or BB if larger)
-        min_raise = max(self.small_bet, self.last_raise_size)
+        min_raise_increment = max(self.small_bet, self.last_raise_size)
         logger.debug(f"Min Raise Calculation: Current Bet: {self.current_bet}, "
-                    f"Last Raise: {self.last_raise_size}, Min Raise: {min_raise}")
+                     f"Last Raise: {self.last_raise_size}, Min Increment: {min_raise_increment}")
         
-        return self.current_bet + min_raise
+        return self.current_bet + min_raise_increment
          
     def get_max_bet(self, player_id: str, bet_type: BetType, player_stack: int) -> int:
         """
         Get maximum bet size.
         
-        In No Limit, max bet is always player's stack.
+        Returns the total amount the player can bet.
+        In No Limit, this is their current bet plus their entire stack.
         """
-        return player_stack
+        current_bet = self.current_bets.get(player_id, PlayerBet()).amount
+        return current_bet + player_stack  # Total bet including what's already in
         
     def validate_bet(self, player_id: str, amount: int, player_stack: int) -> bool:
         """
@@ -485,7 +545,7 @@ class NoLimitBettingManager(BettingManager):
             return to_call <= player_stack
             
         # For raises:
-        min_raise = self.get_min_bet(player_id, BetType.BIG)
+        min_raise = self.get_min_raise(player_id)
         # Can't raise more than stack
         max_raise = self.get_max_bet(player_id, BetType.BIG, player_stack)
         
@@ -509,7 +569,7 @@ class PotLimitBettingManager(BettingManager):
         Initialize pot-limit betting manager.
         
         Args:
-            min_bet: Minimum bet size
+            small_bet: Minimum bet size
         """
         assert small_bet > 0, "small_bet must be set"
         super().__init__()
@@ -517,18 +577,38 @@ class PotLimitBettingManager(BettingManager):
         self.last_raise_size = 0
         
     def get_min_bet(self, player_id: str, bet_type: BetType) -> int:
-        """Get minimum bet size - same as no-limit."""
+        """
+        Get minimum bet allowed.
+        
+        Returns the total amount the player must have bet to make a valid bet.
+        In pot-limit, this is either the current bet (for calls) or the small bet (for opening bets).
+        """
+        if self.current_bet == 0:
+            return self.small_bet  # Minimum opening bet
+        return self.current_bet  # Minimum to call is the current bet
+        
+    def get_min_raise(self, player_id: str) -> int:
+        """
+        Get minimum amount for a raise (not just a call).
+        
+        In pot-limit:
+        - Minimum raise is current bet + max(BB, previous raise size)
+        """
         if self.current_bet == 0:
             return self.small_bet
-        return self.current_bet + max(self.small_bet, self.last_raise_size)
+        
+        # For raising, minimum is current bet plus at least 
+        # the size of the previous raise (or BB if larger)
+        min_raise_increment = max(self.small_bet, self.last_raise_size)
+        
+        return self.current_bet + min_raise_increment
         
     def get_max_bet(self, player_id: str, bet_type: BetType, player_stack: int) -> int:
         """
         Get maximum bet size.
         
-        In Pot Limit:
-        max raise = size of pot after call
-        total bet = current bet + call amount + max raise
+        Returns the total amount the player can bet.
+        In Pot Limit: max bet = current bet + pot after call
         """
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
         call_amount = self.current_bet - current_bet
@@ -543,7 +623,8 @@ class PotLimitBettingManager(BettingManager):
         max_bet = self.current_bet + max_raise
         
         # Can't bet more than stack
-        return min(max_bet, player_stack)
+        max_player_bet = current_bet + player_stack
+        return min(max_bet, max_player_bet)
                
     def validate_bet(self, player_id: str, amount: int, player_stack: int) -> bool:
         """
@@ -574,11 +655,14 @@ class PotLimitBettingManager(BettingManager):
             return to_call <= player_stack
             
         # For raises:
-        min_raise = self.get_min_bet(player_id, BetType.BIG)
+        min_raise = self.get_min_raise(player_id)
         max_raise = self.get_max_bet(player_id, BetType.BIG, player_stack)
         
         # Must be between min raise and max pot limit
-        if not (min_raise <= amount <= max_raise):
+        if amount < min_raise:
+            return False
+            
+        if amount > max_raise:
             return False
             
         # Can't bet more than stack
