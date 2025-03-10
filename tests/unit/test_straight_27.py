@@ -388,28 +388,124 @@ def test_next_step_showdown():
     assert game.state == GameState.COMPLETE
 
     print("\nShowdown Results:")
-    # Create a hand describer for high card evaluation (standard poker)
-    describer = HandDescriber(EvaluationType.HIGH)
 
-    for player in game.table.get_position_order():
-        if player.is_active:
-            cards = player.hand.get_cards()
-            card_str = ' '.join(str(c) for c in cards)
-            print(f"{player.name}: {card_str}")
-
-            # Get hand description
-            try:
-                hand_desc = describer.describe_hand(cards)
-                hand_desc_detailed = describer.describe_hand_detailed(cards)
-                if hand_desc == hand_desc_detailed:
-                    print(f"  Hand: {hand_desc}")
-                else:
-                    print(f"  Hand: {hand_desc_detailed}")
-            except Exception as e:
-                print(f"  Hand: [Unable to describe: {e}]")
 
     assert game.table.players['BTN'].stack == 490
     assert game.table.players['SB'].stack == 490
     assert game.table.players['BB'].stack == 520
 
+def test_game_results():
+    """Test that the game results API provides correct information."""
+    game = setup_test_game_with_mock_deck()
     
+    # Play a full hand
+    game.start_hand()
+    game._next_step()  # Deal cards
+    game._next_step()  # Move to initial bet
+
+    # Calculate initial pot from blinds
+    blinds_pot = 15  # 5 (SB) + 10 (BB)    
+    
+    # BTN calls
+    game.player_action('BTN', PlayerAction.CALL, 10)
+    
+    # SB calls
+    game.player_action('SB', PlayerAction.CALL, 10)
+    
+    # BB checks
+    game.player_action('BB', PlayerAction.CHECK)
+
+    # Calculate final pot: blinds + additional calls
+    expected_pot = blinds_pot + 10 + 5  # BTN adds 10, SB adds 5    
+    
+    # Move to showdown
+    game._next_step()
+    
+    # Check game state
+    assert game.state == GameState.COMPLETE
+    
+    # Get results
+    results = game.get_hand_results()
+
+    print("\nShowdown Results:")
+    print(results)
+
+    # Check overall results
+    assert results.is_complete
+    assert results.total_pot == expected_pot
+    assert len(results.pots) == 1  # Just main pot
+    assert len(results.hands) == 3  # All players stayed in
+    
+    # Check pot details
+    main_pot = results.pots[0]
+    assert main_pot.amount == expected_pot
+    assert main_pot.pot_type == "main"
+    assert not main_pot.split  # Only one winner
+    
+    # For 2-7 Lowball, the BB should win with a pair of Jacks and a pair of Tens
+    # Since that's the worst hand (highest) in 2-7 evaluation
+    assert len(main_pot.winners) == 1
+    assert 'BB' in main_pot.winners
+    
+    # Check hand descriptions
+    bb_hand = results.hands['BB']
+    assert "Two Pair" in bb_hand.hand_name
+    assert "Jacks and Tens" in bb_hand.hand_description
+    
+    # Check winning hands list
+    assert len(results.winning_hands) == 1
+    assert results.winning_hands[0].player_id == 'BB'
+
+def test_game_results_with_fold():
+    """Test game results when players fold."""
+    game = setup_test_game_with_mock_deck()
+    
+    # Start the hand
+    game.start_hand()
+    game._next_step()  # Deal cards
+    game._next_step()  # Move to initial bet
+    
+    # Calculate initial pot from blinds
+    blinds_pot = 15  # 5 (SB) + 10 (BB)
+    
+    # BTN raises
+    game.player_action('BTN', PlayerAction.RAISE, 20)
+    expected_pot = blinds_pot + 20  # BTN adds 20
+    
+    # SB folds
+    game.player_action('SB', PlayerAction.FOLD)
+    
+    # BB folds
+    game.player_action('BB', PlayerAction.FOLD)
+    
+    # Check game state - should be complete after everyone folds
+    assert game.state == GameState.COMPLETE
+    
+    # Get results
+    results = game.get_hand_results()
+    
+    # Print results for debugging
+    print("\nFold Results:")
+    print(results)
+    
+    # Check overall results
+    assert results.is_complete
+    assert results.total_pot == expected_pot
+    assert len(results.pots) == 1  # Just main pot
+    
+    # When players fold, we should still have their hand info
+    assert len(results.hands) == 3
+    
+    # Check pot details
+    main_pot = results.pots[0]
+    assert main_pot.amount == expected_pot
+    assert main_pot.pot_type == "main"
+    assert not main_pot.split  # Only one winner
+    
+    # BTN should win since everyone else folded
+    assert len(main_pot.winners) == 1
+    assert 'BTN' in main_pot.winners
+    
+    # Check winning hands list
+    assert len(results.winning_hands) == 1
+    assert results.winning_hands[0].player_id == 'BTN'  

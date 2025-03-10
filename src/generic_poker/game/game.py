@@ -1,8 +1,8 @@
 """Core game implementation controlling game flow."""
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Dict, Optional, Any, Tuple
+from typing import List, Dict, Optional, Any, Tuple, Set
 
 from generic_poker.config.loader import GameRules, GameActionType
 from generic_poker.game.table import Table, Player, Position
@@ -42,7 +42,96 @@ class ActionResult:
     error: Optional[str] = None
     state_changed: bool = False
 
+@dataclass
+class PotResult:
+    """Information about a pot and its winner(s)."""
+    amount: int  # Amount in the pot
+    winners: List[str]  # List of player IDs who won this pot
+    split: bool = False  # Whether the pot was split (multiple winners)
+    pot_type: str = "main"  # "main" or "side"
+    side_pot_index: Optional[int] = None  # Index of side pot if applicable
+    eligible_players: Set[str] = None  # Players who could win this pot
+    
+    def __post_init__(self):
+        if self.eligible_players is None:
+            self.eligible_players = set()
+        self.split = len(self.winners) > 1
+        
+    @property
+    def amount_per_player(self) -> int:
+        """Amount each winner receives from the pot."""
+        if not self.winners:
+            return 0
+        return self.amount // len(self.winners)
+    
+    def __str__(self) -> str:
+        """String representation of the pot result."""
+        pot_name = "Main pot" if self.pot_type == "main" else f"Side pot {self.side_pot_index + 1}"
+        winners_str = ", ".join(self.winners)
+        if self.split:
+            return f"{pot_name}: ${self.amount} - Split between {winners_str} (${self.amount_per_player} each)"
+        else:
+            return f"{pot_name}: ${self.amount} - Won by {winners_str}"  
 
+@dataclass
+class HandResult:
+    """Information about a player's hand and its evaluation."""
+    player_id: str
+    cards: List[Card]  # Cards in the hand
+    hand_name: str  # e.g., "Full House"
+    hand_description: str  # e.g., "Full House, Aces over Kings"
+    evaluation_type: str  # "high", "low", etc.
+    community_cards: List[Card] = field(default_factory=list)  # Community cards if applicable
+    rank: int = 0  # Internal rank value (lower is better for low games)
+    
+    def __str__(self) -> str:
+        """String representation of the hand result."""
+        cards_str = ", ".join(str(card) for card in self.cards)
+        return f"Player {self.player_id}: {self.hand_description} ({cards_str})"
+
+@dataclass
+class GameResult:
+    """Complete results of a poker hand."""
+    pots: List[PotResult]  # Results for each pot
+    hands: Dict[str, HandResult]  # Hand results by player ID
+    winning_hands: List[HandResult]  # List of winning hands (may be multiple)
+    is_complete: bool = True  # Whether the hand played to completion
+    
+    @property
+    def total_pot(self) -> int:
+        """Total amount in all pots."""
+        return sum(pot.amount for pot in self.pots)
+    
+    @property
+    def winners(self) -> List[str]:
+        """List of all unique winner IDs."""
+        all_winners = [winner for pot in self.pots for winner in pot.winners]
+        return list(set(all_winners))
+    
+    def __str__(self) -> str:
+        """String representation of the game result."""
+        lines = [f"Game Result (Complete: {self.is_complete})"]
+        lines.append(f"Total pot: ${self.total_pot}")
+        
+        # Pot details
+        lines.append("\nPot Results:")
+        for pot in self.pots:
+            lines.append(f"- {pot}")
+            
+        # Winner details
+        lines.append("\nWinners:")
+        for hand in self.winning_hands:
+            lines.append(f"- {hand}")
+            
+        # Other hands
+        if len(self.hands) > len(self.winning_hands):
+            lines.append("\nOther Hands:")
+            for player_id, hand in self.hands.items():
+                if player_id not in self.winners:
+                    lines.append(f"- {hand}")
+                    
+        return "\n".join(lines)    
+    
 class Game:
     """
     Controls game flow and state.
@@ -69,7 +158,7 @@ class Game:
         # Common parameters
         min_buyin: int = 0,
         max_buyin: int = 0,
-        auto_progress: bool = True  # Add this parameter
+        auto_progress: bool = True
     ):
         """
         Initialize new game.
@@ -117,6 +206,7 @@ class Game:
         self.current_step = -1  # Not started
         self.current_player: Optional[str] = None  # ID of player to act
     
+        self.last_hand_result = None  # Store the last hand result here
 
     def get_game_description(self) -> str:
         """
@@ -676,17 +766,27 @@ class Game:
         Side pots are handled in order from smallest to largest.
         """
         from generic_poker.evaluation.evaluator import evaluator, EvaluationType
+        from generic_poker.evaluation.hand_description import HandDescriber
         
         active_players = [p for p in self.table.players.values() if p.is_active]
         if not active_players:
+            self.state = GameState.COMPLETE
             return
             
         # Get evaluation settings from rules
         showdown_rules = self.rules.showdown.best_hand[0]  # Use first evaluation type for now
-        eval_type = EvaluationType(showdown_rules.get('evaluationType', 'high'))
+        eval_type = EvaluationType(showdown_rules.get('evaluationType', 'high'))     
         
+        # Create a hand describer for nice hand descriptions
+        describer = HandDescriber(eval_type)
+
         # For each hand config in the showdown rules, find best hand
         player_best_hands = {}
+
+        # Initialize structures for tracking results
+        pot_results = []
+        hand_results = {}
+        winning_player_ids = set()        
         
         for player in active_players:
             cards = player.hand.get_cards()
@@ -703,7 +803,26 @@ class Game:
             # For straight poker, just use all cards
             # TODO: Handle cases where best hand must be selected from available cards
             player_best_hands[player.id] = cards
+
+            # Create hand result
+            hand_results[player.id] = HandResult(
+                player_id=player.id,
+                cards=cards,
+                hand_name=describer.describe_hand(cards),
+                hand_description=describer.describe_hand_detailed(cards),
+                evaluation_type=eval_type.value,
+                community_cards=self.table.community_cards
+            )            
             
+        # Get total pot amount for tracking
+        total_pot = self.betting.get_total_pot()
+        main_pot_amount = self.betting.get_main_pot_amount()
+        
+        # Get side pot amounts
+        side_pot_amounts = []
+        for i in range(self.betting.get_side_pot_count()):
+            side_pot_amounts.append(self.betting.get_side_pot_amount(i))
+
         # Award any side pots first
         for i in range(self.betting.get_side_pot_count()):
             eligible_ids = self.betting.get_side_pot_eligible_players(i)
@@ -712,14 +831,80 @@ class Game:
                 # Find best hand among eligible players
                 pot_winners = self._find_winners(eligible_players, player_best_hands, eval_type)
                 if pot_winners:
+                    # Get the pot amount before awarding it
+                    side_pot_amount = side_pot_amounts[i]
+                    
+                    # Award the pot
                     self.betting.award_pots(pot_winners, i)
+                    
+                    # Track the result
+                    pot_result = PotResult(
+                        amount=side_pot_amount,
+                        winners=[p.id for p in pot_winners],
+                        pot_type="side",
+                        side_pot_index=i,
+                        eligible_players=eligible_ids
+                    )
+                    pot_results.append(pot_result)
+                    
+                    # Add to winning players
+                    winning_player_ids.update([p.id for p in pot_winners])                  
                     
         # Award main pot
         winners = self._find_winners(active_players, player_best_hands, eval_type)
         if winners:
+            # Award the pot
             self.betting.award_pots(winners)
             
+            # Track the result
+            pot_result = PotResult(
+                amount=main_pot_amount,
+                winners=[p.id for p in winners],
+                pot_type="main",
+                eligible_players=set(p.id for p in active_players)
+            )
+            pot_results.append(pot_result)
+            
+            # Add to winning players
+            winning_player_ids.update([p.id for p in winners])        
+                
+        # Build the winning hands list
+        winning_hands = [hand_results[player_id] for player_id in winning_player_ids 
+                        if player_id in hand_results]
+        
+        # Store the complete game result
+        self.last_hand_result = GameResult(
+            pots=pot_results,
+            hands=hand_results,
+            winning_hands=winning_hands,
+            is_complete=True
+        )
+
+        # Sanity check - verify total pot amounts match
+        if self.last_hand_result.total_pot != total_pot:
+            logger.warning(
+                f"Pot amount mismatch: {self.last_hand_result.total_pot} vs {total_pot}"
+            )
+
         self.state = GameState.COMPLETE
+
+    def get_hand_results(self) -> GameResult:
+        """
+        Get detailed results after a hand is complete.
+        
+        Returns:
+            GameResult object with information about pots, winners, and hands
+            
+        Raises:
+            ValueError: If the game is not in a completed state or no results available
+        """
+        if self.state not in [GameState.COMPLETE, GameState.SHOWDOWN]:
+            raise ValueError("Cannot get results - hand not complete")
+        
+        if self.last_hand_result is None:
+            raise ValueError("No results available - hand may have ended without showdown")
+            
+        return self.last_hand_result
 
     def _find_winners(
         self,
