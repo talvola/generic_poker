@@ -1,4 +1,5 @@
 """Table implementation managing game state."""
+import logging
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 from enum import Enum
@@ -7,6 +8,7 @@ from generic_poker.core.card import Card
 from generic_poker.core.deck import Deck
 from generic_poker.core.hand import PlayerHand
 
+logger = logging.getLogger(__name__)
 
 class Position(Enum):
     """Core player positions that affect game mechanics."""
@@ -217,13 +219,13 @@ class Table:
         Args:
             num_cards: Number of cards to deal to each player
         """
-        self.deck.shuffle()
         active_players = [p for p in self.players.values() if p.is_active]
         
         for _ in range(num_cards):
             for player in active_players:
                 card = self.deck.deal_card()
                 if card:
+                    logger.info(f"  Dealt {card} to player {player.name}")
                     player.hand.add_card(card)
                     
     def deal_community_cards(self, num_cards: int) -> None:

@@ -182,12 +182,15 @@ class HandEvaluator:
         
     def _get_evaluator_class(self, eval_type: EvaluationType) -> Type[BaseEvaluator]:
         """Get appropriate evaluator class for eval type."""
-        from generic_poker.evaluation.eval_types.high import HighHandEvaluator
-        from generic_poker.evaluation.eval_types.low import A5LowEvaluator
+
+        # most hands which use the CSV file-based hand evaluator all use the same 
+        # code.
+        from generic_poker.evaluation.eval_types.standard import StandardHandEvaluator
         
         evaluator_map = {
-            EvaluationType.HIGH: HighHandEvaluator,
-            EvaluationType.LOW_A5: A5LowEvaluator
+            EvaluationType.HIGH: StandardHandEvaluator,
+            EvaluationType.LOW_A5: StandardHandEvaluator,
+            EvaluationType.LOW_27: StandardHandEvaluator
         }
         
         if eval_type not in evaluator_map:

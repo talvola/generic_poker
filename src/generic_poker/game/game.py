@@ -59,8 +59,14 @@ class Game:
         self,
         rules: GameRules,
         structure: BettingStructure,
-        small_bet: int,
+        # For Limit games
+        small_bet: Optional[int] = None,
         big_bet: Optional[int] = None,
+        # For No-Limit/Pot-Limit games
+        small_blind: Optional[int] = None,
+        big_blind: Optional[int] = None,    
+        mandatory_straddle: Optional[int] = None,
+        # Common parameters
         min_buyin: int = 0,
         max_buyin: int = 0,
         auto_progress: bool = True  # Add this parameter
@@ -87,12 +93,92 @@ class Game:
             min_buyin=min_buyin,
             max_buyin=max_buyin
         )
-        self.betting = create_betting_manager(structure, small_bet, big_bet)
+        if structure == BettingStructure.LIMIT:
+            if small_bet is None or big_bet is None:
+                raise ValueError("Limit games require small_bet and big_bet")
+            self.small_bet = small_bet
+            self.big_bet = big_bet
+            # small blind in Limit games is half the small bet
+            self.small_blind = small_bet // 2
+            self.big_blind = small_bet
+            self.betting = create_betting_manager(structure, small_bet, big_bet)
+        else:  # NO_LIMIT or POT_LIMIT
+            if small_blind is None or big_blind is None:
+                raise ValueError("No-Limit/Pot-Limit games require small_blind and big_blind")
+            self.small_blind = small_blind
+            self.big_blind = big_blind
+            # the minimum bet is always the big blind in No-Limit/Pot-Limit games
+            self.small_bet = big_blind
+            self.big_bet = big_blind
+            self.betting = create_betting_manager(structure, small_blind, big_blind)     
         self.auto_progress = auto_progress  # Store the setting     
         
         self.state = GameState.WAITING
         self.current_step = -1  # Not started
         self.current_player: Optional[str] = None  # ID of player to act
+    
+
+    def get_game_description(self) -> str:
+        """
+        Get a human-friendly description of the game.
+        
+        Returns:
+            A formatted string describing the game as it would appear in a casino.
+            
+        Example: "$10/$20 Limit Texas Hold'em"
+        """
+       
+        # Determine betting structure name
+        from generic_poker.game.betting import (
+            LimitBettingManager, NoLimitBettingManager, PotLimitBettingManager
+        )
+        
+        betting_structure = "Unknown"
+        if isinstance(self.betting, LimitBettingManager):
+            betting_structure = "Limit"
+        elif isinstance(self.betting, NoLimitBettingManager):
+            betting_structure = "No Limit"
+        elif isinstance(self.betting, PotLimitBettingManager):
+            betting_structure = "Pot Limit"
+            
+        if isinstance(self.betting, LimitBettingManager):
+            # For Limit, show bet sizes
+            return f"${self.small_bet}/${self.big_bet} {betting_structure} {self.rules.game}"
+        else:
+            # For No-Limit/Pot-Limit, show blind sizes
+            return f"${self.small_blind}/${self.big_blind} {betting_structure} {self.rules.game}"
+
+    def get_table_info(self) -> Dict[str, Any]:
+        """
+        Get detailed information about the current table.
+        
+        Returns:
+            Dictionary with table information including:
+            - game_description: Formatted game description
+            - player_count: Number of players at the table
+            - active_players: Number of players in the current hand
+            - min_buyin: Minimum buy-in amount
+            - max_buyin: Maximum buy-in amount
+            - avg_stack: Average stack size
+            - pot_size: Current pot size
+        """
+        active_count = sum(1 for p in self.table.players.values() if p.is_active)
+        total_chips = sum(p.stack for p in self.table.players.values())
+        avg_stack = total_chips / len(self.table.players) if self.table.players else 0
+        
+        return {
+            "game_description": self.get_game_description(),
+            "player_count": len(self.table.players),
+            "active_players": active_count,
+            "min_buyin": self.table.min_buyin,
+            "max_buyin": self.table.max_buyin,
+            "avg_stack": avg_stack,
+            "pot_size": self.betting.get_total_pot() if hasattr(self.betting, "get_total_pot") else 0
+        }
+
+    def __str__(self) -> str:
+        """String representation of the game."""
+        return self.get_game_description()
     
     def add_player(self, player_id: str, name: str, buyin: int) -> None:
         """Add a player to the game."""
@@ -168,10 +254,12 @@ class Game:
             # CALL if player has enough chips
             if required_bet > 0:
                 if player.stack >= required_bet:
-                    valid_actions.append((PlayerAction.CALL, required_bet, required_bet))
+                    valid_actions.append((PlayerAction.CALL, self.betting.current_bet, self.betting.current_bet))
                 elif player.stack > 0:
                     # ✅ Allow all-in call for less than required bet
-                    valid_actions.append((PlayerAction.CALL, player.stack, player.stack))
+                    # For all-in, the total would be current_bet + stack
+                    total_amount = current_bet + player.stack
+                    valid_actions.append((PlayerAction.CALL, total_amount, total_amount))
             else:
                 valid_actions.append((PlayerAction.CHECK, None, None))
                 
@@ -180,8 +268,13 @@ class Game:
                 current_total = self.betting.current_bet
                 current_bet = self.betting.current_bets.get(player_id, PlayerBet()).amount
 
-                # ✅ Correct minimum raise: last raise size or small bet
-                min_amount = self.betting.get_min_bet(player_id, BetType.BIG)
+                if current_total == 0:
+                    action = PlayerAction.BET
+                    min_amount = self.betting.get_min_bet(player_id, BetType.BIG)
+                else:
+                    action = PlayerAction.RAISE
+                    min_amount = self.betting.get_min_raise(player_id)  # Use get_min_raise for raises
+
                 max_amount = self.betting.get_max_bet(player_id, BetType.BIG, player.stack)
 
                 logger.debug(f"Player: {player_id}, Required Bet: {required_bet}, Current Total: {current_total}")
@@ -398,6 +491,7 @@ class Game:
             
             if step.action_type == GameActionType.DEAL:
                 logger.debug(f"Handling deal action: {step.action_config}")
+                self.state = GameState.DEALING
                 self._handle_deal(step.action_config)
                 if self.auto_progress:  # Add check here
                     self._next_step()
@@ -658,3 +752,74 @@ class Game:
                 best_players.append(player)
                 
         return best_players        
+
+    def format_actions_for_display(self, player_id: str) -> List[str]:
+        """
+        Convert valid actions to user-friendly display strings.
+        
+        Args:
+            player_id: ID of player to get formatted actions for
+            
+        Returns:
+            List of formatted action strings ready for display
+        
+        Example output:
+            ["Fold", "Call $10 (+$5)", "Raise to $20 (+$15)"]
+        """
+        # Get valid actions
+        valid_actions = self.get_valid_actions(player_id)
+        if not valid_actions:
+            return []
+        
+        player = self.table.players[player_id]
+        current_player_bet = self.betting.current_bets.get(player_id, PlayerBet()).amount
+        formatted_actions = []
+        
+        for action, min_amount, max_amount in valid_actions:
+            if action == PlayerAction.FOLD:
+                formatted_actions.append("Fold")
+                
+            elif action == PlayerAction.CHECK:
+                formatted_actions.append("Check")
+                
+            elif action == PlayerAction.CALL:
+                additional = min_amount - current_player_bet
+                formatted_actions.append(f"Call ${min_amount} (+${additional})")
+                
+            elif action in [PlayerAction.BET, PlayerAction.RAISE]:
+                # For fixed limit, min_amount and max_amount should be the same
+                if min_amount == max_amount:
+                    additional = min_amount - current_player_bet
+                    action_name = "Bet" if action == PlayerAction.BET else "Raise to"
+                    formatted_actions.append(f"{action_name} ${min_amount} (+${additional})")
+                # For pot limit or no limit, show a slider or multiple options
+                else:
+                    additional_min = min_amount - current_player_bet
+                    action_name = "Bet" if action == PlayerAction.BET else "Raise to"
+                    
+                    # If this is a no-limit or pot-limit game, we might want to show range
+                    formatted_actions.append(f"{action_name} ${min_amount}-${max_amount} (min +${additional_min})")
+                    
+                    # Additionally, we could add common bet sizing options:
+                    if self.betting.structure != BettingStructure.LIMIT:
+                        pot_size = self.betting.get_total_pot()
+                        
+                        # Half pot
+                        half_pot = min(current_player_bet + (pot_size // 2), max_amount)
+                        if half_pot > min_amount:
+                            additional = half_pot - current_player_bet
+                            formatted_actions.append(f"{action_name} ${half_pot} - Half Pot (+${additional})")
+                        
+                        # Full pot
+                        full_pot = min(current_player_bet + pot_size, max_amount)
+                        if full_pot > half_pot:
+                            additional = full_pot - current_player_bet
+                            formatted_actions.append(f"{action_name} ${full_pot} - Pot (+${additional})")
+                        
+                        # All-in
+                        if max_amount > full_pot:
+                            additional = max_amount - current_player_bet
+                            formatted_actions.append(f"All-in ${max_amount} (+${additional})")
+        
+        return formatted_actions        
+    

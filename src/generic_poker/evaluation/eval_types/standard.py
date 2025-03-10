@@ -1,10 +1,10 @@
-"""A-5 Low hand evaluation."""
+"""Standard poker evaluation based off generic file-based rankings"""
 from typing import List, Optional
 from generic_poker.core.card import Card
 from generic_poker.evaluation.eval_types.base import BaseEvaluator, HandRanking
 
-class A5LowEvaluator(BaseEvaluator):
-    """Evaluator for A-5 Lowball poker."""
+class StandardHandEvaluator(BaseEvaluator):
+    """Evaluator for standard poker."""
     
     def evaluate(
         self,
@@ -12,20 +12,18 @@ class A5LowEvaluator(BaseEvaluator):
         wild_cards: Optional[List[Card]] = None
     ) -> Optional[HandRanking]:
         """
-        Evaluate an A-5 Low poker hand.
-        
-        In A-5 Low:
-        - A-2-3-4-5 is the best possible hand (wheel)
-        - Straights and flushes don't count
-        - Pairs and other made hands are bad
+        Evaluate a poker hand.
         
         Args:
             cards: Cards to evaluate
             wild_cards: Any wild cards in effect (not implemented yet)
+            
+        Returns:
+            Hand ranking if valid hand, None if not
         """
         self._validate_hand_size(cards)
         
-        # Sort cards in canonical order for ranking lookup
+        # Sort cards in canonical order
         sorted_cards = self._sort_cards(cards)
         
         # Convert to string representation for lookup

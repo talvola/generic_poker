@@ -82,6 +82,11 @@ valid_actions = game.get_valid_actions(player_id)
 # Returns a list of tuples: (action, min_amount, max_amount)
 # Example: [(PlayerAction.FOLD, None, None), (PlayerAction.CALL, 10, 10), (PlayerAction.RAISE, 20, 100)]
 
+# Get formatted actions for display
+formatted_actions = game.format_actions_for_display(player_id)
+# Returns list of formatted strings
+# Example: ["Fold", "Call $10 (+$5)", "Raise to $20 (+$15)"]
+
 # Take an action
 result = game.player_action(player_id, PlayerAction.CALL, amount=10)
 result = game.player_action(player_id, PlayerAction.RAISE, amount=30)
@@ -94,12 +99,41 @@ The `get_valid_actions` method returns a list of tuples with the valid actions t
 - Second element is the minimum amount for the action (or None for FOLD/CHECK)
 - Third element is the maximum amount for the action (or None for FOLD/CHECK, equal to min for CALL)
 
+The `format_actions_for_display` method converts the valid actions into user-friendly strings that include:
+- The action name (Fold, Check, Call, Raise to, etc.)
+- The total amount to be bet (e.g., "$10")
+- The additional amount needed in parentheses (e.g., "(+$5)")
+
 The `player_action` method returns an `ActionResult` with these fields:
 - `success`: Boolean indicating if the action was successful
 - `error`: Error message if the action failed
 - `state_changed`: Boolean indicating if the action completed a betting round
 
 If `state_changed` is True and `auto_progress` is False, you should call `game._next_step()` to move to the next game step.
+
+## Game Description and Information
+
+```python
+# Get a formatted description of the game
+description = game.get_game_description()
+# Example: "$10/$20 Limit Texas Hold'em"
+
+# Get detailed table information
+table_info = game.get_table_info()
+# Returns a dictionary with:
+# - game_description: Formatted game description
+# - player_count: Number of players at the table
+# - active_players: Number of players in the current hand
+# - min_buyin: Minimum buy-in amount
+# - max_buyin: Maximum buy-in amount
+# - avg_stack: Average stack size
+# - pot_size: Current pot size
+
+# The game object can also be directly used in string context
+print(f"Current game: {game}")  # Uses __str__ method
+```
+
+These methods are useful for displaying game information in UIs, lobbies, or logs. The formatting follows standard casino conventions for describing poker games.
 
 ## Game States
 

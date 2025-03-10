@@ -1,4 +1,4 @@
-"""Interactive example of Straight Poker game."""
+"""Interactive example of poker game."""
 import logging
 import sys
 
@@ -16,12 +16,12 @@ import json
 from pathlib import Path
 from typing import Dict, List, Tuple
 
-from generic_poker.config.loader import GameRules, BettingStructure
+from generic_poker.config.loader import GameRules, BettingStructure, GameActionType
 from generic_poker.game.game import Game, GameState, PlayerAction
 from generic_poker.core.card import Card
-from generic_poker.game.betting import PlayerBet  # Add this import
-
-
+from generic_poker.game.betting import PlayerBet, LimitBettingManager, NoLimitBettingManager, PotLimitBettingManager
+from generic_poker.evaluation.hand_description import HandDescriber
+from generic_poker.evaluation.evaluator import EvaluationType
 
 def load_straight_poker_rules() -> GameRules:
     """Load Straight Poker game rules."""
@@ -83,14 +83,41 @@ def print_game_state(game: Game) -> None:
                 for pid, bet in game.betting.current_bets.items():
                     player = game.table.players[pid]
                     print(f"  {player.name}: ${bet.amount}")
-            if game.betting.get_side_pot_count() > 1:
+            
+            # Check if we have side pots and display their information
+            side_pot_count = game.betting.get_side_pot_count()
+            if side_pot_count > 0:
                 print("\nSide Pots:")
-                for i, side_pot in enumerate(game.betting.pot.side_pots, 1):
-                    print(f"  Side Pot {i}: ${side_pot.amount}")
-                    for pid, bet in side_pot.bets.items():
-                        player = game.table.players[pid]
-                        print(f"    {player.name}: ${bet.amount}")
+                for i in range(side_pot_count):
+                    side_pot_amount = game.betting.get_side_pot_amount(i)
+                    eligible_players = game.betting.get_side_pot_eligible_players(i)
+                    eligible_names = [game.table.players[pid].name for pid in eligible_players]
+                    
+                    print(f"  Side Pot {i+1}: ${side_pot_amount}")
+                    print(f"    Eligible players: {', '.join(eligible_names)}")
 
+    # Display showdown results if game is complete
+    if game.state == GameState.COMPLETE:
+        print("\nShowdown Results:")
+        # Create a hand describer for high card evaluation (standard poker)
+        describer = HandDescriber(EvaluationType.HIGH)
+        
+        for player in game.table.get_position_order():
+            if player.is_active:
+                cards = player.hand.get_cards()
+                card_str = ' '.join(str(c) for c in cards)
+                print(f"{player.name}: {card_str}")
+                
+                # Get hand description
+                try:
+                    hand_desc = describer.describe_hand(cards)
+                    hand_desc_detailed = describer.describe_hand_detailed(cards)
+                    if hand_desc == hand_desc_detailed:
+                        print(f"  Hand: {hand_desc}")
+                    else:
+                        print(f"  Hand: {hand_desc_detailed}")
+                except Exception as e:
+                    print(f"  Hand: [Unable to describe: {e}]")
 
 def setup_test_game() -> Game:
     """Set up a test game with some players."""
@@ -104,7 +131,8 @@ def setup_test_game() -> Game:
         small_bet=10,
         big_bet=20,
         min_buyin=200,
-        max_buyin=1000
+        max_buyin=1000,
+        auto_progress=False  # Make sure we manually control game progression
     )
     
     # Add some test players
@@ -130,7 +158,7 @@ def get_player_action(game: Game, player_id: str) -> tuple[PlayerAction, int]:
     # Show available actions
     print("\nAvailable actions:")
     for i, (action, min_amount, max_amount) in enumerate(valid_actions, 1):
-        if min_amount is None:
+        if action in (PlayerAction.FOLD, PlayerAction.CHECK):
             print(f"{i}: {action.value}")
         elif min_amount == max_amount:
             print(f"{i}: {action.value} ${min_amount}")
@@ -165,14 +193,31 @@ def get_player_action(game: Game, player_id: str) -> tuple[PlayerAction, int]:
         print("Invalid choice")
 
 def run_game():
-    """Run through a game of Straight Poker."""
+    """Run through a game of poker."""
     game = setup_test_game()
-    print("Starting new game of Straight Poker")
+
+    # Format game description like a casino would: bet sizes + betting structure + game name
+    small_bet = game.betting.small_bet
+    big_bet = getattr(game.betting, 'big_bet', small_bet * 2)  # Default to 2x small_bet if not defined
+    betting_structure = None
+    
+    # Determine betting structure name
+    if isinstance(game.betting, LimitBettingManager):
+        betting_structure = "Limit"
+    elif isinstance(game.betting, NoLimitBettingManager):
+        betting_structure = "No Limit"
+    elif isinstance(game.betting, PotLimitBettingManager):
+        betting_structure = "Pot Limit"
+    
+    print(f"Starting new game: ${small_bet}/${big_bet} {betting_structure} {game.rules.game}")
     print_game_state(game)
     
     input("\nPress Enter to start hand...")
     game.start_hand()
     
+    # Track the initial stack of each player to calculate wins/losses at the end
+    initial_stacks = {pid: player.stack for pid, player in game.table.players.items()}
+
     while game.state != GameState.COMPLETE:
         print_game_state(game)
         
@@ -183,23 +228,68 @@ def run_game():
             else None
         )
         
+        # Determine the appropriate action based on the current step
+        action_type = (
+            game.rules.gameplay[game.current_step].action_type
+            if game.current_step < len(game.rules.gameplay)
+            else None
+        )
+
+        # Automatically process the "Post Blinds" step
         if current_action == "Post Blinds":
-            print("\nPosting forced bets...")
+            print("\nPosting blinds automatically...")
+            game.process_current_step()
+            # Important: After processing the step, move to the next step
+            game._next_step()
+            continue
+
+        # Automatically process the "Deal Hole Cards" step
+        if current_action == "Deal Hole Cards":
+            print(f"\nProcessing step: {current_action}")
+            game.process_current_step()
+            game._next_step()
+            continue        
+
+        # Handle betting rounds only when in BETTING state and not in a dealing step
+        if game.state == GameState.BETTING and game.current_player and action_type == GameActionType.BET:
+            player = game.table.players[game.current_player]
+            if player.is_active:
+                action, amount = get_player_action(game, game.current_player)
+                result = game.player_action(game.current_player, action, amount)
+                
+                if not result.success:
+                    print(f"\nError: {result.error}")
+                    continue
+                    
+                if result.state_changed:
+                    # If the state changed (betting round complete), move to next step
+                    print("\nBetting round complete.")
+                    game._next_step()
+            else:
+                # Player is not active (folded), so move to next player
+                game._next_player()
+        else:
+            print(f"\nProcessing step: {current_action or 'Unknown'}")
             input("Press Enter to continue...")
             game.process_current_step()
-        elif game.state == GameState.BETTING and game.current_player:
-            action, amount = get_player_action(game, game.current_player)
-            result = game.player_action(game.current_player, action, amount)
             
-            if not result.success:
-                print(f"\nError: {result.error}")
-                continue
-        else:
-            input("\nPress Enter to continue...")
+            # Automatically move to next step after processing non-betting steps
+            if game.state != GameState.BETTING:
+                game._next_step()
     
     print("\n=== Hand Complete ===")
     print_game_state(game)
 
+    # Display stack changes to show who won/lost
+    print("\nResults:")
+    for pid, player in game.table.players.items():
+        stack_change = player.stack - initial_stacks[pid]
+        if stack_change > 0:
+            print(f"{player.name} won ${stack_change}")
+        elif stack_change < 0:
+            print(f"{player.name} lost ${-stack_change}")
+        else:
+            print(f"{player.name} broke even")
 
 if __name__ == "__main__":
     run_game()
