@@ -755,8 +755,40 @@ class Game:
     def _handle_fold_win(self, active_players: List[Player]) -> None:
         """Handle pot award when all but one player folds."""
         logger.info("All but one player folded - hand complete")
+        
+        # Get total pot amount before awarding
+        total_pot = self.betting.get_total_pot()
+        
+        # Award the pot
         self.state = GameState.COMPLETE
         self.betting.award_pots(active_players)
+        
+        # Create hand results only for active players (winners) but without showing cards
+        hand_results = {}
+        for player in active_players:
+            hand_results[player.id] = HandResult(
+                player_id=player.id,
+                cards=[],  # Don't include actual cards
+                hand_name="Not shown",
+                hand_description="Hand not shown - won uncontested",
+                evaluation_type="unknown"
+            )
+        
+        # Create pot result
+        pot_result = PotResult(
+            amount=total_pot,
+            winners=[p.id for p in active_players],
+            pot_type="main",
+            eligible_players=set(p.id for p in active_players)
+        )
+        
+        # Store the result
+        self.last_hand_result = GameResult(
+            pots=[pot_result],
+            hands=hand_results,
+            winning_hands=list(hand_results.values()),
+            is_complete=True
+        )
 
     def _handle_showdown(self) -> None:
         """

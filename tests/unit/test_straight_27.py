@@ -494,7 +494,7 @@ def test_game_results_with_fold():
     assert len(results.pots) == 1  # Just main pot
     
     # When players fold, we should still have their hand info
-    assert len(results.hands) == 3
+    assert len(results.hands) == 1
     
     # Check pot details
     main_pot = results.pots[0]
