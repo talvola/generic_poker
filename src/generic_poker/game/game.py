@@ -11,7 +11,7 @@ from generic_poker.game.betting import (
     BettingStructure, BetType, PlayerBet
 )
 from generic_poker.core.card import Card
-from generic_poker.evaluation.evaluator import EvaluationType
+from generic_poker.evaluation.evaluator import EvaluationType, evaluator
 
 logger = logging.getLogger(__name__)
 
@@ -832,30 +832,33 @@ class Game:
         winning_player_ids = set()        
         
         for player in active_players:
-            cards = player.hand.get_cards()
-            
-            # For now, just use 'anyCards' if specified, otherwise all cards
-            num_cards = showdown_rules.get('anyCards', len(cards))
-            if len(cards) < num_cards:
-                logger.warning(
-                    f"Player {player.id} has fewer cards than required: "
-                    f"{len(cards)} vs {num_cards}"
-                )
-                continue
-                
-            # For straight poker, just use all cards
-            # TODO: Handle cases where best hand must be selected from available cards
-            player_best_hands[player.id] = cards
+            best_hand = self._find_best_hand_for_player(
+                player, 
+                self.table.community_cards, 
+                showdown_rules, 
+                eval_type
+            )            
 
+            if not best_hand:
+                logger.warning(f"Player {player.id} doesn't have a valid hand")
+                continue
+            
+            # Sort the cards according to the evaluation type's rules
+            sorted_hand = evaluator.sort_cards(best_hand, eval_type)
+                
+            # Store the player's best hand
+            logger.info(f"Player {player.id}'s best hand is {sorted_hand}")
+            player_best_hands[player.id] = sorted_hand
+            
             # Create hand result
             hand_results[player.id] = HandResult(
                 player_id=player.id,
-                cards=cards,
-                hand_name=describer.describe_hand(cards),
-                hand_description=describer.describe_hand_detailed(cards),
+                cards=sorted_hand,  # Use the best hand, not all cards
+                hand_name=describer.describe_hand(best_hand),
+                hand_description=describer.describe_hand_detailed(best_hand),
                 evaluation_type=eval_type.value,
                 community_cards=self.table.community_cards
-            )            
+            )    
             
         # Get total pot amount for tracking
         total_pot = self.betting.get_total_pot()
@@ -948,6 +951,97 @@ class Game:
             raise ValueError("No results available - hand may have ended without showdown")
             
         return self.last_hand_result
+
+    def _find_best_hand_for_player(
+        self,
+        player: Player,
+        community_cards: List[Card],
+        showdown_rules: dict,
+        eval_type: EvaluationType
+    ) -> List[Card]:
+        """
+        Find the best possible hand for a player according to the game rules.
+        
+        Args:
+            player: The player
+            community_cards: Available community cards
+            showdown_rules: Showdown configuration from game rules
+            eval_type: Type of hand evaluation to use
+            
+        Returns:
+            List of cards representing the player's best hand
+        """
+        from generic_poker.evaluation.evaluator import evaluator
+        import itertools
+        
+        hole_cards = player.hand.get_cards()
+        best_hand = None
+        
+        # Handle different types of hand compositions
+        if "anyCards" in showdown_rules:
+            # Games like 5-card draw where player uses all their cards
+            total_cards = showdown_rules["anyCards"]
+            if len(hole_cards) >= total_cards:
+                # If player has enough hole cards, just use those
+                return hole_cards[:total_cards]
+            else:
+                # Player doesn't have enough cards
+                return []
+        
+        elif "holeCards" in showdown_rules and "communityCards" in showdown_rules:
+            # Games like Greek Hold'em that require specific numbers of hole and community cards
+            required_hole = showdown_rules["holeCards"]
+            required_community = showdown_rules["communityCards"]
+            
+            # Ensure we have enough cards to evaluate
+            if len(hole_cards) < required_hole or len(community_cards) < required_community:
+                logger.warning(
+                    f"Not enough cards for player {player.id}: "
+                    f"Has {len(hole_cards)} hole cards (need {required_hole}) and "
+                    f"{len(community_cards)} community cards (need {required_community})"
+                )
+                return []
+            
+            # Generate all possible combinations
+            hole_combos = list(itertools.combinations(hole_cards, required_hole))
+            community_combos = list(itertools.combinations(community_cards, required_community))
+            
+            # Try all combinations and find the best
+            for hole_combo in hole_combos:
+                for comm_combo in community_combos:
+                    # Combine the two sets of cards
+                    hand = list(hole_combo) + list(comm_combo)
+                    
+                    # Compare with our best hand so far
+                    if best_hand is None:
+                        best_hand = hand
+                    else:
+                        # Use compare_hands to determine which is better
+                        # If hand is better than best_hand, result will be positive
+                        if evaluator.compare_hands(hand, best_hand, eval_type) > 0:
+                            best_hand = hand
+            
+            return best_hand
+        
+        elif "bestOf" in showdown_rules:
+            # Games like Texas Hold'em where player uses best 5 of 7 cards
+            best_of = showdown_rules["bestOf"]
+            all_cards = hole_cards + community_cards
+            
+            # Try all possible combinations
+            for combo in itertools.combinations(all_cards, best_of):
+                hand = list(combo)
+                
+                if best_hand is None:
+                    best_hand = hand
+                else:
+                    if evaluator.compare_hands(hand, best_hand, eval_type) > 0:
+                        best_hand = hand
+            
+            return best_hand
+        
+        # Default: just use all hole cards
+        return hole_cards
 
     def _find_winners(
         self,

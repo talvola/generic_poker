@@ -121,6 +121,7 @@ class HandDescriber:
 
     def _describe_hand(self, cards: List[Card], detailed: bool) -> str:
         """Internal method to describe a hand."""
+
         # Evaluate the hand
         hand_result = self.evaluator.evaluate_hand(cards, self.eval_type)
         if not hand_result or hand_result.rank == 0:

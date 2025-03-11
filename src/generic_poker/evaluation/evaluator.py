@@ -121,6 +121,25 @@ class HandEvaluator:
                 return HandResult(rank=0)  # Return an invalid hand result
 
             return result
+    
+    def sort_cards(self, cards: List[Card], eval_type: Optional[EvaluationType] = None) -> List[Card]:
+        """
+        Sort cards according to evaluation type rules.
+        
+        Args:
+            cards: Cards to sort
+            eval_type: Evaluation type to use for sorting (defaults to current type)
+            
+        Returns:
+            Sorted copy of the cards
+        """
+        type_str = eval_type.value if eval_type else self.current_type
+        
+        if type_str in self._evaluators:
+            return self._evaluators[type_str]._sort_cards(cards.copy())
+        
+        # Fallback to basic sorting if evaluator not found
+        return sorted(cards.copy(), key=lambda c: (c.rank.value, c.suit.value))    
         
     def compare_hands(
             self,
