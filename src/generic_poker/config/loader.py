@@ -218,10 +218,11 @@ class GameRules:
                     cards_in_step = card_info['number']
                     if config['location'] == 'community':
                         community_dealt += cards_in_step
-                    total_dealt += cards_in_step * self.max_players
+                    else:
+                        total_dealt += cards_in_step * self.max_players
                         
         # Verify we don't deal more cards than in deck
-        if total_dealt > self.deck_size:
+        if total_dealt + community_dealt > self.deck_size:
             raise ValueError(
                 f"Game requires {total_dealt} cards but deck only has {self.deck_size}"
             )

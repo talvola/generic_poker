@@ -684,73 +684,84 @@ class Game:
         self.process_current_step()
         
     def _next_player(self) -> None:
-            """
-            Set next player to act based on betting position.
+        """
+        Set next player to act based on betting position.
+        
+        For first betting round (pre-flop):
+            1. First action: UTG (or BTN in 3-player game) after BB has posted
+            2. Then proceeds clockwise
+        For later betting rounds (post-flop and beyond):
+            1. First action: SB
+            2. Then BB
+            3. Then BTN/UTG and others clockwise
+        """
+        players = self.table.get_position_order()  # Gives us BTN->SB->BB order
+        active_players = [p for p in players if p.is_active]
             
-            For first betting round:
-            1. First action: BTN (after BB has posted)
-            2. Then SB
-            3. Then BB gets option
-            """
-            players = self.table.get_position_order()  # Gives us BTN->SB->BB order
-            active_players = [p for p in players if p.is_active]
+        logger.debug("Current active players and positions:")
+        for p in active_players:
+            logger.debug(f"  {p.name}: {(pos.value if (pos := p.position) else 'NA')}")
+
+        # Determine if we're in the pre-flop betting round
+        is_preflop = self.current_step == 0 or (
+            self.current_step < len(self.rules.gameplay) and
+            self.rules.gameplay[self.current_step - 1].name.lower() in 
+            ["post blinds", "ante", "deal hole cards", "pre-flop"]
+        )            
             
-            logger.debug("Current active players and positions:")
-            for p in active_players:
-                logger.debug(f"  {p.name}: {(pos.value if (pos := p.position) else 'NA')}")
-            
-            # Check if this is the first betting round after blinds
-            is_first_bet = (
-                len(self.betting.current_bets) > 0 and  # Blinds have been posted
-                not any(bet.has_acted for bet in self.betting.current_bets.values())  # No one has acted yet
-            )
-            
-            logger.debug(f"Is first betting round: {is_first_bet}")
-            
-            if (
-                is_first_bet and 
-                (player_id := self.current_player) and 
-                not self.betting.current_bets.get(player_id, PlayerBet()).has_acted
-            ):
-                # First action of the round goes to BTN
+        logger.debug(f"Is pre-flop betting: {is_preflop}")
+
+        # For the very first action of a betting round
+        if not any(bet.has_acted for bet in self.betting.current_bets.values()):
+            # First round (pre-flop)
+            if is_preflop:
+                # Action starts with BTN in a 3-player game
                 for player in players:
-                    if player.position == Position.BUTTON:
+                    if player.position and player.position.has_position(Position.BUTTON):
                         self.current_player = player.id
-                        logger.debug(f"First action to button: {player.name}")
+                        logger.debug(f"First pre-flop action to button: {player.name}")
                         return
+            # Later rounds (post-flop)
             else:
-                # Find next active player after current
-                if self.current_player:
-                    try:
-                        current_idx = next(
-                            i for i, p in enumerate(players)
-                            if p.id == self.current_player
-                        )
-                        
-                        # Check players after current position
-                        for i in range(current_idx + 1, len(players)):
-                            if players[i].is_active:
-                                self.current_player = players[i].id
-                                logger.debug(f"Action to next player: {players[i].name}")
-                                return
-                                
-                        # Wrap around to start
-                        for i in range(current_idx):
-                            if players[i].is_active:
-                                self.current_player = players[i].id
-                                logger.debug(f"Action wraps to: {players[i].name}")
-                                return
-                    except StopIteration:
-                        # Current player not found (e.g., they just folded)
-                        if active_players:
-                            self.current_player = active_players[0].id
-                            logger.debug(f"Current player not found, starting with: {self.table.players[self.current_player].name}")
+                # Start with SB
+                for player in players:
+                    if player.position.has_position(Position.SMALL_BLIND):
+                        self.current_player = player.id
+                        logger.debug(f"First post-flop action to SB: {player.name}")
+                        return
+        else:
+            # Find next active player after current
+            if self.current_player:
+                try:
+                    current_idx = next(
+                        i for i, p in enumerate(players)
+                        if p.id == self.current_player
+                    )
+                    
+                    # Check players after current position
+                    for i in range(current_idx + 1, len(players)):
+                        if players[i].is_active:
+                            self.current_player = players[i].id
+                            logger.debug(f"Action to next player: {players[i].name}")
                             return
-                
-            # If we get here and have active players, start with first
-            if active_players:
-                self.current_player = active_players[0].id
-                logger.debug(f"Starting with first active player: {self.table.players[self.current_player].name}")
+                            
+                    # Wrap around to start
+                    for i in range(current_idx):
+                        if players[i].is_active:
+                            self.current_player = players[i].id
+                            logger.debug(f"Action wraps to: {players[i].name}")
+                            return
+                except StopIteration:
+                    # Current player not found (e.g., they just folded)
+                    if active_players:
+                        self.current_player = active_players[0].id
+                        logger.debug(f"Current player not found, starting with: {self.table.players[self.current_player].name}")
+                        return
+            
+        # If we get here and have active players, start with first
+        if active_players:
+            self.current_player = active_players[0].id
+            logger.debug(f"Starting with first active player: {self.table.players[self.current_player].name}")
 
     def _handle_fold_win(self, active_players: List[Player]) -> None:
         """Handle pot award when all but one player folds."""

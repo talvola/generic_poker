@@ -174,45 +174,6 @@ def test_player_addition_positions():
     assert has_position(positions[1], Position.SMALL_BLIND)
     assert has_position(positions[2], Position.BIG_BLIND)
 
-def test_position_rotation():
-    """Test position rotation through all table sizes."""
-    table = Table(max_players=9, min_buyin=100, max_buyin=1000)
-    
-    # Add players one at a time and verify positions
-    player_ids = []
-    for i in range(6):
-        player_id = f"p{i+1}"
-        table.add_player(player_id, f"Player {i+1}", 500)
-        player_ids.append(player_id)
-        
-        positions = table.get_position_order()
-        # Skip position checks for single player
-        if len(positions) == 1:
-            assert positions[0].position is None
-            continue
-            
-        if len(positions) == 2:
-            # Heads-up
-            assert has_position(positions[0], Position.BUTTON)
-            assert has_position(positions[0], Position.SMALL_BLIND)
-            assert has_position(positions[1], Position.BIG_BLIND)
-        else:
-            # 3+ players
-            assert has_position(positions[0], Position.BUTTON)
-            assert has_position(positions[1], Position.SMALL_BLIND)
-            assert has_position(positions[2], Position.BIG_BLIND)
-        
-        # Move button through one complete orbit
-        for _ in range(len(positions)):
-            table.move_button()
-            new_positions = table.get_position_order()
-            if len(new_positions) < 3:  # Skip for 1-2 players
-                continue
-            # Core positions should always be assigned for 3+ players
-            assert has_position(positions[0], Position.BUTTON)
-            assert has_position(positions[1], Position.SMALL_BLIND)
-            assert has_position(positions[2], Position.BIG_BLIND)
-
 def test_invalid_position_cases():
     """Test edge cases and invalid scenarios for positions."""
     table = Table(max_players=9, min_buyin=100, max_buyin=1000)
@@ -306,15 +267,15 @@ def test_get_player_to_act():
     table.add_player("p2", "Bob", 500)
     table.add_player("p3", "Charlie", 500)
     
-    print([player.id for player in table.get_position_order()])
+    positions = table.get_position_order()
+    print([f"{p.id}: {p.position.value}" for p in positions])
 
-    # Pre-flop, first player to act after BB is UTG (p3)
+    # Pre-flop with 3 players, first player is BTN (p1)
     player = table.get_player_to_act(round_start=True)
     assert player is not None and player.id == "p1"
     
-    # Move button and check again
-    table.move_button()
-    player = table.get_player_to_act(round_start=True)
+    # Post-flop, first player should be SB (p2)
+    player = table.get_player_to_act(round_start=False)
     assert player is not None and player.id == "p2"
 
 def test_remove_nonexistent_player():

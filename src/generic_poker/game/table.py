@@ -201,16 +201,20 @@ class Table:
                 # Preflop: Button/SB acts first
                 return positions[0]
             else:
-                # Postflop: BB acts first
+                # Postflop: BB acts first 
                 return positions[1]
                 
-        # 3+ players: UTG or next position after BB acts first
+        # For 3+ players
         if round_start:
-            return positions[3] if len(positions) > 3 else positions[0]
+            if len(positions) <= 3:
+                # In 3-player game, BTN acts first pre-flop
+                return positions[0]
+            else:
+                # In larger games, UTG (after BB) acts first pre-flop
+                return positions[3]
         else:
-            # TODO: Implement getting next player in order
-            # Need to track last actor
-            pass
+            # For post-flop betting, SB acts first
+            return positions[1]
             
     def deal_hole_cards(self, num_cards: int) -> None:
         """

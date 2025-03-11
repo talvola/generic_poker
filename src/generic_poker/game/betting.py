@@ -332,10 +332,11 @@ class BettingManager(ABC):
                                 preserving bet amount and blind bets; if False, start a new round.
         """
         if preserve_current_bet:
-            # Continue same round, preserve blinds and current bet
+            # Continue same round, preserve current bet but reset 'has_acted' flags
             current = self.current_bet
-            blind_bets = {pid: bet for pid, bet in self.current_bets.items() if bet.posted_blind}
-            self.current_bets = blind_bets  # Keep only blinds, reset others
+            # Keep all bets but reset has_acted for everyone, not just blinds
+            for bet in self.current_bets.values():
+                bet.has_acted = False
         else:
             # True new round (e.g., after dealing)
             self.current_bets.clear()
@@ -343,6 +344,7 @@ class BettingManager(ABC):
             self.betting_round += 1
             self.pot.end_betting_round()  # Start new Pot round
         self.current_bet = current
+        
         logger.debug(f"Starting betting round {self.betting_round}: preserve_bet={preserve_current_bet}, "
                     f"current_bet={self.current_bet}, "
                     f"current_bets={[(pid, bet.amount, 'acted' if bet.has_acted else 'not acted', 'blind' if bet.posted_blind else 'not blind') for pid, bet in self.current_bets.items()]}")
