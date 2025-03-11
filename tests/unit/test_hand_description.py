@@ -171,6 +171,21 @@ def test_three_of_kind_description():
     assert describer.describe_hand(cards) == "Three of a Kind"
     assert describer.describe_hand_detailed(cards) == "Three Queens"
 
+def test_a5_description():
+    """Test detailed descriptions for hands using A-5."""
+    describer = HandDescriber(EvaluationType.LOW_A5)
+    
+    # Test Ace-high Straight - which should be a High Card for King in A-5
+    cards = [
+        Card(Rank.ACE, Suit.HEARTS),
+        Card(Rank.KING, Suit.CLUBS),
+        Card(Rank.QUEEN, Suit.DIAMONDS),
+        Card(Rank.JACK, Suit.SPADES),
+        Card(Rank.TEN, Suit.HEARTS)
+    ]
+    assert describer.describe_hand(cards) == "High Card"
+    assert describer.describe_hand_detailed(cards) == "King High"
+
 # don't have the evaluators for these yet 
 
 # def test_pip_hand_description():
