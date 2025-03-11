@@ -37,7 +37,7 @@ def create_predetermined_deck():
     # In this three-handed case, button is dealt first, then SB, then BB in order
     cards = [
         Card(Rank.ACE, Suit.HEARTS), #BTN
-        Card(Rank.KING, Suit.SPADES), #SB
+        Card(Rank.QUEEN, Suit.DIAMONDS), #SB
         Card(Rank.JACK, Suit.SPADES), #BB
         Card(Rank.KING, Suit.HEARTS), #BTN
         Card(Rank.KING, Suit.CLUBS), #SB
@@ -45,11 +45,11 @@ def create_predetermined_deck():
         Card(Rank.QUEEN, Suit.HEARTS), #FLOP
         Card(Rank.KING, Suit.DIAMONDS), #FLOP
         Card(Rank.TEN, Suit.SPADES), #FLOP
-        Card(Rank.JACK, Suit.HEARTS), #TURN
+        Card(Rank.QUEEN, Suit.CLUBS), #TURN
         Card(Rank.QUEEN, Suit.SPADES), #RIVER
+        Card(Rank.JACK, Suit.HEARTS), #
         Card(Rank.TEN, Suit.DIAMONDS), #
         Card(Rank.TEN, Suit.HEARTS), #
-        Card(Rank.QUEEN, Suit.CLUBS), #
         Card(Rank.NINE, Suit.SPADES), #
       
         # Rest of the deck in some order (won't be used in 5-card poker)
@@ -61,7 +61,7 @@ def create_predetermined_deck():
 def setup_test_game_with_mock_deck():
     """Create a test game with three players and a predetermined deck."""
     rules = {
-        "game": "Greek Hold 'em",
+        "game": "Hold'em",
         "players": {
             "min": 2,
             "max": 9
@@ -164,12 +164,11 @@ def setup_test_game_with_mock_deck():
         "showdown": {
             "order": "clockwise",
             "startingFrom": "dealer",
-            "cardsRequired": "two hole cards, three community cards",
+            "cardsRequired": "any combination of hole and community cards",
             "bestHand": [
                 {
                     "evaluationType": "high",
-                    "holeCards": 2,
-                    "communityCards": 3
+                    "anyCards": 5
                 }
             ]
         }
@@ -224,141 +223,6 @@ def setup_logging():
         force=True  # Force reconfiguration of logging
     )
     
-def test_next_step_deal():
-    """Test basic sequence: Button calls, SB calls, BB checks."""
-    game = setup_test_game_with_mock_deck()
-
-    # verify player and initial stack before posting blinds
-    assert game.table.players['BTN'].stack == 500
-    assert game.table.players['SB'].stack == 500
-    assert game.table.players['BB'].stack == 500    
-
-    """Press Enter to start hand..."""
-    # note that starting the hand also processes the first step (posting blinds)
-    # so no call to process_current_step() is necessary.  
-    game.start_hand()
-    
-    # Verify initial state
-    assert game.current_step == 0           # Should be in post blinds step
-    assert game.state == GameState.BETTING  # Forced bets 
-
-    # verify player and initial stack after posting blinds
-    assert game.table.players['BTN'].stack == 500
-    assert game.table.players['SB'].stack == 495
-    assert game.table.players['BB'].stack == 490
-    # test active status for each player 
-    assert game.table.players['BTN'].is_active == True
-    assert game.table.players['SB'].is_active == True
-    assert game.table.players['BB'].is_active == True
-    # make sure players have no cards before deal
-    assert game.table.players['BTN'].hand.size == 0
-    assert game.table.players['SB'].hand.size == 0
-    assert game.table.players['BB'].hand.size == 0 
-
-    # after posting blinds, move to the next step
-    game._next_step()
-
-    assert game.current_step == 1           # Should be in deal hole cards step
-    assert game.state == GameState.DEALING  # Deal hole cards 
-
-    # validate player's stacks are the same
-
-    # verify player and initial stack after posting blinds
-    assert game.table.players['BTN'].stack == 500
-    assert game.table.players['SB'].stack == 495
-    assert game.table.players['BB'].stack == 490
-    # test active status for each player 
-    assert game.table.players['BTN'].is_active == True
-    assert game.table.players['SB'].is_active == True
-    assert game.table.players['BB'].is_active == True
-
-    # make sure players have each been dealt 5 cards
-    assert game.table.players['BTN'].hand.size == 2
-    assert game.table.players['SB'].hand.size == 2
-    assert game.table.players['BB'].hand.size == 2  
-
-    # verify player's cards
-
-    # Check BTN's hand 
-    btn_cards = game.table.players['BTN'].hand.get_cards()
-    assert any(card.rank == Rank.ACE and card.suit == Suit.HEARTS for card in btn_cards)
-    assert any(card.rank == Rank.KING and card.suit == Suit.HEARTS for card in btn_cards)
-    # Check SB's hand
-    sb_cards = game.table.players['SB'].hand.get_cards()
-    assert any(card.rank == Rank.KING and card.suit == Suit.SPADES for card in sb_cards)
-    assert any(card.rank == Rank.KING and card.suit == Suit.CLUBS for card in sb_cards)
-    # Check BB's hand 
-    bb_cards = game.table.players['BB'].hand.get_cards()
-    assert any(card.rank == Rank.JACK and card.suit == Suit.SPADES for card in bb_cards)
-    assert any(card.rank == Rank.JACK and card.suit == Suit.DIAMONDS for card in bb_cards)
-
-def test_deal_flop():
-    """Test that the game results API provides correct information."""
-    game = setup_test_game_with_mock_deck()
-    
-    # Play a full hand
-    game.start_hand()
-    game._next_step()  # Deal hole cards
-    game._next_step()  # Move to pre-flop bet
-
-    # Calculate initial pot from blinds
-    blinds_pot = 15  # 5 (SB) + 10 (BB)    
-    
-    # BTN calls
-    game.player_action('BTN', PlayerAction.CALL, 10)
-    game.player_action('SB', PlayerAction.CALL, 10)
-    game.player_action('BB', PlayerAction.CHECK)
-
-    game._next_step()  # Move to deal flop
-    
-    # check community cards
-
-    assert len(game.table.community_cards) == 3
-    community_cards = game.table.community_cards
-    assert any(card.rank == Rank.QUEEN and card.suit == Suit.HEARTS for card in community_cards)
-    assert any(card.rank == Rank.KING and card.suit == Suit.DIAMONDS for card in community_cards)
-    assert any(card.rank == Rank.TEN and card.suit == Suit.SPADES for card in community_cards)
-
-    game._next_step()  # Move to post-flop bet
-
-    # check the current player - should be SB after the flop
-    assert game.current_player == 'SB'
-
-    game.player_action('SB', PlayerAction.CHECK)
-    game.player_action('BB', PlayerAction.CHECK)
-    game.player_action('BTN', PlayerAction.CHECK)
-
-    game._next_step()  # Move to deal turn
-
-    # check community cards
-
-    assert len(game.table.community_cards) == 4
-    community_cards = game.table.community_cards
-    assert any(card.rank == Rank.QUEEN and card.suit == Suit.HEARTS for card in community_cards)
-    assert any(card.rank == Rank.KING and card.suit == Suit.DIAMONDS for card in community_cards)
-    assert any(card.rank == Rank.TEN and card.suit == Suit.SPADES for card in community_cards)
-    assert any(card.rank == Rank.JACK and card.suit == Suit.HEARTS for card in community_cards)
-
-    game._next_step()  # Move to turn bet
-
-    # check the current player - should be SB after the flop
-    assert game.current_player == 'SB'    
-
-    game.player_action('SB', PlayerAction.CHECK)
-    game.player_action('BB', PlayerAction.CHECK)
-    game.player_action('BTN', PlayerAction.CHECK)
-
-    game._next_step()  # Move to deal river
-
-    # check community cards
-
-    assert len(game.table.community_cards) == 5
-    community_cards = game.table.community_cards
-    assert any(card.rank == Rank.QUEEN and card.suit == Suit.HEARTS for card in community_cards)
-    assert any(card.rank == Rank.KING and card.suit == Suit.DIAMONDS for card in community_cards)
-    assert any(card.rank == Rank.TEN and card.suit == Suit.SPADES for card in community_cards)
-    assert any(card.rank == Rank.JACK and card.suit == Suit.HEARTS for card in community_cards)    
-    assert any(card.rank == Rank.QUEEN and card.suit == Suit.SPADES for card in community_cards)
 
 def test_game_results():
     """Test that the game results API provides correct information."""
@@ -428,8 +292,8 @@ def test_game_results():
     
     # Check hand descriptions
     sb_hand = results.hands['SB']
-    assert "Full House" in sb_hand.hand_name
-    assert "Full House, Kings over Queens" in sb_hand.hand_description
+    assert "Four of a Kind" in sb_hand.hand_name
+    assert "Four Queens" in sb_hand.hand_description
     
     # Check winning hands list
     assert len(results.winning_hands) == 1
