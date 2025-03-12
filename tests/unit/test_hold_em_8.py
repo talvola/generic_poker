@@ -61,7 +61,7 @@ def create_predetermined_deck():
 def setup_test_game_with_mock_deck():
     """Create a test game with three players and a predetermined deck."""
     rules = {
-        "game": "Hold'em",
+        "game": "Hold'em 8",
         "players": {
             "min": 2,
             "max": 9
@@ -167,7 +167,13 @@ def setup_test_game_with_mock_deck():
             "cardsRequired": "any combination of hole and community cards",
             "bestHand": [
                 {
+                    "name": "High Hand",
                     "evaluationType": "high",
+                    "anyCards": 5
+                },
+                {
+                    "name": "Low Hand",
+                    "evaluationType": "a5_low",
                     "anyCards": 5
                 }
             ]
@@ -277,25 +283,26 @@ def test_game_results():
     # Check overall results
     assert results.is_complete
     assert results.total_pot == expected_pot
-    assert len(results.pots) == 1  # Just main pot
-    assert len(results.hands) == 3  # All players stayed in
+    assert len(results.pots) == 2  # 2 pots - one for high, one for low
+    assert len(results.hands) == 3  # All players have hands in the result
     
-    # Check pot details
-    main_pot = results.pots[0]
-    assert main_pot.amount == expected_pot
-    assert main_pot.pot_type == "main"
-    assert not main_pot.split  # Only one winner
+    # Get the high and low pots
+    high_pot = next((pot for pot in results.pots if pot.hand_type == "High Hand"), None)
+    low_pot = next((pot for pot in results.pots if pot.hand_type == "Low Hand"), None)
     
-    # For Greek Hold'em - the SB should win with a Full House
-    assert len(main_pot.winners) == 1
-    assert 'SB' in main_pot.winners
+    assert high_pot is not None
+    assert low_pot is not None
     
-    # Check hand descriptions
-    sb_hand = results.hands['SB']
-    assert "Four of a Kind" in sb_hand[0].hand_name
-    assert "Four Queens" in sb_hand[0].hand_description
+    # Check high pot details
+    assert high_pot.amount == expected_pot / 2  # Split pot
+    assert high_pot.pot_type == "main"
+    assert len(high_pot.winners) == 1
+    assert "SB" in high_pot.winners
     
-    # Check winning hands list
-    assert len(results.winning_hands) == 1
-    assert results.winning_hands[0].player_id == 'SB'
+    # Check low pot details
+    assert low_pot.amount == expected_pot / 2
+    assert low_pot.pot_type == "main"
+    assert len(low_pot.winners) == 1
+    assert "BB" in low_pot.winners
+ 
 

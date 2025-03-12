@@ -457,6 +457,28 @@ class Pot:
         pot.amount = 0
         pot.eligible_players.clear()
 
+    def award_partial_to_winners(self, winners: List[Player], side_pot_index: Optional[int] = None, award_amount: int = 0) -> None:
+        """
+        Award a portion of a pot to winners without clearing the pot.
+        
+        Args:
+            winners: List of players who won
+            side_pot_index: Index of side pot to award (None for main pot)
+            award_amount: Actual amount awarded to winners
+        """
+        if not winners or award_amount <= 0:
+            return
+            
+        current_round = self.round_pots[-1]
+        pot = current_round.side_pots[side_pot_index] if side_pot_index is not None else current_round.main_pot
+        
+        # Reduce the pot by the awarded amount
+        pot.amount -= award_amount
+        
+        # Do not clear eligible players - the pot still exists
+        logger.debug(f"Reduced {'side' if side_pot_index is not None else 'main'} pot by ${award_amount}, "
+                    f"remaining: ${pot.amount}")        
+
     def _split_pot(self, amount: int, winners: List[Player]) -> None:
         """Split pot amount among winners, handling remainders."""
         amount_per_player = amount // len(winners)

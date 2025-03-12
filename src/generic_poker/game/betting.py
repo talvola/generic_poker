@@ -70,25 +70,77 @@ class BettingManager(ABC):
         """Get the total pot amount across all pots in the current round."""
         return self.pot.total
     
-    def award_pots(self, winners: List[Player], side_pot_index: Optional[int] = None) -> None:
-        """Award main or specified side pot to winners, updating stacks."""
+    # def award_pots(self, winners: List[Player], side_pot_index: Optional[int] = None) -> None:
+    #     """Award main or specified side pot to winners, updating stacks."""
+    #     if not winners:
+    #         logger.error("No winners to award pots")
+    #         return
+    #     amount = (self.pot.round_pots[-1].side_pots[side_pot_index].amount 
+    #             if side_pot_index is not None 
+    #             else self.pot.round_pots[-1].main_pot.amount)
+    #     if len(winners) == 1:
+    #         winners[0].stack += amount
+    #         logger.info(f"Awarded pot of ${amount} to {winners[0].name}")
+    #     else:
+    #         amount_per_player = amount // len(winners)
+    #         remainder = amount % len(winners)
+    #         for i, winner in enumerate(winners):
+    #             award = amount_per_player + (1 if i < remainder else 0)
+    #             winner.stack += award
+    #             logger.info(f"Awarded ${award} to {winner.name} from split pot")
+    #     self.pot.award_to_winners(winners, side_pot_index)  # Clears pot
+
+    def award_pots(self, winners: List[Player], side_pot_index: Optional[int] = None, award_amount: Optional[int] = None) -> None:
+        """
+        Award main or specified side pot to winners, updating stacks.
+        
+        Args:
+            winners: List of players who won
+            side_pot_index: Index of side pot to award (None for main pot)
+            award_amount: Specific amount to award (if None, awards full pot)
+        """
         if not winners:
             logger.error("No winners to award pots")
             return
-        amount = (self.pot.round_pots[-1].side_pots[side_pot_index].amount 
-                if side_pot_index is not None 
-                else self.pot.round_pots[-1].main_pot.amount)
-        if len(winners) == 1:
-            winners[0].stack += amount
-            logger.info(f"Awarded pot of ${amount} to {winners[0].name}")
+            
+        pot = (self.pot.round_pots[-1].side_pots[side_pot_index] 
+            if side_pot_index is not None 
+            else self.pot.round_pots[-1].main_pot)
+        
+        total_pot_amount = pot.amount
+        
+        # Determine how much to award
+        if award_amount is None:
+            # Award the full pot
+            amount_to_award = total_pot_amount
+            is_full_pot = True
         else:
-            amount_per_player = amount // len(winners)
-            remainder = amount % len(winners)
+            # Award the specified amount
+            amount_to_award = min(award_amount, total_pot_amount)  # Don't award more than available
+            is_full_pot = (amount_to_award >= total_pot_amount)
+
+        # Don't award anything if the amount is zero
+        if amount_to_award <= 0:
+            logger.debug(f"No pot to award (amount: ${amount_to_award})")
+            return            
+        
+        if len(winners) == 1:
+            winners[0].stack += amount_to_award
+            logger.info(f"Awarded pot of ${amount_to_award} to {winners[0].name}")
+        else:
+            amount_per_player = amount_to_award // len(winners)
+            remainder = amount_to_award % len(winners)
             for i, winner in enumerate(winners):
-                award = amount_per_player + (1 if i < remainder else 0)
-                winner.stack += award
-                logger.info(f"Awarded ${award} to {winner.name} from split pot")
-        self.pot.award_to_winners(winners, side_pot_index)  # Clears pot
+                player_award = amount_per_player + (1 if i < remainder else 0)
+                winner.stack += player_award
+                logger.info(f"Awarded ${player_award} to {winner.name} from split pot")
+        
+        # Only clear the pot if we're awarding the full amount
+        if is_full_pot:
+            self.pot.award_to_winners(winners, side_pot_index)  # Clears pot
+        else:
+            # For partial awards, we reduce the pot by the awarded amount
+            self.pot.award_partial_to_winners(winners, side_pot_index, amount_to_award)       
 
     def get_side_pot_eligible_players(self, index: int) -> Set[str]:
         """Get eligible players for a side pot."""
@@ -344,7 +396,7 @@ class BettingManager(ABC):
             self.betting_round += 1
             self.pot.end_betting_round()  # Start new Pot round
         self.current_bet = current
-        
+
         logger.debug(f"Starting betting round {self.betting_round}: preserve_bet={preserve_current_bet}, "
                     f"current_bet={self.current_bet}, "
                     f"current_bets={[(pid, bet.amount, 'acted' if bet.has_acted else 'not acted', 'blind' if bet.posted_blind else 'not blind') for pid, bet in self.current_bets.items()]}")

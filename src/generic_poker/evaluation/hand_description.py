@@ -33,8 +33,6 @@ class HandDescriber:
         # Get the proper rank ordering for this evaluation type
         self.rank_order = RANK_ORDERS.get(eval_type.value, BASE_RANKS)        
 
-        print(f"Rank order for {eval_type.value}: {self.rank_order}")
-
     def _load_hand_descriptions(self) -> Dict[int, str]:
         """Load hand descriptions from CSV files."""
         descriptions = {}
@@ -52,7 +50,6 @@ class HandDescriber:
         file_name = self.HAND_DESCRIPTION_FILES.get(self.eval_type)
         if file_name:
             file_path = Path(__file__).parents[3] / 'data' / 'hand_descriptions' / file_name
-            print(f"Loading hand descriptions from {file_path}")
             try:
                 if file_path.exists():
                     with open(file_path, mode='r') as file:
@@ -105,13 +102,10 @@ class HandDescriber:
         
         # Find the indices of each rank in the rank order
         # (Lower index = higher rank in the ordering)
-        rank_indices = {r: self.rank_order.index(r) for r in rank_values}
-        print(f"Rank values: {rank_values}")
-        print(f"Rank indices: {rank_indices}")       
+        rank_indices = {r: self.rank_order.index(r) for r in rank_values}   
         
         # Get the rank with the lowest index (highest rank)
         highest_rank_value = min(rank_values, key=lambda r: rank_indices[r])
-        print(f"Highest rank value: {highest_rank_value}")
         
         # Return the Rank enum for this value
         return next(r for r in Rank if r.value == highest_rank_value)
