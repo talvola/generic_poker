@@ -956,12 +956,12 @@ class Game:
                 )
 
         # Handle default action if no winners in any division
-        logger.debug(f"had_any_winners: {had_any_winners} default_action: {default_action} condition: {default_action.get('condition') if default_action else 'NA'}")
         if not had_any_winners and default_action and default_action.get('condition') == 'no_qualifier_met':
-            logging.debug("No player qualified for any hand - handling default action")
+            logger.debug("No player qualified for any hand - handling default action")
             action = default_action.get('action')
             
             if action == 'split_pot':
+                logger.debug("   split_pot: split the pot among all active players")
                 # For 'split_pot' action, split the pot among all active players
                 self._handle_split_among_active(active_players, original_main_pot, original_side_pots)
                 
@@ -996,7 +996,61 @@ class Game:
                     if player.id in hand_results:
                         for hand in hand_results[player.id]:
                             hand.hand_type = "Split (No Qualifier)"
-                            winning_hands.append(hand)                
+                            winning_hands.append(hand)             
+
+            elif action == 'best_hand':
+                logger.debug("   best_hand: evaluate hands using the alternate evaluation type")
+                # For 'best_hand' action, evaluate hands using the alternate evaluation type
+                alternate_configs = default_action.get('bestHand', [])
+                
+                if alternate_configs:
+                    # Process each alternate hand configuration
+                    alt_pot_results = []
+                    alt_winning_hands = []
+                    
+                    for alt_config in alternate_configs:
+                        alt_name = alt_config.get('name', 'Alternate Hand')
+                        alt_eval_type = EvaluationType(alt_config.get('evaluationType', 'high'))
+                        
+                        # Find best hands using alternate evaluation
+                        alt_results = self._evaluate_hands_for_config(
+                            active_players, 
+                            alt_config,
+                            alt_eval_type
+                        )
+                        
+                        # Update the hand results
+                        for player_id, result in alt_results.items():
+                            if player_id not in hand_results:
+                                hand_results[player_id] = []
+                            
+                            # Set the hand_type attribute on the result
+                            result.hand_type = alt_name
+                            hand_results[player_id].append(result)
+                        
+                        # Award pots using the alternate evaluation
+                        alt_winners, had_alt_winners = self._award_alternate_pots(
+                            active_players,
+                            alt_results,
+                            alt_eval_type,
+                            alt_config,
+                            original_main_pot,
+                            original_side_pots
+                        )
+                        
+                        alt_pot_results.extend(alt_winners)
+                        
+                        # Add winning hands
+                        for pot_result in alt_winners:
+                            for winner_id in pot_result.winners:
+                                if winner_id in alt_results:
+                                    winning_hand = alt_results[winner_id]
+                                    winning_hand.hand_type = alt_name
+                                    alt_winning_hands.append(winning_hand)
+                    
+                    # Use the alternate results
+                    awarded_pot_results = alt_pot_results
+                    winning_hands = alt_winning_hands                               
 
         # Store the complete game result
         self.last_hand_result = GameResult(
@@ -1288,6 +1342,126 @@ class Game:
                 award = amount_per_player + (1 if i < remainder else 0)
                 player.stack += award
                 logger.info(f"Split ${award} to {player.name} from main pot (no qualifier)")
+
+    def _award_alternate_pots(
+        self,
+        players: List[Player],
+        hand_results: Dict[str, HandResult],
+        eval_type: EvaluationType,
+        hand_config: dict,
+        original_main_pot: int,
+        original_side_pots: List[int]
+    ) -> Tuple[List[PotResult], bool]:
+        """
+        Award pots using an alternate evaluation when no qualifier is met.
+        
+        Args:
+            players: List of active players
+            hand_results: Dictionary of player hand results
+            eval_type: Type of evaluation being used
+            hand_config: Hand configuration
+            original_main_pot: Original main pot amount
+            original_side_pots: Original side pot amounts
+            
+        Returns:
+            Tuple of (pot results, had_winners)
+        """
+        # Similar implementation to _award_pots_for_config but without pot_percentage
+        # and using the full pot amounts since this is the fallback evaluation
+        
+        pot_results = []
+        player_hands = {
+            player_id: result.cards 
+            for player_id, result in hand_results.items()
+        }
+        
+        # Convert players to dictionary for easier lookup
+        player_dict = {player.id: player for player in players}
+        
+        # Qualifier for the alternate hand type (if any)
+        qualifier = hand_config.get('qualifier', None)
+        
+        had_winners = False
+        
+        # Award side pots first
+        for i in range(len(original_side_pots)):
+            eligible_ids = self.betting.get_side_pot_eligible_players(i)
+            eligible_players = [player_dict[pid] for pid in eligible_ids if pid in player_dict]
+            
+            # Find qualified players
+            qualified_players = []
+            for player in eligible_players:
+                if player.id not in player_hands:
+                    continue
+                    
+                # Check qualifier if specified
+                if qualifier:
+                    hand = player_hands[player.id]
+                    result = evaluator.evaluate_hand(hand, eval_type)
+                    if not result or (result.rank > qualifier[0]) or (result.rank == qualifier[0] and result.ordered_rank > qualifier[1]):
+                        continue
+                
+                qualified_players.append(player)
+            
+            if qualified_players:
+                # Find best hand among eligible players
+                winners = self._find_winners(qualified_players, player_hands, eval_type)
+                if winners:
+                    had_winners = True
+                    
+                    # Award the full side pot
+                    pot_amount = original_side_pots[i]
+                    self.betting.award_pots(winners, i, pot_amount)
+                    
+                    # Track the result
+                    pot_result = PotResult(
+                        amount=pot_amount,
+                        winners=[p.id for p in winners],
+                        pot_type="side",
+                        hand_type=hand_config.get('name', 'Alternate Hand'),
+                        side_pot_index=i,
+                        eligible_players=eligible_ids
+                    )
+                    pot_results.append(pot_result)
+        
+        # Award main pot
+        eligible_players = [player_dict[pid] for pid in player_dict.keys()]
+        
+        # Find qualified players
+        qualified_players = []
+        for player in eligible_players:
+            if player.id not in player_hands:
+                continue
+                
+            # Check qualifier if specified
+            if qualifier:
+                hand = player_hands[player.id]
+                result = evaluator.evaluate_hand(hand, eval_type)
+                if not result or (result.rank > qualifier[0]) or (result.rank == qualifier[0] and result.ordered_rank > qualifier[1]):
+                    continue
+            
+            qualified_players.append(player)
+        
+        if qualified_players:
+            winners = self._find_winners(qualified_players, player_hands, eval_type)
+            if winners:
+                had_winners = True
+                
+                # Award the full main pot
+                pot_amount = original_main_pot
+                self.betting.award_pots(winners, None, pot_amount)
+                
+                # Track the result
+                pot_result = PotResult(
+                    amount=pot_amount,
+                    winners=[p.id for p in winners],
+                    pot_type="main",
+                    hand_type=hand_config.get('name', 'Alternate Hand'),
+                    eligible_players=set(p.id for p in eligible_players)
+                )
+                pot_results.append(pot_result)
+        
+        return pot_results, had_winners                
 
     def get_hand_results(self) -> GameResult:
         """
