@@ -62,7 +62,7 @@ class ShowdownConfig:
     starting_from: str
     cards_required: str
     best_hand: List[Dict[str, Any]]
-
+    default_action: Dict[str, Any]
 
 @dataclass
 class GameRules:
@@ -153,7 +153,8 @@ class GameRules:
             order=showdown_data['order'],
             starting_from=showdown_data['startingFrom'],
             cards_required=showdown_data['cardsRequired'],
-            best_hand=showdown_data['bestHand']
+            best_hand=showdown_data['bestHand'],
+            default_action=showdown_data.get('defaultAction', {})
         )
 
         rules = cls(

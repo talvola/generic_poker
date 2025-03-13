@@ -845,139 +845,6 @@ class Game:
             is_complete=True
         )
 
-    # def _handle_showdown(self) -> None:
-    #     """
-    #     Handle showdown and determine winners.
-        
-    #     Evaluates all active players' hands and awards pots.
-    #     Side pots are handled in order from smallest to largest.
-    #     """
-    #     from generic_poker.evaluation.evaluator import evaluator, EvaluationType
-    #     from generic_poker.evaluation.hand_description import HandDescriber
-        
-    #     active_players = [p for p in self.table.players.values() if p.is_active]
-    #     if not active_players:
-    #         self.state = GameState.COMPLETE
-    #         return
-            
-    #     # Get evaluation settings from rules
-    #     showdown_rules = self.rules.showdown.best_hand[0]  # Use first evaluation type for now
-    #     eval_type = EvaluationType(showdown_rules.get('evaluationType', 'high'))     
-        
-    #     # Create a hand describer for nice hand descriptions
-    #     describer = HandDescriber(eval_type)
-
-    #     # For each hand config in the showdown rules, find best hand
-    #     player_best_hands = {}
-
-    #     # Initialize structures for tracking results
-    #     pot_results = []
-    #     hand_results = {}
-    #     winning_player_ids = set()        
-        
-    #     for player in active_players:
-    #         best_hand = self._find_best_hand_for_player(
-    #             player, 
-    #             self.table.community_cards, 
-    #             showdown_rules, 
-    #             eval_type
-    #         )            
-
-    #         if not best_hand:
-    #             logger.warning(f"Player {player.id} doesn't have a valid hand")
-    #             continue
-            
-    #         # Sort the cards according to the evaluation type's rules
-    #         sorted_hand = evaluator.sort_cards(best_hand, eval_type)
-                
-    #         # Store the player's best hand
-    #         logger.info(f"Player {player.id}'s best hand is {sorted_hand}")
-    #         player_best_hands[player.id] = sorted_hand
-            
-    #         # Create hand result
-    #         hand_results[player.id] = HandResult(
-    #             player_id=player.id,
-    #             cards=sorted_hand,  # Use the best hand, not all cards
-    #             hand_name=describer.describe_hand(best_hand),
-    #             hand_description=describer.describe_hand_detailed(best_hand),
-    #             evaluation_type=eval_type.value,
-    #             community_cards=self.table.community_cards
-    #         )    
-            
-    #     # Get total pot amount for tracking
-    #     total_pot = self.betting.get_total_pot()
-    #     main_pot_amount = self.betting.get_main_pot_amount()
-        
-    #     # Get side pot amounts
-    #     side_pot_amounts = []
-    #     for i in range(self.betting.get_side_pot_count()):
-    #         side_pot_amounts.append(self.betting.get_side_pot_amount(i))
-
-    #     # Award any side pots first
-    #     for i in range(self.betting.get_side_pot_count()):
-    #         eligible_ids = self.betting.get_side_pot_eligible_players(i)
-    #         eligible_players = [p for p in active_players if p.id in eligible_ids]
-    #         if eligible_players:
-    #             # Find best hand among eligible players
-    #             pot_winners = self._find_winners(eligible_players, player_best_hands, eval_type)
-    #             if pot_winners:
-    #                 # Get the pot amount before awarding it
-    #                 side_pot_amount = side_pot_amounts[i]
-                    
-    #                 # Award the pot
-    #                 self.betting.award_pots(pot_winners, i)
-                    
-    #                 # Track the result
-    #                 pot_result = PotResult(
-    #                     amount=side_pot_amount,
-    #                     winners=[p.id for p in pot_winners],
-    #                     pot_type="side",
-    #                     side_pot_index=i,
-    #                     eligible_players=eligible_ids
-    #                 )
-    #                 pot_results.append(pot_result)
-                    
-    #                 # Add to winning players
-    #                 winning_player_ids.update([p.id for p in pot_winners])                  
-                    
-    #     # Award main pot
-    #     winners = self._find_winners(active_players, player_best_hands, eval_type)
-    #     if winners:
-    #         # Award the pot
-    #         self.betting.award_pots(winners)
-            
-    #         # Track the result
-    #         pot_result = PotResult(
-    #             amount=main_pot_amount,
-    #             winners=[p.id for p in winners],
-    #             pot_type="main",
-    #             eligible_players=set(p.id for p in active_players)
-    #         )
-    #         pot_results.append(pot_result)
-            
-    #         # Add to winning players
-    #         winning_player_ids.update([p.id for p in winners])        
-                
-    #     # Build the winning hands list
-    #     winning_hands = [hand_results[player_id] for player_id in winning_player_ids 
-    #                     if player_id in hand_results]
-        
-    #     # Store the complete game result
-    #     self.last_hand_result = GameResult(
-    #         pots=pot_results,
-    #         hands=hand_results,
-    #         winning_hands=winning_hands,
-    #         is_complete=True
-    #     )
-
-    #     # Sanity check - verify total pot amounts match
-    #     if self.last_hand_result.total_pot != total_pot:
-    #         logger.warning(
-    #             f"Pot amount mismatch: {self.last_hand_result.total_pot} vs {total_pot}"
-    #         )
-
-    #     self.state = GameState.COMPLETE
-
     def _handle_showdown(self) -> None:
         """
         Handle showdown and determine winners.
@@ -993,22 +860,27 @@ class Game:
         # Get showdown rules
         showdown_rules = self.rules.showdown
         best_hand_configs = showdown_rules.best_hand
+        default_action = showdown_rules.default_action
         
         # Initialize structures for tracking results
         pot_results = []
         hand_results = {}
-        winning_player_ids = set()
         winning_hands = []
         
         # Get total pot amount for tracking
-        total_pot = self.betting.get_total_pot()
-
-        # Get total pot amount for tracking
         original_main_pot = self.betting.get_main_pot_amount()
         original_side_pots = [self.betting.get_side_pot_amount(i) for i in range(self.betting.get_side_pot_count())]        
+        total_pot = self.betting.get_total_pot()
                 
         # If there's only one hand configuration, it gets 100% of the pot
         pot_percentage = 1.0 / len(best_hand_configs)
+
+        # Track awarded divisions
+        had_any_winners = False       
+
+        # Track which portions of the pot were awarded
+        awarded_portions = 0
+        awarded_pot_results = []        
         
         logger.info(f"Showdown with {len(best_hand_configs)} possible hands to win")  
 
@@ -1016,8 +888,11 @@ class Game:
         for config_index, hand_config in enumerate(best_hand_configs):
             config_name = hand_config.get('name', f"Configuration {config_index+1}")
             eval_type = EvaluationType(hand_config.get('evaluationType', 'high'))
+            qualifier = hand_config.get('qualifier', None)
             
             logger.info(f"  Evaluating {config_name} with evaluation type {eval_type}")  
+            if qualifier:
+                logger.info(f"    with qualifier {qualifier}")  
 
             # Find best hands for this configuration
             config_results = self._evaluate_hands_for_config(
@@ -1030,11 +905,12 @@ class Game:
             for player_id, result in config_results.items():
                 if player_id not in hand_results:
                     hand_results[player_id] = []
+
                 hand_results[player_id].append(result)
                 logger.info(f"  Player {player_id} has {result.hand_description}")  
             
             # Award pots for this configuration
-            pot_winners = self._award_pots_for_config(
+            pot_winners, had_winners = self._award_pots_for_config(
                 active_players,
                 config_results,
                 eval_type,
@@ -1043,23 +919,88 @@ class Game:
                 original_main_pot,
                 original_side_pots                
             )
+            had_any_winners = had_any_winners or had_winners
             
-            # Add to pot results
-            pot_results.extend(pot_winners)
-            
-            # Add winning players to the set
-            for pot_result in pot_winners:
-                for winner_id in pot_result.winners:
-                    if winner_id in config_results:
-                        # Make a copy of the hand result for this winner
-                        winning_hand = config_results[winner_id]
-                        # Ensure it has the correct hand_type
-                        winning_hand.hand_type = config_name
-                        winning_hands.append(winning_hand)
+            # Track if this portion was awarded
+            if had_winners:
+                logging.debug("Had winners - saving pot results")
+                awarded_portions += 1
+                awarded_pot_results.extend(pot_winners)
+                
+                # Add winning hands to the list with proper type
+                for pot_result in pot_winners:
+                    for winner_id in pot_result.winners:
+                        if winner_id in config_results:
+                            winning_hand = config_results[winner_id]
+                            winning_hand.hand_type = config_name
+                            winning_hands.append(winning_hand)
+            else:
+                # Save the pot results even though no winners
+                # This ensures they show up in the game result
+                for pot_result in pot_winners:
+                    pot_result.winners = []  # Clear winners list
+                    awarded_pot_results.append(pot_result)
                
+        # If some portions were not awarded, redistribute to the winners of other portions
+        if awarded_portions > 0 and awarded_portions < len(best_hand_configs):
+            logging.debug("Some portions not awarded - redistribute to the winners of other portions")
+            remaining_percentage = 1.0 - (awarded_portions * pot_percentage)
+            
+            if remaining_percentage > 0 and awarded_pot_results:
+                # Award remaining pot proportionally to existing winners
+                self._redistribute_unawarded_pot(
+                    original_main_pot, 
+                    original_side_pots,
+                    remaining_percentage, 
+                    awarded_pot_results
+                )
+
+        # Handle default action if no winners in any division
+        logger.debug(f"had_any_winners: {had_any_winners} default_action: {default_action} condition: {default_action.get('condition') if default_action else 'NA'}")
+        if not had_any_winners and default_action and default_action.get('condition') == 'no_qualifier_met':
+            logging.debug("No player qualified for any hand - handling default action")
+            action = default_action.get('action')
+            
+            if action == 'split_pot':
+                # For 'split_pot' action, split the pot among all active players
+                self._handle_split_among_active(active_players, original_main_pot, original_side_pots)
+                
+                # Create pot result entries for the split
+                for i in range(len(original_side_pots)):
+                    eligible_ids = self.betting.get_side_pot_eligible_players(i)
+                    eligible_players = [p for p in active_players if p.id in eligible_ids]
+                    
+                    if eligible_players:
+                        pot_result = PotResult(
+                            amount=original_side_pots[i],
+                            winners=[p.id for p in eligible_players],
+                            pot_type="side",
+                            hand_type="Split (No Qualifier)",
+                            side_pot_index=i,
+                            eligible_players=set(p.id for p in eligible_players)
+                        )
+                        awarded_pot_results.append(pot_result)
+                
+                # Main pot
+                pot_result = PotResult(
+                    amount=original_main_pot,
+                    winners=[p.id for p in active_players],
+                    pot_type="main",
+                    hand_type="Split (No Qualifier)",
+                    eligible_players=set(p.id for p in active_players)
+                )
+                awarded_pot_results.append(pot_result)
+                
+                # Also mark all hands as "winning" in this case
+                for player in active_players:
+                    if player.id in hand_results:
+                        for hand in hand_results[player.id]:
+                            hand.hand_type = "Split (No Qualifier)"
+                            winning_hands.append(hand)                
+
         # Store the complete game result
         self.last_hand_result = GameResult(
-            pots=pot_results,
+            pots=awarded_pot_results,
             hands=hand_results,
             winning_hands=winning_hands,
             is_complete=True
@@ -1131,7 +1072,7 @@ class Game:
         pot_percentage: float,
         original_main_pot: int,  
         original_side_pots: List[int]         
-    ) -> List[PotResult]:
+    ) -> Tuple[List[PotResult], bool]:
         """
         Award pots for a specific hand configuration.
         
@@ -1143,7 +1084,7 @@ class Game:
             pot_percentage: Percentage of the pot to award for this config
             
         Returns:
-            List of pot results
+            Tuple of (pot results, had_winners)
         """
         from generic_poker.evaluation.evaluator import evaluator
         
@@ -1169,6 +1110,8 @@ class Game:
         
         logger.info(f"    Main pot has ${current_main_pot}.   There are {current_side_pot_count} side pot(s)")  
   
+        had_winners = False
+
         # Award side pots first
         for i in range(side_pot_count):
             eligible_ids = self.betting.get_side_pot_eligible_players(i)
@@ -1184,7 +1127,7 @@ class Game:
                 if qualifier:
                     hand = player_hands[player.id]
                     result = evaluator.evaluate_hand(hand, eval_type)
-                    if not result or result.rank > qualifier[0]:
+                    if not result or (result.rank > qualifier[0]) or (result.rank == qualifier[0] and result.ordered_rank > qualifier[1]):
                         continue
                 
                 qualified_players.append(player)
@@ -1193,6 +1136,7 @@ class Game:
                 # Find best hand among eligible players
                 winners = self._find_winners(qualified_players, player_hands, eval_type)
                 if winners:
+                    had_winners = True
                     # Calculate pot amount based on ORIGINAL side pot
                     pot_amount = int(original_side_pots[i] * pot_percentage)
                     
@@ -1223,7 +1167,7 @@ class Game:
             if qualifier:
                 hand = player_hands[player.id]
                 result = evaluator.evaluate_hand(hand, eval_type)
-                if not result or result.rank > qualifier[0]:
+                if not result or (result.rank > qualifier[0]) or (result.rank == qualifier[0] and result.ordered_rank > qualifier[1]):
                     continue
             
             qualified_players.append(player)
@@ -1231,6 +1175,7 @@ class Game:
         if qualified_players:
             winners = self._find_winners(qualified_players, player_hands, eval_type)
             if winners:
+                had_winners = True
                 # Calculate pot amount based on ORIGINAL main pot
                 pot_amount = int(original_main_pot * pot_percentage)
                 logger.info(f"       Awarding ${pot_amount} ({original_main_pot} * {pot_percentage}) to {winners}.")  
@@ -1248,8 +1193,101 @@ class Game:
                 )
                 pot_results.append(pot_result)
         
-        return pot_results    
+        return pot_results, had_winners
 
+    def _redistribute_unawarded_pot(
+        self,
+        original_main_pot: int,
+        original_side_pots: List[int],
+        remaining_percentage: float,
+        awarded_pot_results: List[PotResult]
+    ) -> None:
+        """
+        Redistribute unawarded pot portions to existing winners.
+        
+        Args:
+            original_main_pot: Original main pot amount
+            original_side_pots: Original side pot amounts
+            remaining_percentage: Percentage of pot remaining to award
+            awarded_pot_results: Pot results that have been awarded so far
+        """
+        # Group awarded pots by type
+        main_pots = [p for p in awarded_pot_results if p.pot_type == "main" and p.winners]
+        side_pots = {}
+        for pot in [p for p in awarded_pot_results if p.pot_type == "side" and p.winners]:
+            if pot.side_pot_index not in side_pots:
+                side_pots[pot.side_pot_index] = []
+            side_pots[pot.side_pot_index].append(pot)
+        
+        # Redistribute main pot
+        if main_pots:
+            additional_main = int(original_main_pot * remaining_percentage)
+            for pot in main_pots:
+                # Find players who won this pot
+                winners = [self.table.players[pid] for pid in pot.winners]
+                
+                # Award additional amount
+                self.betting.award_pots(winners, None, additional_main)
+                
+                # Update pot amount in result
+                pot.amount += additional_main
+                
+                logger.info(f"Redistributed ${additional_main} to {[p.name for p in winners]} (no qualifying low hand)")
+        
+        # Redistribute side pots
+        for idx, pots in side_pots.items():
+            if idx < len(original_side_pots):
+                additional_side = int(original_side_pots[idx] * remaining_percentage)
+                
+                for pot in pots:
+                    # Find players who won this pot
+                    winners = [self.table.players[pid] for pid in pot.winners]
+                    
+                    # Award additional amount
+                    self.betting.award_pots(winners, idx, additional_side)
+                    
+                    # Update pot amount in result
+                    pot.amount += additional_side
+                    
+                    logger.info(f"Redistributed ${additional_side} to {[p.name for p in winners]} for side pot {idx} (no qualifying low hand)")
+
+
+    def _handle_split_among_active(self, players: List[Player], main_pot: int, side_pots: List[int]) -> None:
+        """
+        Split the pot among all active players when no qualifier is met.
+        
+        Args:
+            players: List of active players
+            main_pot: Main pot amount
+            side_pots: List of side pot amounts
+        """
+        # Award side pots first - only to eligible players
+        for i, pot_amount in enumerate(side_pots):
+            if pot_amount <= 0:
+                continue
+                
+            eligible_ids = self.betting.get_side_pot_eligible_players(i)
+            eligible_players = [p for p in players if p.id in eligible_ids]
+            
+            if eligible_players:
+                # Split this pot among eligible players
+                amount_per_player = pot_amount // len(eligible_players)
+                remainder = pot_amount % len(eligible_players)
+                
+                for j, player in enumerate(eligible_players):
+                    award = amount_per_player + (1 if j < remainder else 0)
+                    player.stack += award
+                    logger.info(f"Split ${award} to {player.name} from side pot {i} (no qualifier)")
+        
+        # Award main pot to all active players
+        if main_pot > 0:
+            amount_per_player = main_pot // len(players)
+            remainder = main_pot % len(players)
+            
+            for i, player in enumerate(players):
+                award = amount_per_player + (1 if i < remainder else 0)
+                player.stack += award
+                logger.info(f"Split ${award} to {player.name} from main pot (no qualifier)")
 
     def get_hand_results(self) -> GameResult:
         """
