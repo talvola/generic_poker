@@ -385,9 +385,21 @@ class Game:
                 
             # For discard state, return discard actions
             if self.state == GameState.DRAWING:
-                max_discard = self.current_discard_config["cards"][0]["number"]
-                # for now, the discard config only specifies one number, so use for both min and max discard value
-                return [(PlayerAction.DISCARD, max_discard, max_discard)]
+                is_discard = getattr(self, "current_discard_config", None) is not None
+                is_draw = getattr(self, "current_draw_config", None) is not None
+
+                # discard is the simpler case
+                if is_discard:
+                    card_config = self.current_discard_config["cards"][0]
+                    # for now, the discard config only specifies one number, so use for both min and max discard value
+                    max_discard = card_config.get("number", 0)
+                    min_discard = card_config.get("number", 0)
+                    return [(PlayerAction.DISCARD, min_discard, max_discard)]
+                elif is_draw:
+                    card_config = self.current_draw_config["cards"][0]
+                    max_discard = card_config.get("number", 0)
+                    min_discard = card_config.get("min_number", 0)
+                    return [(PlayerAction.DRAW, min_discard, max_discard)]
                     
             if self.state != GameState.BETTING:
                 return []  # Not betting phase
@@ -477,8 +489,8 @@ class Game:
                     error="Not your turn"
                 )
                 
-            # Handle discard action
-            if action == PlayerAction.DISCARD:
+            # Handle discard / draw actions
+            if action == PlayerAction.DISCARD or action == PlayerAction.DRAW:
                 if self.state != GameState.DRAWING:
                     logger.warning(f"Invalid action - not drawing state: {self.state}")
                     return ActionResult(
@@ -781,7 +793,7 @@ class Game:
             min_discard = card_config.get("number", 0)
             face_up = card_config.get("state", "face down") == "face up"
         elif is_draw:
-            card_config = self.current_discard_config["cards"][0]
+            card_config = self.current_draw_config["cards"][0]
             max_discard = card_config.get("number", 0)
             min_discard = card_config.get("min_number", 0)
             face_up = card_config.get("state", "face down") == "face up"            

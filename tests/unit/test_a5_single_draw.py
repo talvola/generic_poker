@@ -51,6 +51,7 @@ def create_predetermined_deck():
         Card(Rank.TEN, Suit.DIAMONDS), #
         Card(Rank.TEN, Suit.HEARTS), #
         Card(Rank.NINE, Suit.SPADES), #
+        Card(Rank.TWO, Suit.SPADES), #
       
         # Rest of the deck in some order (won't be used in 5-card poker)
         # You can add more cards here if needed for other tests
@@ -217,25 +218,30 @@ def test_game_discard():
     assert game.state == GameState.DRAWING  # Drawing/Discarding different or same? 
 
     valid_actions = game.get_valid_actions(game.current_player)
-    # only action is DISCARD of 1 card (so min and max are 1)
+    # only action is DRAW of 0-5 cards
     assert len(valid_actions) == 1
-    assert any(action[0] == PlayerAction.DISCARD and action[1] == 1 and action[2] == 1 for action in valid_actions)    
+    assert any(action[0] == PlayerAction.DRAW and action[1] == 0 and action[2] == 5 for action in valid_actions)    
 
     # validate player's hand before discard
     discarding_player = game.current_player
     player_cards = game.table.players[discarding_player].hand.get_cards()
-    assert len(player_cards) == 3
+    assert len(player_cards) == 5
     assert any(card.rank == Rank.ACE and card.suit == Suit.HEARTS for card in player_cards)
     assert any(card.rank == Rank.KING and card.suit == Suit.HEARTS for card in player_cards)
     assert any(card.rank == Rank.QUEEN and card.suit == Suit.HEARTS for card in player_cards)
+    assert any(card.rank == Rank.QUEEN and card.suit == Suit.CLUBS for card in player_cards)
+    assert any(card.rank == Rank.TEN and card.suit == Suit.DIAMONDS for card in player_cards)
 
     # actually discard the cards - this will advance current player, so be sure to use our saved discarding_player
     cards_to_discard = [game.table.players[discarding_player].hand.cards[0]]  # discard the first card
     game.player_action('BTN', PlayerAction.DISCARD, cards=cards_to_discard)
 
     player_cards = game.table.players[discarding_player].hand.get_cards()
-    assert len(player_cards) == 2
+    assert len(player_cards) == 5
     assert any(card.rank == Rank.KING and card.suit == Suit.HEARTS for card in player_cards)
     assert any(card.rank == Rank.QUEEN and card.suit == Suit.HEARTS for card in player_cards)
+    assert any(card.rank == Rank.QUEEN and card.suit == Suit.CLUBS for card in player_cards)
+    assert any(card.rank == Rank.TEN and card.suit == Suit.DIAMONDS for card in player_cards)
+    assert any(card.rank == Rank.TWO and card.suit == Suit.SPADES for card in player_cards)
 
 
