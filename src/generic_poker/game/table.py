@@ -88,6 +88,8 @@ class Table:
         self.players: Dict[str, Player] = {}  # id -> Player
         self.button_pos: int = 0  # Index of button position
         self.deck = Deck()
+        self.discard_pile = Deck()  # New discard pile
+        self.discard_pile.clear()  # Ensure it's empty
         self.community_cards: List[Card] = []
         
     def add_player(self, player_id: str, name: str, buyin: int) -> None:
@@ -247,4 +249,5 @@ class Table:
         for player in self.players.values():
             player.hand.clear()
         self.community_cards.clear()
+        self.discard_pile.clear()  # Clear the discard pile
         self.deck = Deck()  # New shuffled deck

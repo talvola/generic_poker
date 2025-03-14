@@ -98,26 +98,11 @@ def print_game_state(game: Game) -> None:
 
     # Display showdown results if game is complete
     if game.state == GameState.COMPLETE:
+        # Get results
+        results = game.get_hand_results()
+
         print("\nShowdown Results:")
-        # Create a hand describer for high card evaluation (standard poker)
-        describer = HandDescriber(EvaluationType.HIGH)
-        
-        for player in game.table.get_position_order():
-            if player.is_active:
-                cards = player.hand.get_cards()
-                card_str = ' '.join(str(c) for c in cards)
-                print(f"{player.name}: {card_str}")
-                
-                # Get hand description
-                try:
-                    hand_desc = describer.describe_hand(cards)
-                    hand_desc_detailed = describer.describe_hand_detailed(cards)
-                    if hand_desc == hand_desc_detailed:
-                        print(f"  Hand: {hand_desc}")
-                    else:
-                        print(f"  Hand: {hand_desc_detailed}")
-                except Exception as e:
-                    print(f"  Hand: [Unable to describe: {e}]")
+        print(results)
 
 def setup_test_game() -> Game:
     """Set up a test game with some players."""
@@ -130,7 +115,7 @@ def setup_test_game() -> Game:
         structure=BettingStructure.LIMIT,
         small_bet=10,
         big_bet=20,
-        min_buyin=200,
+        min_buyin=100,
         max_buyin=1000,
         auto_progress=False  # Make sure we manually control game progression
     )
@@ -195,21 +180,8 @@ def get_player_action(game: Game, player_id: str) -> tuple[PlayerAction, int]:
 def run_game():
     """Run through a game of poker."""
     game = setup_test_game()
-
-    # Format game description like a casino would: bet sizes + betting structure + game name
-    small_bet = game.betting.small_bet
-    big_bet = getattr(game.betting, 'big_bet', small_bet * 2)  # Default to 2x small_bet if not defined
-    betting_structure = None
     
-    # Determine betting structure name
-    if isinstance(game.betting, LimitBettingManager):
-        betting_structure = "Limit"
-    elif isinstance(game.betting, NoLimitBettingManager):
-        betting_structure = "No Limit"
-    elif isinstance(game.betting, PotLimitBettingManager):
-        betting_structure = "Pot Limit"
-    
-    print(f"Starting new game: ${small_bet}/${big_bet} {betting_structure} {game.rules.game}")
+    print(f"Starting new game: {game}")
     print_game_state(game)
     
     input("\nPress Enter to start hand...")
@@ -238,7 +210,6 @@ def run_game():
         # Automatically process the "Post Blinds" step
         if current_action == "Post Blinds":
             print("\nPosting blinds automatically...")
-            game.process_current_step()
             # Important: After processing the step, move to the next step
             game._next_step()
             continue
@@ -246,7 +217,6 @@ def run_game():
         # Automatically process the "Deal Hole Cards" step
         if current_action == "Deal Hole Cards":
             print(f"\nProcessing step: {current_action}")
-            game.process_current_step()
             game._next_step()
             continue        
 

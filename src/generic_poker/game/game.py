@@ -10,7 +10,7 @@ from generic_poker.game.betting import (
     BettingManager, LimitBettingManager, create_betting_manager,
     BettingStructure, BetType, PlayerBet
 )
-from generic_poker.core.card import Card
+from generic_poker.core.card import Card, Visibility
 from generic_poker.evaluation.evaluator import EvaluationType, evaluator
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,8 @@ class PlayerAction(Enum):
     CALL = "call"
     BET = "bet"
     RAISE = "raise"
-
+    DISCARD = "discard" # simplified discard only
+    DRAW = "draw" # really more general discard and then draw
 
 @dataclass
 class ActionResult:
@@ -350,6 +351,13 @@ class Game:
         # Execute first step
         self.process_current_step()
 
+    def _all_players_have_acted(self, players: List[Player]) -> bool:
+        """Check if all players have acted in the current round."""
+        # In a discard round, we can't use the betting.round_complete method
+        # We'll consider the round complete when we've cycled through all active players
+        # This is simplified - in a real implementation you might want to track this state
+        return True        
+
     def get_valid_actions(self, player_id: str) -> List[Tuple[PlayerAction, Optional[int], Optional[int]]]:
             """
             Get list of valid actions for a player.
@@ -362,13 +370,25 @@ class Game:
                 if not applicable (like for fold/check)
                 
             Example:
+                For betting actions:
+
                 [(PlayerAction.FOLD, None, None),
                 (PlayerAction.CALL, 10, 10),
                 (PlayerAction.RAISE, 20, 100)]
+
+                For discard / draw actions:
+
+                [(PlayerAction.DISCARD, 1, 1)] 
             """
             if player_id != self.current_player:
                 return []  # Not player's turn
                 
+            # For discard state, return discard actions
+            if self.state == GameState.DRAWING:
+                max_discard = self.current_discard_config["cards"][0]["number"]
+                # for now, the discard config only specifies one number, so use for both min and max discard value
+                return [(PlayerAction.DISCARD, max_discard, max_discard)]
+                    
             if self.state != GameState.BETTING:
                 return []  # Not betting phase
                 
@@ -433,7 +453,8 @@ class Game:
             self,
             player_id: str,
             action: PlayerAction,
-            amount: int = 0
+            amount: int = 0,
+            cards: Optional[List[Card]] = None  # New parameter for discard
         ) -> ActionResult:
             """
             Handle a player action.
@@ -456,6 +477,46 @@ class Game:
                     error="Not your turn"
                 )
                 
+            # Handle discard action
+            if action == PlayerAction.DISCARD:
+                if self.state != GameState.DRAWING:
+                    logger.warning(f"Invalid action - not drawing state: {self.state}")
+                    return ActionResult(
+                        success=False,
+                        error="Cannot discard in current state"
+                    )
+                    
+                if cards is None:
+                    cards = []
+                    
+                # Make sure all cards are in player's hand
+                for card in cards:
+                    if card not in player.hand.cards:
+                        logger.warning(f"{player.name} trying to discard card not in hand: {card}")
+                        return ActionResult(
+                            success=False,
+                            error="Cannot discard card not in hand"
+                        )
+                
+                # Process the discard
+                if not self._handle_discard_action(player, cards):
+                    return ActionResult(
+                        success=False,
+                        error="Invalid discard action"
+                    )
+                    
+                # Move to next player
+                self._next_player()
+                
+                # Check if discard round is complete
+                if self._check_discard_round_complete():
+                    logger.info("Discard round complete")
+                    if self.auto_progress:
+                        self._next_step()
+                    return ActionResult(success=True, state_changed=True)
+                    
+                return ActionResult(success=True)
+                    
             if self.state != GameState.BETTING:
                 logger.warning(f"Invalid action - not betting state: {self.state}")
                 return ActionResult(
@@ -643,6 +704,20 @@ class Game:
                     self.betting.new_round(preserve_bet)
                     self._next_player()
                 
+            # treating discard and draw (which is discard/draw) separately for now,
+            # but could be refactored to be the same thing
+            elif step.action_type == GameActionType.DISCARD:
+                logger.info(f"Starting discard round: {step.name}")
+                self.state = GameState.DRAWING
+                self._setup_discard_round(step.action_config)
+                self._next_player()
+
+            elif step.action_type == GameActionType.DRAW:
+                logger.info(f"Starting draw round: {step.name}")
+                self.state = GameState.DRAWING
+                self._setup_draw_round(step.action_config)
+                self._next_player()
+
             elif step.action_type == GameActionType.SHOWDOWN:
                 logger.info("Moving to showdown")
                 self.state = GameState.SHOWDOWN
@@ -661,6 +736,97 @@ class Game:
                 logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to board")
                 self.table.deal_community_cards(num_cards)
                 
+    def _setup_discard_round(self, config: Dict[str, Any]) -> None:
+        """Set up a discard round based on configuration."""
+        self.current_discard_config = config
+        logger.debug(f"Setting up discard round with config: {config}")
+
+    def _setup_draw_round(self, config: Dict[str, Any]) -> None:
+        """Set up a draw round based on configuration."""
+        self.current_draw_config = config
+        logger.debug(f"Setting up draw round with config: {config}")
+
+    def _check_discard_round_complete(self) -> bool:
+        """Check if the current discard round is complete."""
+        # In the simplest implementation, we just check if we've gone through all active players
+        players_order = self.table.get_position_order()
+        active_players = [p for p in players_order if p.is_active]
+        
+        # Consider all players have acted if we've cycled back to the first player
+        # (This is simplified - in production you'd want to track which players have acted)
+        return len(active_players) > 0 and self.current_player == active_players[0].id
+        
+    def _handle_discard_action(self, player: Player, cards: List[Card]) -> bool:
+        """
+        Handle a discard or draw action for a player.
+        
+        Args:
+            player: The player discarding cards
+            cards: Cards to discard
+            
+        Returns:
+            True if discard was successful, False otherwise
+        """
+        # Get discard parameters
+        # right now, suporting the simple discard case - no redraw 
+
+        # see if discard or draw config exists   
+        is_discard = getattr(self, "current_discard_config", None) is not None
+        is_draw = getattr(self, "current_draw_config", None) is not None
+
+        # discard is the simpler case
+        if is_discard:
+            card_config = self.current_discard_config["cards"][0]
+            max_discard = card_config.get("number", 0)
+            min_discard = card_config.get("number", 0)
+            face_up = card_config.get("state", "face down") == "face up"
+        elif is_draw:
+            card_config = self.current_discard_config["cards"][0]
+            max_discard = card_config.get("number", 0)
+            min_discard = card_config.get("min_number", 0)
+            face_up = card_config.get("state", "face down") == "face up"            
+        
+        # will support draws later
+        if is_draw:
+            # Determine draw amount (if any)
+            draw_amount = len(cards)  # Default: draw same number as discard
+            draw_amount_config = card_config.get("draw_amount")
+            
+            if draw_amount_config:
+                if draw_amount_config.get("relative_to") == "discard":
+                    # Adjust draw amount based on discard amount
+                    draw_amount = len(cards) + draw_amount_config.get("amount", 0)
+                    # Ensure non-negative
+                    draw_amount = max(0, draw_amount)
+        
+        # Validate discard count
+        if len(cards) > max_discard:
+            logger.warning(f"{player.name} trying to discard too many cards: {len(cards)} > {max_discard}")
+            return False
+            
+        if len(cards) < min_discard:
+            logger.warning(f"{player.name} trying to discard too few cards: {len(cards)} < {min_discard}")
+            return False
+        
+        # Process discard
+        logger.info(f"{player.name} discards {len(cards)} cards")
+        
+        # Remove cards from hand and add to discard pile
+        for card in cards:
+            player.hand.remove_card(card)
+            if face_up:
+                card.visibility = Visibility.FACE_UP
+            self.table.discard_pile.add_card(card)
+        
+        if is_draw:
+            # Draw new cards if applicable
+            if draw_amount > 0:
+                new_cards = self.table.deck.deal_cards(draw_amount)
+                player.hand.add_cards(new_cards)
+                logger.info(f"{player.name} draws {len(new_cards)} new cards")
+        
+        return True
+                    
     def _handle_forced_bets(self) -> None:
         """Handle posting of blinds or antes."""
         players = self.table.get_position_order()
