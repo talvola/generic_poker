@@ -34,12 +34,17 @@ class DealAction:
     location: str  # 'player' or 'community'
     cards: List[Dict[str, Any]]  # number, state, subset(optional)
 
-
 @dataclass
 class BetAction:
     """Configuration for betting rounds."""
     type: str  # 'blinds', 'small', 'big', etc.
 
+@dataclass
+class ForcedBets:
+    """Configuration for forced bets."""
+    style: str
+    rule: Optional[str] = None
+    variation: Optional[str] = None
 
 @dataclass
 class ShowdownAction:
@@ -74,6 +79,7 @@ class GameRules:
     deck_size: int
     betting_structures: List[BettingStructure]
     gameplay: List[GameStep]
+    forced_bets: ForcedBets
     showdown: ShowdownConfig
 
     @classmethod
@@ -121,7 +127,30 @@ class GameRules:
         except ValueError as e:
             raise ValueError(f"Invalid betting structure: {e}")
 
-        # Parse gameplay steps
+        # Parse forced bets - default to Blinds if nothing specified.
+        forced_bets_data = data.get('forcedBets', {})
+        if forced_bets_data:
+            # see if variation exists - only use in Razz High now - for backward compatibility
+            # in the future, we'll have two rules - one for the opening round, and one for 
+            # subsequent rounds, which can default to the showdown evaluation (if there is only 
+            # one specified)
+            if 'variation' in forced_bets_data and force_bets_data.get('rule') == 'low card al':
+                rule = 'low card al rh'
+            else:
+                rule = forced_bets_data.get('rule')
+            forced_bets = ForcedBets(
+                style=forced_bets_data.get('style'),
+                rule=rule,
+                variation=forced_bets_data.get('variation')
+            )
+        else:
+            forced_bets = ForcedBets(
+                style='blinds',
+                rule=None,
+                variation=None
+            )  
+
+        # Parse gameplay st eps
         gameplay = []
         for step in data['gamePlay']:
             action_type = None
@@ -165,6 +194,7 @@ class GameRules:
             deck_size=data['deck']['cards'],
             betting_structures=betting_structures,
             gameplay=gameplay,
+            forced_bets=forced_bets,
             showdown=showdown
         )
         

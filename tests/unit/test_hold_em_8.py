@@ -290,7 +290,7 @@ def test_game_results():
     assert len(results.pots) == 1  # no low qualified - so only one pot
     assert len(results.hands) == 3  # All players have hands in the result
     
-    # Get the high and low pots
+    # Get the pot
     high_pot = next((pot for pot in results.pots if pot.hand_type == "High Hand"), None)
     
     assert high_pot is not None

@@ -54,6 +54,14 @@ class Player:
         """Initialize player's hand if not provided."""
         if self.hand is None:
             self.hand = PlayerHand()
+
+    def __eq__(self, other):
+        if not isinstance(other, Player):
+            return False
+        return self.id == other.id
+
+    def __hash__(self):
+        return hash(self.id)            
     
 def has_position(player, pos):
     return player.position is not None and player.position.has_position(pos)

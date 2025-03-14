@@ -58,9 +58,30 @@ RANK_ORDERS = {
     'badugi': BADUGI_RANKS,
     
     # 6-card low pip count
-    'low_pip_6_cards': BASE_RANKS_PADDED
+    'low_pip_6_cards': BASE_RANKS_PADDED,
 
-    # leaving out the stud bring-in hands for now, such as two_card_high, etc.
+    # stud bring-in hands, such as two_card_high, etc.
+    'one_card_low': LOW_A5_RANKS,
+    'two_card_low': LOW_A5_RANKS,
+    'three_card_low': LOW_A5_RANKS,
+    'four_card_low': LOW_A5_RANKS,
+    'one_card_low_al': LOW_A5_RANKS,
+    'two_card_high_al': LOW_A5_RANKS,
+    'three_card_high_al': LOW_A5_RANKS,
+    'four_card_high_al': LOW_A5_RANKS,
+    # special evaluation types for Razz High
+    'two_card_high_al_rh': LOW_A5_RANKS,
+    'three_card_high_al_rh': LOW_A5_RANKS,
+    'four_card_high_al_rh': LOW_A5_RANKS,
+
+    'one_card_high': BASE_RANKS,
+    'two_card_high': BASE_RANKS,
+    'three_card_high': BASE_RANKS,
+    'four_card_high': BASE_RANKS,
+    'one_card_high_ah': BASE_RANKS,
+    'two_card_low_ah': BASE_RANKS,
+    'three_card_low_ah': BASE_RANKS,
+    'four_card_low_ah': BASE_RANKS
 }
 
 # Mapping of evaluation types to required hand sizes

@@ -199,6 +199,10 @@ class Game:
         small_blind: Optional[int] = None,
         big_blind: Optional[int] = None,    
         mandatory_straddle: Optional[int] = None,
+        # For games with Antes:
+        ante: Optional[int] = None,
+        # For Stud games:
+        bring_in: Optional[int] = None,
         # Common parameters
         min_buyin: int = 0,
         max_buyin: int = 0,

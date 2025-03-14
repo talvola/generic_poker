@@ -28,7 +28,27 @@ class EvaluationType(str, Enum):
     GAME_21 = '21'
     GAME_21_6 = '21_6'
     LOW_PIP_6 = 'low_pip_6_cards'
-
+    # special partial hands for stud games
+    # but could be used for other games as well
+    ONE_CARD_LOW = 'one_card_low'
+    ONE_CARD_LOW_AL = 'one_card_low_al'
+    ONE_CARD_HIGH = 'one_card_high'
+    ONE_CARD_HIGH_AH = 'one_card_high_ah'
+    TWO_CARD_LOW = 'two_card_low'
+    TWO_CARD_LOW_AH = 'two_card_low_ah'
+    TWO_CARD_HIGH = 'two_card_high'
+    TWO_CARD_HIGH_AL = 'two_card_high_al'
+    TWO_CARD_HIGH_AL_RH = 'two_card_high_al_rh'
+    THREE_CARD_LOW = 'three_card_low'
+    THREE_CARD_LOW_AH = 'three_card_low_ah'
+    THREE_CARD_HIGH = 'three_card_high'
+    THREE_CARD_HIGH_AL = 'three_card_high_al'
+    THREE_CARD_HIGH_AL_RH = 'three_card_high_al_rh'
+    FOUR_CARD_LOW = 'three_card_low'
+    FOUR_CARD_LOW_AH = 'three_card_low_ah'
+    FOUR_CARD_HIGH = 'three_card_high'
+    FOUR_CARD_HIGH_AL = 'three_card_high_al'
+    FOUR_CARD_HIGH_AL_RH = 'three_card_high_al_rh'
 
 @dataclass
 class HandResult:
@@ -209,7 +229,27 @@ class HandEvaluator:
         evaluator_map = {
             EvaluationType.HIGH: StandardHandEvaluator,
             EvaluationType.LOW_A5: StandardHandEvaluator,
-            EvaluationType.LOW_27: StandardHandEvaluator
+            EvaluationType.LOW_27: StandardHandEvaluator,
+            # the stud partial hand evaluators can all use the standard hand evaluator
+            EvaluationType.ONE_CARD_LOW: StandardHandEvaluator,
+            EvaluationType.ONE_CARD_LOW_AL: StandardHandEvaluator,
+            EvaluationType.ONE_CARD_HIGH: StandardHandEvaluator,
+            EvaluationType.ONE_CARD_HIGH_AH: StandardHandEvaluator,
+            EvaluationType.TWO_CARD_LOW: StandardHandEvaluator,
+            EvaluationType.TWO_CARD_LOW_AH: StandardHandEvaluator,
+            EvaluationType.TWO_CARD_HIGH: StandardHandEvaluator,
+            EvaluationType.TWO_CARD_HIGH_AL: StandardHandEvaluator,
+            EvaluationType.TWO_CARD_HIGH_AL_RH: StandardHandEvaluator,
+            EvaluationType.THREE_CARD_LOW: StandardHandEvaluator,
+            EvaluationType.THREE_CARD_LOW_AH: StandardHandEvaluator,
+            EvaluationType.THREE_CARD_HIGH: StandardHandEvaluator,
+            EvaluationType.THREE_CARD_HIGH_AL: StandardHandEvaluator,
+            EvaluationType.THREE_CARD_HIGH_AL_RH: StandardHandEvaluator,
+            EvaluationType.FOUR_CARD_LOW: StandardHandEvaluator,
+            EvaluationType.FOUR_CARD_LOW_AH: StandardHandEvaluator,
+            EvaluationType.FOUR_CARD_HIGH: StandardHandEvaluator,
+            EvaluationType.FOUR_CARD_HIGH_AL: StandardHandEvaluator,
+            EvaluationType.FOUR_CARD_HIGH_AL_RH: StandardHandEvaluator         
         }
         
         if eval_type not in evaluator_map:
