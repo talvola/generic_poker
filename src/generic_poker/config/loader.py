@@ -134,7 +134,7 @@ class GameRules:
             # in the future, we'll have two rules - one for the opening round, and one for 
             # subsequent rounds, which can default to the showdown evaluation (if there is only 
             # one specified)
-            if 'variation' in forced_bets_data and force_bets_data.get('rule') == 'low card al':
+            if 'variation' in forced_bets_data and forced_bets_data.get('rule') == 'low card al':
                 rule = 'low card al rh'
             else:
                 rule = forced_bets_data.get('rule')

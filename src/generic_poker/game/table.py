@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 from enum import Enum
 
-from generic_poker.core.card import Card
+from generic_poker.core.card import Card, Visibility
 from generic_poker.core.deck import Deck
 from generic_poker.core.hand import PlayerHand
 
@@ -226,32 +226,56 @@ class Table:
             # For post-flop betting, SB acts first
             return positions[1]
             
-    def deal_hole_cards(self, num_cards: int) -> None:
+    def deal_hole_cards(self, num_cards: int, face_up: bool = False) -> None:
         """
         Deal hole cards to all active players.
         
         Args:
             num_cards: Number of cards to deal to each player
+            face_up: Whether to deal the cards face up (default: False)
         """
         active_players = [p for p in self.players.values() if p.is_active]
         
         for _ in range(num_cards):
             for player in active_players:
-                card = self.deck.deal_card()
+                card = self.deck.deal_card(face_up=face_up)  # Pass face_up to Deck
                 if card:
                     logger.info(f"  Dealt {card} to player {player.name}")
-                    player.hand.add_card(card)
+                    player.hand.add_card(card)             
                     
-    def deal_community_cards(self, num_cards: int) -> None:
+    def deal_community_cards(self, num_cards: int, face_up: bool = True) -> None:
         """
         Deal community cards.
         
         Args:
             num_cards: Number of community cards to deal
+            face_up: Whether to deal the cards face up (default: True)
         """
-        cards = self.deck.deal_cards(num_cards, face_up=True)
+        cards = self.deck.deal_cards(num_cards, face_up=face_up)
+        if cards:
+            logger.info(f"  Dealt {len(cards)} community {'card' if len(cards) == 1 else 'cards'}: {cards}")
         self.community_cards.extend(cards)
         
+    def expose_community_cards(self, indices: list[int] = None) -> None:
+        """
+        Flip specified community cards face-up. If no indices provided, flip all face-down cards.
+        
+        Args:
+            indices: Optional list of indices of community cards to expose
+        """
+        if indices is None:
+            # Flip all face-down cards
+            for card in self.community_cards:
+                if card.visibility == Visibility.FACE_DOWN:
+                    card.visibility = Visibility.FACE_UP
+                    logger.info(f"  Exposed {card} on community board")
+        else:
+            # Flip specific cards by index
+            for idx in indices:
+                if 0 <= idx < len(self.community_cards) and self.community_cards[idx].visibility == Visibility.FACE_DOWN:
+                    self.community_cards[idx].visibility = Visibility.FACE_UP
+                    logger.info(f"  Exposed {self.community_cards[idx]} on community board")
+
     def clear_hands(self) -> None:
         """Clear all player hands and community cards."""
         for player in self.players.values():

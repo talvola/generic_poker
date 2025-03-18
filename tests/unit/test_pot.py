@@ -174,6 +174,7 @@ class TestDistributeExcessToSidePots:
             active_players={"P1"},
             excluded_players=set(),
             player_bets={"P1": 300},
+            player_antes={},
             order=1
         )
         current.side_pots.append(side_pot)
@@ -206,6 +207,7 @@ class TestDistributeExcessToSidePots:
             active_players={"P1"},
             excluded_players=set(),
             player_bets={"P1": 200},
+            player_antes={},
             order=1
         )
         side_pot2 = ActivePot(
@@ -215,6 +217,7 @@ class TestDistributeExcessToSidePots:
             active_players={"P1"},
             excluded_players=set(),
             player_bets={"P1": 100},
+            player_antes={},
             order=2
         )
         current.side_pots.extend([side_pot1, side_pot2])

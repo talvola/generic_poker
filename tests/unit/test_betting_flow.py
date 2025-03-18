@@ -123,19 +123,19 @@ def test_basic_call_sequence():
     assert game.state == GameState.BETTING  # Now player betting occurs    
 
     # Verify first action is to Button (Alice)
-    assert game.current_player == "BTN"
+    assert game.current_player.id == "BTN"
     
     # Button calls
     result = game.player_action("BTN", PlayerAction.CALL, 10)
     assert result.success
     assert not result.state_changed  # Round shouldn't be over
-    assert game.current_player == "SB"  # Should move to SB
+    assert game.current_player.id == "SB"  # Should move to SB
     
     # Small blind calls
     result = game.player_action("SB", PlayerAction.CALL, 10)
     assert result.success
     assert not result.state_changed
-    assert game.current_player == "BB"  # Should move to BB
+    assert game.current_player.id == "BB"  # Should move to BB
     
     # Big blind checks
     result = game.player_action("BB", PlayerAction.CHECK, 0)
@@ -150,38 +150,42 @@ def test_basic_call_sequence():
 
 
 def test_basic_fold_sequence():
-    """Test basic sequence: Button folds, SB calls, BB checks."""
+    """Test basic sequence: Button folds, SB calls, BB checks in pre-flop betting."""
     game = create_test_game()
     game.start_hand()
     assert game.current_step == 0  # Post Blinds
+    assert game.state == GameState.BETTING  # Fine for forced bets
+
+    game._next_step()  # Move to Deal Hole Cards (Step 1)
+    assert game.current_step == 1
+    assert game.state == GameState.DEALING
+
+    game._next_step()  # Move to Initial Bet (Step 2)
+    assert game.current_step == 2
     assert game.state == GameState.BETTING
-    assert game.current_player == "BTN"
+    assert game.current_player.id == "BTN"  # Pre-flop starts with BTN in 3-player
 
     # Button folds
     result = game.player_action("BTN", PlayerAction.FOLD, 0)
     assert result.success
     assert not result.state_changed
-    assert game.current_player == "SB"
+    assert game.current_player.id == "SB"
 
-    game._next_step()  # Move to Deal Hole Cards (Step 1)
-    assert game.current_step == 1
-    game._next_step()  # Move to Initial Bet (Step 2)
-    assert game.current_step == 2
-
-    # Small blind calls
-    result = game.player_action("SB", PlayerAction.CALL, 10)
+    # Small blind calls (needs $5 more to match BB’s $10)
+    result = game.player_action("SB", PlayerAction.CALL, 10)  # Adjust amount
     assert result.success
     assert not result.state_changed
-    assert game.current_player == "BB"
+    assert game.current_player.id == "BB"
 
     # Big blind checks
     result = game.player_action("BB", PlayerAction.CHECK, 0)
     assert result.success
     assert result.state_changed  # Betting round ends
-    assert game.betting.get_main_pot_amount() == 20  # SB: 10, BB: 10
+    assert game.betting.get_main_pot_amount() == 20  # SB: 5+5=10, BB: 10
 
     game._next_step()  # Move to Showdown (Step 3)
     assert game.current_step == 3
+    assert game.state == GameState.COMPLETE  # Hand is complete
 
 def test_hand_with_showdown(test_hands):
     """Test complete hand with showdown - BTN should win with royal flush."""
@@ -199,7 +203,6 @@ def test_hand_with_showdown(test_hands):
     
     assert game.current_step == 0  # Post Blinds
     assert game.state == GameState.BETTING
-    assert game.current_player == "BTN"
 
     game._next_step()  # Move to Deal Hole Cards (Step 1)
     assert game.current_step == 1
@@ -305,25 +308,35 @@ def test_all_fold_to_one():
     initial_stacks = {pid: player.stack for pid, player in game.table.players.items()}
     
     game.start_hand()
-    
+    assert game.current_step == 0  # Post Blinds
+    assert game.state == GameState.BETTING  # For forced bets
+
+    game._next_step()  # Move to Deal Hole Cards (Step 1)
+    assert game.current_step == 1
+    assert game.state == GameState.DEALING
+
+    game._next_step()  # Move to Initial Bet (Step 2)
+    assert game.current_step == 2
+    assert game.state == GameState.BETTING
+    assert game.current_player.id == "BTN"  # Pre-flop starts with BTN
+
     # BTN folds
     result = game.player_action("BTN", PlayerAction.FOLD, 0)
     assert result.success
     assert not result.state_changed
-    assert game.current_player == "SB"
-    
+    assert game.current_player.id == "SB"
+
     # SB folds
     result = game.player_action("SB", PlayerAction.FOLD, 0)
     assert result.success
-    assert result.state_changed  # Should end hand when all but one fold
+    assert result.state_changed  # Hand ends when all but one fold
     
-    # BB should win the pot without showdown
+    # BB wins the pot without showdown
     assert game.state == GameState.COMPLETE
-    pot_size = 15  # Just the blinds
+    pot_size = 15  # Just the blinds (SB: 5, BB: 10)
     assert game.table.players["BB"].stack == initial_stacks["BB"] - 10 + pot_size
-    assert game.table.players["BTN"].stack == initial_stacks["BTN"]  # Didn't put any money in
+    assert game.table.players["BTN"].stack == initial_stacks["BTN"]  # No additional contribution
     assert game.table.players["SB"].stack == initial_stacks["SB"] - 5  # Lost small blind
-
 
 def test_raise_and_calls(test_hands):
     """Test raising scenario where everyone calls."""

@@ -10,6 +10,7 @@ from generic_poker.game.betting import (
     BettingManager, LimitBettingManager, create_betting_manager,
     BettingStructure, BetType, PlayerBet
 )
+from generic_poker.game.bringin import BringInDeterminator
 from generic_poker.core.card import Card, Visibility
 from generic_poker.evaluation.evaluator import EvaluationType, evaluator
 
@@ -33,6 +34,7 @@ class PlayerAction(Enum):
     CALL = "call"
     BET = "bet"
     RAISE = "raise"
+    BRING_IN = "bring_in" 
     DISCARD = "discard" # simplified discard only
     DRAW = "draw" # really more general discard and then draw
 
@@ -230,6 +232,9 @@ class Game:
             min_buyin=min_buyin,
             max_buyin=max_buyin
         )
+
+        # Betting rules
+        self.betting_structure = structure
         if structure == BettingStructure.LIMIT:
             if small_bet is None or big_bet is None:
                 raise ValueError("Limit games require small_bet and big_bet")
@@ -248,6 +253,9 @@ class Game:
             self.small_bet = big_blind
             self.big_bet = big_blind
             self.betting = create_betting_manager(structure, small_blind, big_blind)     
+        self.bring_in = bring_in            
+        self.ante = ante            
+
         self.auto_progress = auto_progress  # Store the setting     
         
         self.state = GameState.WAITING
@@ -348,12 +356,16 @@ class Game:
             
         # Reset state
         self.table.clear_hands()
+        self.betting.new_round(preserve_current_bet=False)
+
         self.current_step = 0
-        self.state = GameState.DEALING
+        self.state = GameState.BETTING 
+        self.current_player = None
+
         logger.info("Hand started - moving to first step")
         
-        # Execute first step
-        self.process_current_step()
+        # Execute first step - should this be conditioned on auto progress setting?
+        self.process_current_step() 
 
     def _all_players_have_acted(self, players: List[Player]) -> bool:
         """Check if all players have acted in the current round."""
@@ -384,8 +396,8 @@ class Game:
 
                 [(PlayerAction.DISCARD, 1, 1)] 
             """
-            if player_id != self.current_player:
-                return []  # Not player's turn
+            if player_id != self.current_player.id:  
+                return []  # Not this player's turn 
                 
             # For discard state, return discard actions
             if self.state == GameState.DRAWING:
@@ -411,11 +423,24 @@ class Game:
             player = self.table.players[player_id]
             current_bet = self.betting.current_bets.get(player_id, PlayerBet()).amount
             required_bet = self.betting.get_required_bet(player_id)
-
-            logger.debug(f"Player: {player_id}, Required Bet: {required_bet}, Current Bet: {current_bet}")
-            logger.debug(f"  Stack: {player.stack}")   
             
             valid_actions = []
+
+            # Bring-in step (forced bet with options)
+            step = self.rules.gameplay[self.current_step]
+            is_stud = self.rules.forced_bets.style == "bring-in"
+
+            if step.action_config["type"] == "bring-in":
+                valid_actions.append((PlayerAction.BRING_IN, self.bring_in, self.bring_in))
+                if player.stack >= self.small_bet:
+                    valid_actions.append((PlayerAction.BET, self.small_bet, self.small_bet))
+                elif player.stack > self.bring_in:
+                    valid_actions.append((PlayerAction.BET, player.stack, player.stack))
+                return valid_actions
+    
+    
+            logger.debug(f"Player: {player_id}, Required Bet: {required_bet}, Current Bet: {current_bet}")
+            logger.debug(f"  Stack: {player.stack}")   
 
             # Always allow folding (even if player could check)
             valid_actions.append((PlayerAction.FOLD, None, None))            
@@ -435,27 +460,56 @@ class Game:
              # Determine possible BET or RAISE
             if player.stack > required_bet:
                 current_total = self.betting.current_bet
+                is_third_street = is_stud and step.action_config["type"] == "small"
+
+                active_players = [p for p in self.table.get_position_order() if p.is_active]
+                bring_in_idx = next((i for i, p in enumerate(active_players) if self.betting.current_bets.get(p.id, PlayerBet()).posted_blind), -1)
+                acted_count = sum(1 for b in self.betting.current_bets.values() if b.has_acted or b.posted_blind)
+                is_first_after_bring_in = (is_third_street and bring_in_idx != -1 and 
+                                        active_players[(bring_in_idx + 1) % len(active_players)].id == player_id and
+                                        acted_count <= 1)  # Only bring-in has acted       
+
                 current_bet = self.betting.current_bets.get(player_id, PlayerBet()).amount
 
-                if current_total == 0:
+                current_idx = next((i for i, p in enumerate(active_players) if self.betting.current_bets.get(p.id, PlayerBet()).posted_blind), -1)
+                next_idx = (current_idx + 1) % len(active_players)
+
+                if is_first_after_bring_in:
+                    # First player after bring-in in limit Stud
+                    logger.debug(f"First player after bring-in")   
+                    action = PlayerAction.BET  # Or COMPLETE if added
+                    min_amount = self.small_bet  # 10
+                    logger.debug(f"  BET min_amount: {min_amount}")   
+                    if self.betting_structure == BettingStructure.LIMIT:
+                        max_amount = min_amount  # 10 in limit
+                        logger.debug(f"  BET max_amount: {max_amount} (LIMIT)")   
+                    else:                      
+                        max_amount = self.betting.get_max_bet(player_id, BetType.SMALL, player.stack)  # Flexible for no-limit/pot-limit
+                        logger.debug(f"  BET max_amount: {max_amount} (NO/POT-LIMIT)")   
+                elif current_total == 0:
                     action = PlayerAction.BET
-                    min_amount = self.betting.get_min_bet(player_id, BetType.BIG)
+                    #min_amount = self.betting.get_min_bet(player_id, BetType.BIG)
+                    min_amount = self.betting.get_min_bet(player_id, BetType.SMALL if is_stud else BetType.BIG)
+                    max_amount = self.betting.get_max_bet(player_id, BetType.SMALL if is_stud else BetType.BIG, player.stack)  
+                    logger.debug(f"  BET min_amount: {min_amount}")   
+                    logger.debug(f"  BET max_amount: {max_amount}")   
                 else:
                     action = PlayerAction.RAISE
-                    min_amount = self.betting.get_min_raise(player_id)  # Use get_min_raise for raises
+                    min_amount = self.betting.get_min_raise(player_id)
+                   # max_amount = self.betting.get_max_bet(player_id, BetType.BIG, player.stack)  
+                    max_amount = min_amount if self.betting_structure == BettingStructure.LIMIT else self.betting.get_max_bet(player_id, BetType.BIG, player.stack)
+                    logger.debug(f"  RAISE min_amount: {min_amount}")   
+                    logger.debug(f"  RAISE max_amount: {max_amount}")                                    
 
-                max_amount = self.betting.get_max_bet(player_id, BetType.BIG, player.stack)
+                # moved to above
+                # max_amount = self.betting.get_max_bet(player_id, BetType.BIG, player.stack)
 
                 logger.debug(f"Player: {player_id}, Required Bet: {required_bet}, Current Total: {current_total}")
                 logger.debug(f"Min Amount: {min_amount}, Max Amount: {max_amount}")                
                 
-                if current_total == 0:
-                    action = PlayerAction.BET
-                else:
-                    action = PlayerAction.RAISE
-
                 # ✅ Normal raise if player has enough chips
-                if player.stack + current_bet >= min_amount:
+                #if player.stack + current_bet >= min_amount:
+                if player.stack >= min_amount:
                     valid_actions.append((action, min_amount, max_amount))
                 else:
                     # All-in raise if stack can't meet min raise
@@ -486,7 +540,8 @@ class Game:
             player = self.table.players[player_id]
             logger.info(f"Processing action from {player.name}: {action.value}")
             
-            if player_id != self.current_player:
+            # Check if it's this player's turn
+            if player_id != self.current_player.id:  # Compare with Player object's id
                 logger.warning(f"Invalid action - not {player.name}'s turn")
                 return ActionResult(
                     success=False,
@@ -522,7 +577,7 @@ class Game:
                     )
                     
                 # Move to next player
-                self._next_player()
+                self.current_player = self.next_player(round_start=False)
                 
                 # Check if discard round is complete
                 if self._check_discard_round_complete():
@@ -557,7 +612,7 @@ class Game:
                         self._handle_fold_win(active_players)
                         return ActionResult(success=True, state_changed=True)
                         
-                    self._next_player()
+                    self.current_player = self.next_player(round_start=False)
                     return ActionResult(success=True)
                     
                 elif action == PlayerAction.CHECK:
@@ -589,7 +644,7 @@ class Game:
                         return ActionResult(success=True, state_changed=True)
                     
                     # Move to next player if round not complete
-                    self._next_player()
+                    self.current_player = self.next_player(round_start=False)
                     return ActionResult(success=True)
                     
                 elif action == PlayerAction.CALL:
@@ -611,26 +666,29 @@ class Game:
                     self.betting.place_bet(player_id, total_bet, player.stack)
                     player.stack -= call_amount  # Deduct only the additional amount needed
                     
+                elif action == PlayerAction.BRING_IN:
+                    valid_actions = self.get_valid_actions(player_id)
+                    valid_bet = next((a for a in valid_actions if a[0] == PlayerAction.BRING_IN), None)
+                    if not valid_bet or amount != valid_bet[1]:
+                        return ActionResult(success=False, error=f"Invalid bring-in amount: ${amount}")
+                    logger.info(f"{player.name} brings in for ${amount}")
+                    self.betting.place_bet(player_id, amount, player.stack, is_forced=True)
+                    player.stack -= amount  # Already deducted additional amount
+                    self.current_player = self.next_player(round_start=False)
+                    return ActionResult(success=True)
+                        
                 elif action in [PlayerAction.BET, PlayerAction.RAISE]:
                     # Validate bet/raise amount
                     valid_actions = self.get_valid_actions(player_id)
 
                     logger.debug(f"Valid actions: {valid_actions}")
 
-                    valid_raise = next(
-                        (a for a in valid_actions if a[0] == action),
-                        None
-                    )
-                   
-                    if not valid_raise:
-                        return ActionResult(
-                            success=False,
-                            error=f"Invalid {action.value}"
-                        )
-                        
-                    _, min_amount, max_amount = valid_raise
+                    valid_bet = next((a for a in valid_actions if a[0] == action), None)
+                    if not valid_bet:
+                        return ActionResult(success=False, error=f"Invalid {action.value}")
+                    _, min_amount, max_amount = valid_bet
 
-                    logger.debug(f"Attempting action: {action}, Amount: {amount}, Min: {min_amount}, Max: {max_amount}")
+                    logger.debug(f"Attempting action: {action}, Amount: {amount}, Min: {min_amount}, Max: {max_amount} with stack of {player.stack}")
 
                     if (min_amount is not None and amount < min_amount) or (max_amount is not None and amount > max_amount):
                         return ActionResult(
@@ -639,6 +697,9 @@ class Game:
                         )
                     
                     current_bet = self.betting.current_bets.get(player_id, PlayerBet())
+                    current_ante = self.betting.pot.total_antes.get(f"round_{self.betting.pot.current_round}_{player_id}", 0)
+                    logger.debug(f"  current_bet is {current_bet}")
+                    logger.debug(f"  current_ante is {current_ante}")
                     
                     # Adjust for all-in
                     if amount >= player.stack:  # Changed from > to >=
@@ -647,7 +708,8 @@ class Game:
                         additional = player.stack  # Take entire remaining stack   
                     else:
                         # Normal raise
-                        additional = amount - current_bet.amount                        
+                        # Ante is included in current_bet, but not in the amount, so need to adjust
+                        additional = amount - current_bet.amount + current_ante                  
 
                     if additional > player.stack:
                         return ActionResult(
@@ -657,7 +719,10 @@ class Game:
                         
                     # ✅ Place the bet and deduct from stack
                     logger.info(f"{player.name} {action.value}s to ${amount}")
-                    self.betting.place_bet(player_id, amount, player.stack)
+                    step = self.rules.gameplay[self.current_step]
+                    bet_type = BetType.SMALL if (self.rules.forced_bets.style == "bring-in" and 
+                                                step.action_config["type"] == "small") else BetType.BIG                    
+                    self.betting.place_bet(player_id, amount, player.stack, bet_type=bet_type)
                     player.stack -= additional
 
                     logger.debug(f"{player.name}'s remaining stack: ${player.stack}")
@@ -668,7 +733,7 @@ class Game:
                         logger.debug(f"Updated last raise size to ${self.betting.last_raise_size}")                 
                               
                 # Move to next player
-                self._next_player()
+                self.current_player = self.next_player(round_start=False)
                 
                 # Check if betting round complete
                 if self.betting.round_complete():
@@ -698,59 +763,67 @@ class Game:
                 
             step = self.rules.gameplay[self.current_step]
             logger.info(f"Processing step {self.current_step}: {step.name}")
-            
-            if step.action_type == GameActionType.DEAL:
-                logger.debug(f"Handling deal action: {step.action_config}")
-                self.state = GameState.DEALING
-                self._handle_deal(step.action_config)
-                if self.auto_progress:  # Add check here
-                    self._next_step()
-                
-            elif step.action_type == GameActionType.BET:
-                if step.action_config["type"] == "blinds":
-                    logger.info("Processing forced bets")
-                    self._handle_forced_bets()
-                    if self.auto_progress:  # Add check here
+                           
+            if step.action_type == GameActionType.BET:
+                if step.action_config["type"] in ["antes", "blinds", "bring-in"]:
+                    self.handle_forced_bets(step.action_config["type"])  # Use new method with bet_type
+                    self.state = GameState.BETTING  # Set here for all forced bets
+                    if self.auto_progress:
                         self._next_step()
                 else:
                     logger.info(f"Starting betting round: {step.name}")
                     self.state = GameState.BETTING
-                    # Preserve current bet if this is first betting round after blinds
-                    preserve_bet = len(self.betting.current_bets) > 0
+                    is_first_betting_round = False
+                    for i, s in enumerate(self.rules.gameplay):
+                        if s.action_type == GameActionType.BET and s.action_config.get("type") == "small":
+                            is_first_betting_round = (i == self.current_step)
+                            break
+                    preserve_bet = is_first_betting_round
                     self.betting.new_round(preserve_bet)
-                    self._next_player()
-                
+                    self.current_player = self.next_player(round_start=True)
+
+            elif step.action_type == GameActionType.DEAL:
+                logger.debug(f"Handling deal action: {step.action_config}")
+                self.state = GameState.DEALING
+                self._handle_deal(step.action_config)
+                if self.auto_progress:  
+                    self._next_step()
+
             # treating discard and draw (which is discard/draw) separately for now,
             # but could be refactored to be the same thing
             elif step.action_type == GameActionType.DISCARD:
                 logger.info(f"Starting discard round: {step.name}")
                 self.state = GameState.DRAWING
                 self._setup_discard_round(step.action_config)
-                self._next_player()
-
+                self.current_player = self.next_player(round_start=True)
+            
             elif step.action_type == GameActionType.DRAW:
                 logger.info(f"Starting draw round: {step.name}")
                 self.state = GameState.DRAWING
                 self._setup_draw_round(step.action_config)
-                self._next_player()
+                self.current_player = self.next_player(round_start=True)
 
             elif step.action_type == GameActionType.SHOWDOWN:
                 logger.info("Moving to showdown")
                 self.state = GameState.SHOWDOWN
                 self._handle_showdown()
-            
+
     def _handle_deal(self, config: Dict[str, Any]) -> None:
         """Handle a dealing action."""
         location = config["location"]
         for card_config in config["cards"]:
             num_cards = card_config["number"]
+            state = card_config["state"]  # "face up" or "face down"
+            
+            # Convert state to boolean for Deck's face_up parameter
+            face_up = state == "face up"
             
             if location == "player":
-                logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to each player")
-                self.table.deal_hole_cards(num_cards)
+                logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to each player ({state})")
+                self.table.deal_hole_cards(num_cards, face_up=face_up)
             else:  # community
-                logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to board")
-                self.table.deal_community_cards(num_cards)
+                logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to board ({state})")
+                self.table.deal_community_cards(num_cards, face_up=face_up)                            
                 
     def _setup_discard_round(self, config: Dict[str, Any]) -> None:
         """Set up a discard round based on configuration."""
@@ -843,151 +916,434 @@ class Game:
         
         return True
                     
-    def _handle_forced_bets(self) -> None:
-        """Handle posting of blinds or antes."""
-        players = self.table.get_position_order()
-        if not players:
-            return
-            
-        logger.debug("Posting forced bets. Players in order:")
-        for p in players:
-            logger.debug(f"  {p.name}: {p.id} ({p.position.value if p.position else 'NA'})")
-            
-        logger.debug(f"Small Bet: {self.betting.small_bet}")
-        assert self.betting.small_bet is not None and self.betting.small_bet > 0, "small_bet must be set before posting blinds"
+    # def _handle_forced_bets(self) -> None:
+    #     """Handle posting of blinds, antes, or bring-ins depending on game type."""
 
-        sb_amount = self.betting.small_bet // 2
-        bb_amount = self.betting.small_bet
+    #     # Check if this is a stud-style game with bring-in
+    #     if hasattr(self.rules, 'forcedBets') and self.rules.forcedBets.get('type') == 'bring-in':
+    #         self._handle_stud_bring_in()
+    #         return
+            
+    #     # Blinds are the default
+    #     players = self.table.get_position_order()
+    #     if not players:
+    #         return
+            
+    #     logger.debug("Posting forced bets. Players in order:")
+    #     for p in players:
+    #         logger.debug(f"  {p.name}: {p.id} ({p.position.value if p.position else 'NA'})")
+            
+    #     logger.debug(f"Small Bet: {self.betting.small_bet}")
+    #     assert self.betting.small_bet is not None and self.betting.small_bet > 0, "small_bet must be set before posting blinds"
+
+    #     sb_amount = self.betting.small_bet // 2
+    #     bb_amount = self.betting.small_bet
         
-        # Find SB and BB players - handle both regular and heads-up cases
-        sb_player = next(
-            (p for p in players if (pos := p.position) and pos.has_position(Position.SMALL_BLIND)),
-            None
-        )
-        bb_player = next(
-            (p for p in players if (pos := p.position) and pos.has_position(Position.BIG_BLIND)),
-            None
-        )
+    #     # Find SB and BB players - handle both regular and heads-up cases
+    #     sb_player = next(
+    #         (p for p in players if (pos := p.position) and pos.has_position(Position.SMALL_BLIND)),
+    #         None
+    #     )
+    #     bb_player = next(
+    #         (p for p in players if (pos := p.position) and pos.has_position(Position.BIG_BLIND)),
+    #         None
+    #     )
 
-        # Ensure Small Blind player exists
-        if (sb_player := next((p for p in players if (pos := p.position) and pos.has_position(Position.SMALL_BLIND)), None)) is None:
-            logger.error("Small Blind player not found. Cannot post blinds.")
-            return  # Or handle the error appropriately
+    #     # Ensure Small Blind player exists
+    #     if (sb_player := next((p for p in players if (pos := p.position) and pos.has_position(Position.SMALL_BLIND)), None)) is None:
+    #         logger.error("Small Blind player not found. Cannot post blinds.")
+    #         return  # Or handle the error appropriately
 
-        # Ensure Big Blind player exists
-        if (bb_player := next((p for p in players if (pos := p.position) and pos.has_position(Position.BIG_BLIND)), None)) is None:
-            logger.error("Big Blind player not found. Cannot post blinds.")
-            return  # Or handle the error appropriately        
+    #     # Ensure Big Blind player exists
+    #     if (bb_player := next((p for p in players if (pos := p.position) and pos.has_position(Position.BIG_BLIND)), None)) is None:
+    #         logger.error("Big Blind player not found. Cannot post blinds.")
+    #         return  # Or handle the error appropriately        
        
-        # Post small blind
-        sb_player.stack -= sb_amount
-        self.betting.place_bet(sb_player.id, sb_amount, sb_player.stack, is_forced=True)
-        logger.info(f"{sb_player.name} posts small blind of ${sb_amount} (Remaining stack: ${sb_player.stack})")
+    #     # Post small blind
+    #     sb_player.stack -= sb_amount
+    #     self.betting.place_bet(sb_player.id, sb_amount, sb_player.stack, is_forced=True)
+    #     logger.info(f"{sb_player.name} posts small blind of ${sb_amount} (Remaining stack: ${sb_player.stack})")
         
-        # Post big blind
-        bb_player.stack -= bb_amount
-        self.betting.place_bet(bb_player.id, bb_amount, bb_player.stack, is_forced=True)
-        logger.info(f"{bb_player.name} posts big blind of ${bb_amount} (Remaining stack: ${bb_player.stack})")
+    #     # Post big blind
+    #     bb_player.stack -= bb_amount
+    #     self.betting.place_bet(bb_player.id, bb_amount, bb_player.stack, is_forced=True)
+    #     logger.info(f"{bb_player.name} posts big blind of ${bb_amount} (Remaining stack: ${bb_player.stack})")
         
-        # Update current bet to BB amount
-        self.betting.current_bet = bb_amount
+    #     # Update current bet to BB amount
+    #     self.betting.current_bet = bb_amount
 
-        # Initialize last_raise_size to the big blind
-        self.betting.last_raise_size = bb_amount
+    #     # Initialize last_raise_size to the big blind
+    #     self.betting.last_raise_size = bb_amount
             
-        logger.debug("After posting blinds:")
-        for player_id, bet in self.betting.current_bets.items():
-            logger.debug(f"  {self.table.players[player_id].name}: ${bet.amount} (blind={bet.posted_blind})")
+    #     logger.debug("After posting blinds:")
+    #     for player_id, bet in self.betting.current_bets.items():
+    #         logger.debug(f"  {self.table.players[player_id].name}: ${bet.amount} (blind={bet.posted_blind})")
 
-        # Set first player to act (BTN in 3-player game)
-        self._next_player()  # Move to BTN
-        self.state = GameState.BETTING  # Ready for action            
+    #     # Set first player to act (BTN in 3-player game)
+    #     self.current_player = self.next_player(round_start=True)  # Move to BTN
+    #     self.state = GameState.BETTING  # Ready for action            
+        
+    def handle_forced_bets(self, bet_type: str):
+        """Handle forced bets (antes or blinds) at the start of a hand."""
+        active_players = [p for p in self.table.players.values() if p.is_active]
+        if not active_players:
+            return
+
+        if bet_type == "antes":
+            ante_amount = self.ante
+            logger.debug(f"Posting antes: ${ante_amount}")
+            # All players post antes
+            for player in active_players:
+                amount = min(ante_amount, player.stack)
+                if amount > 0:
+                    player.stack -= amount
+                    #self.betting.pot.add_bet(player.id, amount, is_all_in=(amount == player.stack), stack_before=player.stack)
+                    self.betting.place_bet(player.id, amount, player.stack + amount, is_forced=True, is_ante=True)
+                    logger.info(f"{player.name} posts ante of ${amount} (Remaining stack: ${player.stack})")
+            self.current_player = None  # No player has acted yet; bring-in will determine first
+            self.betting.new_round(preserve_current_bet=True)  # Preserve ante as part of round but reset acted flags
+
+        # elif bet_type == "blinds":
+        #     # Optional: Post antes if present (e.g., in some Hold'em variants)
+        #     if self.ante > 0:
+        #         for player in active_players:
+        #             amount = min(self.ante, player.stack)
+        #             if amount > 0:
+        #                 player.stack -= amount
+        #                 self.betting.pot.add_bet(player.id, amount, is_all_in=(amount == player.stack), stack_before=player.stack)
+        #                 logger.info(f"Player {player.name} posted ante of ${amount}")
+
+        #     # Post blinds
+        #     positions = self.table.get_position_order()
+
+        #     # Ensure Small Blind player exists
+        #     if (sb_player := next((p for p in positions if (pos := p.position) and pos.has_position(Position.SMALL_BLIND)), None)) is None:
+        #         logger.error("Small Blind player not found. Cannot post blinds.")
+        #         return  # Or handle the error appropriately
+
+        #     # Ensure Big Blind player exists
+        #     if (bb_player := next((p for p in positions if (pos := p.position) and pos.has_position(Position.BIG_BLIND)), None)) is None:
+        #         logger.error("Big Blind player not found. Cannot post blinds.")
+        #         return  # Or handle the error appropriately     
+
+        #     if sb_player and self.small_bet > 0:
+        #         sb_amount = min(self.small_bet, sb_player.stack)
+        #         sb_player.stack -= sb_amount
+        #         self.betting.place_bet(sb_player.id, sb_amount, sb_player.stack + sb_amount, is_forced=True)
+        #         logger.info(f"Player {sb_player.name} posted small blind of ${sb_amount}")
+
+        #     if bb_player and self.big_bet > 0:
+        #         bb_amount = min(self.big_bet, bb_player.stack)
+        #         bb_player.stack -= bb_amount
+        #         self.betting.place_bet(bb_player.id, bb_amount, bb_player.stack + bb_amount, is_forced=True)
+        #         logger.info(f"Player {bb_player.name} posted big blind of ${bb_amount}")
+
+        #     self.current_player = self.next_player(round_start=True)
+        #     self.betting.new_round(preserve_current_bet=True)  # Preserve blinds but reset acted flags
+
+        elif bet_type == "blinds":
+            positions = self.table.get_position_order()
+            sb_player = next((p for p in positions if p.position and p.position.has_position(Position.SMALL_BLIND)), None)
+            bb_player = next((p for p in positions if p.position and p.position.has_position(Position.BIG_BLIND)), None)
+            if sb_player and self.betting.small_bet > 0:
+                sb_amount = min(self.betting.small_bet // 2, sb_player.stack)
+                sb_player.stack -= sb_amount
+                self.betting.place_bet(sb_player.id, sb_amount, sb_player.stack + sb_amount, is_forced=True)
+                logger.info(f"{sb_player.name} posts small blind of ${sb_amount}...")
+            if bb_player and self.betting.small_bet > 0:
+                bb_amount = min(self.betting.small_bet, bb_player.stack)
+                bb_player.stack -= bb_amount
+                self.betting.place_bet(bb_player.id, bb_amount, bb_player.stack + bb_amount, is_forced=True)
+                logger.info(f"{bb_player.name} posts big blind of ${bb_amount}...")
+            self.current_player = self.next_player(round_start=True)
+            self.betting.new_round(preserve_current_bet=True)        
+
+        elif bet_type == "bring-in":
+            # Determine bring-in player (lowest up-card)
+            bring_in_player = BringInDeterminator.determine_first_to_act(active_players, self.betting.betting_round + 1, "low card")
+            if bring_in_player:
+                self.current_player = bring_in_player
+                logger.info(f"Bring-in player: {bring_in_player.name} with {bring_in_player.hand.cards[-1]}")
+            else:
+                logger.error("No bring-in player determined")
+                self.current_player = active_players[0]  # Fallback
+            # Betting round starts with bring-in player, no auto-post yet
+            self.betting.new_round(preserve_current_bet=True)  # Reset bets, keep ante in pot
+                           
+    # def _handle_stud_bring_in(self) -> None:
+    #     """Handle the bring-in bet for stud poker variants."""
+        
+    #     # Get active players
+    #     active_players = [p for p in self.table.players.values() if p.is_active]
+    #     if not active_players:
+    #         logger.warning("No active players for bring-in")
+    #         return
+        
+    #     # Get bring-in rule and amount
+    #     rule = self.rules.forced_bets.rule
+    #     bring_in_amount = self.bring_in
+        
+    #     # Determine which player posts the bring-in
+    #     bring_in_player = BringInDeterminator.determine_first_to_act(
+    #         active_players, round_num=1, card_rule=rule
+    #     )
+        
+    #     if not bring_in_player:
+    #         logger.warning("Could not determine bring-in player, using first active player")
+    #         bring_in_player = active_players[0]
+        
+    #     logger.info(f"{bring_in_player.name} posts bring-in of ${bring_in_amount}")
+        
+    #     # Post the bring-in
+    #     bring_in_player.stack -= bring_in_amount
+    #     self.betting.place_bet(bring_in_player.id, bring_in_amount, bring_in_player.stack, is_forced=True)
+        
+    #     # Set the current player to the player after the bring-in
+    #     self._set_next_player_after(bring_in_player.id)
+        
+    #     # Update game state
+    #     self.state = GameState.BETTING
+
+    def _set_next_player_after(self, player_id: str) -> None:
+        """Set the current player to the player after the specified player."""
+        players = self.table.get_position_order()
+        active_players = [p for p in players if p.is_active]
+        
+        try:
+            idx = next(i for i, p in enumerate(active_players) if p.id == player_id)
+            next_idx = (idx + 1) % len(active_players)
+            self.current_player = active_players[next_idx]
+        except (StopIteration, IndexError):
+            if active_players:
+                self.current_player = active_players[0]
+            else:
+                self.current_player = None        
         
     def _next_step(self) -> None:
         """Move to next step in gameplay sequence."""
         self.current_step += 1
         self.process_current_step()
         
-    def _next_player(self) -> None:
-        """
-        Set next player to act based on betting position.
+    # def _next_player(self) -> None:
+    #     """
+    #     Set next player to act based on betting position or stud rules.
         
-        For first betting round (pre-flop):
-            1. First action: UTG (or BTN in 3-player game) after BB has posted
-            2. Then proceeds clockwise
-        For later betting rounds (post-flop and beyond):
-            1. First action: SB
-            2. Then BB
-            3. Then BTN/UTG and others clockwise
-        """
-        players = self.table.get_position_order()  # Gives us BTN->SB->BB order
-        active_players = [p for p in players if p.is_active]
-            
-        logger.debug("Current active players and positions:")
-        for p in active_players:
-            logger.debug(f"  {p.name}: {(pos.value if (pos := p.position) else 'NA')}")
+    #     In stud poker, the first-to-act varies by round and visible cards.
 
-        # Determine if we're in the pre-flop betting round
-        is_preflop = self.current_step == 0 or (
-            self.current_step < len(self.rules.gameplay) and
-            self.rules.gameplay[self.current_step - 1].name.lower() in 
-            ["post blinds", "ante", "deal hole cards", "pre-flop"]
-        )            
+    #     For blinds - follow this pattern based on player position relative to dealer:
+        
+    #         For first betting round (pre-flop):
+    #             1. First action: UTG (or BTN in 3-player game) after BB has posted
+    #             2. Then proceeds clockwise
+    #         For later betting rounds (post-flop and beyond):
+    #             1. First action: SB
+    #             2. Then BB
+    #             3. Then BTN/UTG and others clockwise
+    #     """
+    #     # Check if this is a stud game
+    #     is_stud_game = hasattr(self.rules, 'forcedBets') and self.rules.forcedBets.get('type') == 'bring-in'
+        
+    #     # For stud games in rounds after the first, determine first player differently
+    #     if (is_stud_game and 
+    #         self.current_step > 0 and  # Not in the first step
+    #         not any(bet.has_acted for bet in self.betting.current_bets.values())):  # First action of the round
             
-        logger.debug(f"Is pre-flop betting: {is_preflop}")
+    #         from generic_poker.game.bringin import BringInDeterminator
+            
+    #         # Get active players
+    #         active_players = [p for p in self.table.players.values() if p.is_active]
+            
+    #         # Get current betting round (steps are 0-indexed, rounds are 1-indexed)
+    #         # Count the number of betting rounds we've been through
+    #         betting_rounds = sum(1 for step in self.rules.gameplay[:self.current_step+1] 
+    #                             if step.action_type == GameActionType.BET)
+            
+    #         # Get bring-in rule
+    #         rule = self.rules.forcedBets.get('rule', 'low card')
+            
+    #         # Determine which player acts first this round
+    #         first_player = BringInDeterminator.determine_first_to_act(
+    #             active_players, betting_rounds, rule, self.table.community_cards
+    #         )
+            
+    #         if first_player:
+    #             self.current_player = first_player.id
+    #             logger.debug(f"Stud first-to-act in round {betting_rounds}: {first_player.name}")
+    #             return
+        
+    #     # For non-stud games or subsequent actions in a round, use the regular logic        
+    #     players = self.table.get_position_order()  # Gives us BTN->SB->BB order
+    #     active_players = [p for p in players if p.is_active]
+            
+    #     logger.debug("Current active players and positions:")
+    #     for p in active_players:
+    #         logger.debug(f"  {p.name}: {(pos.value if (pos := p.position) else 'NA')}")
 
-        # For the very first action of a betting round
-        if not any(bet.has_acted for bet in self.betting.current_bets.values()):
-            # First round (pre-flop)
-            if is_preflop:
-                # Action starts with BTN in a 3-player game
-                for player in players:
-                    if player.position and player.position.has_position(Position.BUTTON):
-                        self.current_player = player.id
-                        logger.debug(f"First pre-flop action to button: {player.name}")
-                        return
-            # Later rounds (post-flop)
-            else:
-                # Start with SB
-                for player in players:
-                    if player.position.has_position(Position.SMALL_BLIND):
-                        self.current_player = player.id
-                        logger.debug(f"First post-flop action to SB: {player.name}")
-                        return
-        else:
-            # Find next active player after current
-            if self.current_player:
-                try:
-                    current_idx = next(
-                        i for i, p in enumerate(players)
-                        if p.id == self.current_player
-                    )
+    #     # Determine if we're in the pre-flop betting round
+    #     is_preflop = self.current_step == 0 or (
+    #         self.current_step < len(self.rules.gameplay) and
+    #         self.rules.gameplay[self.current_step - 1].name.lower() in 
+    #         ["post blinds", "ante", "deal hole cards", "pre-flop"]
+    #     )            
+            
+    #     logger.debug(f"Is pre-flop betting: {is_preflop}")
+
+    #     # For the very first action of a betting round
+    #     if not any(bet.has_acted for bet in self.betting.current_bets.values()):
+    #         # First round (pre-flop)
+    #         if is_preflop:
+    #             # Action starts with BTN in a 3-player game
+    #             for player in players:
+    #                 if player.position and player.position.has_position(Position.BUTTON):
+    #                     self.current_player = player.id
+    #                     logger.debug(f"First pre-flop action to button: {player.name}")
+    #                     return
+    #         # Later rounds (post-flop)
+    #         else:
+    #             # Start with SB
+    #             for player in players:
+    #                 if player.position.has_position(Position.SMALL_BLIND):
+    #                     self.current_player = player.id
+    #                     logger.debug(f"First post-flop action to SB: {player.name}")
+    #                     return
+    #     else:
+    #         # Find next active player after current
+    #         if self.current_player:
+    #             try:
+    #                 current_idx = next(
+    #                     i for i, p in enumerate(players)
+    #                     if p.id == self.current_player
+    #                 )
                     
-                    # Check players after current position
-                    for i in range(current_idx + 1, len(players)):
-                        if players[i].is_active:
-                            self.current_player = players[i].id
-                            logger.debug(f"Action to next player: {players[i].name}")
-                            return
+    #                 # Check players after current position
+    #                 for i in range(current_idx + 1, len(players)):
+    #                     if players[i].is_active:
+    #                         self.current_player = players[i].id
+    #                         logger.debug(f"Action to next player: {players[i].name}")
+    #                         return
                             
-                    # Wrap around to start
-                    for i in range(current_idx):
-                        if players[i].is_active:
-                            self.current_player = players[i].id
-                            logger.debug(f"Action wraps to: {players[i].name}")
-                            return
-                except StopIteration:
-                    # Current player not found (e.g., they just folded)
-                    if active_players:
-                        self.current_player = active_players[0].id
-                        logger.debug(f"Current player not found, starting with: {self.table.players[self.current_player].name}")
-                        return
+    #                 # Wrap around to start
+    #                 for i in range(current_idx):
+    #                     if players[i].is_active:
+    #                         self.current_player = players[i].id
+    #                         logger.debug(f"Action wraps to: {players[i].name}")
+    #                         return
+    #             except StopIteration:
+    #                 # Current player not found (e.g., they just folded)
+    #                 if active_players:
+    #                     self.current_player = active_players[0].id
+    #                     logger.debug(f"Current player not found, starting with: {self.table.players[self.current_player].name}")
+    #                     return
             
-        # If we get here and have active players, start with first
-        if active_players:
-            self.current_player = active_players[0].id
-            logger.debug(f"Starting with first active player: {self.table.players[self.current_player].name}")
+    #     # If we get here and have active players, start with first
+    #     if active_players:
+    #         self.current_player = active_players[0].id
+    #         logger.debug(f"Starting with first active player: {self.table.players[self.current_player].name}")
 
+    def next_player(self, round_start: bool = False) -> Optional[Player]:
+        """
+        Determine the next player to act based on game type and round state.
+        
+        Args:
+            round_start: True if this is the start of a betting round
+        
+        Returns:
+            Next player to act or None if no active players
+        """
+        active_players = [p for p in self.table.players.values() if p.is_active]
+        if not active_players:
+            return None
+        
+        # Check if this is a stud game with bring-in
+        is_stud_game = self.rules.forced_bets.style == "bring-in"
+
+        if is_stud_game:
+            step = self.rules.gameplay[self.current_step]
+            bring_in_rule = self.rules.forced_bets.rule
+
+            # Find the "Initial Bet" step dynamically
+            bring_in_step_idx = next((i for i, s in enumerate(self.rules.gameplay) if s.get("bet", {}).get("type") == "bring-in"), -1)
+            initial_bet_step_idx = bring_in_step_idx + 1 if bring_in_step_idx != -1 else -1            
+
+            if round_start and step.action_config["type"] == "bring-in":
+                bring_in_player = BringInDeterminator.determine_first_to_act(active_players, self.betting.betting_round + 1, bring_in_rule)
+                logger.debug(f"Stud first-to-act in bring-in round: {bring_in_player.name}")
+                return bring_in_player
+            elif round_start and self.current_step == initial_bet_step_idx:  # "Initial Bet" (first small bet round)
+                # Start with player after last bring-in
+                logger.debug(f"  self.betting.current_bets = {self.betting.current_bets}")
+                # find the player with posted_blind = True
+                current_idx = next((i for i, p in enumerate(active_players) if self.betting.current_bets.get(p.id, PlayerBet()).posted_blind), -1)
+                #last_bring_in = next((p for p in active_players if self.betting.current_bets.get(p.id, PlayerBet()).amount > 0), active_players[0])
+                #current_idx = active_players.index(last_bring_in)
+                next_idx = (current_idx + 1) % len(active_players)
+                logger.debug(f"Stud first-to-act in round {self.betting.betting_round + 1}: {active_players[next_idx].name}")
+                return active_players[next_idx]
+            elif round_start:
+                # Later rounds (e.g., Third Street Bet): use high hand logic via determine_first_to_act
+                first_player = BringInDeterminator.determine_first_to_act(active_players, self.betting.betting_round + 1, bring_in_rule)
+                logger.debug(f"Stud first-to-act in round {self.betting.betting_round + 1}: {first_player.name}")
+                return first_player            
+            elif self.current_player:
+                current_idx = active_players.index(self.current_player)
+                next_idx = (current_idx + 1) % len(active_players)
+                logger.debug(f"Stud next player: {active_players[next_idx].name}")
+                return active_players[next_idx]
+            return active_players[0]       
+            
+        # Blinds-based games (e.g., Hold'em)
+        players = self.table.get_position_order()  # BTN -> SB -> BB order
+        active_players = [p for p in players if p.is_active]
+        if not active_players:
+            return None            
+        
+        # Determine if this is the first voluntary betting round
+        is_first_betting_round = False
+        for i, step in enumerate(self.rules.gameplay):
+            if step.action_type == GameActionType.BET and step.action_config.get("type") == "small":
+                is_first_betting_round = (i == self.current_step)
+                break
+
+        if round_start:
+            if is_first_betting_round:
+                # First betting round (e.g., pre-flop in Hold'em): Start with BTN in 3-player
+                if len(active_players) <= 3:
+                    for player in players:
+                        if player.position and player.position.has_position(Position.BUTTON) and player.is_active:
+                            logger.debug(f"Pre-flop first action to BTN: {player.name}")
+                            return player
+                    logger.debug(f"BTN not active, starting with: {active_players[0].name}")
+                    return active_players[0]                        
+                else:
+                    bb_idx = next((i for i, p in enumerate(players) if p.has_position(Position.BIG_BLIND) and p.is_active), -1)
+                    next_idx = (bb_idx + 1) % len(players)
+                    logger.debug(f"Pre-flop first action to UTG: {players[next_idx].name}")
+                    return players[next_idx]
+            else:
+                # Subsequent rounds: Start with SB
+                for player in players:
+                    if player.position and player.position.has_position(Position.SMALL_BLIND) and player.is_active:
+                        logger.debug(f"Subsequent round action to SB: {player.name}")
+                        return player
+                logger.debug(f"SB not active, starting with: {active_players[0].name}")
+                return active_players[0]
+                    
+        # Subsequent actions in the round
+        if self.current_player:
+            try:
+                current_idx = next(i for i, p in enumerate(active_players) if p.id == self.current_player.id)
+                next_idx = (current_idx + 1) % len(active_players)
+                logger.debug(f"Next player: {active_players[next_idx].name}")
+                return active_players[next_idx]
+            except StopIteration:
+                # Current player no longer active (e.g., folded); start with first active
+                logger.debug(f"Current player not found, starting with: {active_players[0].name}")
+                return active_players[0]
+
+        # Default: First active player
+        logger.debug(f"Defaulting to first active player: {active_players[0].name}")
+        return active_players[0]
+    
     def _handle_fold_win(self, active_players: List[Player]) -> None:
         """Handle pot award when all but one player folds."""
         logger.info("All but one player folded - hand complete")
@@ -1884,7 +2240,7 @@ class Game:
                     formatted_actions.append(f"{action_name} ${min_amount}-${max_amount} (min +${additional_min})")
                     
                     # Additionally, we could add common bet sizing options:
-                    if self.betting.structure != BettingStructure.LIMIT:
+                    if self.betting_structure != BettingStructure.LIMIT:
                         pot_size = self.betting.get_total_pot()
                         
                         # Half pot
