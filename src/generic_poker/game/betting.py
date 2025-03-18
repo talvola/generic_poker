@@ -6,7 +6,7 @@ from enum import Enum
 
 from generic_poker.config.loader import BettingStructure
 from generic_poker.game.pot import Pot
-from generic_poker.game.table import Player
+from generic_poker.game.table import Player, Table
 
 import logging 
 
@@ -45,8 +45,9 @@ class BettingManager(ABC):
     (limit, no-limit, pot-limit).
     """
     
-    def __init__(self):
+    def __init__(self, table: 'Table'):
         """Initialize betting manager."""
+        self.table = table  # Reference to Table for active players
         self.pot = Pot()
         self.current_bets: Dict[str, PlayerBet] = {}  # player_id -> bet info
         self.current_bet: int = 0  # Highest bet in current round
@@ -367,25 +368,24 @@ class BettingManager(ABC):
         1. All active players have acted
         2. All active players have matched the current bet or are all-in
         """
+        active_players = [p.id for p in self.table.players.values() if p.is_active]
         logger.debug(f"Checking if round complete. Current bets: {[(pid, bet.amount, bet.has_acted) for pid, bet in self.current_bets.items()]}")
         
-        # Everyone must have acted
+        if len(self.current_bets) != len(active_players):
+            logger.debug("Round not complete - not all players acted")
+            return False
+        
         for bet in self.current_bets.values():
             if not bet.has_acted:
                 logger.debug("Round not complete - not everyone has acted")
                 return False
         
-        # All bets must be equal to current bet
-        amounts = set()
-        for bet in self.current_bets.values():
-            if not bet.is_all_in:
-                amounts.add(bet.amount)
-        
+        amounts = set(bet.amount for bet in self.current_bets.values() if not bet.is_all_in)
         logger.debug(f"Unique bet amounts: {amounts}")
         if len(amounts) > 1:
             logger.debug("Round not complete - bets not equal")
             return False
-            
+        
         logger.debug("Round complete - all players acted and bets equal")
         return True
         
@@ -419,7 +419,7 @@ class BettingManager(ABC):
 class LimitBettingManager(BettingManager):
     """Betting manager for limit games."""
     
-    def __init__(self, small_bet: int, big_bet: int):
+    def __init__(self, table: 'Table', small_bet: int, big_bet: int):
         """
         Initialize limit betting manager.
         
@@ -428,7 +428,7 @@ class LimitBettingManager(BettingManager):
             big_bet: Size of big bets
         """
         assert small_bet is not None and small_bet > 0, "small_bet must be set"
-        super().__init__()
+        super().__init__(table)
         self.small_bet = small_bet
         self.big_bet = big_bet
                 
@@ -531,7 +531,7 @@ class LimitBettingManager(BettingManager):
 class NoLimitBettingManager(BettingManager):
     """Betting manager for no-limit games."""
     
-    def __init__(self, small_bet: int):
+    def __init__(self, table: 'Table', small_bet: int):
         """
         Initialize no-limit betting manager.
         
@@ -539,7 +539,7 @@ class NoLimitBettingManager(BettingManager):
             small_bet: Minimum bet size (usually equal to big blind)
         """
         assert small_bet > 0, "small_bet must be set"
-        super().__init__()
+        super().__init__(table)
         self.small_bet = small_bet
         self.last_raise_size = small_bet  # Initialize to small bet
         
@@ -631,7 +631,7 @@ class NoLimitBettingManager(BettingManager):
 class PotLimitBettingManager(BettingManager):
     """Betting manager for pot-limit games."""
     
-    def __init__(self, small_bet: int):
+    def __init__(self, table: 'Table', small_bet: int):
         """
         Initialize pot-limit betting manager.
         
@@ -639,7 +639,7 @@ class PotLimitBettingManager(BettingManager):
             small_bet: Minimum bet size
         """
         assert small_bet > 0, "small_bet must be set"
-        super().__init__()
+        super().__init__(table)
         self.small_bet = small_bet
         self.last_raise_size = 0
         
@@ -739,7 +739,8 @@ class PotLimitBettingManager(BettingManager):
 def create_betting_manager(
     structure: BettingStructure,
     small_bet: int,
-    big_bet: Optional[int] = None
+    big_bet: Optional[int] = None,
+    table: Optional['Table'] = None    
 ) -> BettingManager:
     """
     Factory function to create appropriate betting manager.
@@ -748,6 +749,7 @@ def create_betting_manager(
         structure: Type of betting structure
         small_bet: Small bet/min bet size
         big_bet: Big bet size (for limit games)
+        table: Table object for player access
         
     Returns:
         Configured betting manager
@@ -757,12 +759,12 @@ def create_betting_manager(
     if structure == BettingStructure.LIMIT:
         if big_bet is None:
             raise ValueError("Big bet size required for limit games")
-        return LimitBettingManager(small_bet, big_bet)
+        return LimitBettingManager(table, small_bet, big_bet)
         
     if structure == BettingStructure.NO_LIMIT:
-        return NoLimitBettingManager(small_bet)
+        return NoLimitBettingManager(table, small_bet)
         
     if structure == BettingStructure.POT_LIMIT:
-        return PotLimitBettingManager(small_bet)
+        return PotLimitBettingManager(table, small_bet)
         
     raise ValueError(f"Unknown betting structure: {structure}")

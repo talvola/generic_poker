@@ -243,7 +243,7 @@ class Game:
             # small blind in Limit games is half the small bet
             self.small_blind = small_bet // 2
             self.big_blind = small_bet
-            self.betting = create_betting_manager(structure, small_bet, big_bet)
+            self.betting = create_betting_manager(structure, small_bet, big_bet, self.table)
         else:  # NO_LIMIT or POT_LIMIT
             if small_blind is None or big_blind is None:
                 raise ValueError("No-Limit/Pot-Limit games require small_blind and big_blind")
@@ -252,7 +252,7 @@ class Game:
             # the minimum bet is always the big blind in No-Limit/Pot-Limit games
             self.small_bet = big_blind
             self.big_bet = big_blind
-            self.betting = create_betting_manager(structure, small_blind, big_blind)     
+            self.betting = create_betting_manager(structure, small_blind, big_blind, self.table)   
         self.bring_in = bring_in            
         self.ante = ante            
 
@@ -425,10 +425,7 @@ class Game:
             required_bet = self.betting.get_required_bet(player_id)
             
             valid_actions = []
-
-            # Bring-in step (forced bet with options)
-            step = self.rules.gameplay[self.current_step]
-            is_stud = self.rules.forced_bets.style == "bring-in"
+            step = self.rules.gameplay[self.current_step]           
 
             if step.action_config["type"] == "bring-in":
                 valid_actions.append((PlayerAction.BRING_IN, self.bring_in, self.bring_in))
@@ -460,37 +457,32 @@ class Game:
              # Determine possible BET or RAISE
             if player.stack > required_bet:
                 current_total = self.betting.current_bet
-                is_third_street = is_stud and step.action_config["type"] == "small"
-
+                is_stud = self.rules.forced_bets.style == "bring-in"
+                step_type = step.action_config["type"]
+                bet_size = self.small_bet if step_type == "small" else self.big_bet
+                    
                 active_players = [p for p in self.table.get_position_order() if p.is_active]
                 bring_in_idx = next((i for i, p in enumerate(active_players) if self.betting.current_bets.get(p.id, PlayerBet()).posted_blind), -1)
                 acted_count = sum(1 for b in self.betting.current_bets.values() if b.has_acted or b.posted_blind)
-                is_first_after_bring_in = (is_third_street and bring_in_idx != -1 and 
+                is_first_after_bring_in = (is_stud and step_type == "small" and bring_in_idx != -1 and 
                                         active_players[(bring_in_idx + 1) % len(active_players)].id == player_id and
-                                        acted_count <= 1)  # Only bring-in has acted       
+                                        acted_count <= 1)
 
                 current_bet = self.betting.current_bets.get(player_id, PlayerBet()).amount
-
-                current_idx = next((i for i, p in enumerate(active_players) if self.betting.current_bets.get(p.id, PlayerBet()).posted_blind), -1)
-                next_idx = (current_idx + 1) % len(active_players)
 
                 if is_first_after_bring_in:
                     # First player after bring-in in limit Stud
                     logger.debug(f"First player after bring-in")   
                     action = PlayerAction.BET  # Or COMPLETE if added
                     min_amount = self.small_bet  # 10
+                    max_amount = min_amount if self.betting_structure == BettingStructure.LIMIT else self.betting.get_max_bet(player_id, BetType.SMALL, player.stack)
                     logger.debug(f"  BET min_amount: {min_amount}")   
-                    if self.betting_structure == BettingStructure.LIMIT:
-                        max_amount = min_amount  # 10 in limit
-                        logger.debug(f"  BET max_amount: {max_amount} (LIMIT)")   
-                    else:                      
-                        max_amount = self.betting.get_max_bet(player_id, BetType.SMALL, player.stack)  # Flexible for no-limit/pot-limit
-                        logger.debug(f"  BET max_amount: {max_amount} (NO/POT-LIMIT)")   
+                    logger.debug(f"  BET max_amount: {max_amount}") 
                 elif current_total == 0:
                     action = PlayerAction.BET
                     #min_amount = self.betting.get_min_bet(player_id, BetType.BIG)
-                    min_amount = self.betting.get_min_bet(player_id, BetType.SMALL if is_stud else BetType.BIG)
-                    max_amount = self.betting.get_max_bet(player_id, BetType.SMALL if is_stud else BetType.BIG, player.stack)  
+                    min_amount = bet_size  # 10 for "small", 20 for "big"
+                    max_amount = min_amount if self.betting_structure == BettingStructure.LIMIT else self.betting.get_max_bet(player_id, BetType.SMALL if step_type == "small" else BetType.BIG, player.stack)
                     logger.debug(f"  BET min_amount: {min_amount}")   
                     logger.debug(f"  BET max_amount: {max_amount}")   
                 else:
@@ -635,7 +627,10 @@ class Game:
                         
                     logger.info(f"{player.name} checks")
                     current_bet.has_acted = True  # Mark them as having acted
-                    
+                    self.betting.current_bets[player_id] = current_bet  # Record check
+
+                    logger.debug(f"Current bets after check: {self.betting.current_bets}")
+
                     # Check if betting round is complete
                     if self.betting.round_complete():
                         logger.debug("Betting round complete after check")
@@ -1262,8 +1257,12 @@ class Game:
             bring_in_rule = self.rules.forced_bets.rule
 
             # Find the "Initial Bet" step dynamically
-            bring_in_step_idx = next((i for i, s in enumerate(self.rules.gameplay) if s.get("bet", {}).get("type") == "bring-in"), -1)
-            initial_bet_step_idx = bring_in_step_idx + 1 if bring_in_step_idx != -1 else -1            
+            # Debug the gameplay steps
+            logger.debug(f"Gameplay steps: {[s.__dict__ for s in self.rules.gameplay]}")
+            bring_in_step_idx = next((i for i, s in enumerate(self.rules.gameplay) if s.action_config.get("type") == "bring-in"), -1)
+            initial_bet_step_idx = bring_in_step_idx + 1 if bring_in_step_idx != -1 else -1
+            logger.debug(f"  current step: {self.current_step}, bring_in_step_idx: {bring_in_step_idx}, initial_bet_step_idx: {initial_bet_step_idx}")
+       
 
             if round_start and step.action_config["type"] == "bring-in":
                 bring_in_player = BringInDeterminator.determine_first_to_act(active_players, self.betting.betting_round + 1, bring_in_rule)

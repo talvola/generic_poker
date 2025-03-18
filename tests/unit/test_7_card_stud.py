@@ -128,29 +128,11 @@ def setup_test_game_with_mock_deck():
                         }
                     ]
                 },
-                "name": "Deal Third Street"
-            },
-            {
-                "bet": {
-                    "type": "small"
-                },
-                "name": "Third Street Bet"
-            },
-            {
-                "deal": {
-                    "location": "player",
-                    "cards": [
-                        {
-                            "number": 1,
-                            "state": "face up"
-                        }
-                    ]
-                },
                 "name": "Deal Fourth Street"
             },
             {
                 "bet": {
-                    "type": "big"
+                    "type": "small"
                 },
                 "name": "Fourth Street Bet"
             },
@@ -178,7 +160,7 @@ def setup_test_game_with_mock_deck():
                     "cards": [
                         {
                             "number": 1,
-                            "state": "face down"
+                            "state": "face up"
                         }
                     ]
                 },
@@ -189,6 +171,24 @@ def setup_test_game_with_mock_deck():
                     "type": "big"
                 },
                 "name": "Sixth Street Bet"
+            },
+            {
+                "deal": {
+                    "location": "player",
+                    "cards": [
+                        {
+                            "number": 1,
+                            "state": "face down"
+                        }
+                    ]
+                },
+                "name": "Deal Seventh Street"
+            },
+            {
+                "bet": {
+                    "type": "big"
+                },
+                "name": "Seventh Street Bet"
             },
             {
                 "showdown": {
@@ -304,6 +304,7 @@ def test_game_bringin():
     
     # Initial stacks (assume 500 each)
     initial_stacks = {pid: player.stack for pid, player in game.table.players.items()}
+    assert all(stack == 500 for stack in initial_stacks.values())
 
     # Step 0: Post Antes
     game.start_hand()
@@ -314,6 +315,7 @@ def test_game_bringin():
     assert game.table.players['p3'].stack == 499
     assert game.betting.get_main_pot_amount() == 3  # 3 players x $1
     assert game.betting.get_ante_total() == 3  # 3 players x $1
+
     # test current_bets in BettingManager
     assert game.betting.current_bets == {'p1': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
                                          'p2': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
@@ -321,11 +323,6 @@ def test_game_bringin():
     # also test total_bets and total_antes from Pot
     assert game.betting.pot.total_bets == {'round_2_p1': 1, 'round_2_p2': 1, 'round_2_p3': 1}
     assert game.betting.pot.total_antes == {'round_2_p1': 1, 'round_2_p2': 1, 'round_2_p3': 1}
-
-    # These are the door cards (exposed cards) based on the mock deck
-    #Card(Rank.QUEEN, Suit.HEARTS), #Alice DOOR CARD
-    #Card(Rank.KING, Suit.DIAMONDS), #Bob DOOR CARD
-    #Card(Rank.TWO, Suit.CLUBS), #Charlie DOOR CARD  
 
     # Step 1: Deal Hole Cards (2 down, 1 up)
     game._next_step()
@@ -385,7 +382,7 @@ def test_game_bringin():
     assert game.betting.pot.total_bets == {'round_2_p1': 1, 'round_2_p2': 1, 'round_2_p3': 4}
     assert game.betting.pot.total_antes == {'round_2_p1': 1, 'round_2_p2': 1, 'round_2_p3': 1}    
 
-    # Step 3: Initial Bet (others can act)
+    # Step 3: Third Street Bet (others can act)
     game._next_step()
     assert game.current_step == 3
     assert game.state == GameState.BETTING
@@ -441,7 +438,7 @@ def test_game_bringin():
     assert game.betting.get_main_pot_amount() == 63  # 53 + 10
     assert game.betting.get_ante_total() == 3
 
-    # Step 4: Deal Third Street (fourth card, face up)
+    # Step 4: Deal Fourth Street (fourth card, face up)
     game._next_step()
     assert game.current_step == 4
     assert game.state == GameState.DEALING
@@ -458,10 +455,13 @@ def test_game_bringin():
     assert game.betting.get_main_pot_amount() == 63
     assert game.betting.get_ante_total() == 3
 
-    # Step 5: Third Street Bet (small bet, high hand first, no bring-in)
+    # Step 5: Fourth Street Bet (small bet, high hand first, no bring-in)
     game._next_step()
     assert game.current_step == 5
     assert game.state == GameState.BETTING
+    assert game.betting.get_main_pot_amount() == 63 # from before
+    assert game.betting.get_ante_total() == 0  # antes have been cleared in this round  
+
     # Upcards: Alice: Qh,10s; Bob: Kd,Qc; Charlie: 2c,Qs
     # Bob has highest (Kd,Qc), starts betting
     assert game.current_player.id == "p2"  # Bob (Kd,Qc)
@@ -476,7 +476,148 @@ def test_game_bringin():
     assert game.betting.current_bet == 10
     assert game.table.players["p2"].stack == 469  # 479 - 10
     assert game.betting.get_main_pot_amount() == 73  # 63 + 10
-    assert game.betting.get_ante_total() == 3  
+
+    # Charlie calls $10
+    assert game.current_player.id == "p3"  # Charlie next
+    valid_actions = game.get_valid_actions("p3")
+    assert (PlayerAction.FOLD, None, None) in valid_actions
+    assert (PlayerAction.CALL, 10, 10) in valid_actions
+    result = game.player_action("p3", PlayerAction.CALL, 10)
+    assert result.success
+    assert game.table.players["p3"].stack == 469  # 479 - 10
+    assert game.betting.get_main_pot_amount() == 83  # 73 + 10    
+
+    # Alice calls $10
+    assert game.current_player.id == "p1"  # Alice next
+    valid_actions = game.get_valid_actions("p1")
+    assert (PlayerAction.FOLD, None, None) in valid_actions
+    assert (PlayerAction.CALL, 10, 10) in valid_actions
+    result = game.player_action("p1", PlayerAction.CALL, 10)
+    assert result.success
+    assert game.table.players["p1"].stack == 469  # 479 - 10
+    assert game.betting.get_main_pot_amount() == 93  # 83 + 10    
+   
+    # Step 6: Deal Fifth Street
+    game._next_step()
+    assert game.current_step == 6
+    assert game.state == GameState.DEALING
+    assert len(game.table.players["p1"].hand.cards) == 5  # Alice: Ah,Kh,Qh,Ts,Jh
+    assert len(game.table.players["p2"].hand.cards) == 5  # Bob: Qd,Kc,Kd,Qc,Td
+    assert len(game.table.players["p3"].hand.cards) == 5  # Charlie: Js,Jd,2c,Qs,Th
+    assert str(game.table.players["p1"].hand.cards[4]) == "Jh"
+    assert str(game.table.players["p2"].hand.cards[4]) == "Td"
+    assert str(game.table.players["p3"].hand.cards[4]) == "Th"
+    assert game.table.players["p1"].hand.cards[4].visibility == Visibility.FACE_UP    
+
+    # Step 7: Fifth Street Bet (big bet)
+    game._next_step()
+    assert game.current_step == 7
+    assert game.state == GameState.BETTING
+    assert game.current_player.id == "p2"  # Bob (Kd,Qc,Td)
+    valid_actions = game.get_valid_actions("p2")
+    assert (PlayerAction.FOLD, None, None) in valid_actions
+    assert (PlayerAction.CHECK, None, None) in valid_actions
+    assert (PlayerAction.BET, 20, 20) in valid_actions  # Big bet
+    result = game.player_action("p2", PlayerAction.CHECK, None)
+    assert result.success
+    
+    assert game.current_player.id == "p3"  # Charlie next
+    valid_actions = game.get_valid_actions("p3")
+    assert (PlayerAction.CHECK, None, None) in valid_actions
+    result = game.player_action("p3", PlayerAction.CHECK, None)
+    assert result.success
+    
+    assert game.current_player.id == "p1"  # Alice next
+    valid_actions = game.get_valid_actions("p1")
+    assert (PlayerAction.CHECK, None, None) in valid_actions
+    result = game.player_action("p1", PlayerAction.CHECK, None)
+    assert result.success   
+
+    # Step 8: Deal Sixth Street
+    game._next_step()
+    assert game.current_step == 8 
+    assert game.state == GameState.DEALING
+    assert len(game.table.players["p1"].hand.cards) == 6  # Alice: Ah,Kh   Qh,Ts,Jh,9s
+    assert len(game.table.players["p2"].hand.cards) == 6  # Bob: Qd,Kc     Kd,Qc,Td,7s
+    assert len(game.table.players["p3"].hand.cards) == 6  # Charlie: Js,Jd 2c,Qs,Th,6s    
+    assert str(game.table.players["p1"].hand.cards[5]) == "9s"
+    assert str(game.table.players["p2"].hand.cards[5]) == "7s"
+    assert str(game.table.players["p3"].hand.cards[5]) == "6s"
+    
+    # Step 9: Sixth Street Bet (big bet)
+    game._next_step()
+    assert game.current_step == 9
+    assert game.state == GameState.BETTING
+    assert game.current_player.id == "p2"
+    result = game.player_action("p2", PlayerAction.CHECK, None)
+    assert result.success
+    
+    assert game.current_player.id == "p3"
+    result = game.player_action("p3", PlayerAction.CHECK, None)
+    assert result.success
+    
+    assert game.current_player.id == "p1"
+    result = game.player_action("p1", PlayerAction.CHECK, None)
+    assert result.success
+    
+    # Step 10: Deal Seventh Street (down card)
+    game._next_step()
+    assert game.current_step == 10
+    assert game.state == GameState.DEALING
+    assert str(game.table.players["p1"].hand.cards[6]) == "9d"
+    assert str(game.table.players["p2"].hand.cards[6]) == "7h"
+    assert str(game.table.players["p3"].hand.cards[6]) == "6c"
+    assert game.table.players["p1"].hand.cards[6].visibility == Visibility.FACE_DOWN
+    
+    # Step 11: Seventh Street Bet (big bet)
+    game._next_step()
+    assert game.current_step == 11
+    assert game.state == GameState.BETTING
+    assert game.current_player.id == "p2"
+    result = game.player_action("p2", PlayerAction.CHECK, None)
+    assert result.success
+    
+    assert game.current_player.id == "p3"
+    result = game.player_action("p3", PlayerAction.CHECK, None)
+    assert result.success
+    
+    assert game.current_player.id == "p1"
+    result = game.player_action("p1", PlayerAction.CHECK, None)
+    assert result.success
+    
+    # Step 12: Showdown
+    game._next_step()
+    assert game.current_step == 12
+    assert game.state == GameState.COMPLETE
+
+    # Get results
+    results = game.get_hand_results()
+
+    print("\nShowdown Results:")
+    print(results)
+
+    # Check overall results
+    expected_pot = 93  # 3 antes + 60 (third/fourth street)
+    assert results.is_complete   
+    assert results.total_pot == expected_pot
+    assert len(results.pots) == 1  # Just main pot
+    assert len(results.hands) == 3  # All players stayed in    
+
+    # Check pot details
+    main_pot = results.pots[0]    
+    assert main_pot.amount == expected_pot
+    assert main_pot.pot_type == "main"
+    assert not main_pot.split  # Only one winner
+    assert len(main_pot.winners) == 1    
+    assert 'p1' in main_pot.winners
+
+    winning_hand = results.hands['p1']    
+    assert "Straight" in winning_hand[0].hand_name
+    assert "Ace-high Straight" in winning_hand[0].hand_description    
+
+    # Check winning hands list
+    assert len(results.winning_hands) == 1
+    assert results.winning_hands[0].player_id == 'p1'    
 
 # more tests to follow to check the bring-in, the options for betting for that 
 # player and other players, and subsequent rounds of betting.

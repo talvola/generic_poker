@@ -48,24 +48,6 @@
             "bet": {
                 "type": "small"
             },
-            "name": "Initial Bet"
-        },
-        {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal Third Street"
-        },
-        {
-            "bet": {
-                "type": "small"
-            },
             "name": "Third Street Bet"
         },
         {
@@ -82,7 +64,7 @@
         },
         {
             "bet": {
-                "type": "big"
+                "type": "small"
             },
             "name": "Fourth Street Bet"
         },
@@ -110,7 +92,7 @@
                 "cards": [
                     {
                         "number": 1,
-                        "state": "face down"
+                        "state": "face up"
                     }
                 ]
             },
@@ -121,6 +103,24 @@
                 "type": "big"
             },
             "name": "Sixth Street Bet"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Seventh Street"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Seventh Street Bet"
         },
         {
             "showdown": {

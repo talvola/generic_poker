@@ -44,11 +44,11 @@ class EvaluationType(str, Enum):
     THREE_CARD_HIGH = 'three_card_high'
     THREE_CARD_HIGH_AL = 'three_card_high_al'
     THREE_CARD_HIGH_AL_RH = 'three_card_high_al_rh'
-    FOUR_CARD_LOW = 'three_card_low'
-    FOUR_CARD_LOW_AH = 'three_card_low_ah'
-    FOUR_CARD_HIGH = 'three_card_high'
-    FOUR_CARD_HIGH_AL = 'three_card_high_al'
-    FOUR_CARD_HIGH_AL_RH = 'three_card_high_al_rh'
+    FOUR_CARD_LOW = 'four_card_low'
+    FOUR_CARD_LOW_AH = 'four_card_low_ah'
+    FOUR_CARD_HIGH = 'four_card_high'
+    FOUR_CARD_HIGH_AL = 'four_card_high_al'
+    FOUR_CARD_HIGH_AL_RH = 'four_card_high_al_rh'
 
 @dataclass
 class HandResult:
