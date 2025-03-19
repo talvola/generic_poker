@@ -1335,3 +1335,254 @@ class TestsFromBettingFlow:
         empty_pot.add_bet("BB", 10, False, 990)  # BB checking - not necessary to call add_bet
 
         assert current.main_pot.amount == 30  # 10 fom each
+
+class TestAntesHandling:
+    """Tests for ante-specific functionality in the Pot class."""
+
+    def test_antes_single_round(self, empty_pot):
+        """Test antes posted by all players in a single round."""
+        current = empty_pot.round_pots[-1]
+
+        # Three players post $2 ante each
+        empty_pot.add_bet("P1", 2, False, 1000, is_ante=True)
+        empty_pot.add_bet("P2", 2, False, 1000, is_ante=True)
+        empty_pot.add_bet("P3", 2, False, 1000, is_ante=True)
+
+        assert current.main_pot.amount == 6  # 2 from each
+        assert empty_pot.ante_total == 6
+        assert current.main_pot.player_antes == {"P1": 2, "P2": 2, "P3": 2}
+        assert current.main_pot.player_bets == {"P1": 2, "P2": 2, "P3": 2}
+        assert empty_pot.total == 6
+        assert empty_pot.total_bets == {"round_1_P1": 2, "round_1_P2": 2, "round_1_P3": 2}
+        assert empty_pot.total_antes == {"round_1_P1": 2, "round_1_P2": 2, "round_1_P3": 2}
+        assert current.main_pot.eligible_players == {"P1", "P2", "P3"}
+        assert current.main_pot.active_players == {"P1", "P2", "P3"}
+
+    def test_antes_reset_across_rounds(self, empty_pot):
+        """Test that antes are reset after a betting round ends."""
+        current = empty_pot.round_pots[-1]
+
+        # Round 1: Post antes
+        empty_pot.add_bet("P1", 2, False, 1000, is_ante=True)
+        empty_pot.add_bet("P2", 2, False, 1000, is_ante=True)
+        assert empty_pot.ante_total == 4
+        assert current.main_pot.player_antes == {"P1": 2, "P2": 2}
+
+        empty_pot.end_betting_round()
+
+        # Round 2: Antes should be cleared
+        current = empty_pot.round_pots[-1]
+        assert empty_pot.ante_total == 0
+        assert current.main_pot.player_antes == {}
+        assert empty_pot.total_antes == {}
+        assert current.main_pot.amount == 4  # Carried over from Round 1
+        assert empty_pot.total == 4      
+
+    def test_antes_with_betting(self, empty_pot):
+        """Test antes followed by normal betting."""
+        current = empty_pot.round_pots[-1]
+        empty_pot.add_bet("P1", 1, False, 1000, is_ante=True)
+        empty_pot.add_bet("P2", 1, False, 1000, is_ante=True)
+        assert empty_pot.ante_total == 2
+        assert current.main_pot.amount == 2
+        empty_pot.add_bet("P1", 11, False, 999)  # Total 11 (1 ante + 10 bet)
+        empty_pot.add_bet("P2", 11, False, 999)  # Total 11 (1 ante + 10 bet)
+        assert current.main_pot.amount == 24  # 2 antes + 22 bets (11 each)
+        assert empty_pot.ante_total == 2
+        assert current.main_pot.player_antes == {"P1": 1, "P2": 1}
+        assert current.main_pot.player_bets == {"P1": 12, "P2": 12}
+        assert empty_pot.total == 24
+        assert empty_pot.total_bets == {"round_1_P1": 12, "round_1_P2": 12}
+        assert empty_pot.total_antes == {"round_1_P1": 1, "round_1_P2": 1}
+        assert current.main_pot.eligible_players == {"P1", "P2"}
+        assert current.main_pot.active_players == {"P1", "P2"}
+
+class TestBringInHandling:
+    """Tests for Stud-style bring-in bets."""
+
+    def test_bring_in_basic(self, empty_pot):
+        """Test basic bring-in followed by calls."""
+        current = empty_pot.round_pots[-1]
+        empty_pot.add_bet("P1", 1, False, 1000, is_ante=True)
+        empty_pot.add_bet("P2", 1, False, 1000, is_ante=True)
+        empty_pot.add_bet("P3", 1, False, 1000, is_ante=True)
+        empty_pot.add_bet("P1", 4, False, 999)
+        empty_pot.add_bet("P2", 4, False, 999)
+        empty_pot.add_bet("P3", 4, False, 999)
+        assert current.main_pot.amount == 15
+        assert empty_pot.ante_total == 3
+        assert current.main_pot.player_antes == {"P1": 1, "P2": 1, "P3": 1}
+        assert current.main_pot.player_bets == {"P1": 5, "P2": 5, "P3": 5}
+        assert empty_pot.total == 15
+        assert empty_pot.total_bets == {"round_1_P1": 5, "round_1_P2": 5, "round_1_P3": 5}
+        assert empty_pot.total_antes == {"round_1_P1": 1, "round_1_P2": 1, "round_1_P3": 1}
+        assert current.main_pot.eligible_players == {"P1", "P2", "P3"}
+        assert current.main_pot.active_players == {"P1", "P2", "P3"}
+
+    def test_bring_in_with_all_in(self, empty_pot):
+        """Test bring-in with one player all-in short."""
+        current = empty_pot.round_pots[-1]
+        empty_pot.add_bet("P1", 1, False, 1000, is_ante=True)
+        empty_pot.add_bet("P2", 1, False, 4, is_ante=True)
+        empty_pot.add_bet("P3", 1, False, 1000, is_ante=True)
+        assert current.main_pot.amount == 3
+        empty_pot.add_bet("P1", 4, False, 999)
+        assert current.main_pot.amount == 7 # 3 from antes, and 4 more from P1
+        empty_pot.add_bet("P2", 3, True, 3)
+        # at this point, we should have split the main pot since we had a call for less because of stack size
+        # it should contain the 3 antes, and then 3 from each of P1 and P2 since P2 was 'short'
+        assert current.main_pot.amount == 9 # 3 from antes, 3 more from P1, and 3 more from P2 who is all-in
+        # then there shold be a side pot of $1 for the extra $1 from P1.   It is not capped
+        assert len(current.side_pots) == 1
+        assert current.side_pots[0].amount == 1
+        assert not current.side_pots[0].capped
+        assert current.main_pot.eligible_players == {"P1", "P2", "P3"}
+        assert current.side_pots[0].eligible_players == {"P1"}  # P2 has not yet contributed to the side pot, so is not there.
+        # P3 now calls the bring-in of $4
+        empty_pot.add_bet("P3", 4, False, 999)
+        assert current.main_pot.amount == 12 # 3 from antes, 3 from P1, 3 from P2, and 3 from P3
+        assert current.main_pot.capped
+        assert current.main_pot.cap_amount == 4 # includes the ante
+        # the side pot gets the extra $1 from P3's call of the bring-in
+        assert len(current.side_pots) == 1
+        assert current.side_pots[0].amount == 2
+        assert empty_pot.total == 14
+        assert empty_pot.total_bets == {"round_1_P1": 5, "round_1_P2": 4, "round_1_P3": 5}
+        assert empty_pot.total_antes == {"round_1_P1": 1, "round_1_P2": 1, "round_1_P3": 1}
+        assert current.main_pot.eligible_players == {"P1", "P2", "P3"}
+        assert current.side_pots[0].eligible_players == {"P1", "P3"}  # P1 and P3 have contributed
+
+    def test_bring_in_with_raise(self, empty_pot):
+        """Test bring-in followed by a raise and all-in."""
+        current = empty_pot.round_pots[-1]
+        empty_pot.add_bet("P1", 1, False, 1000, is_ante=True)
+        empty_pot.add_bet("P2", 1, False, 1000, is_ante=True)
+        empty_pot.add_bet("P3", 1, False, 10, is_ante=True)
+        assert current.main_pot.amount == 3
+        empty_pot.add_bet("P1", 4, False, 999)
+        assert current.main_pot.amount == 7 # 3 from antes, and 4 more from P1
+        empty_pot.add_bet("P2", 10, False, 999)
+        assert current.main_pot.amount == 17 # 3 from antes, 4 from P1, and 10 from P2
+        # P3 is calling for less - $9 instead of the required $10
+        empty_pot.add_bet("P3", 9, True, 9)
+        assert current.main_pot.amount == 25 # 3 from antes, 4 from P1, and 9 from P2, 9 from P3
+        assert len(current.side_pots) == 1
+        assert current.side_pots[0].amount == 1 # P3's excess         
+        # P1 calls the $10
+        empty_pot.add_bet("P1", 10, False, 996)
+        assert current.main_pot.amount == 30
+        assert len(current.side_pots) == 1
+        assert current.side_pots[0].amount == 2 # P3 and P1's excess         
+        assert empty_pot.total == 32
+        assert empty_pot.total_bets == {"round_1_P1": 11, "round_1_P2": 11, "round_1_P3": 10}
+        assert empty_pot.total_antes == {"round_1_P1": 1, "round_1_P2": 1, "round_1_P3": 1}
+        assert current.main_pot.eligible_players == {"P1", "P2", "P3"}   
+        assert current.side_pots[0].eligible_players == {"P1", "P2"}  # P1 and P2 have contributed
+
+class TestStudPokerScenarios:
+    """Tests simulating Stud poker multi-street dynamics."""
+
+    def test_stud_third_to_fourth_street(self, empty_pot):
+        """Test Stud transition from Third to Fourth Street with side pot."""
+        current = empty_pot.round_pots[-1]
+
+        # Antes
+        empty_pot.add_bet("P1", 1, False, 1000, is_ante=True)
+        empty_pot.add_bet("P2", 1, False, 51, is_ante=True)
+        empty_pot.add_bet("P3", 1, False, 1000, is_ante=True)
+
+        # Third Street: P1 bring-in $3, P2 all-in $50, P3 calls, P1 calls
+        empty_pot.add_bet("P1", 4, False, 999)
+        empty_pot.add_bet("P2", 50, True, 50)
+        empty_pot.add_bet("P3", 50, False, 999)
+        empty_pot.add_bet("P1", 50, False, 996)
+        assert current.main_pot.amount == 153  # 50 each + antes
+        assert current.main_pot.capped
+        assert len(current.side_pots) == 0
+
+        empty_pot.end_betting_round()
+
+        # Fourth Street: P1 bets $100, P3 calls
+        current = empty_pot.round_pots[-1]
+        empty_pot.add_bet("P1", 100, False, 946)
+        empty_pot.add_bet("P3", 100, False, 949)
+        assert current.main_pot.amount == 153  # Unchanged
+        assert len(current.side_pots) == 1
+        assert current.side_pots[0].amount == 200  # 100 each P1/P3
+        assert not current.side_pots[0].capped    
+
+    def test_stud_multi_all_in(self, empty_pot):
+        """Test Stud with multiple all-ins across streets."""
+        current = empty_pot.round_pots[-1]
+
+        # Antes
+        empty_pot.add_bet("P1", 1, False, 1000, is_ante=True)
+        empty_pot.add_bet("P2", 1, False, 31, is_ante=True)
+        empty_pot.add_bet("P3", 1, False, 151, is_ante=True)
+
+        # Third Street
+        empty_pot.add_bet("P1", 4, False, 999)    # Bring-in
+        empty_pot.add_bet("P2", 30, True, 30)     # All-in
+        empty_pot.add_bet("P3", 150, True, 150)   # All-in
+        empty_pot.add_bet("P1", 150, False, 996)
+        assert current.main_pot.amount == 93      # 30 each + antes
+        assert len(current.side_pots) == 1
+        assert current.side_pots[0].amount == 240 # 120 each P1/P3
+        assert current.side_pots[0].capped        
+
+class TestEdgeCases:
+    """Tests for unusual or boundary conditions."""        
+
+    def test_ante_and_blinds_mixed(self, empty_pot):
+        """Test mixed ante and blinds scenario."""
+        current = empty_pot.round_pots[-1]
+
+        # Antes
+        empty_pot.add_bet("P1", 1, False, 1000, is_ante=True)
+        empty_pot.add_bet("P2", 1, False, 1000, is_ante=True)
+        empty_pot.add_bet("P3", 1, False, 1000, is_ante=True)
+
+        # Blinds (SB/BB)
+        empty_pot.add_bet("P2", 5, False, 999)   # 5 SB
+        empty_pot.add_bet("P3", 10, False, 999)  # 10 BB
+
+        # P1 calls BB
+        empty_pot.add_bet("P1", 10, False, 999)  # 10
+        # P2 calls 
+        empty_pot.add_bet("P2", 10, False, 999)  # 10        
+        assert current.main_pot.amount == 33      # $1 ante + $10 from each
+        assert empty_pot.ante_total == 3
+        assert current.main_pot.player_antes == {"P1": 1, "P2": 1, "P3": 1}
+        assert current.main_pot.player_bets == {"P1": 11, "P2": 11, "P3": 11}
+
+    def test_incomplete_bring_in_all_in(self, empty_pot):
+        """Test player all-in for less than bring-in amount."""
+        current = empty_pot.round_pots[-1]
+
+        # Antes
+        empty_pot.add_bet("P1", 1, False, 2, is_ante=True)
+        empty_pot.add_bet("P2", 1, False, 1000, is_ante=True)
+
+        # P1 all-in $2 total (1 ante + 1), less than $3 bring-in
+        empty_pot.add_bet("P1", 1, True, 1)
+        empty_pot.add_bet("P2", 3, False, 999)  # Bring-in $3 
+        assert current.main_pot.amount == 4      # 2 P1 + 2 P2
+        assert current.main_pot.capped
+        assert current.main_pot.cap_amount == 2
+        assert len(current.side_pots) == 1
+        assert current.side_pots[0].amount == 2 # 2 extra from P2
+     
+
+    def test_zero_amount_bet_after_ante(self, empty_pot):
+        """Test zero-amount bet after antes (e.g., check)."""
+        current = empty_pot.round_pots[-1]
+
+        # Antes
+        empty_pot.add_bet("P1", 1, False, 1000, is_ante=True)
+        empty_pot.add_bet("P2", 1, False, 1000, is_ante=True)
+
+        # P1 tries to bet 0 more (simulating check)
+        empty_pot.add_bet("P1", 0, False, 999)  # Total still 1
+        assert current.main_pot.amount == 2
+        assert current.main_pot.player_bets == {"P1": 1, "P2": 1}
+        assert empty_pot.total == 2        

@@ -377,17 +377,36 @@ class Pot:
         # amount_to_add = total_amount - prev_total
         prev_total = self.total_bets.get(round_key, 0)  # 1 after ante
         amount_to_add = total_amount - (prev_total - self.total_antes.get(round_key, 0))  # 3 - (1 - 1) = 3
+        if is_all_in:
+            amount_to_add = min(amount_to_add, stack_before)  # Cap at remaining stack
 
         logger.debug(f"**** prev_total: {prev_total}, amount_to_add: {amount_to_add}")
+
+        logger.debug(f"**** bet: BetInfo(player_id:{player_id}, amount:{amount_to_add}, is_all_in:{is_all_in}, stack_before:{stack_before}, prev_total:{prev_total}, new_total:{total_amount})")
+
+
+        if amount_to_add < 0:
+            raise ValueError(f"Total amount {total_amount} cannot be less than previous total {prev_total} for player {player_id} in round {self.current_round}")
+        
+        bet = BetInfo(
+            player_id=player_id,
+            amount=amount_to_add,
+            is_all_in=is_all_in,
+            stack_before=stack_before,
+            prev_total=prev_total,
+            new_total=total_amount
+        )
 
         # Special handling for antes
         if is_ante:  # Assuming ante is passed via Game
             self.ante_total += amount_to_add
             self.total_antes[round_key] = total_amount
-            current.main_pot.player_antes[player_id] = amount_to_add
-            current.main_pot.amount += amount_to_add
-            current.main_pot.player_bets[player_id] = amount_to_add
             self.total_bets[round_key] = amount_to_add
+            self._contribute_to_pot(current.main_pot, bet, amount_to_add, is_ante=True)
+
+            #current.main_pot.player_antes[player_id] = amount_to_add
+            #current.main_pot.amount += amount_to_add
+            #current.main_pot.player_bets[player_id] = amount_to_add
 
             # not sure if we want to track antes here
             #self.total_bets[f"round_{self.current_round}_{player_id}"] = total_amount
@@ -402,21 +421,7 @@ class Pot:
                 logger.debug(f"  {pot}")
                     
             return
-
-        if amount_to_add < 0:
-            raise ValueError(f"Total amount {total_amount} cannot be less than previous total {prev_total} for player {player_id} in round {self.current_round}")
-    
-        logger.debug(f"**** bet: BetInfo(player_id:{player_id}, amount:{amount_to_add}, is_all_in:{is_all_in}, stack_before:{stack_before}, prev_total:{prev_total}, new_total:{total_amount})")
-
-        bet = BetInfo(
-            player_id=player_id,
-            amount=amount_to_add,
-            is_all_in=is_all_in,
-            stack_before=stack_before,
-            prev_total=prev_total,
-            new_total=total_amount
-        )
-        
+           
         logger.debug(f"\nProcessing new bet in round {self.current_round}:")
         logger.debug(f"  Player: {player_id}")
         logger.debug(f"  Total amount: {total_amount}")
@@ -487,7 +492,8 @@ class Pot:
                 adjusted_total = player_total - ante_amount  # Subtract ante           
                 logger.debug(f"      adjusted_total is {adjusted_total}")
     
-                if is_all_in and pot.current_bet > 0 and player_total < pot.current_bet:
+#                if is_all_in and pot.current_bet > 0 and player_total < pot.current_bet:
+                if is_all_in and pot.current_bet > 0 and adjusted_total  < pot.current_bet:
                     logger.debug(f"    Player is all-in and cannot meet current bet of {pot.current_bet}")
                     logger.debug(f"    Player's total contribution is {player_total}")
                     logger.debug(f"    Restructuring pot with target_amount={player_total}")

@@ -116,7 +116,7 @@ def setup_test_game_with_mock_deck():
                 "bet": {
                     "type": "small"
                 },
-                "name": "Initial Bet"
+                "name": "Third Street Bet"
             },
             {
                 "deal": {
@@ -358,8 +358,8 @@ def test_game_bringin():
     # Check valid actions for bring-in player (Charlie)
     valid_actions = game.get_valid_actions("p3")
     assert len(valid_actions) == 2  # Bring-in or complete
-    assert (PlayerAction.BRING_IN, 3, 3) in valid_actions  # Bring-in amount ($2)
-    assert (PlayerAction.BET, 10, 10) in valid_actions  # Complete to small bet ($5)
+    assert (PlayerAction.BRING_IN, 3, 3) in valid_actions  # Bring-in amount ($3)
+    assert (PlayerAction.BET, 10, 10) in valid_actions  # Complete to small bet ($10)
     
     # Charlie posts bring-in ($3)
     result = game.player_action("p3", PlayerAction.BRING_IN, 3)
