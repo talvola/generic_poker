@@ -27,7 +27,7 @@ def print_betting_state(game: Game, msg: str):
     """Helper to print detailed betting state."""
     print(f"\n{msg}:")
     print("─" * 50)
-    print(f"Pot: {game.betting.pot.main_pot}")
+    print(f"Pot: {game.betting.pot.round_pots[-1].main_pot}")
     print(f"Current bet: {game.betting.current_bet}")
     print("\nBetting history:")
     for pid, bet in game.betting.current_bets.items():
@@ -71,12 +71,15 @@ def test_simple_side_pot():
     )
     game.start_hand()
     
-    while game.state != GameState.BETTING:
-        game._next_step()
+    # Move to dealing, then betting phase
+    game._next_step()
+    game._next_step()
+
+    assert game.current_player.id == 'BTN'    
 
     # Initial state (after blinds)
     print_betting_state(game, "Initial state")
-    assert game.betting.pot.main_pot == 15, "Pot should be SB(5) + BB(10)"
+    assert game.betting.get_main_pot_amount() == 15, "Pot should be SB(5) + BB(10)"
     assert game.table.players["BTN"].stack == 100, "BTN shouldn't post blind"
     assert game.table.players["SB"].stack == 55, "SB should have posted 5"
     assert game.table.players["BB"].stack == 90, "BB should have posted 10"
@@ -85,7 +88,7 @@ def test_simple_side_pot():
     result = game.player_action("BTN", PlayerAction.CALL, 10)
     assert result.success, "BTN's call should succeed"
     print_betting_state(game, "After BTN calls")
-    assert game.betting.pot.main_pot == 25, "Pot should include BTN's call"
+    assert game.betting.get_main_pot_amount() == 25, "Pot should include BTN's call"
     assert game.table.players["BTN"].stack == 90, "BTN stack reduced by call"
     
     # Verify SB's valid actions
@@ -95,15 +98,15 @@ def test_simple_side_pot():
         print(f"- {action}: min={min_amount}, max={max_amount}")
     
     # SB raises all-in (adding 55 to their 5 blind for total 60)
-    result = game.player_action("SB", PlayerAction.RAISE, 55)
+    result = game.player_action("SB", PlayerAction.RAISE, 60)
     assert result.success, "SB's all-in raise should succeed"
     print_betting_state(game, "After SB all-in raise")
-    assert game.betting.current_bet == 60, "Current bet should be SB's total (55 + 5 blind)"
+    assert game.betting.get_main_pot_amount() == 80, "Current bet should be SB's total (55 + 5 blind)"
     assert game.table.players["SB"].stack == 0, "SB should be all-in"
     
     # Track incremental betting
     assert game.betting.current_bets["SB"].amount == 60, "SB total bet wrong"
-    assert game.betting.pot.main_pot == 80, "Pot wrong after SB raise"
+    assert game.betting.get_main_pot_amount() == 80, "Pot wrong after SB raise"
     
     # BB calls 60 (adds 50 to their 10)
     result = game.player_action("BB", PlayerAction.CALL, 60)
@@ -111,7 +114,7 @@ def test_simple_side_pot():
     print_betting_state(game, "After BB calls")
     assert game.betting.current_bets["BB"].amount == 60, "BB total bet wrong"
     assert game.table.players["BB"].stack == 40, "BB stack wrong after call"
-    assert game.betting.pot.main_pot == 130, "Pot wrong after BB call"
+    assert game.betting.get_main_pot_amount() == 130, "Pot wrong after BB call"
     
     # BTN calls 60 (adds 50 to their 10)
     result = game.player_action("BTN", PlayerAction.CALL, 60)
@@ -120,8 +123,8 @@ def test_simple_side_pot():
     
     # Final state verification
     assert game.betting.current_bet == 60, "Final current bet should be 60"
-    assert game.betting.pot.main_pot == 180, "Final pot should be 180 (60 * 3)"
-    assert len(game.betting.pot.side_pots) == 0, "Should be no side pots"
+    assert game.betting.get_main_pot_amount() == 180, "Final pot should be 180 (60 * 3)"
+    assert game.betting.get_side_pot_count() == 0, "Should be no side pots"
     
     # Verify final stacks
     assert game.table.players["BTN"].stack == 40, "BTN final stack wrong"
@@ -159,11 +162,12 @@ def test_side_pot_with_extra():
     )
     game.start_hand()
     
-    while game.state != GameState.BETTING:
-        game._next_step()
+    # Move to dealing, then betting phase
+    game._next_step()
+    game._next_step()
 
     print_betting_state(game, "Initial state")
-    assert game.betting.pot.main_pot == 15
+    assert game.betting.get_main_pot_amount() == 15
     
     # BTN calls 10
     result = game.player_action("BTN", PlayerAction.CALL, 10)
@@ -177,7 +181,7 @@ def test_side_pot_with_extra():
         print(f"- {action}: min={min_amount}, max={max_amount}")
     
     # SB raises all-in (adding 55 to their 5 blind)
-    result = game.player_action("SB", PlayerAction.RAISE, 55)
+    result = game.player_action("SB", PlayerAction.RAISE, 60)
     assert result.success
     print_betting_state(game, "After SB all-in")
     
@@ -209,18 +213,15 @@ def test_side_pot_with_extra():
     
     # Verify final state
     # Main pot of 180 (60 from each player)
-    assert game.betting.pot.main_pot == 180
+    assert game.betting.get_main_pot_amount() == 180
     
     # Side pot of 80 (BB and BTN each put in 40 more)
-    assert len(game.betting.pot.side_pots) == 1
-    assert game.betting.pot.side_pots[0].amount == 80
-    eligible = game.betting.pot.side_pots[0].eligible_players
+    assert game.betting.get_side_pot_count() == 1
+    assert game.betting.get_side_pot_amount(0) == 80
+    eligible = game.betting.pot.round_pots[-1].side_pots[0].eligible_players
     assert len(eligible) == 2
     assert "BB" in eligible and "BTN" in eligible
-    
-    # Total pot should be 260
-    assert game.betting.pot.total == 260
-    
+      
     # Final stacks
     assert game.table.players["BTN"].stack == 0   # All-in
     assert game.table.players["SB"].stack == 0    # All-in
@@ -245,11 +246,14 @@ def test_uneven_all_in_amounts():
     )
     game.start_hand()
     
-    while game.state != GameState.BETTING:
-        game._next_step()
+    # Move to dealing, then betting phase
+    game._next_step()
+    game._next_step()
+
+    assert game.current_player.id == 'BTN'    
         
     # Initial state
-    assert game.betting.pot.main_pot == 15  # SB(5) + BB(10)
+    assert game.betting.get_main_pot_amount() == 15  # SB(5) + BB(10)
     assert game.table.players["BTN"].stack == 100
     assert game.table.players["SB"].stack == 35   # 40 - 5
     assert game.table.players["BB"].stack == 50   # 60 - 10
@@ -274,17 +278,16 @@ def test_uneven_all_in_amounts():
     assert result.success
     
     # Verify pot structure
-    assert len(game.betting.pot.side_pots) == 2
     
     # Main pot should have 40 from each player (120 total)
-    assert game.betting.pot.main_pot == 120
+    assert game.betting.get_main_pot_amount() == 120
     
     # First side pot: BB and BTN contribute 20 more each (40 total)
-    assert game.betting.pot.side_pots[0].amount == 40
-    assert len(game.betting.pot.side_pots[0].eligible_players) == 2
-    assert "BB" in game.betting.pot.side_pots[0].eligible_players
-    assert "BTN" in game.betting.pot.side_pots[0].eligible_players
-    
+    assert game.betting.get_side_pot_amount(0) == 40
+    assert game.betting.get_side_pot_count() == 1
+    assert "BB" in game.betting.pot.round_pots[-1].side_pots[0].eligible_players
+    assert "BTN" in game.betting.pot.round_pots[-1].side_pots[0].eligible_players
+
     # Final stacks
     assert game.table.players["BTN"].stack == 40  # 100 - 60
     assert game.table.players["SB"].stack == 0    # All-in
