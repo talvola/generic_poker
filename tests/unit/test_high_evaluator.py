@@ -4,7 +4,7 @@ from pathlib import Path
 
 from generic_poker.core.card import Card, Rank, Suit
 from generic_poker.evaluation.evaluator import HandEvaluator, EvaluationType
-from generic_poker.evaluation.eval_types.high import HighHandEvaluator
+from generic_poker.evaluation.eval_types.standard import StandardHandEvaluator
 
 
 @pytest.fixture

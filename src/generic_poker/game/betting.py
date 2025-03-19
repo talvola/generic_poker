@@ -225,7 +225,7 @@ class BettingManager(ABC):
         pass
         
     @abstractmethod
-    def validate_bet(self, player_id: str, amount: int, player_stack: int) -> bool:
+    def validate_bet(self, player_id: str, amount: int, player_stack: int, bet_type: BetType = BetType.BIG) -> bool:
         """
         Validate if a bet is legal.
         
@@ -567,7 +567,7 @@ class NoLimitBettingManager(BettingManager):
         # For raising, minimum is current bet plus at least 
         # the size of the previous raise (or BB if larger)
         min_raise_increment = max(self.small_bet, self.last_raise_size)
-        logger.debug(f"Min Raise Calculation: Current Bet: {self.current_bet}, "
+        logger.debug(f"Min Raise Calculation: Current Bet: {self.current_bet}, Small Bet: {self.small_bet}, "
                      f"Last Raise: {self.last_raise_size}, Min Increment: {min_raise_increment}")
         
         return self.current_bet + min_raise_increment
@@ -582,7 +582,7 @@ class NoLimitBettingManager(BettingManager):
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
         return current_bet + player_stack  # Total bet including what's already in
         
-    def validate_bet(self, player_id: str, amount: int, player_stack: int) -> bool:
+    def validate_bet(self, player_id: str, amount: int, player_stack: int, bet_type: BetType = BetType.BIG) -> bool:
         """
         Validate bet in no-limit game.
         
@@ -681,15 +681,18 @@ class PotLimitBettingManager(BettingManager):
         call_amount = self.current_bet - current_bet
         
         # Calculate pot size after call
-        pot_after_call = self.pot.total(exclude_antes=(self.betting_round == 0)) + call_amount
-        
+        # Antes are not included in the pot for betting purposes in the first round
+
+        #pot_after_call = self.pot.total(exclude_antes=(self.betting_round == 0)) + call_amount
+        pot_after_call = self.get_total_pot() - self.get_ante_total() + call_amount
+      
         max_bet = self.current_bet + pot_after_call
         
         # Can't bet more than stack
         max_player_bet = current_bet + player_stack
         return min(max_bet, max_player_bet)
                
-    def validate_bet(self, player_id: str, amount: int, player_stack: int) -> bool:
+    def validate_bet(self, player_id: str, amount: int, player_stack: int, bet_type: BetType = BetType.BIG) -> bool:
         """
         Validate bet in pot-limit game.
         

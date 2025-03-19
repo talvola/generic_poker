@@ -46,14 +46,24 @@ def test_nl_minimum_raise():
     game = create_test_game(
         num_players=3,
         structure=BettingStructure.NO_LIMIT,
-        small_bet=10  # This is the minimum bet size
+        small_blind=5,
+        big_blind=10
     )
     game.start_hand()
     
-    # Move to betting phase
-    while game.state != GameState.BETTING:
-        game._next_step()
+    # Move to dealing, then betting phase
+    game._next_step()
+    game._next_step()
     
+    assert game.current_player.id == 'BTN'
+
+    # Check valid actions for button (Alice)
+    valid_actions = game.get_valid_actions("BTN")
+
+    assert (PlayerAction.FOLD, None, None) in valid_actions
+    assert (PlayerAction.CALL, 10, 10) in valid_actions  # call the blinds for $10
+    assert (PlayerAction.RAISE, 20, 500) in valid_actions  # minimum raise after blinds is double the amount of big blind
+
     # Initial state should have BB=10
     assert game.betting.current_bet == 10
     
@@ -76,17 +86,20 @@ def test_nl_all_in_less_than_minimum():
     game = create_test_game(
         num_players=3,
         structure=BettingStructure.NO_LIMIT,
-        small_bet=10,
+        small_blind=5,
+        big_blind=10,
         starting_stack=25  # Small stack to force all-ins
     )
     game.start_hand()
 
-    # Move to betting
-    while game.state != GameState.BETTING:
-        game._next_step()
+    # Move to dealing, then betting phase
+    game._next_step()
+    game._next_step()
+    
+    assert game.current_player.id == 'BTN'
 
     # Initial stacks after blinds (SB posts 5, BB posts 10)
-    assert game.betting.pot.main_pot == 15  # SB (5) + BB (10)
+    assert game.betting.get_main_pot_amount()  == 15  # SB (5) + BB (10)
     assert game.table.players["BTN"].stack == 25
     assert game.table.players["SB"].stack == 20  # 25 - 5 blind
     assert game.table.players["BB"].stack == 15  # 25 - 10 blind
@@ -98,19 +111,19 @@ def test_nl_all_in_less_than_minimum():
 
     # Verify stack updates
     assert game.table.players["BTN"].stack == 5   # 25 - 20
-    assert game.betting.pot.main_pot == 35        # 15 + 20
+    assert game.betting.get_main_pot_amount()  == 35        # 15 + 20
 
     # SB all-in for 25 (correct all-in raise)
     result = game.player_action("SB", PlayerAction.RAISE, 25)
     assert result.success
     assert game.table.players["SB"].stack == 0    # SB is all-in
-    assert game.betting.pot.main_pot == 55        # 35 + 20
+    assert game.betting.get_main_pot_amount()  == 55        # 35 + 20
 
     # BB can only call 15 more or fold - no raise possible with only 15 left
     result = game.player_action("BB", PlayerAction.CALL, 25)  # Call SB's all-in
     assert result.success
     assert game.table.players["BB"].stack == 0    # BB used their last 15 to call
-    assert game.betting.pot.main_pot == 70        # 55 + 15
+    assert game.betting.get_main_pot_amount()  == 70        # 55 + 15
 
     # Final stacks check
     assert game.table.players["BTN"].stack == 5
@@ -118,22 +131,26 @@ def test_nl_all_in_less_than_minimum():
     assert game.table.players["BB"].stack == 0
 
     # Final pot check
-    assert game.betting.pot.main_pot == 70  # Total pot after all actions
+    assert game.betting.get_main_pot_amount() == 70  # Total pot after all actions
 
 def test_pot_limit_maximum_bet():
     """Test pot-size bet calculations in Pot Limit."""
     game = create_test_game(
         num_players=3,
         structure=BettingStructure.POT_LIMIT,
-        small_bet=10
+        small_blind=5,
+        big_blind=10
     )
     game.start_hand()
     
-    while game.state != GameState.BETTING:
-        game._next_step()
+    # Move to dealing, then betting phase
+    game._next_step()
+    game._next_step()
+    
+    assert game.current_player.id == 'BTN'
         
     # Initial pot is 15 (SB=5 + BB=10)
-    assert game.betting.pot.main_pot == 15
+    assert game.betting.get_main_pot_amount() == 15
     
     # Try to raise more than pot limit
     result = game.player_action("BTN", PlayerAction.RAISE, 36)  # More than max of 35
@@ -145,7 +162,7 @@ def test_pot_limit_maximum_bet():
     
     # Verify final amounts
     assert game.betting.current_bet == 35
-    assert game.betting.pot.main_pot == 50  # Initial 15 + BTN's 25 more
+    assert game.betting.get_main_pot_amount() == 50  # Initial 15 + BTN's 25 more
     assert game.table.players["BTN"].stack == 465  # Started 500, put in 35
 
 def test_pot_limit_initial_raise():
@@ -153,15 +170,19 @@ def test_pot_limit_initial_raise():
     game = create_test_game(
         num_players=3,
         structure=BettingStructure.POT_LIMIT,
-        small_bet=10
+        small_blind=5,
+        big_blind=10
     )
     game.start_hand()
     
-    while game.state != GameState.BETTING:
-        game._next_step()
+    # Move to dealing, then betting phase
+    game._next_step()
+    game._next_step()
+    
+    assert game.current_player.id == 'BTN'
         
     # Initial state
-    assert game.betting.pot.main_pot == 15  # SB(5) + BB(10)
+    assert game.betting.get_main_pot_amount() == 15  # SB(5) + BB(10)
     assert game.table.players["BTN"].stack == 500
     assert game.table.players["SB"].stack == 495  # After 5 blind
     assert game.table.players["BB"].stack == 490  # After 10 blind
@@ -179,7 +200,7 @@ def test_pot_limit_initial_raise():
     result = game.player_action("BTN", PlayerAction.RAISE, 34)  # Valid but not max
     assert result.success
     assert game.betting.current_bet == 34
-    assert game.betting.pot.main_pot == 49  # 15 + 34
+    assert game.betting.get_main_pot_amount() == 49  # 15 + 34
     assert game.table.players["BTN"].stack == 466  # 500 - 34
     
     # Now SB acts:
@@ -194,26 +215,30 @@ def test_pot_limit_initial_raise():
     result = game.player_action("SB", PlayerAction.RAISE, 112)  # Maximum allowed
     assert result.success
     assert game.betting.current_bet == 112
-    assert game.betting.pot.main_pot == 156  # 49 + 107 (112-5 already in)
+    assert game.betting.get_main_pot_amount() == 156  # 49 + 107 (112-5 already in)
 
 def test_pot_limit_multiple_raises():
     """Test a sequence of pot limit raises."""
     game = create_test_game(
         num_players=3,
         structure=BettingStructure.POT_LIMIT,
-        small_bet=10,
+        small_blind=5,
+        big_blind=10,
         starting_stack=1000  # Need bigger stacks for multiple raises
     )
     game.start_hand()
     
-    while game.state != GameState.BETTING:
-        game._next_step()
+    # Move to dealing, then betting phase
+    game._next_step()
+    game._next_step()
+    
+    assert game.current_player.id == 'BTN'
         
     # Initial pot: 15
     # BTN max raise to 35
     result = game.player_action("BTN", PlayerAction.RAISE, 35)
     assert result.success
-    assert game.betting.pot.main_pot == 50  # 15 + 35
+    assert game.betting.get_main_pot_amount() == 50  # 15 + 35
     
     # SB can now:
     # - Current pot: 50
@@ -223,7 +248,7 @@ def test_pot_limit_multiple_raises():
     # - Max bet: 115 (35 + 80)
     result = game.player_action("SB", PlayerAction.RAISE, 115)
     assert result.success
-    assert game.betting.pot.main_pot == 160  # 50 + 110 (115-5)
+    assert game.betting.get_main_pot_amount() == 160  # 50 + 110 (115-5)
     
     # BB can now:
     # - Current pot: 160
@@ -233,19 +258,23 @@ def test_pot_limit_multiple_raises():
     # - Max bet: 380 (115 + 265)
     result = game.player_action("BB", PlayerAction.RAISE, 380)
     assert result.success
-    assert game.betting.pot.main_pot == 530  # 160 + 370 (380-10)
+    assert game.betting.get_main_pot_amount() == 530  # 160 + 370 (380-10)
 
 def test_pot_limit_small_raises():
     """Test minimum raises in pot limit."""
     game = create_test_game(
         num_players=3,
         structure=BettingStructure.POT_LIMIT,
-        small_bet=10
+        small_blind=5,
+        big_blind=10
     )
     game.start_hand()
     
-    while game.state != GameState.BETTING:
-        game._next_step()
+    # Move to dealing, then betting phase
+    game._next_step()
+    game._next_step()
+    
+    assert game.current_player.id == 'BTN'
         
     # Minimum raise should be double the previous bet
     result = game.player_action("BTN", PlayerAction.RAISE, 19)  # Less than min
@@ -260,7 +289,8 @@ def test_pot_limit_all_in_under_max():
     game = create_test_game(
         num_players=3,
         structure=BettingStructure.POT_LIMIT,
-        small_bet=10,
+        small_blind=5,
+        big_blind=10,
         player_stacks={
             "BTN": 30,
             "SB": 495,
@@ -269,8 +299,11 @@ def test_pot_limit_all_in_under_max():
     )
     game.start_hand()
     
-    while game.state != GameState.BETTING:
-        game._next_step()
+    # Move to dealing, then betting phase
+    game._next_step()
+    game._next_step()
+    
+    assert game.current_player.id == 'BTN'
         
     # BTN only has 30, pot limit would allow 35
     result = game.player_action("BTN", PlayerAction.RAISE, 30)  # All-in
@@ -287,12 +320,16 @@ def test_pot_limit_edge_cases():
     game = create_test_game(
         num_players=3,
         structure=BettingStructure.POT_LIMIT,
-        small_bet=10
+        small_blind=5,
+        big_blind=10
     )
     game.start_hand()
     
-    while game.state != GameState.BETTING:
-        game._next_step()
+    # Move to dealing, then betting phase
+    game._next_step()
+    game._next_step()
+    
+    assert game.current_player.id == 'BTN'
         
     # Try to raise less than BB
     result = game.player_action("BTN", PlayerAction.RAISE, 15)
@@ -304,7 +341,7 @@ def test_pot_limit_edge_cases():
     
     # Verify all numbers exactly
     assert game.betting.current_bet == 35
-    assert game.betting.pot.main_pot == 50
+    assert game.betting.get_main_pot_amount() == 50
     
     # Detailed position of each player
     assert game.table.players["BTN"].stack == 465  # 500 - 35
@@ -316,7 +353,8 @@ def test_side_pots_all_in():
     game = create_test_game(
         num_players=3,
         structure=BettingStructure.NO_LIMIT,
-        small_bet=10,
+        small_blind=5,
+        big_blind=10,
         player_stacks={
             "BTN": 100,
             "SB": 40,
@@ -325,9 +363,11 @@ def test_side_pots_all_in():
     )
     game.start_hand()
     
-    # Move to betting
-    while game.state != GameState.BETTING:
-        game._next_step()
+    # Move to dealing, then betting phase
+    game._next_step()
+    game._next_step()
+    
+    assert game.current_player.id == 'BTN'
         
     # BTN raises to 30
     result = game.player_action("BTN", PlayerAction.RAISE, 30)
@@ -344,12 +384,10 @@ def test_side_pots_all_in():
     # BTN calls 60
     result = game.player_action("BTN", PlayerAction.CALL, 60)
     assert result.success
-    
+       
     # Verify pot structure
-    assert len(game.betting.pot.side_pots) == 2
-    # Main pot should have 40 from each player (120 total)
-    assert game.betting.pot.main_pot == 120
-    # First side pot: BB and BTN contribute 20 more each (40 total)
-    assert game.betting.pot.side_pots[0].amount == 40
-    # Second side pot: BTN matches BB's last 20
-    assert game.betting.pot.side_pots[1].amount == 20
+    assert game.betting.get_side_pot_count() == 1
+    # Main pot has $40 from SB, $40 fro mBB, $40 from BTN
+    assert game.betting.get_main_pot_amount() == 120
+    # Side pot: BB and BTN contribute 20 more each (40 total)
+    assert game.betting.get_side_pot_amount(0) == 40
