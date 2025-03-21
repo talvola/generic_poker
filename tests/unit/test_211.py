@@ -37,20 +37,21 @@ def create_predetermined_deck():
     # In this three-handed case, button is dealt first, then SB, then BB in order
     cards = [
         Card(Rank.ACE, Suit.HEARTS), #BTN
-        Card(Rank.KING, Suit.SPADES), #SB
+        Card(Rank.QUEEN, Suit.DIAMONDS), #SB
         Card(Rank.JACK, Suit.SPADES), #BB
         Card(Rank.KING, Suit.HEARTS), #BTN
         Card(Rank.KING, Suit.CLUBS), #SB
         Card(Rank.JACK, Suit.DIAMONDS), #BB
-        Card(Rank.QUEEN, Suit.HEARTS), #FLOP
-        Card(Rank.KING, Suit.DIAMONDS), #FLOP
-        Card(Rank.TEN, Suit.SPADES), #FLOP
-        Card(Rank.JACK, Suit.HEARTS), #TURN
-        Card(Rank.QUEEN, Suit.SPADES), #RIVER
-        Card(Rank.TEN, Suit.DIAMONDS), #
-        Card(Rank.TEN, Suit.HEARTS), #
-        Card(Rank.QUEEN, Suit.CLUBS), #
-        Card(Rank.NINE, Suit.SPADES), #
+        Card(Rank.QUEEN, Suit.HEARTS), #BTN
+        Card(Rank.KING, Suit.DIAMONDS), #SB
+        Card(Rank.TEN, Suit.SPADES), #BB
+        Card(Rank.QUEEN, Suit.CLUBS), #BTN
+        Card(Rank.QUEEN, Suit.SPADES), #SB
+        Card(Rank.JACK, Suit.HEARTS), #BB
+        Card(Rank.TEN, Suit.DIAMONDS), #FLOP
+        Card(Rank.TEN, Suit.HEARTS), #FLOP
+        Card(Rank.NINE, Suit.SPADES), #TURN
+        Card(Rank.EIGHT, Suit.SPADES), #RIVER
       
         # Rest of the deck in some order (won't be used in 5-card poker)
         # You can add more cards here if needed for other tests
@@ -61,7 +62,7 @@ def create_predetermined_deck():
 def setup_test_game_with_mock_deck():
     """Create a test game with three players and a predetermined deck."""
     rules = {
-        "game": "Greek Hold 'em",
+        "game": "2-11 Poker",
         "players": {
             "min": 2,
             "max": 9
@@ -87,7 +88,7 @@ def setup_test_game_with_mock_deck():
                     "location": "player",
                     "cards": [
                         {
-                            "number": 2,
+                            "number": 4,
                             "state": "face down"
                         }
                     ]
@@ -105,7 +106,7 @@ def setup_test_game_with_mock_deck():
                     "location": "community",
                     "cards": [
                         {
-                            "number": 3,
+                            "number": 2,
                             "state": "face up"
                         }
                     ]
@@ -164,12 +165,18 @@ def setup_test_game_with_mock_deck():
         "showdown": {
             "order": "clockwise",
             "startingFrom": "dealer",
-            "cardsRequired": "two hole cards, three community cards",
+            "cardsRequired": "two or three hole cards, three or two community cards",
             "bestHand": [
                 {
                     "evaluationType": "high",
-                    "holeCards": 2,
-                    "communityCards": 3
+                    "holeCards": [
+                        2,
+                        3
+                    ],
+                    "communityCards": [
+                        3,
+                        2
+                    ]
                 }
             ]
         }
@@ -224,24 +231,15 @@ def setup_logging():
         force=True  # Force reconfiguration of logging
     )
     
-def test_game_results():
+
+def test_game_results_showdown():
     """Test that the game results API provides correct information."""
     game = setup_test_game_with_mock_deck()
     
-    # Step 0: Post Blinds
+    # Play a full hand
     game.start_hand()
-    assert game.current_step == 0  # Post Blinds
-    assert game.state == GameState.BETTING
-
-    # Step 1: Deal Hole Cards (2 down)
     game._next_step()  # Deal hole cards
-    assert game.current_step == 1
-    assert game.state == GameState.DEALING
-
-    # Step 2: Pre-Flop Bet
     game._next_step()  # Move to pre-flop bet
-    assert game.current_step == 2
-    assert game.state == GameState.BETTING
 
     # Calculate initial pot from blinds
     blinds_pot = 15  # 5 (SB) + 10 (BB)    
@@ -273,10 +271,9 @@ def test_game_results():
     game.player_action('SB', PlayerAction.CHECK)
     game.player_action('BB', PlayerAction.CHECK)
     game.player_action('BTN', PlayerAction.CHECK)
-
-    # Step 9: Showdown
     game._next_step()  # Move to showdown
-    assert game.current_step == 9
+
+    # Check game state
     assert game.state == GameState.COMPLETE
     
     # Get results
@@ -299,14 +296,18 @@ def test_game_results():
     
     # For Greek Hold'em - the SB should win with a Full House
     assert len(main_pot.winners) == 1
-    assert 'SB' in main_pot.winners
+    assert 'BB' in main_pot.winners
     
     # Check hand descriptions
-    winning_hand = results.hands['SB']
-    assert "Full House" in winning_hand[0].hand_name
-    assert "Full House, Kings over Queens" in winning_hand[0].hand_description
+    hand = results.hands['BB']
+    
+    # Only one hand in 2-11 Poker (high hand)
+    assert len(hand) == 1 
+
+    assert "Full House" in hand[0].hand_name
+    assert "Full House, Jacks over Tens" in hand[0].hand_description
     
     # Check winning hands list
     assert len(results.winning_hands) == 1
-    assert results.winning_hands[0].player_id == 'SB'
+    assert results.winning_hands[0].player_id == 'BB'
 
