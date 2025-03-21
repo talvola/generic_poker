@@ -15,7 +15,7 @@ from typing import List
 class MockDeck(Deck):
     """A deck with predetermined card sequence for testing."""
     
-    def __init__(self, cards: List[Card]):
+    def __init__(self, cards: List[Card]): 
         """
         Initialize a mock deck with specific cards.
         
@@ -234,16 +234,24 @@ def test_game_results():
     """Test that the game results API provides correct information."""
     game = setup_test_game_with_mock_deck()
     
-    # Play a full hand
+    # Step 0: Post Blinds
     game.start_hand()
+    assert game.current_step == 0  # Post Blinds
+    assert game.state == GameState.BETTING
+    # Step 1: Deal Hole Cards (2 down)
     game._next_step()  # Deal hole cards
+    assert game.current_step == 1
+    assert game.state == GameState.DEALING
+    # Step 2: Pre-Flop Bet
     game._next_step()  # Move to pre-flop bet
+    assert game.current_step == 2
+    assert game.state == GameState.BETTING
 
     # Calculate initial pot from blinds
     blinds_pot = 15  # 5 (SB) + 10 (BB)    
     
     # check the current player
-    assert game.current_player == 'BTN'
+    assert game.current_player.id == 'BTN'
 
     # BTN acts first and calls
     game.player_action('BTN', PlayerAction.CALL, 10)
@@ -269,11 +277,12 @@ def test_game_results():
     game.player_action('SB', PlayerAction.CHECK)
     game.player_action('BB', PlayerAction.CHECK)
     game.player_action('BTN', PlayerAction.CHECK)
-    game._next_step()  # Move to showdown
 
-    # Check game state
+    # Step 9: Showdown
+    game._next_step()  # Move to showdown
+    assert game.current_step == 9
     assert game.state == GameState.COMPLETE
-    
+
     # Get results
     results = game.get_hand_results()
 
@@ -305,4 +314,13 @@ def test_game_results():
     assert len(low_pot.winners) == 1
     assert "BB" in low_pot.winners
  
+    # Verify winning hands
+    winning_high = next(hand for hand in results.winning_hands if hand.hand_type == "High Hand")
+    assert winning_high.player_id == "SB", f"Expected SB as high hand winner, got {winning_high.player_id}"
+    assert "Four of a Kind" in winning_high.hand_name, f"Expected 'Four of a Kind' in winning high hand, got {winning_high.hand_name}"
+    assert "Four Queens" in winning_high.hand_description, f"Expected 'Four Queens' in winning high hand description, got {winning_high.hand_description}"
 
+    winning_low = next(hand for hand in results.winning_hands if hand.hand_type == "Low Hand")
+    assert winning_low.player_id == "BB", f"Expected BB as low hand winner, got {winning_low.player_id}"
+    assert "One Pair" in winning_low.hand_name, f"Expected 'One Pair' in winning low hand, got {winning_low.hand_name}"
+    assert "Pair of Jacks" in winning_low.hand_description, f"Expected 'Pair of Jacks' in winning low hand description, got {winning_low.hand_description}"

@@ -309,7 +309,7 @@ def test_game_results():
     blinds_pot = 15  # 5 (SB) + 10 (BB)    
     
     # check the current player
-    assert game.current_player == 'BTN'
+    assert game.current_player.id == 'BTN'
 
     # BTN acts first and calls
     game.player_action('BTN', PlayerAction.CALL, 10)
@@ -407,7 +407,7 @@ def test_game_results_low_qualifier():
     blinds_pot = 15  # 5 (SB) + 10 (BB)    
     
     # check the current player
-    assert game.current_player == 'BTN'
+    assert game.current_player.id == 'BTN'
 
     # BTN acts first and calls
     game.player_action('BTN', PlayerAction.CALL, 10)
@@ -470,7 +470,7 @@ def test_game_results_high_qualifier():
     blinds_pot = 15  # 5 (SB) + 10 (BB)    
     
     # check the current player
-    assert game.current_player == 'BTN'
+    assert game.current_player.id == 'BTN'
 
     # BTN acts first and calls
     game.player_action('BTN', PlayerAction.CALL, 10)
