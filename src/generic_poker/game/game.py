@@ -894,7 +894,7 @@ class Game:
             return False
         
         # Process discard
-        logger.info(f"{player.name} discards {len(cards)} cards")
+        logger.info(f"{player.name} discards {len(cards)} cards: {cards}")
         
         # Remove cards from hand and add to discard pile
         for card in cards:
