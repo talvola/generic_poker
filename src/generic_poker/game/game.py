@@ -1064,6 +1064,8 @@ class Game:
                 else:
                     bb_idx = next((i for i, p in enumerate(players) if p.has_position(Position.BIG_BLIND) and p.is_active), -1)
                     next_idx = (bb_idx + 1) % len(players)
+                    while not players[next_idx].is_active:
+                        next_idx = (next_idx + 1) % len(players)                   
                     logger.debug(f"Pre-flop first action to UTG: {players[next_idx].name}")
                     return players[next_idx]
             else:
@@ -1078,10 +1080,15 @@ class Game:
         # Subsequent actions in the round
         if self.current_player:
             try:
-                current_idx = next(i for i, p in enumerate(active_players) if p.id == self.current_player.id)
-                next_idx = (current_idx + 1) % len(active_players)
-                logger.debug(f"Next player: {active_players[next_idx].name}")
-                return active_players[next_idx]
+                current_idx = next(i for i, p in enumerate(players) if p.id == self.current_player.id)
+                next_idx = (current_idx + 1) % len(players)
+                # Skip inactive players
+                while not players[next_idx].is_active:
+                    next_idx = (next_idx + 1) % len(players)
+                    if next_idx == current_idx:  # Full circle, no active players left
+                        return None                
+                logger.debug(f"Next player: {players[next_idx].name}")
+                return players[next_idx]
             except StopIteration:
                 # Current player no longer active (e.g., folded); start with first active
                 logger.debug(f"Current player not found, starting with: {active_players[0].name}")
@@ -1105,13 +1112,14 @@ class Game:
         # Create hand results only for active players (winners) but without showing cards
         hand_results = {}
         for player in active_players:
-            hand_results[player.id] = HandResult(
+            hand_result = HandResult(
                 player_id=player.id,
-                cards=[],  # Don't include actual cards
+                cards=[],
                 hand_name="Not shown",
                 hand_description="Hand not shown - won uncontested",
                 evaluation_type="unknown"
             )
+            hand_results[player.id] = [hand_result]  # Wrap in a list
         
         # Create pot result
         pot_result = PotResult(
@@ -1126,7 +1134,7 @@ class Game:
         self.last_hand_result = GameResult(
             pots=[pot_result],
             hands=hand_results,
-            winning_hands=list(hand_results.values()),
+            winning_hands=list(hand_results.values())[0],  # First list of hands
             is_complete=True
         )
 

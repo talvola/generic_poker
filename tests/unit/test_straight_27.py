@@ -448,9 +448,9 @@ def test_game_results():
     assert 'BB' in main_pot.winners
     
     # Check hand descriptions
-    bb_hand = results.hands['BB']
-    assert "Two Pair" in bb_hand.hand_name
-    assert "Jacks and Tens" in bb_hand.hand_description
+    winning_hand = results.hands['BB']
+    assert "Two Pair" in winning_hand[0].hand_name
+    assert "Jacks and Tens" in winning_hand[0].hand_description
     
     # Check winning hands list
     assert len(results.winning_hands) == 1
@@ -468,13 +468,22 @@ def test_game_results_with_fold():
     # Calculate initial pot from blinds
     blinds_pot = 15  # 5 (SB) + 10 (BB)
     
+    # check the current player
+    assert game.current_player.id == 'BTN'
+
     # BTN raises
     game.player_action('BTN', PlayerAction.RAISE, 20)
     expected_pot = blinds_pot + 20  # BTN adds 20
     
+    # check the current player
+    assert game.current_player.id == 'SB'
+
     # SB folds
     game.player_action('SB', PlayerAction.FOLD)
     
+    # check the current player
+    assert game.current_player.id == 'BB'
+
     # BB folds
     game.player_action('BB', PlayerAction.FOLD)
     
