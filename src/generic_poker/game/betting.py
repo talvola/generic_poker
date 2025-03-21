@@ -494,11 +494,15 @@ class LimitBettingManager(BettingManager):
             True if bet is valid, False otherwise
         """
         logger.debug(f"Validating limit bet in round {self.betting_round}: player={player_id}, amount={amount}, "
-                    f"current_bet={self.current_bet}, stack={player_stack}")
+                    f"player_stack={player_stack},  bet_type={bet_type}")
+                    
+        logger.debug(f"self.current_bet={self.current_bet}")
         
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
         to_call = self.current_bet - current_bet
         bet_size = self.small_bet if bet_type == BetType.SMALL else self.big_bet
+
+        logger.debug(f"current_bet={current_bet}, to_call={to_call}, bet_size={bet_size}")
 
         if amount == 0:  # Check/fold always valid
             return True
@@ -525,7 +529,7 @@ class LimitBettingManager(BettingManager):
         if amount == self.current_bet + bet_size:
             return amount - current_bet <= player_stack
             
-        logger.debug(f"Invalid limit bet: {amount} not equal to current bet ({current_bet}) + bet unit ({bet_size})")
+        logger.debug(f"Invalid limit bet: {amount} not equal to current bet ({self.current_bet}) + bet unit ({bet_size})")
         return False
 
 class NoLimitBettingManager(BettingManager):

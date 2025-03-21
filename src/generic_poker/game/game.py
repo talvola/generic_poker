@@ -397,6 +397,7 @@ class Game:
                 [(PlayerAction.DISCARD, 1, 1)] 
             """
             if player_id != self.current_player.id:  
+                logger.info(f"Not this player's turn ({player_id} vs {self.current_player.id})")
                 return []  # Not this player's turn 
                 
             # For discard state, return discard actions
@@ -910,74 +911,7 @@ class Game:
                 logger.info(f"{player.name} draws {len(new_cards)} new cards")
         
         return True
-                    
-    # def _handle_forced_bets(self) -> None:
-    #     """Handle posting of blinds, antes, or bring-ins depending on game type."""
-
-    #     # Check if this is a stud-style game with bring-in
-    #     if hasattr(self.rules, 'forcedBets') and self.rules.forcedBets.get('type') == 'bring-in':
-    #         self._handle_stud_bring_in()
-    #         return
-            
-    #     # Blinds are the default
-    #     players = self.table.get_position_order()
-    #     if not players:
-    #         return
-            
-    #     logger.debug("Posting forced bets. Players in order:")
-    #     for p in players:
-    #         logger.debug(f"  {p.name}: {p.id} ({p.position.value if p.position else 'NA'})")
-            
-    #     logger.debug(f"Small Bet: {self.betting.small_bet}")
-    #     assert self.betting.small_bet is not None and self.betting.small_bet > 0, "small_bet must be set before posting blinds"
-
-    #     sb_amount = self.betting.small_bet // 2
-    #     bb_amount = self.betting.small_bet
-        
-    #     # Find SB and BB players - handle both regular and heads-up cases
-    #     sb_player = next(
-    #         (p for p in players if (pos := p.position) and pos.has_position(Position.SMALL_BLIND)),
-    #         None
-    #     )
-    #     bb_player = next(
-    #         (p for p in players if (pos := p.position) and pos.has_position(Position.BIG_BLIND)),
-    #         None
-    #     )
-
-    #     # Ensure Small Blind player exists
-    #     if (sb_player := next((p for p in players if (pos := p.position) and pos.has_position(Position.SMALL_BLIND)), None)) is None:
-    #         logger.error("Small Blind player not found. Cannot post blinds.")
-    #         return  # Or handle the error appropriately
-
-    #     # Ensure Big Blind player exists
-    #     if (bb_player := next((p for p in players if (pos := p.position) and pos.has_position(Position.BIG_BLIND)), None)) is None:
-    #         logger.error("Big Blind player not found. Cannot post blinds.")
-    #         return  # Or handle the error appropriately        
-       
-    #     # Post small blind
-    #     sb_player.stack -= sb_amount
-    #     self.betting.place_bet(sb_player.id, sb_amount, sb_player.stack, is_forced=True)
-    #     logger.info(f"{sb_player.name} posts small blind of ${sb_amount} (Remaining stack: ${sb_player.stack})")
-        
-    #     # Post big blind
-    #     bb_player.stack -= bb_amount
-    #     self.betting.place_bet(bb_player.id, bb_amount, bb_player.stack, is_forced=True)
-    #     logger.info(f"{bb_player.name} posts big blind of ${bb_amount} (Remaining stack: ${bb_player.stack})")
-        
-    #     # Update current bet to BB amount
-    #     self.betting.current_bet = bb_amount
-
-    #     # Initialize last_raise_size to the big blind
-    #     self.betting.last_raise_size = bb_amount
-            
-    #     logger.debug("After posting blinds:")
-    #     for player_id, bet in self.betting.current_bets.items():
-    #         logger.debug(f"  {self.table.players[player_id].name}: ${bet.amount} (blind={bet.posted_blind})")
-
-    #     # Set first player to act (BTN in 3-player game)
-    #     self.current_player = self.next_player(round_start=True)  # Move to BTN
-    #     self.state = GameState.BETTING  # Ready for action            
-        
+                          
     def handle_forced_bets(self, bet_type: str):
         """Handle forced bets (antes or blinds) at the start of a hand."""
         active_players = [p for p in self.table.players.values() if p.is_active]
