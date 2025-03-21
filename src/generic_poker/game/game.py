@@ -243,7 +243,7 @@ class Game:
             # small blind in Limit games is half the small bet
             self.small_blind = small_bet // 2
             self.big_blind = small_bet
-            self.betting = create_betting_manager(structure, small_bet, big_bet, self.table)
+            self.betting = create_betting_manager(structure, self.small_bet, self.big_bet, self.table)
         else:  # NO_LIMIT or POT_LIMIT
             if small_blind is None or big_blind is None:
                 raise ValueError("No-Limit/Pot-Limit games require small_blind and big_blind")
@@ -252,7 +252,7 @@ class Game:
             # the minimum bet is always the big blind in No-Limit/Pot-Limit games
             self.small_bet = big_blind
             self.big_bet = big_blind
-            self.betting = create_betting_manager(structure, small_bet, big_bet, self.table)   
+            self.betting = create_betting_manager(structure, self.small_bet, self.big_bet, self.table)   
         self.bring_in = bring_in            
         self.ante = ante            
 

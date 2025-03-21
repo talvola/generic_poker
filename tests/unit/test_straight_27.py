@@ -442,8 +442,8 @@ def test_game_results():
     assert main_pot.pot_type == "main"
     assert not main_pot.split  # Only one winner
     
-    # For 2-7 Lowball, the BB should win with a pair of Jacks and a pair of Tens
-    # Since that's the worst hand (highest) in 2-7 evaluation
+    # For A-5 Lowball, the BB should win with a pair of Jacks and a pair of Tens
+    # Since that's the worst hand (highest) in A-5 evaluation
     assert len(main_pot.winners) == 1
     assert 'BB' in main_pot.winners
     

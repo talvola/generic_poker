@@ -761,6 +761,7 @@ def create_betting_manager(
     Returns:
         Configured betting manager
     """
+    logger.debug(f'Creating betting manager: {structure}, small_bet={small_bet}, big_bet={big_bet}')
     assert small_bet is not None and small_bet > 0, "small_bet must be set"
 
     if structure == BettingStructure.LIMIT:

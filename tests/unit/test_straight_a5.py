@@ -223,9 +223,9 @@ def test_game_results():
     assert 'BTN' in main_pot.winners
     
     # Check hand descriptions
-    btn_hand = results.hands['BTN']
-    assert "High Card" in btn_hand.hand_name
-    assert "King High" in btn_hand.hand_description
+    winning_hand = results.hands['BTN']
+    assert "High Card" in winning_hand[0].hand_name
+    assert "King High" in winning_hand[0].hand_description
     
     # Check winning hands list
     assert len(results.winning_hands) == 1

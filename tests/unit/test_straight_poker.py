@@ -449,10 +449,10 @@ def test_next_step_initial_bet():
     assert game.state == GameState.BETTING  
 
     # validate current player is the BTN
-    assert game.current_player == 'BTN'
+    assert game.current_player.id == 'BTN'
 
     # Get valid actions
-    valid_actions = game.get_valid_actions(game.current_player)
+    valid_actions = game.get_valid_actions(game.current_player.id)
     
     # Check that there are 3 valid actions
     assert len(valid_actions) == 3
@@ -471,7 +471,7 @@ def test_next_step_initial_bet():
     assert raise_action[2] == 20  # Max raise amount
 
     # Test calling the blind
-    result = game.player_action(game.current_player, PlayerAction.CALL, 10)
+    result = game.player_action(game.current_player.id, PlayerAction.CALL, 10)
     # check result - success, and no state change since there are more players
     assert result.success == True
     assert result.state_changed == False 
@@ -483,10 +483,10 @@ def test_next_step_initial_bet():
     assert game.betting.get_main_pot_amount() == 15 + 10    
 
     # player_action already moved us to the next player, so we can check the current player
-    assert game.current_player == 'SB'
+    assert game.current_player.id == 'SB'
 
     # Get valid actions
-    valid_actions = game.get_valid_actions(game.current_player)
+    valid_actions = game.get_valid_actions(game.current_player.id)
 
     # Check that there are 3 valid actions - SB can fold, call, or raise
     assert len(valid_actions) == 3
@@ -506,7 +506,7 @@ def test_next_step_initial_bet():
     assert raise_action[2] == 20  # Max raise amount (player's stack)
 
     # Test calling the blind
-    result = game.player_action(game.current_player, PlayerAction.CALL, 5)
+    result = game.player_action(game.current_player.id, PlayerAction.CALL, 5)
     # check result - success, and no state change since there are more players
     assert result.success == True
     assert result.state_changed == False
@@ -542,10 +542,10 @@ def test_next_step_initial_bet_nl():
     assert game.state == GameState.BETTING  
 
     # validate current player is the BTN
-    assert game.current_player == 'BTN'
+    assert game.current_player.id == 'BTN'
 
     # Get valid actions
-    valid_actions = game.get_valid_actions(game.current_player)
+    valid_actions = game.get_valid_actions(game.current_player.id)
     
     # Check that there are 3 valid actions
     assert len(valid_actions) == 3
@@ -564,7 +564,7 @@ def test_next_step_initial_bet_nl():
     assert raise_action[2] == 20  # Max raise amount
 
     # Test calling the blind
-    result = game.player_action(game.current_player, PlayerAction.CALL, 10)
+    result = game.player_action(game.current_player.id, PlayerAction.CALL, 10)
     # check result - success, and no state change since there are more players
     assert result.success == True
     assert result.state_changed == False 
@@ -576,10 +576,10 @@ def test_next_step_initial_bet_nl():
     assert game.betting.get_main_pot_amount() == 15 + 10    
 
     # player_action already moved us to the next player, so we can check the current player
-    assert game.current_player == 'SB'
+    assert game.current_player.id == 'SB'
 
     # Get valid actions
-    valid_actions = game.get_valid_actions(game.current_player)
+    valid_actions = game.get_valid_actions(game.current_player.id)
 
     # Check that there are 3 valid actions - SB can fold, call, or raise
     assert len(valid_actions) == 3
@@ -599,7 +599,7 @@ def test_next_step_initial_bet_nl():
     assert raise_action[2] == 20  # Max raise amount (player's stack)
 
     # Test calling the blind
-    result = game.player_action(game.current_player, PlayerAction.CALL, 5)
+    result = game.player_action(game.current_player.id, PlayerAction.CALL, 5)
     # check result - success, and no state change since there are more players
     assert result.success == True
     assert result.state_changed == False
