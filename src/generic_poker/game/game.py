@@ -907,7 +907,7 @@ class Game:
             if draw_amount > 0:
                 new_cards = self.table.deck.deal_cards(draw_amount)
                 player.hand.add_cards(new_cards)
-                logger.info(f"{player.name} draws {len(new_cards)} new cards")
+                logger.info(f"{player.name} draws {len(new_cards)} new cards: {new_cards}")
         
         return True
                           

@@ -33,6 +33,12 @@ def load_test_rules() -> GameRules:
     }
     return GameRules.from_json(json.dumps(rules))
 
+def load_rules_from_file(game: str) -> GameRules:
+    """Load Straight Poker game rules."""
+    game_file = game + '.json'
+    rules_path = Path(__file__).parents[2] / 'data' / 'game_configs' / game_file
+    with open(rules_path) as f:
+        return GameRules.from_json(f.read())
 
 def create_test_game(
     num_players: int = 3,
