@@ -39,6 +39,7 @@ class PlayerAction(Enum):
     DRAW = "draw" # really more general discard and then draw
     SEPARATE  = "separate"  # separate hand into subsets
     EXPOSE  = "expose"  # expose down cards (make face up)
+    PASS = "pass"  # New player action
 
 @dataclass
 class ActionResult:
@@ -268,6 +269,8 @@ class Game:
 
         self.pending_exposures: Dict[str, List[Card]] = {}  # player_id -> list of cards to expose
         self.current_expose_config = None  # To store the expose config during the step        
+        self.pending_passes: Dict[str, Tuple[Card, str]] = {}  # player_id -> (card, recipient_id)
+        self.current_pass_config = None        
 
     def get_game_description(self) -> str:
         """
@@ -411,6 +414,7 @@ class Game:
                 is_draw = getattr(self, "current_draw_config", None) is not None
                 is_separate = getattr(self, "current_separate_config", None) is not None
                 is_expose = getattr(self, "current_expose_config", None) is not None
+                is_pass = getattr(self, "current_pass_config", None) is not None
 
                 # discard is the simpler case
                 if is_discard:
@@ -430,6 +434,10 @@ class Game:
                 elif is_expose:
                     total_cards = sum(cfg["number"] for cfg in self.current_expose_config["cards"])
                     return [(PlayerAction.EXPOSE, total_cards, total_cards)]
+                elif is_pass:
+                    config = self.current_pass_config["cards"][0]
+                    num_to_pass = config["number"]
+                    return [(PlayerAction.PASS, num_to_pass, num_to_pass)]                
                                                     
             if self.state != GameState.BETTING:
                 return []  # Not betting phase
@@ -635,6 +643,37 @@ class Game:
                         self._next_step()  
                     return ActionResult(success=True, state_changed=True)
                 return ActionResult(success=True)      
+            
+            if action == PlayerAction.PASS:
+                if self.state != GameState.DRAWING or not hasattr(self, "current_pass_config"):
+                    return ActionResult(success=False, error="Cannot pass in current state")
+                if not cards:
+                    return ActionResult(success=False, error="No cards specified for passing")
+                
+                # Validate the pass action
+                if not self._validate_pass_action(player, cards):
+                    return ActionResult(success=False, error="Invalid pass")
+                
+                # Determine the recipient (player to the left)
+                active_players = [p for p in self.table.players.values() if p.is_active]
+                current_idx = active_players.index(player)
+                recipient_idx = (current_idx + 1) % len(active_players)  # Left is next player
+                recipient_id = active_players[recipient_idx].id
+                
+                # Store the pass (assuming 1 card for simplicity)
+                self.pending_passes[player_id] = (cards[0], recipient_id)
+                logger.info(f"Player {player.name} selected {cards[0]} to pass to player {recipient_id} (pending)")
+
+                # Move to the next player
+                self.current_player = self.next_player(round_start=False)
+                if self._check_pass_round_complete():
+                    # All players have chosen; apply passes simultaneously
+                    self._apply_all_passes()
+                    logger.info("Pass round complete; all passes applied")
+                    if self.auto_progress:
+                        self._next_step()  # Move to next step (e.g., turn betting)
+                    return ActionResult(success=True, state_changed=True)
+                return ActionResult(success=True)            
 
             # the rest handle different betting actions     
                     
@@ -868,6 +907,12 @@ class Game:
                 self._setup_expose_round(step.action_config)
                 self.current_player = self.next_player(round_start=True)
 
+            elif step.action_type == GameActionType.PASS:
+                logger.info(f"Starting pass round: {step.name}")
+                self.state = GameState.DRAWING
+                self._setup_pass_round(step.action_config)
+                self.current_player = self.next_player(round_start=True)
+
             elif step.action_type == GameActionType.SHOWDOWN:
                 logger.info("Moving to showdown")
                 self.state = GameState.SHOWDOWN
@@ -906,7 +951,12 @@ class Game:
     def _setup_expose_round(self, config: Dict[str, Any]) -> None:
         """Set up an expose round based on configuration."""
         self.current_expose_config = config
-        logger.debug(f"Setting up expose round with config: {config}")           
+        logger.debug(f"Setting up expose round with config: {config}")   
+
+    def _setup_pass_round(self, config: Dict[str, Any]) -> None:
+        """Set up a pass round based on configuration."""
+        self.current_pass_config = config
+        logger.debug(f"Setting up pass round with config: {config}")                
 
     def _check_discard_round_complete(self) -> bool:
         """Check if the current discard round is complete."""
@@ -1072,7 +1122,7 @@ class Game:
     def _check_expose_round_complete(self) -> bool:
         """Check if all active players have selected cards to expose."""
         active_players = [p for p in self.table.players.values() if p.is_active]
-        return all(p.id in self.pending_exposures for p in active_players)
+        return all(p.id in self.pending_exposures for p in active_players)    
     
     def _apply_all_exposures(self) -> None:
         """Apply all pending exposures simultaneously."""
@@ -1082,7 +1132,52 @@ class Game:
                 if card in player.hand.get_cards() and card.visibility == Visibility.FACE_DOWN:
                     card.visibility = Visibility.FACE_UP
                     logger.info(f"Player {player.name} exposed {card}")
-        self.pending_exposures.clear()  # Reset after applying    
+        self.pending_exposures.clear()  # Reset after applying        
+    
+    def _validate_pass_action(self, player: Player, cards: List[Card]) -> bool:
+        """Validate the player's pass choice without applying it."""
+        config = self.current_pass_config["cards"][0]
+        num_to_pass = config["number"]  # e.g., 1
+        required_state = config.get("state", "face down")
+
+        if len(cards) != num_to_pass:
+            logger.warning(f"Player {player.name} selected {len(cards)} cards, but {num_to_pass} are required")
+            return False
+
+        player_hand = player.hand.get_cards()
+        for card in cards:
+            if card not in player_hand:
+                logger.warning(f"Player {player.name} tried to pass a card not in their hand: {card}")
+                return False
+            if required_state == "face down" and card.visibility != Visibility.FACE_DOWN:
+                logger.warning(f"Player {player.name} tried to pass a card that is not face down: {card}")
+                return False
+
+        return True    
+    
+    def _check_pass_round_complete(self) -> bool:
+        """Check if all active players have selected cards to pass."""
+        active_players = [p for p in self.table.players.values() if p.is_active]
+        return all(p.id in self.pending_passes for p in active_players)    
+
+    def _apply_all_passes(self) -> None:
+        """Apply all pending passes simultaneously."""
+        new_hands = {player_id: [] for player_id in self.table.players}  # Temporary storage
+        
+        # Remove passed cards from original hands and assign to new hands
+        for player_id, (card, recipient_id) in self.pending_passes.items():
+            player = self.table.players[player_id]
+            player.hand.remove_card(card)
+            new_hands[recipient_id].append(card)
+        
+        # Add received cards to each player's hand
+        for player_id, cards in new_hands.items():
+            if cards:  # Only if they received something
+                player = self.table.players[player_id]
+                player.hand.add_cards(cards)
+                logger.info(f"Player {player.name} received {cards}")
+
+        self.pending_passes.clear()  # Reset after applying        
                               
     def handle_forced_bets(self, bet_type: str):
         """Handle forced bets (antes or blinds) at the start of a hand."""
