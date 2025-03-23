@@ -37,6 +37,7 @@ class PlayerAction(Enum):
     BRING_IN = "bring_in" 
     DISCARD = "discard" # simplified discard only
     DRAW = "draw" # really more general discard and then draw
+    SEPARATE  = "separate"  # separate hand into subsets
 
 @dataclass
 class ActionResult:
@@ -404,6 +405,7 @@ class Game:
             if self.state == GameState.DRAWING:
                 is_discard = getattr(self, "current_discard_config", None) is not None
                 is_draw = getattr(self, "current_draw_config", None) is not None
+                is_separate = getattr(self, "current_separate_config", None) is not None
 
                 # discard is the simpler case
                 if is_discard:
@@ -417,7 +419,10 @@ class Game:
                     max_discard = card_config.get("number", 0)
                     min_discard = card_config.get("min_number", 0)
                     return [(PlayerAction.DRAW, min_discard, max_discard)]
-                    
+                elif is_separate:
+                    total_cards = sum(cfg["number"] for cfg in self.current_separate_config["cards"])
+                    return [(PlayerAction.SEPARATE, total_cards, total_cards)]
+                                    
             if self.state != GameState.BETTING:
                 return []  # Not betting phase
                 
@@ -580,6 +585,25 @@ class Game:
                     return ActionResult(success=True, state_changed=True)
                     
                 return ActionResult(success=True)
+            
+            if action == PlayerAction.SEPARATE:
+                if self.state != GameState.DRAWING or not hasattr(self, "current_separate_config"):
+                    return ActionResult(success=False, error="Cannot separate in current state")
+                if not cards:
+                    return ActionResult(success=False, error="No cards specified")
+                
+                if not self._handle_separate_action(player, cards):
+                    return ActionResult(success=False, error="Invalid separation")
+                
+                self.current_player = self.next_player(round_start=False)
+                if self._check_separate_round_complete():
+                    logger.info("Separate round complete")
+                    if self.auto_progress:
+                        self._next_step()
+                    return ActionResult(success=True, state_changed=True)
+                return ActionResult(success=True)       
+
+            # the rest handle different betting actions     
                     
             if self.state != GameState.BETTING:
                 logger.warning(f"Invalid action - not betting state: {self.state}")
@@ -799,6 +823,12 @@ class Game:
                 self._setup_draw_round(step.action_config)
                 self.current_player = self.next_player(round_start=True)
 
+            elif step.action_type == GameActionType.SEPARATE:
+                logger.info(f"Starting separate round: {step.name}")
+                self.state = GameState.DRAWING  # Reuse DRAWING for player interaction
+                self._setup_separate_round(step.action_config)
+                self.current_player = self.next_player(round_start=True)
+
             elif step.action_type == GameActionType.SHOWDOWN:
                 logger.info("Moving to showdown")
                 self.state = GameState.SHOWDOWN
@@ -829,6 +859,10 @@ class Game:
         """Set up a draw round based on configuration."""
         self.current_draw_config = config
         logger.debug(f"Setting up draw round with config: {config}")
+
+    def _setup_separate_round(self, config: Dict[str, Any]) -> None:
+        self.current_separate_config = config
+        logger.debug(f"Setting up separate round with config: {config}")        
 
     def _check_discard_round_complete(self) -> bool:
         """Check if the current discard round is complete."""
@@ -910,6 +944,38 @@ class Game:
                 logger.info(f"{player.name} draws {len(new_cards)} new cards: {new_cards}")
         
         return True
+                          
+    def _handle_separate_action(self, player: Player, cards: List[Card]) -> bool:
+        config = self.current_separate_config["cards"]
+        all_cards = player.hand.get_cards()
+        
+        # Validate total cards and source
+        expected_total = sum(cfg["number"] for cfg in config)
+        if len(cards) != expected_total or not all(c in all_cards for c in cards):
+            logger.warning(f"Invalid card selection for {player.name}: {cards}")
+            return False
+        
+        # Assign cards to subsets
+        card_index = 0
+        player.hand.clear_subsets()  # Clear existing subsets
+        for cfg in config:
+            subset = cfg["hole_subset"]
+            num = cfg["number"]
+            subset_cards = cards[card_index:card_index + num]
+            for card in subset_cards:
+                player.hand.add_to_subset(card, subset)
+            card_index += num
+        
+        logger.info(f"{player.name} separated cards into: {dict(player.hand.subsets)}")
+        return True
+    
+    def _check_separate_round_complete(self) -> bool:
+        config = self.current_separate_config["cards"]
+        active_players = [p for p in self.table.players.values() if p.is_active]
+        return all(
+            all(len(p.hand.get_subset(cfg["hole_subset"])) == cfg["number"] for cfg in config)
+            for p in active_players
+        )    
                           
     def handle_forced_bets(self, bet_type: str):
         """Handle forced bets (antes or blinds) at the start of a hand."""
@@ -1795,19 +1861,32 @@ class Game:
         from generic_poker.evaluation.evaluator import evaluator
         import itertools
         
-        hole_cards = player.hand.get_cards()
-        best_hand = None
-
+        hole_subset = showdown_rules.get("hole_subset", "default")
+        if hole_subset and hole_subset != "default":
+            # Use specific subset if specified (e.g., SHESHE)
+            hole_cards = player.hand.get_subset(hole_subset)
+            if not hole_cards:
+                logger.warning(f"No cards in hole subset '{hole_subset}' for player {player.id}")
+                return []
+        else:
+            # Use all cards if no subset specified or default (e.g., Hold'em, Stud)
+            hole_cards = player.hand.get_cards()
+            if not hole_cards:
+                logger.warning(f"No cards in hand for player {player.id}")
+                return []
+        
         # If no community cards exist (e.g., Stud), use hole cards only
         if not community_cards:
             logger.debug(f"No community cards available for {player.id}, using hole cards only")
             comm_cards = []
         else:
-            subset = showdown_rules.get("subset", "default")
-            comm_cards = community_cards.get(subset, [])
-            if not comm_cards and subset != "default":
-                logger.warning(f"Subset '{subset}' not found for player {player.id}, falling back to hole cards")
-               
+            comm_subset = showdown_rules.get("community_subset", "default")
+            comm_cards = community_cards.get(comm_subset, [])
+            if not comm_cards and comm_subset != "default":
+                logger.warning(f"Community subset '{comm_subset}' not found for player {player.id}")
+
+        best_hand = None
+
         # Handle different types of hand compositions
         if "anyCards" in showdown_rules:
             total_cards = showdown_rules["anyCards"]

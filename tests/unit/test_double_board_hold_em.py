@@ -217,13 +217,13 @@ def setup_test_game_with_mock_deck():
                     "name": "Board 1",
                     "evaluationType": "high",
                     "anyCards": 5,
-                    "subset": "Board 1"
+                    "community_subset": "Board 1"
                 },
                 {
                     "name": "Board 2",
                     "evaluationType": "high",
                     "anyCards": 5,
-                    "subset": "Board 2"
+                    "community_subset": "Board 2"
                 }
             ]
         }

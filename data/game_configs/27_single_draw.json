@@ -1,0 +1,76 @@
+{
+    "game": "2-7 Single Draw",
+    "players": {
+        "min": 2,
+        "max": 8
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Initial Bet"
+        },
+        {
+            "draw": {
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Draw Cards"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Final Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "all cards",
+        "bestHand": [
+            {
+                "evaluationType": "27_low",
+                "anyCards": 5
+            }
+        ]
+    }
+}
