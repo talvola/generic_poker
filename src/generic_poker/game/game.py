@@ -38,6 +38,7 @@ class PlayerAction(Enum):
     DISCARD = "discard" # simplified discard only
     DRAW = "draw" # really more general discard and then draw
     SEPARATE  = "separate"  # separate hand into subsets
+    EXPOSE  = "expose"  # expose down cards (make face up)
 
 @dataclass
 class ActionResult:
@@ -265,6 +266,9 @@ class Game:
     
         self.last_hand_result = None  # Store the last hand result here
 
+        self.pending_exposures: Dict[str, List[Card]] = {}  # player_id -> list of cards to expose
+        self.current_expose_config = None  # To store the expose config during the step        
+
     def get_game_description(self) -> str:
         """
         Get a human-friendly description of the game.
@@ -406,6 +410,7 @@ class Game:
                 is_discard = getattr(self, "current_discard_config", None) is not None
                 is_draw = getattr(self, "current_draw_config", None) is not None
                 is_separate = getattr(self, "current_separate_config", None) is not None
+                is_expose = getattr(self, "current_expose_config", None) is not None
 
                 # discard is the simpler case
                 if is_discard:
@@ -422,7 +427,10 @@ class Game:
                 elif is_separate:
                     total_cards = sum(cfg["number"] for cfg in self.current_separate_config["cards"])
                     return [(PlayerAction.SEPARATE, total_cards, total_cards)]
-                                    
+                elif is_expose:
+                    total_cards = sum(cfg["number"] for cfg in self.current_expose_config["cards"])
+                    return [(PlayerAction.EXPOSE, total_cards, total_cards)]
+                                                    
             if self.state != GameState.BETTING:
                 return []  # Not betting phase
                 
@@ -602,6 +610,31 @@ class Game:
                         self._next_step()
                     return ActionResult(success=True, state_changed=True)
                 return ActionResult(success=True)       
+            
+            if action == PlayerAction.EXPOSE:
+                if self.state != GameState.DRAWING or not hasattr(self, "current_expose_config"):
+                    return ActionResult(success=False, error="Cannot expose in current state")
+                if not cards:
+                    return ActionResult(success=False, error="No cards specified for exposure")
+                
+                # Validate the exposure choice
+                if not self._validate_expose_action(player, cards):
+                    return ActionResult(success=False, error="Invalid exposure")
+                
+                # Store the player's choice instead of flipping immediately
+                self.pending_exposures[player_id] = cards
+                logger.info(f"Player {player.name} selected {len(cards)} cards to expose (pending)")
+                    
+                # Move to the next player
+                self.current_player = self.next_player(round_start=False)
+                if self._check_expose_round_complete():
+                    # All players have chosen; apply exposures simultaneously
+                    self._apply_all_exposures()
+                    logger.info("Expose round complete; all exposures applied")
+                    if self.auto_progress:
+                        self._next_step()  
+                    return ActionResult(success=True, state_changed=True)
+                return ActionResult(success=True)      
 
             # the rest handle different betting actions     
                     
@@ -829,6 +862,12 @@ class Game:
                 self._setup_separate_round(step.action_config)
                 self.current_player = self.next_player(round_start=True)
 
+            elif step.action_type == GameActionType.EXPOSE:
+                logger.info(f"Starting expose round: {step.name}")
+                self.state = GameState.DRAWING  # Reuse DRAWING state for player actions
+                self._setup_expose_round(step.action_config)
+                self.current_player = self.next_player(round_start=True)
+
             elif step.action_type == GameActionType.SHOWDOWN:
                 logger.info("Moving to showdown")
                 self.state = GameState.SHOWDOWN
@@ -862,7 +901,12 @@ class Game:
 
     def _setup_separate_round(self, config: Dict[str, Any]) -> None:
         self.current_separate_config = config
-        logger.debug(f"Setting up separate round with config: {config}")        
+        logger.debug(f"Setting up separate round with config: {config}")     
+
+    def _setup_expose_round(self, config: Dict[str, Any]) -> None:
+        """Set up an expose round based on configuration."""
+        self.current_expose_config = config
+        logger.debug(f"Setting up expose round with config: {config}")           
 
     def _check_discard_round_complete(self) -> bool:
         """Check if the current discard round is complete."""
@@ -968,7 +1012,7 @@ class Game:
         
         logger.info(f"{player.name} separated cards into: {dict(player.hand.subsets)}")
         return True
-    
+       
     def _check_separate_round_complete(self) -> bool:
         config = self.current_separate_config["cards"]
         active_players = [p for p in self.table.players.values() if p.is_active]
@@ -976,7 +1020,70 @@ class Game:
             all(len(p.hand.get_subset(cfg["hole_subset"])) == cfg["number"] for cfg in config)
             for p in active_players
         )    
-                          
+    
+    def _validate_expose_action(self, player: Player, cards: List[Card]) -> bool:
+        """Validate the player's exposure choice without applying it."""
+        config = self.current_expose_config["cards"][0]
+        num_to_expose = config["number"]  # e.g., 2
+        required_state = config.get("state", "face down")
+
+        if len(cards) != num_to_expose:
+            logger.warning(f"Player {player.name} selected {len(cards)} cards, but {num_to_expose} are required")
+            return False
+
+        player_hand = player.hand.get_cards()
+        for card in cards:
+            if card not in player_hand:
+                logger.warning(f"Player {player.name} tried to expose a card not in their hand: {card}")
+                return False
+            if required_state == "face down" and card.visibility != Visibility.FACE_DOWN:
+                logger.warning(f"Player {player.name} tried to expose a card that is not face down: {card}")
+                return False
+
+        return True    
+
+    def _handle_expose_action(self, player: Player, cards: List[Card]) -> bool:
+        """Handle a player's exposure of cards."""
+        config = self.current_expose_config["cards"][0]  # Single config for simplicity
+        num_to_expose = config["number"]
+        required_state = config.get("state", "face down")  # Default to face down
+
+        # Validate number of cards and their state
+        if len(cards) != num_to_expose:
+            logger.warning(f"Player {player.name} attempted to expose {len(cards)} cards, but {num_to_expose} are required")
+            return False
+
+        player_hand = player.hand.get_cards()
+        for card in cards:
+            if card not in player_hand:
+                logger.warning(f"Player {player.name} tried to expose a card not in their hand: {card}")
+                return False
+            if required_state == "face down" and card.visibility != Visibility.FACE_DOWN:
+                logger.warning(f"Player {player.name} tried to expose a card that is not face down: {card}")
+                return False
+
+        # Expose the selected cards
+        for card in cards:
+            card.visibility = Visibility.FACE_UP
+            logger.info(f"Player {player.name} exposed {card}")
+
+        return True    
+    
+    def _check_expose_round_complete(self) -> bool:
+        """Check if all active players have selected cards to expose."""
+        active_players = [p for p in self.table.players.values() if p.is_active]
+        return all(p.id in self.pending_exposures for p in active_players)
+    
+    def _apply_all_exposures(self) -> None:
+        """Apply all pending exposures simultaneously."""
+        for player_id, cards in self.pending_exposures.items():
+            player = self.table.players[player_id]
+            for card in cards:
+                if card in player.hand.get_cards() and card.visibility == Visibility.FACE_DOWN:
+                    card.visibility = Visibility.FACE_UP
+                    logger.info(f"Player {player.name} exposed {card}")
+        self.pending_exposures.clear()  # Reset after applying    
+                              
     def handle_forced_bets(self, bet_type: str):
         """Handle forced bets (antes or blinds) at the start of a hand."""
         active_players = [p for p in self.table.players.values() if p.is_active]
@@ -1077,7 +1184,7 @@ class Game:
             logger.debug(f"  current step: {self.current_step}, bring_in_step_idx: {bring_in_step_idx}, initial_bet_step_idx: {initial_bet_step_idx}")
        
 
-            if round_start and step.action_config["type"] == "bring-in":
+            if round_start and step.action_config.get("type") == "bring-in":
                 bring_in_player = BringInDeterminator.determine_first_to_act(active_players, self.betting.betting_round + 1, bring_in_rule)
                 logger.debug(f"Stud first-to-act in bring-in round: {bring_in_player.name}")
                 return bring_in_player
