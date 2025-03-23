@@ -809,17 +809,16 @@ class Game:
         location = config["location"]
         for card_config in config["cards"]:
             num_cards = card_config["number"]
-            state = card_config["state"]  # "face up" or "face down"
-            
-            # Convert state to boolean for Deck's face_up parameter
+            state = card_config["state"]
+            subset = card_config.get("subset", "default")  # Default to "default" if not specified
             face_up = state == "face up"
             
             if location == "player":
                 logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to each player ({state})")
                 self.table.deal_hole_cards(num_cards, face_up=face_up)
             else:  # community
-                logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to board ({state})")
-                self.table.deal_community_cards(num_cards, face_up=face_up)                            
+                logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to community subset '{subset}' ({state})")
+                self.table.deal_community_cards(num_cards, subset=subset, face_up=face_up)               
                 
     def _setup_discard_round(self, config: Dict[str, Any]) -> None:
         """Set up a discard round based on configuration."""
@@ -1777,9 +1776,9 @@ class Game:
     def _find_best_hand_for_player(
         self,
         player: Player,
-        community_cards: List[Card],
+        community_cards: Dict[str, List[Card]],
         showdown_rules: dict,
-        eval_type: EvaluationType
+        eval_type: str
     ) -> List[Card]:
         """
         Find the best possible hand for a player according to the game rules.
@@ -1798,15 +1797,25 @@ class Game:
         
         hole_cards = player.hand.get_cards()
         best_hand = None
-        
+
+        # If no community cards exist (e.g., Stud), use hole cards only
+        if not community_cards:
+            logger.debug(f"No community cards available for {player.id}, using hole cards only")
+            comm_cards = []
+        else:
+            subset = showdown_rules.get("subset", "default")
+            comm_cards = community_cards.get(subset, [])
+            if not comm_cards and subset != "default":
+                logger.warning(f"Subset '{subset}' not found for player {player.id}, falling back to hole cards")
+               
         # Handle different types of hand compositions
         if "anyCards" in showdown_rules:
             total_cards = showdown_rules["anyCards"]
-            all_cards = hole_cards + community_cards
+            all_cards = hole_cards + comm_cards
             
             # If there are no community cards or exactly the right number of hole cards,
             # we can just use the hole cards (straight poker case)
-            if not community_cards and len(hole_cards) == total_cards:
+            if not comm_cards and len(hole_cards) == total_cards:
                 return hole_cards
             
             # Otherwise, find the best hand from all available cards
@@ -1826,7 +1835,7 @@ class Game:
                 # Not enough cards total
                 logger.warning(
                     f"Not enough cards for player {player.id}: "
-                    f"Has {len(hole_cards)} hole cards and {len(community_cards)} community cards "
+                    f"Has {len(hole_cards)} hole cards and {len(comm_cards)} community cards "
                     f"(need {total_cards} total)"
                 )
                 return []
@@ -1848,12 +1857,12 @@ class Game:
                 required_community = comm_options[comm_index] if comm_options else 0
                 
                 # Skip if we don't have enough cards
-                if len(hole_cards) < required_hole or len(community_cards) < required_community:
+                if len(hole_cards) < required_hole or len(comm_cards) < required_community:
                     continue
                 
                 # Generate combinations for this option
                 hole_combos = list(itertools.combinations(hole_cards, required_hole))
-                community_combos = [tuple()] if required_community == 0 else list(itertools.combinations(community_cards, required_community))
+                community_combos = [tuple()] if required_community == 0 else list(itertools.combinations(comm_cards , required_community))
                 
                 # Try all combinations for this option
                 for hole_combo in hole_combos:
@@ -1884,17 +1893,17 @@ class Game:
             required_community = showdown_rules.get("communityCards", 0)
             
             # Ensure we have enough cards to evaluate
-            if len(hole_cards) < required_hole or len(community_cards) < required_community:
+            if len(hole_cards) < required_hole or len(comm_cards) < required_community:
                 logger.warning(
                     f"Not enough cards for player {player.id}: "
                     f"Has {len(hole_cards)} hole cards (need {required_hole}) and "
-                    f"{len(community_cards)} community cards (need {required_community})"
+                    f"{len(comm_cards)} community cards (need {required_community})"
                 )
                 return []
             
             # Generate combinations only for categories with requirements > 0
             hole_combos = [tuple()] if required_hole == 0 else list(itertools.combinations(hole_cards, required_hole))
-            community_combos = [tuple()] if required_community == 0 else list(itertools.combinations(community_cards, required_community))
+            community_combos = [tuple()] if required_community == 0 else list(itertools.combinations(comm_cards, required_community))
             
             # Try all combinations and find the best
             for hole_combo in hole_combos:

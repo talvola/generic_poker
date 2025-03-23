@@ -98,8 +98,9 @@ class Table:
         self.deck = Deck()
         self.discard_pile = Deck()  # New discard pile
         self.discard_pile.clear()  # Ensure it's empty
-        self.community_cards: List[Card] = []
-        
+#        self.community_cards: List[Card] = []
+        self.community_cards: Dict[str, List[Card]] = {}
+       
     def add_player(self, player_id: str, name: str, buyin: int) -> None:
         """
         Add a player to the table.
@@ -243,43 +244,61 @@ class Table:
                     logger.info(f"  Dealt {card} to player {player.name}")
                     player.hand.add_card(card)             
                     
-    def deal_community_cards(self, num_cards: int, face_up: bool = True) -> None:
+    def deal_community_cards(self, num_cards: int, subset: str = "default", face_up: bool = True) -> None:
         """
-        Deal community cards.
-        
+        Deal community cards to a specific subset.
+
         Args:
             num_cards: Number of community cards to deal
+            subset: Name of the subset to deal to (default: "default")
             face_up: Whether to deal the cards face up (default: True)
         """
+        if subset not in self.community_cards:
+            self.community_cards[subset] = []
         cards = self.deck.deal_cards(num_cards, face_up=face_up)
         if cards:
-            logger.info(f"  Dealt {len(cards)} community {'card' if len(cards) == 1 else 'cards'}: {cards}")
-        self.community_cards.extend(cards)
+            logger.info(f"  Dealt {len(cards)} community {'card' if len(cards) == 1 else 'cards'} to subset '{subset}': {cards}")
+        self.community_cards[subset].extend(cards)
         
-    def expose_community_cards(self, indices: list[int] = None) -> None:
+    def expose_community_cards(self, subset: str = "default", indices: Optional[List[int]] = None) -> None:
         """
-        Flip specified community cards face-up. If no indices provided, flip all face-down cards.
-        
+        Flip specified community cards face-up in a subset. If no indices provided, flip all face-down cards in the subset.
+
         Args:
-            indices: Optional list of indices of community cards to expose
+            subset: Name of the subset to expose cards from (default: "default")
+            indices: Optional list of indices of cards to expose in the subset
         """
+        if subset not in self.community_cards:
+            logger.warning(f"Subset '{subset}' does not exist.")
+            return
+        cards = self.community_cards[subset]
         if indices is None:
-            # Flip all face-down cards
-            for card in self.community_cards:
+            for card in cards:
                 if card.visibility == Visibility.FACE_DOWN:
                     card.visibility = Visibility.FACE_UP
-                    logger.info(f"  Exposed {card} on community board")
+                    logger.info(f"  Exposed {card} in subset '{subset}'")
         else:
-            # Flip specific cards by index
             for idx in indices:
-                if 0 <= idx < len(self.community_cards) and self.community_cards[idx].visibility == Visibility.FACE_DOWN:
-                    self.community_cards[idx].visibility = Visibility.FACE_UP
-                    logger.info(f"  Exposed {self.community_cards[idx]} on community board")
+                if 0 <= idx < len(cards) and cards[idx].visibility == Visibility.FACE_DOWN:
+                    cards[idx].visibility = Visibility.FACE_UP
+                    logger.info(f"  Exposed {cards[idx]} in subset '{subset}'")
+
+    def get_community_card_count(self, subset: str = "default") -> int:
+        """
+        Get the number of community cards in a specific subset.
+
+        Args:
+            subset: Name of the subset to count cards from (default: "default")
+
+        Returns:
+            Number of cards in the specified subset, or 0 if the subset doesn’t exist
+        """
+        return len(self.community_cards.get(subset, []))                    
 
     def clear_hands(self) -> None:
         """Clear all player hands and community cards."""
         for player in self.players.values():
             player.hand.clear()
-        self.community_cards.clear()
-        self.discard_pile.clear()  # Clear the discard pile
-        self.deck = Deck()  # New shuffled deck
+        self.community_cards.clear()  # Clears the dictionary
+        self.discard_pile.clear()
+        self.deck = Deck()

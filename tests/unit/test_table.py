@@ -211,12 +211,12 @@ def test_deal_community_cards():
     
     # Deal 3 flop cards
     table.deal_community_cards(3)
-    assert len(table.community_cards) == 3
-    assert all(card.visibility == Visibility.FACE_UP for card in table.community_cards)
+    assert table.get_community_card_count() == 3 
+    assert all(card.visibility == Visibility.FACE_UP for card in table.community_cards["default"])
     
     # Deal 1 turn card
     table.deal_community_cards(1)
-    assert len(table.community_cards) == 4
+    assert table.get_community_card_count() == 4
 
 def test_clear_hands():
     """Test clearing player hands and community cards."""
@@ -230,12 +230,12 @@ def test_clear_hands():
     
     # Ensure cards are dealt
     assert len(table.players["p1"].hand.cards) == 2
-    assert len(table.community_cards) == 3
+    assert table.get_community_card_count() == 3 
     
     # Clear hands and verify
     table.clear_hands()
     assert len(table.players["p1"].hand.cards) == 0
-    assert len(table.community_cards) == 0
+    assert table.get_community_card_count() == 0
 
 def test_invalid_buyin():
     """Test adding a player with invalid buy-in amounts."""

@@ -48,7 +48,7 @@ def create_predetermined_deck():
         Card(Rank.QUEEN, Suit.CLUBS), #TURN
         Card(Rank.QUEEN, Suit.SPADES), #RIVER
         # the following cards are unused for Texas Hold'em
-        # leaving them in here so the same mock deck can be used for other games which require more cards
+        # leaving them in here so the same mock deck can be used for other games which require more cards   
         Card(Rank.JACK, Suit.HEARTS), #
         Card(Rank.TEN, Suit.DIAMONDS), #
         Card(Rank.TEN, Suit.HEARTS), #
@@ -320,9 +320,9 @@ def test_game_results_showdown():
     assert game.state == GameState.DEALING 
 
     # Check community cards
-    assert str(game.table.community_cards[0]) == "Qh"  # Flop 1
-    assert str(game.table.community_cards[1]) == "Kd"  # Flop 2
-    assert str(game.table.community_cards[2]) == "Ts"  # Flop 3
+    assert str(game.table.community_cards["default"][0]) == "Qh"  # Flop 1
+    assert str(game.table.community_cards["default"][1]) == "Kd"  # Flop 2
+    assert str(game.table.community_cards["default"][2]) == "Ts"  # Flop 3
 
     # Check pot after flop
     assert game.betting.get_main_pot_amount() == 60  # SB + BB + BTN raise
@@ -358,7 +358,7 @@ def test_game_results_showdown():
     assert game.state == GameState.DEALING
     
     # Check community cards
-    assert str(game.table.community_cards[3]) == "Qc"  # Turn
+    assert str(game.table.community_cards["default"][3]) == "Qc"  # Turn
 
     # Check pot after turn
     assert game.betting.get_main_pot_amount() == 60  # SB + BB + BTN raise
@@ -391,7 +391,7 @@ def test_game_results_showdown():
     assert game.state == GameState.DEALING
 
     # Check community cards
-    assert str(game.table.community_cards[4]) == "Qs"  # River
+    assert str(game.table.community_cards["default"][4]) == "Qs"  # River
 
     # Check pot after river
     assert game.betting.get_main_pot_amount() == 60  # SB + BB + BTN raise

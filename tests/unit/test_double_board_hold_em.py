@@ -45,13 +45,14 @@ def create_predetermined_deck():
         Card(Rank.QUEEN, Suit.HEARTS), #FLOP
         Card(Rank.KING, Suit.DIAMONDS), #FLOP
         Card(Rank.TEN, Suit.SPADES), #FLOP
-        Card(Rank.QUEEN, Suit.CLUBS), #TURN
-        Card(Rank.QUEEN, Suit.SPADES), #RIVER
-        Card(Rank.JACK, Suit.HEARTS), #
-        Card(Rank.TEN, Suit.DIAMONDS), #
-        Card(Rank.TEN, Suit.HEARTS), #
-        Card(Rank.NINE, Suit.SPADES), #
-      
+        Card(Rank.QUEEN, Suit.CLUBS), #FLOP2
+        Card(Rank.QUEEN, Suit.SPADES), #FLOP2
+        Card(Rank.JACK, Suit.HEARTS), #FLOP2
+        Card(Rank.TEN, Suit.DIAMONDS), #TURN1
+        Card(Rank.TEN, Suit.HEARTS), #TURN2
+        Card(Rank.NINE, Suit.SPADES), #RIVER1
+        Card(Rank.TWO, Suit.SPADES), #RIVER2
+     
         # Rest of the deck in some order (won't be used in 5-card poker)
         # You can add more cards here if needed for other tests
     ]
@@ -72,12 +73,13 @@ def create_predetermined_deck_split():
         Card(Rank.QUEEN, Suit.HEARTS), #FLOP
         Card(Rank.KING, Suit.DIAMONDS), #FLOP
         Card(Rank.FOUR, Suit.SPADES), #FLOP
-        Card(Rank.TWO, Suit.CLUBS), #TURN
-        Card(Rank.THREE, Suit.SPADES), #RIVER
-        Card(Rank.FIVE, Suit.HEARTS), #
-        Card(Rank.TEN, Suit.DIAMONDS), #
-        Card(Rank.TEN, Suit.HEARTS), #
-        Card(Rank.NINE, Suit.SPADES), #
+        Card(Rank.TWO, Suit.CLUBS), #FLOP2
+        Card(Rank.THREE, Suit.SPADES), #FLOP2
+        Card(Rank.FIVE, Suit.HEARTS), #FLOP2
+        Card(Rank.TEN, Suit.DIAMONDS), #TURN1
+        Card(Rank.TEN, Suit.HEARTS), #TURN2
+        Card(Rank.NINE, Suit.SPADES), #RIVER1
+        Card(Rank.TWO, Suit.SPADES), #RIVER2
       
         # Rest of the deck in some order (won't be used in 5-card poker)
         # You can add more cards here if needed for other tests
@@ -88,10 +90,10 @@ def create_predetermined_deck_split():
 def setup_test_game_with_mock_deck():
     """Create a test game with three players and a predetermined deck."""
     rules = {
-        "game": "Hold'em 8",
+        "game": "Double-Board Hold'em",
         "players": {
             "min": 2,
-            "max": 9
+            "max": 6
         },
         "deck": {
             "type": "standard",
@@ -133,7 +135,13 @@ def setup_test_game_with_mock_deck():
                     "cards": [
                         {
                             "number": 3,
-                            "state": "face up"
+                            "state": "face up",
+                            "subset": "Board 1"
+                        },
+                        {
+                            "number": 3,
+                            "state": "face up",
+                            "subset": "Board 2"
                         }
                     ]
                 },
@@ -151,7 +159,13 @@ def setup_test_game_with_mock_deck():
                     "cards": [
                         {
                             "number": 1,
-                            "state": "face up"
+                            "state": "face up",
+                            "subset": "Board 1"
+                        },
+                        {
+                            "number": 1,
+                            "state": "face up",
+                            "subset": "Board 2"
                         }
                     ]
                 },
@@ -169,7 +183,13 @@ def setup_test_game_with_mock_deck():
                     "cards": [
                         {
                             "number": 1,
-                            "state": "face up"
+                            "state": "face up",
+                            "subset": "Board 1"
+                        },
+                        {
+                            "number": 1,
+                            "state": "face up",
+                            "subset": "Board 2"
                         }
                     ]
                 },
@@ -191,21 +211,19 @@ def setup_test_game_with_mock_deck():
         "showdown": {
             "order": "clockwise",
             "startingFrom": "dealer",
-            "cardsRequired": "any combination of hole and community cards",
+            "cardsRequired": "all cards",
             "bestHand": [
                 {
-                    "name": "High Hand",
+                    "name": "Board 1",
                     "evaluationType": "high",
-                    "anyCards": 5
+                    "anyCards": 5,
+                    "subset": "Board 1"
                 },
                 {
-                    "name": "Low Hand",
-                    "evaluationType": "a5_low",
+                    "name": "Board 2",
+                    "evaluationType": "high",
                     "anyCards": 5,
-                    "qualifier": [
-                        1,
-                        56
-                    ]                    
+                    "subset": "Board 2"
                 }
             ]
         }
@@ -356,9 +374,13 @@ def test_game_results_showdown_high():
     assert game.state == GameState.DEALING 
 
     # Check community cards
-    assert str(game.table.community_cards["default"][0]) == "Qh"  # Flop 1
-    assert str(game.table.community_cards["default"][1]) == "Kd"  # Flop 2
-    assert str(game.table.community_cards["default"][2]) == "Ts"  # Flop 3
+    assert str(game.table.community_cards["Board 1"][0]) == "Qh"  # Flop 1
+    assert str(game.table.community_cards["Board 1"][1]) == "Kd"  # Flop 2
+    assert str(game.table.community_cards["Board 1"][2]) == "Ts"  # Flop 3
+
+    assert str(game.table.community_cards["Board 2"][0]) == "Qc"  # Flop 1
+    assert str(game.table.community_cards["Board 2"][1]) == "Qs"  # Flop 2
+    assert str(game.table.community_cards["Board 2"][2]) == "Jh"  # Flop 3
 
     # Check pot after flop
     assert game.betting.get_main_pot_amount() == 60  # SB + BB + BTN raise
@@ -394,7 +416,8 @@ def test_game_results_showdown_high():
     assert game.state == GameState.DEALING
     
     # Check community cards
-    assert str(game.table.community_cards["default"][3]) == "Qc"  # Turn
+    assert str(game.table.community_cards["Board 1"][3]) == "Td"  # Turn
+    assert str(game.table.community_cards["Board 2"][3]) == "Th"  # Turn
 
     # Check pot after turn
     assert game.betting.get_main_pot_amount() == 60  # SB + BB + BTN raise
@@ -425,10 +448,11 @@ def test_game_results_showdown_high():
     game._next_step()  # Deal river
     assert game.current_step == 7
     assert game.state == GameState.DEALING
-
+  
     # Check community cards
-    assert str(game.table.community_cards["default"][4]) == "Qs"  # River
-
+    assert str(game.table.community_cards["Board 1"][4]) == "9s"  # River
+    assert str(game.table.community_cards["Board 2"][4]) == "2s"  # River
+   
     # Check pot after river
     assert game.betting.get_main_pot_amount() == 60  # SB + BB + BTN raise
     
@@ -469,21 +493,38 @@ def test_game_results_showdown_high():
     expected_pot = 60  # SB + BB + BTN all put in $20   
     assert results.is_complete
     assert results.total_pot == expected_pot
-    assert len(results.pots) == 1  # no low qualified - so only one pot
+    assert len(results.pots) == 2  # two boards - two pots
     assert len(results.hands) == 3  # All players have hands in the result
     
-    # Get the pot
-    high_pot = next((pot for pot in results.pots if pot.hand_type == "High Hand"), None)
+    # Get the pots
+    board_1_pot = next((pot for pot in results.pots if pot.hand_type == "Board 1"), None)
+    board_2_pot = next((pot for pot in results.pots if pot.hand_type == "Board 2"), None)
     
-    assert high_pot is not None
+    assert board_1_pot is not None
+    assert board_2_pot is not None
     
-    # Check high pot details
-    assert high_pot.amount == expected_pot  # Entire pot goes to high
-    assert high_pot.pot_type == "main"
-    assert len(high_pot.winners) == 1
-    assert "SB" in high_pot.winners
+    # Check board 1 pot details
+    assert board_1_pot.amount == expected_pot // 2  # Half pot goes to high
+    assert board_1_pot.pot_type == "main"
+    assert len(board_1_pot.winners) == 1
+    assert "BB" in board_1_pot.winners
 
- 
+    # Check board 2 pot details
+    assert board_2_pot.amount == expected_pot // 2  # Half pot goes to high
+    assert board_2_pot.pot_type == "main"
+    assert len(board_2_pot.winners) == 1
+    assert "BB" in board_2_pot.winners    
+
+     # Verify winning hands
+    winning_b1 = next(hand for hand in results.winning_hands if hand.hand_type == "Board 1")
+    assert winning_b1.player_id == "BB", f"Expected BB as board 1 hand winner, got {winning_b1.player_id}"
+    assert "Straight" in winning_b1.hand_name, f"Expected 'Straight' in winning high hand, got {winning_b1.hand_name}"
+    assert "King-high" in winning_b1.hand_description, f"Expected 'King-high' in winning high hand description, got {winning_b1.hand_description}"
+
+    winning_b2 = next(hand for hand in results.winning_hands if hand.hand_type == "Board 2")
+    assert winning_b2.player_id == "BB", f"Expected BB as board 2 hand winner, got {winning_b2.player_id}"
+    assert "Full House" in winning_b2.hand_name, f"Expected 'Full House' in winning high hand, got {winning_b2.hand_name}"
+    assert "Jacks over Queens" in winning_b2.hand_description, f"Expected 'Jacks over Queens' in winning high hand description, got {winning_b2.hand_description}"
 
 def test_game_results_showdown_split():
     """Test that the game results API provides correct information."""
@@ -673,52 +714,38 @@ def test_game_results_showdown_split():
     print(results)
 
     # Check overall results
-    expected_pot = 60  # SB + BB + BTN all put in $20 
+    expected_pot = 60  # SB + BB + BTN all put in $20   
     assert results.is_complete
     assert results.total_pot == expected_pot
-    assert len(results.pots) == 2  # high pot and low qualified 
+    assert len(results.pots) == 2  # two boards - two pots
     assert len(results.hands) == 3  # All players have hands in the result
     
-    # High pot
-    high_pot = next(pot for pot in results.pots if pot.hand_type == "High Hand")
-    assert high_pot.amount == 30, f"Expected high pot of $30, got ${high_pot.amount}"
-    assert high_pot.winners == ["SB"], f"Expected high pot winner SB, got {high_pot.winners}"
-    assert not high_pot.split, "High pot should not be split"
-    assert high_pot.pot_type == "main", "High pot should be main pot"
-
-    # Low pot
-    low_pot = next(pot for pot in results.pots if pot.hand_type == "Low Hand")
-    assert low_pot.amount == 30, f"Expected low pot of $30, got ${low_pot.amount}"
-    assert low_pot.winners == ["BB"], f"Expected low pot winner BB, got {low_pot.winners}"
-    assert not low_pot.split, "Low pot should not be split"
-    assert low_pot.pot_type == "main", "Low pot should be main pot"
-
-    # Check hands for SB (assuming hands is a dict of lists)
-    sb_hands = results.hands["SB"]
-    assert len(sb_hands) == 2, "SB should have two hand evaluations (high and low)"
-
-    # SB High hand
-    sb_high = next(hand for hand in sb_hands if hand.hand_type == "High Hand")
-    assert "Two Pair" in sb_high.hand_name, f"Expected 'Two Pair' in SB high hand name, got {sb_high.hand_name}"
-    assert "Kings and Queens" in sb_high.hand_description, f"Expected 'Kings and Queens' in SB high hand description, got {sb_high.hand_description}"
-
-    # Check hands for BB
-    bb_hands = results.hands["BB"]
-    assert len(bb_hands) == 2, "BB should have two hand evaluations (high and low)"
+    # Get the pots
+    board_1_pot = next((pot for pot in results.pots if pot.hand_type == "Board 1"), None)
+    board_2_pot = next((pot for pot in results.pots if pot.hand_type == "Board 2"), None)
     
-    # BB Low hand
-    bb_low = next(hand for hand in bb_hands if hand.hand_type == "Low Hand")
-    assert "Eight High" in bb_low.hand_description, f"Expected 'Eight High' in BB low hand description, got {bb_low.hand_description}"
-
-    # Check winning hands list
-    assert len(results.winning_hands) == 2, f"Expected 2 winning hands, got {len(results.winning_hands)}"
+    assert board_1_pot is not None
+    assert board_2_pot is not None
     
-    # Verify winning hands
-    winning_high = next(hand for hand in results.winning_hands if hand.hand_type == "High Hand")
-    assert winning_high.player_id == "SB", f"Expected SB as high hand winner, got {winning_high.player_id}"
-    assert "Two Pair" in winning_high.hand_name, f"Expected 'Two Pair' in winning high hand, got {winning_high.hand_name}"
-    assert "Kings and Queens" in winning_high.hand_description, f"Expected 'Kings and Queens' in winning high hand description, got {winning_high.hand_description}"
+    # Check board 1 pot details
+    assert board_1_pot.amount == expected_pot // 2  # Half pot goes to high
+    assert board_1_pot.pot_type == "main"
+    assert len(board_1_pot.winners) == 1
+    assert "SB" in board_1_pot.winners
 
-    winning_low = next(hand for hand in results.winning_hands if hand.hand_type == "Low Hand")
-    assert winning_low.player_id == "BB", f"Expected BB as low hand winner, got {winning_low.player_id}"
-    assert "Eight High" in winning_low.hand_description, f"Expected 'Eight High' in winning low hand description, got {winning_low.hand_description}"
+    # Check board 2 pot details
+    assert board_2_pot.amount == expected_pot // 2  # Half pot goes to high
+    assert board_2_pot.pot_type == "main"
+    assert len(board_2_pot.winners) == 1
+    assert "BTN" in board_2_pot.winners    
+
+     # Verify winning hands
+    winning_b1 = next(hand for hand in results.winning_hands if hand.hand_type == "Board 1")
+    assert winning_b1.player_id == "SB", f"Expected SB as board 1 hand winner, got {winning_b1.player_id}"
+    assert "Two Pair" in winning_b1.hand_name, f"Expected 'Two Pair' in winning high hand, got {winning_b1.hand_name}"
+    assert "Kings and Queens" in winning_b1.hand_description, f"Expected 'Kings and Queens' in winning high hand description, got {winning_b1.hand_description}"
+
+    winning_b2 = next(hand for hand in results.winning_hands if hand.hand_type == "Board 2")
+    assert winning_b2.player_id == "BTN", f"Expected BTN as board 2 hand winner, got {winning_b2.player_id}"
+    assert "One Pair" in winning_b2.hand_name, f"Expected 'One Pair' in winning high hand, got {winning_b2.hand_name}"
+    assert "Pair of Twos" in winning_b2.hand_description, f"Expected 'Pair of Twos' in winning high hand description, got {winning_b2.hand_description}"

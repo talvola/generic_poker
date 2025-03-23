@@ -1,0 +1,139 @@
+{
+    "game": "Double-Board Hold'em",
+    "players": {
+        "min": 2,
+        "max": 6
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 2,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Pre-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Board 1"
+                    },
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Board 2"
+                    }
+                ]
+            },
+            "name": "Deal Flop"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Post-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 1"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 2"
+                    }
+                ]
+            },
+            "name": "Deal Turn"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Turn Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 1"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 2"
+                    }
+                ]
+            },
+            "name": "Deal River"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "River Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "all cards",
+        "bestHand": [
+            {
+                "name": "Board 1",
+                "evaluationType": "high",
+                "anyCards": 5,
+                "subset": "Board 1"
+            },
+            {
+                "name": "Board 2",
+                "evaluationType": "high",
+                "anyCards": 5,
+                "subset": "Board 2"
+            }
+        ]
+    }
+}
