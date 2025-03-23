@@ -7,6 +7,8 @@ from generic_poker.game.betting import BettingStructure
 from generic_poker.core.deck import Deck
 from generic_poker.evaluation.hand_description import HandDescriber, EvaluationType
 
+from test_helpers import load_rules_from_file
+
 import json 
 import logging
 import sys
@@ -89,148 +91,10 @@ def create_predetermined_deck_split():
 
 def setup_test_game_with_mock_deck():
     """Create a test game with three players and a predetermined deck."""
-    rules = {
-        "game": "Double-Board Hold'em",
-        "players": {
-            "min": 2,
-            "max": 6
-        },
-        "deck": {
-            "type": "standard",
-            "cards": 52
-        },
-        "bettingStructures": [
-            "Limit",
-            "No Limit",
-            "Pot Limit"
-        ],
-        "gamePlay": [
-            {
-                "bet": {
-                    "type": "blinds"
-                },
-                "name": "Post Blinds"
-            },
-            {
-                "deal": {
-                    "location": "player",
-                    "cards": [
-                        {
-                            "number": 2,
-                            "state": "face down"
-                        }
-                    ]
-                },
-                "name": "Deal Hole Cards"
-            },
-            {
-                "bet": {
-                    "type": "small"
-                },
-                "name": "Pre-Flop Bet"
-            },
-            {
-                "deal": {
-                    "location": "community",
-                    "cards": [
-                        {
-                            "number": 3,
-                            "state": "face up",
-                            "subset": "Board 1"
-                        },
-                        {
-                            "number": 3,
-                            "state": "face up",
-                            "subset": "Board 2"
-                        }
-                    ]
-                },
-                "name": "Deal Flop"
-            },
-            {
-                "bet": {
-                    "type": "small"
-                },
-                "name": "Post-Flop Bet"
-            },
-            {
-                "deal": {
-                    "location": "community",
-                    "cards": [
-                        {
-                            "number": 1,
-                            "state": "face up",
-                            "subset": "Board 1"
-                        },
-                        {
-                            "number": 1,
-                            "state": "face up",
-                            "subset": "Board 2"
-                        }
-                    ]
-                },
-                "name": "Deal Turn"
-            },
-            {
-                "bet": {
-                    "type": "big"
-                },
-                "name": "Turn Bet"
-            },
-            {
-                "deal": {
-                    "location": "community",
-                    "cards": [
-                        {
-                            "number": 1,
-                            "state": "face up",
-                            "subset": "Board 1"
-                        },
-                        {
-                            "number": 1,
-                            "state": "face up",
-                            "subset": "Board 2"
-                        }
-                    ]
-                },
-                "name": "Deal River"
-            },
-            {
-                "bet": {
-                    "type": "big"
-                },
-                "name": "River Bet"
-            },
-            {
-                "showdown": {
-                    "type": "final"
-                },
-                "name": "Showdown"
-            }
-        ],
-        "showdown": {
-            "order": "clockwise",
-            "startingFrom": "dealer",
-            "cardsRequired": "all cards",
-            "bestHand": [
-                {
-                    "name": "Board 1",
-                    "evaluationType": "high",
-                    "anyCards": 5,
-                    "community_subset": "Board 1"
-                },
-                {
-                    "name": "Board 2",
-                    "evaluationType": "high",
-                    "anyCards": 5,
-                    "community_subset": "Board 2"
-                }
-            ]
-        }
-    }
-    
+    rules = load_rules_from_file('double_board_hold_em')
+
     game = Game(
-        rules=GameRules.from_json(json.dumps(rules)),
+        rules=rules,
         structure=BettingStructure.LIMIT,
         small_bet=10,
         big_bet=20,

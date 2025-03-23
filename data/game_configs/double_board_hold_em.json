@@ -126,13 +126,13 @@
                 "name": "Board 1",
                 "evaluationType": "high",
                 "anyCards": 5,
-                "subset": "Board 1"
+                "community_subset": "Board 1"
             },
             {
                 "name": "Board 2",
                 "evaluationType": "high",
                 "anyCards": 5,
-                "subset": "Board 2"
+                "community_subset": "Board 2"
             }
         ]
     }
