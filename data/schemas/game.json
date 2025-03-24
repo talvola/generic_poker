@@ -86,31 +86,36 @@
           "type": "integer",
           "description": "Number of any cards required"
         },
+        "hole_subset": {
+          "type": "string",
+          "description": "Specific subset of hole cards to use for this hand evaluation (e.g., 'Hold'em')"
+        },
+        "community_subset": {
+          "type": "string",
+          "description": "Specific subset of community cards to use for this hand evaluation (e.g., 'Board 1')"
+        },        
         "holeCardsAllowed": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/cardSubsetAllowed"
-          },
-          "description": "Allowed combinations of hole card subsets"
+              "type": "object",
+              "properties": {
+                  "hole_subsets": {
+                      "type": "array",
+                      "items": {"type": "string"},
+                      "description": "List of hole card subsets forming a valid hand"
+                  }
+              },
+              "required": ["hole_subsets"]
+          }
         },
         "communityCardsAllowed": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/cardSubsetAllowed"
+            "type": "string",
+            "description": "List of allowed community card subsets (simplified from cardSubsetAllowed)"
           },
-          "description": "Allowed combinations of community card subsets"
-        },
-        "communitySubsetsAllowed": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "List of allowed community subsets"
-        },
-        "subset": {
-          "type": "string",
-          "description": "Specific subset of cards to be used for this hand evaluation (deprecated)"
-        },        
+          "description": "Simplified list of allowed community card subsets"
+        },   
         "wildCard": {
           "type": "object",
           "properties": {
@@ -241,7 +246,7 @@
                       "type": "string",
                       "description": "State of the cards (face up or face down)"
                     },
-                    "subset": {
+                    "community_subset": {
                       "type": "string",
                       "description": "Subset of cards if applicable"
                     }
@@ -265,9 +270,9 @@
                       "type": "string",
                       "description": "Rule for discarding cards"
                     },
-                    "subset": {
+                    "hole_subset": {
                       "type": "string",
-                      "description": "Subset of cards for discarding"
+                      "description": "Subset of cards to discard (e.g., 'Hand 1', or 'any' for any subset)"
                     },
                     "number": {
                       "type": "integer",
@@ -276,10 +281,15 @@
                     "state": {
                       "type": "string",
                       "description": "State of the discarded cards (face up or face down)"
-                    }
+                    },
+                    "entire_subset": {
+                      "type": "boolean",
+                      "description": "If true, the discarded cards must be an entire named subset",
+                      "default": false
+                    }                    
                   },
                   "anyOf": [
-                    { "required": ["subset"] },
+                    { "required": ["hole_subset"] },
                     { "required": ["number"] }
                   ],
                   "additionalProperties": false
@@ -309,7 +319,7 @@
                       "type": "string",
                       "description": "State of the cards (face up or face down)"
                     },
-                    "subset": {
+                    "hole_subset": {
                       "type": "string",
                       "description": "Subset of player's hand to draw from/to"
                     },
@@ -407,7 +417,7 @@
                 "items": {
                   "type": "object",
                   "properties": {
-                    "subset": {
+                    "hole_subset": {
                       "type": "string",
                       "description": "Name of the subset"
                     },
@@ -416,7 +426,7 @@
                       "description": "Number of cards in the subset"
                     }
                   },
-                  "required": ["subset", "number"],
+                  "required": ["hole_subset", "number"],
                   "additionalProperties": false
                 }
               }

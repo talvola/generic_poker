@@ -421,7 +421,7 @@ class Game:
                     card_config = self.current_discard_config["cards"][0]
                     # for now, the discard config only specifies one number, so use for both min and max discard value
                     max_discard = card_config.get("number", 0)
-                    min_discard = card_config.get("number", 0)
+                    min_discard = card_config.get("number", 0)          
                     return [(PlayerAction.DISCARD, min_discard, max_discard)]
                 elif is_draw:
                     card_config = self.current_draw_config["cards"][0]
@@ -991,11 +991,15 @@ class Game:
             card_config = self.current_discard_config["cards"][0]
             max_discard = card_config.get("number", 0)
             min_discard = card_config.get("number", 0)
+            num_to_discard = card_config.get("number", 0)
+            subset = card_config.get("hole_subset")
+            entire_subset = card_config.get("entire_subset", False)            
             face_up = card_config.get("state", "face down") == "face up"
         elif is_draw:
             card_config = self.current_draw_config["cards"][0]
             max_discard = card_config.get("number", 0)
             min_discard = card_config.get("min_number", 0)
+            entire_subset = False # Draw doesn't support subsets
             face_up = card_config.get("state", "face down") == "face up"            
         
         # will support draws later
@@ -1020,8 +1024,22 @@ class Game:
             logger.warning(f"{player.name} trying to discard too few cards: {len(cards)} < {min_discard}")
             return False
         
-        # Process discard
-        logger.info(f"{player.name} discards {len(cards)} cards: {cards}")
+        # If entire_subset is true, validate the cards match an existing subset
+        if entire_subset:
+            player_subsets = player.hand.subsets
+            valid_discard = False
+            for subset_name, subset_cards in player_subsets.items():
+                if len(subset_cards) == len(cards) and all(c in subset_cards for c in cards):
+                    valid_discard = True
+                    # Remove the entire subset
+                    player.hand.subsets[subset_name].clear()
+                    logger.info(f"Player {player.name} discarded subset '{subset_name}'")
+                    break
+            if not valid_discard:
+                logger.warning(f"Player {player.name} discarded {cards}, but it doesn’t match an entire subset")
+                return False
+        else:
+            logger.info(f"{player.name} discards {len(cards)} cards: {cards}")
         
         # Remove cards from hand and add to discard pile
         for card in cards:
@@ -2092,27 +2110,36 @@ class Game:
         # Handle different types of hand compositions
         if "anyCards" in showdown_rules:
             total_cards = showdown_rules["anyCards"]
-            all_cards = hole_cards + comm_cards
+            allowed_combinations = showdown_rules.get("holeCardsAllowed", [])
+
+            if allowed_combinations:
+                # Evaluate each allowed combination
+                for combo in allowed_combinations:
+                    subset_cards = []
+                    for subset_name in combo["hole_subsets"]:
+                        subset_cards.extend(player.hand.get_subset(subset_name))
+                    all_cards = subset_cards + comm_cards
+                    if len(all_cards) >= total_cards:
+                        for hand_combo in itertools.combinations(all_cards, total_cards):
+                            hand = list(hand_combo)
+                            if best_hand is None or evaluator.compare_hands(hand, best_hand, eval_type) > 0:
+                                best_hand = hand            
+    
+            else:
+                # Fallback to all hole cards
+                all_cards = hole_cards + comm_cards
+                if len(all_cards) >= total_cards:
+                    for hand_combo in itertools.combinations(all_cards, total_cards):
+                        hand = list(hand_combo)
+                        if best_hand is None or evaluator.compare_hands(hand, best_hand, eval_type) > 0:
+                            best_hand = hand
             
             # If there are no community cards or exactly the right number of hole cards,
             # we can just use the hole cards (straight poker case)
             if not comm_cards and len(hole_cards) == total_cards:
                 return hole_cards
             
-            # Otherwise, find the best hand from all available cards
-            if len(all_cards) >= total_cards:
-                # Try all possible combinations
-                for combo in itertools.combinations(all_cards, total_cards):
-                    hand = list(combo)
-                    
-                    if best_hand is None:
-                        best_hand = hand
-                    else:
-                        if evaluator.compare_hands(hand, best_hand, eval_type) > 0:
-                            best_hand = hand
-                
-                return best_hand
-            else:
+            if len(all_cards) < total_cards:
                 # Not enough cards total
                 logger.warning(
                     f"Not enough cards for player {player.id}: "
@@ -2121,6 +2148,8 @@ class Game:
                 )
                 return []
             
+            return best_hand or [] 
+                   
         # Handle cases with multiple possible combinations of hole and community cards
         elif "holeCards" in showdown_rules and isinstance(showdown_rules["holeCards"], list):
             hole_options = showdown_rules["holeCards"]
