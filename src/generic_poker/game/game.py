@@ -10,7 +10,7 @@ from generic_poker.game.betting import (
     BettingManager, LimitBettingManager, create_betting_manager,
     BettingStructure, BetType, PlayerBet
 )
-from generic_poker.game.bringin import BringInDeterminator
+from generic_poker.game.bringin import BringInDeterminator, CardRule
 from generic_poker.core.card import Card, Visibility
 from generic_poker.evaluation.evaluator import EvaluationType, evaluator
 
@@ -1238,7 +1238,9 @@ class Game:
 
         elif bet_type == "bring-in":
             # Determine bring-in player (lowest up-card)
-            bring_in_player = BringInDeterminator.determine_first_to_act(active_players, self.betting.betting_round + 1, "low card")
+            num_visible = sum(1 for c in active_players[0].hand.get_cards() if c.visibility == Visibility.FACE_UP)
+            bring_in_rule = CardRule(self.rules.forced_bets.rule)
+            bring_in_player = BringInDeterminator.determine_first_to_act(active_players, num_visible, bring_in_rule, self.rules)
             if bring_in_player:
                 self.current_player = bring_in_player
                 logger.info(f"Bring-in player: {bring_in_player.name} with {bring_in_player.hand.cards[-1]}")
@@ -1287,7 +1289,7 @@ class Game:
 
         if is_stud_game:
             step = self.rules.gameplay[self.current_step]
-            bring_in_rule = self.rules.forced_bets.rule
+            bring_in_rule = CardRule(self.rules.forced_bets.rule)
 
             # Find the "Initial Bet" step dynamically
             # Debug the gameplay steps
@@ -1295,10 +1297,11 @@ class Game:
             bring_in_step_idx = next((i for i, s in enumerate(self.rules.gameplay) if s.action_config.get("type") == "bring-in"), -1)
             initial_bet_step_idx = bring_in_step_idx + 1 if bring_in_step_idx != -1 else -1
             logger.debug(f"  current step: {self.current_step}, bring_in_step_idx: {bring_in_step_idx}, initial_bet_step_idx: {initial_bet_step_idx}")
-       
+
+            num_visible = sum(1 for c in active_players[0].hand.get_cards() if c.visibility == Visibility.FACE_UP)      
 
             if round_start and step.action_config.get("type") == "bring-in":
-                bring_in_player = BringInDeterminator.determine_first_to_act(active_players, self.betting.betting_round + 1, bring_in_rule)
+                bring_in_player = BringInDeterminator.determine_first_to_act(active_players, num_visible, bring_in_rule, self.rules)
                 logger.debug(f"Stud first-to-act in bring-in round: {bring_in_player.name}")
                 return bring_in_player
             elif round_start and self.current_step == initial_bet_step_idx:  # "Initial Bet" (first small bet round)
@@ -1313,7 +1316,7 @@ class Game:
                 return active_players[next_idx]
             elif round_start:
                 # Later rounds (e.g., Third Street Bet): use high hand logic via determine_first_to_act
-                first_player = BringInDeterminator.determine_first_to_act(active_players, self.betting.betting_round + 1, bring_in_rule)
+                first_player = BringInDeterminator.determine_first_to_act(active_players, num_visible, bring_in_rule, self.rules)
                 logger.debug(f"Stud first-to-act in round {self.betting.betting_round + 1}: {first_player.name}")
                 return first_player            
             elif self.current_player:

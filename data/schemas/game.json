@@ -38,7 +38,11 @@
         "variation": {
           "type": "string",
           "description": "Optional variation on the standard bring-in rules"
-        }        
+        },
+        "bringInEval": {
+          "type": "string",
+          "description": "Evaluation type from bestHand to use for bring-in with 2+ cards (required for multi-hand games)"
+        }            
       },
       "required": ["style", "rule"],
       "additionalProperties": false

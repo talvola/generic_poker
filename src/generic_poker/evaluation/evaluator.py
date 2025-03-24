@@ -34,21 +34,21 @@ class EvaluationType(str, Enum):
     ONE_CARD_LOW_AL = 'one_card_low_al'
     ONE_CARD_HIGH = 'one_card_high'
     ONE_CARD_HIGH_AH = 'one_card_high_ah'
-    TWO_CARD_LOW = 'two_card_low'
-    TWO_CARD_LOW_AH = 'two_card_low_ah'
-    TWO_CARD_HIGH = 'two_card_high'
-    TWO_CARD_HIGH_AL = 'two_card_high_al'
-    TWO_CARD_HIGH_AL_RH = 'two_card_high_al_rh'
-    THREE_CARD_LOW = 'three_card_low'
-    THREE_CARD_LOW_AH = 'three_card_low_ah'
-    THREE_CARD_HIGH = 'three_card_high'
-    THREE_CARD_HIGH_AL = 'three_card_high_al'
-    THREE_CARD_HIGH_AL_RH = 'three_card_high_al_rh'
-    FOUR_CARD_LOW = 'four_card_low'
-    FOUR_CARD_LOW_AH = 'four_card_low_ah'
-    FOUR_CARD_HIGH = 'four_card_high'
-    FOUR_CARD_HIGH_AL = 'four_card_high_al'
-    FOUR_CARD_HIGH_AL_RH = 'four_card_high_al_rh'
+    # TWO_CARD_LOW = 'two_card_low'
+    # TWO_CARD_LOW_AH = 'two_card_low_ah'
+    # TWO_CARD_HIGH = 'two_card_high'
+    # TWO_CARD_HIGH_AL = 'two_card_high_al'
+    # TWO_CARD_HIGH_AL_RH = 'two_card_high_al_rh'
+    # THREE_CARD_LOW = 'three_card_low'
+    # THREE_CARD_LOW_AH = 'three_card_low_ah'
+    # THREE_CARD_HIGH = 'three_card_high'
+    # THREE_CARD_HIGH_AL = 'three_card_high_al'
+    # THREE_CARD_HIGH_AL_RH = 'three_card_high_al_rh'
+    # FOUR_CARD_LOW = 'four_card_low'
+    # FOUR_CARD_LOW_AH = 'four_card_low_ah'
+    # FOUR_CARD_HIGH = 'four_card_high'
+    # FOUR_CARD_HIGH_AL = 'four_card_high_al'
+    # FOUR_CARD_HIGH_AL_RH = 'four_card_high_al_rh'
 
 @dataclass
 class HandResult:
@@ -221,41 +221,17 @@ class HandEvaluator:
         
     def _get_evaluator_class(self, eval_type: EvaluationType) -> Type[BaseEvaluator]:
         """Get appropriate evaluator class for eval type."""
-
-        # most hands which use the CSV file-based hand evaluator all use the same 
-        # code.
         from generic_poker.evaluation.eval_types.standard import StandardHandEvaluator
         
+        # Map exceptions to specific evaluator classes; all others default to StandardHandEvaluator
         evaluator_map = {
-            EvaluationType.HIGH: StandardHandEvaluator,
-            EvaluationType.LOW_A5: StandardHandEvaluator,
-            EvaluationType.LOW_27: StandardHandEvaluator,
-            # the stud partial hand evaluators can all use the standard hand evaluator
-            EvaluationType.ONE_CARD_LOW: StandardHandEvaluator,
-            EvaluationType.ONE_CARD_LOW_AL: StandardHandEvaluator,
-            EvaluationType.ONE_CARD_HIGH: StandardHandEvaluator,
-            EvaluationType.ONE_CARD_HIGH_AH: StandardHandEvaluator,
-            EvaluationType.TWO_CARD_LOW: StandardHandEvaluator,
-            EvaluationType.TWO_CARD_LOW_AH: StandardHandEvaluator,
-            EvaluationType.TWO_CARD_HIGH: StandardHandEvaluator,
-            EvaluationType.TWO_CARD_HIGH_AL: StandardHandEvaluator,
-            EvaluationType.TWO_CARD_HIGH_AL_RH: StandardHandEvaluator,
-            EvaluationType.THREE_CARD_LOW: StandardHandEvaluator,
-            EvaluationType.THREE_CARD_LOW_AH: StandardHandEvaluator,
-            EvaluationType.THREE_CARD_HIGH: StandardHandEvaluator,
-            EvaluationType.THREE_CARD_HIGH_AL: StandardHandEvaluator,
-            EvaluationType.THREE_CARD_HIGH_AL_RH: StandardHandEvaluator,
-            EvaluationType.FOUR_CARD_LOW: StandardHandEvaluator,
-            EvaluationType.FOUR_CARD_LOW_AH: StandardHandEvaluator,
-            EvaluationType.FOUR_CARD_HIGH: StandardHandEvaluator,
-            EvaluationType.FOUR_CARD_HIGH_AL: StandardHandEvaluator,
-            EvaluationType.FOUR_CARD_HIGH_AL_RH: StandardHandEvaluator         
+            # Add exceptions here as needed, e.g.:
+            # EvaluationType.HIGH_WILD: WildHandEvaluator,
+            # EvaluationType.BADUGI: BadugiEvaluator,
         }
         
-        if eval_type not in evaluator_map:
-            raise ValueError(f"No evaluator available for type: {eval_type}")
-        
-        return evaluator_map[eval_type]
+        # Return the mapped evaluator if it exists, otherwise default to StandardHandEvaluator
+        return evaluator_map.get(eval_type, StandardHandEvaluator)
         
 # Global instance
 evaluator = HandEvaluator()

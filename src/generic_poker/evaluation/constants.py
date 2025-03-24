@@ -62,9 +62,9 @@ RANK_ORDERS = {
 
     # stud bring-in hands, such as two_card_high, etc.
     'one_card_low': LOW_A5_RANKS,
-    'two_card_low': LOW_A5_RANKS,
-    'three_card_low': LOW_A5_RANKS,
-    'four_card_low': LOW_A5_RANKS,
+    'two_card_a5_low': LOW_A5_RANKS,
+    'three_card_a5_low': LOW_A5_RANKS,
+    'four_card_a5_low': LOW_A5_RANKS,
     'one_card_low_al': LOW_A5_RANKS,
     'two_card_high_al': LOW_A5_RANKS,
     'three_card_high_al': LOW_A5_RANKS,
@@ -79,9 +79,9 @@ RANK_ORDERS = {
     'three_card_high': BASE_RANKS,
     'four_card_high': BASE_RANKS,
     'one_card_high_ah': BASE_RANKS,
-    'two_card_low_ah': BASE_RANKS,
-    'three_card_low_ah': BASE_RANKS,
-    'four_card_low_ah': BASE_RANKS
+    'two_card_27_low': BASE_RANKS,
+    'three_card_27_low': BASE_RANKS,
+    'four_card_27_low': BASE_RANKS
 }
 
 # Mapping of evaluation types to required hand sizes
@@ -101,19 +101,19 @@ HAND_SIZES = {
     'badugi_ah': 4,
     'hidugi': 4,
     'four_card_high': 4,
-    'four_card_low': 4,
+    'four_card_a5_low': 4,
     'four_card_high_al': 4,
-    'four_card_low_ah': 4,
+    'four_card_27_low': 4,
     'four_card_high_al_rh': 4,
     'three_card_high': 3,
-    'three_card_low': 3,
+    'three_card_a5_low': 3,
     'three_card_high_al': 3,
-    'three_card_low_ah': 3,
+    'three_card_27_low': 3,
     'three_card_high_al_rh': 3,
     'two_card_high': 2,
-    'two_card_low': 2,
+    'two_card_a5_low': 2,
     'two_card_high_al': 2,
-    'two_card_low_ah': 2,
+    'two_card_27_low': 2,
     'two_card_high_al_rh': 2,
     'one_card_high': 1,
     'one_card_low': 1,
