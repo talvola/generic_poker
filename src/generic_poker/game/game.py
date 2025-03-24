@@ -80,6 +80,19 @@ class PotResult:
         else:
             return f"{pot_name}: ${self.amount} - Won by {winners_str}"  
 
+    def to_json(self) -> dict:
+        """Convert to JSON-compatible dictionary."""
+        return {
+            "amount": self.amount,
+            "winners": self.winners,
+            "split": self.split,
+            "pot_type": self.pot_type,
+            "hand_type": self.hand_type,
+            "side_pot_index": self.side_pot_index,
+            "eligible_players": list(self.eligible_players),
+            "amount_per_player": self.amount_per_player
+        }
+    
 @dataclass
 class HandResult:
     """Information about a player's hand and its evaluation."""
@@ -96,6 +109,19 @@ class HandResult:
         """String representation of the hand result."""
         cards_str = ", ".join(str(card) for card in self.cards)
         return f"Player {self.player_id}: {self.hand_description} ({cards_str})"
+    
+    def to_json(self) -> dict:
+        """Convert to JSON-compatible dictionary."""
+        return {
+            "player_id": self.player_id,
+            "cards": [str(card) for card in self.cards],
+            "hand_name": self.hand_name,
+            "hand_description": self.hand_description,
+            "evaluation_type": self.evaluation_type,
+            "hand_type": self.hand_type,
+            "community_cards": [str(card) for card in self.community_cards],
+            "rank": self.rank
+        }    
 
 @dataclass
 class GameResult:
@@ -180,6 +206,17 @@ class GameResult:
                     lines.append(f"\t\t- {hand}")
         
         return "\n".join(lines)
+
+    def to_json(self) -> str:
+        """Convert to JSON string."""
+        result_dict = {
+            "is_complete": self.is_complete,
+            "total_pot": self.total_pot,
+            "pots": [pot.to_json() for pot in self.pots],
+            "hands": {pid: [hand.to_json() for hand in hands] for pid, hands in self.hands.items()},
+            "winning_hands": [hand.to_json() for hand in self.winning_hands]
+        }
+        return json.dumps(result_dict, indent=2)        
     
 class Game:
     """
@@ -1051,6 +1088,9 @@ class Game:
         if is_draw:
             # Draw new cards if applicable
             if draw_amount > 0:
+                if len(self.table.deck.cards) < draw_amount:
+                    logger.warning(f"Not enough cards to draw {draw_amount} for {player.name}; available: {len(self.table.deck.cards)}")
+                    draw_amount = len(self.table.deck.cards)                
                 new_cards = self.table.deck.deal_cards(draw_amount)
                 player.hand.add_cards(new_cards)
                 logger.info(f"{player.name} draws {len(new_cards)} new cards: {new_cards}")

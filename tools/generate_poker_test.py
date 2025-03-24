@@ -1,0 +1,259 @@
+import json
+from typing import Dict, List, Any
+import sys
+import os
+
+def generate_test_script(json_file_path: str, output_file_path: str) -> None:
+    """Generate a pytest script for a poker game defined in a JSON file."""
+    with open(json_file_path, 'r') as f:
+        game_rules = json.load(f)
+
+    file_base_name = os.path.splitext(os.path.basename(json_file_path))[0]
+    game_name = game_rules["game"].replace(" ", "_").lower()
+    uses_blinds = any(step.get("bet", {}).get("type") == "blinds" for step in game_rules["gamePlay"])
+    player_ids = ["BTN", "SB", "BB"] if uses_blinds else ["p1", "p2", "p3"]
+    action_order = ["SB", "BB", "BTN"] if uses_blinds else player_ids
+
+    script = [
+        '"""Minimal end-to-end test for {game_name}."""'.format(game_name=game_name),
+        "import pytest",
+        "from generic_poker.config.loader import GameRules",
+        "from generic_poker.game.game import Game, GameState, PlayerAction",
+        "from generic_poker.core.card import Card, Rank, Suit",
+        "from generic_poker.game.betting import BettingStructure",
+        "from generic_poker.core.deck import Deck",
+        "from test_helpers import load_rules_from_file",
+        "import logging",
+        "import sys",
+        "",
+        "class MockDeck(Deck):",
+        '    """A deck with predetermined card sequence for testing, followed by remaining cards."""',
+        "    def __init__(self, named_cards):",
+        "        super().__init__(include_jokers=False)",
+        "        self.cards.clear()",
+        "        # Add named cards in reverse order (last dealt first)",
+        "        for card in reversed(named_cards):",
+        "            self.cards.append(card)",
+        "        # Add remaining cards from a standard deck in deterministic order",
+        "        all_cards = [Card(rank, suit) for suit in [Suit.SPADES, Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS] "
+        "                    for rank in [Rank.TWO, Rank.THREE, Rank.FOUR, Rank.FIVE, Rank.SIX, Rank.SEVEN, "
+        "                                 Rank.EIGHT, Rank.NINE, Rank.TEN, Rank.JACK, Rank.QUEEN, Rank.KING, Rank.ACE]]",
+        "        used_cards = {(c.rank, c.suit) for c in named_cards}",
+        "        remaining_cards = [c for c in all_cards if (c.rank, c.suit) not in used_cards]",
+        "        for card in reversed(remaining_cards):",
+        "            self.cards.append(card)",
+        "",
+        "def create_predetermined_deck():",
+        '    """Create a deck with predetermined cards followed by the rest of a standard deck."""',
+        "    named_cards = [",
+        "        Card(Rank.ACE, Suit.HEARTS), Card(Rank.NINE, Suit.DIAMONDS), Card(Rank.JACK, Suit.SPADES),",
+        "        Card(Rank.KING, Suit.HEARTS), Card(Rank.KING, Suit.CLUBS), Card(Rank.JACK, Suit.DIAMONDS),",
+        "        Card(Rank.QUEEN, Suit.HEARTS), Card(Rank.KING, Suit.DIAMONDS), Card(Rank.TEN, Suit.SPADES),",
+        "        Card(Rank.QUEEN, Suit.CLUBS), Card(Rank.QUEEN, Suit.SPADES), Card(Rank.JACK, Suit.HEARTS),",
+        "        Card(Rank.TEN, Suit.DIAMONDS), Card(Rank.TEN, Suit.HEARTS), Card(Rank.NINE, Suit.SPADES),",
+        "        Card(Rank.TWO, Suit.SPADES), Card(Rank.TWO, Suit.DIAMONDS), Card(Rank.TWO, Suit.HEARTS),",
+        "    ]",
+        "    return MockDeck(named_cards)",
+        "",
+        "def setup_test_game():",
+        f'    """Setup a 3-player {game_name} game with a mock deck."""',
+        f"    rules = load_rules_from_file('{file_base_name}')",
+        "    game = Game(",
+        "        rules=rules,",
+        "        structure=BettingStructure.LIMIT,",
+        "        small_bet=10,",
+        "        big_bet=20,",
+        "        min_buyin=100,",
+        "        max_buyin=1000,",
+        "        auto_progress=False",
+        "    )",
+    ]
+
+    for i, pid in enumerate(player_ids):
+        script.append(f"    game.add_player('{pid}', 'Player{i+1}', 500)")
+
+    script.extend([
+        "    original_clear_hands = game.table.clear_hands",
+        "    def patched_clear_hands():",
+        "        for player in game.table.players.values():",
+        "            player.hand.clear()",
+        "        game.table.community_cards.clear()",
+        "    game.table.clear_hands = patched_clear_hands",
+        "    game.table.deck = create_predetermined_deck()",
+        "    return game",
+        "",
+        "@pytest.fixture(autouse=True)",
+        "def setup_logging():",
+        "    root_logger = logging.getLogger()",
+        "    for handler in root_logger.handlers[:]:",
+        "        root_logger.removeHandler(handler)",
+        "    logging.basicConfig(",
+        "        level=logging.DEBUG,",
+        "        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',",
+        "        handlers=[logging.StreamHandler(sys.stdout)],",
+        "        force=True",
+        "    )",
+        "",
+        f"def test_{game_name}_minimal_flow():",
+        f'    """Test minimal flow for {game_name} from start to showdown."""',
+        "    game = setup_test_game()",
+        "    game.start_hand()",
+    ])
+
+    first_betting_round = True
+
+    for step_idx, step in enumerate(game_rules["gamePlay"]):
+        step_name = step["name"].replace(" ", "_").lower()
+        action_type = list(step.keys())[0]
+        if step_idx == 0:
+            script.append(f"    # Step {step_idx}: {step['name']}")
+            script.append(f"    assert game.current_step == {step_idx}")
+        else:
+            script.append(f"    # Step {step_idx}: {step['name']}")
+            script.append(f"    game._next_step()  # {step_name}")
+            script.append(f"    assert game.current_step == {step_idx}")
+
+        if action_type == "bet":
+            bet_type = step["bet"]["type"]
+            if bet_type == "blinds":
+                script.extend([
+                    "    assert game.state == GameState.BETTING",
+                    f"    assert game.table.players['{player_ids[1]}'].stack == 495  # SB",
+                    f"    assert game.table.players['{player_ids[2]}'].stack == 490  # BB",
+                    f"    assert game.table.players['{player_ids[0]}'].stack == 500  # BTN",
+                    "    assert game.betting.get_main_pot_amount() == 15",
+                ])
+            elif bet_type in ["small", "big"]:
+                bet_amount = 10 if bet_type == "small" else 20
+                first_player = "'BTN'" if first_betting_round else "'SB'"
+                if first_betting_round:
+                    script.extend([
+                        "    assert game.state == GameState.BETTING",
+                        f"    assert game.current_player.id == {first_player}  # BTN first pre-flop",
+                        f"    actions = game.get_valid_actions({first_player})",
+                        f"    assert (PlayerAction.CALL, {bet_amount}, {bet_amount}) in actions",
+                        f"    game.player_action('BTN', PlayerAction.CALL, {bet_amount})",
+                        f"    game.player_action('SB', PlayerAction.CALL, {bet_amount - 5})  # SB completes to {bet_amount}",
+                        f"    game.player_action('BB', PlayerAction.CHECK)  # BB already in for {bet_amount}",
+                        f"    assert game.betting.get_main_pot_amount() == 30",
+                    ])
+                else:
+                    script.extend([
+                        "    assert game.state == GameState.BETTING",
+                        f"    assert game.current_player.id == {first_player}  # SB first post-flop",
+                        f"    actions = game.get_valid_actions({first_player})",
+                        "    assert (PlayerAction.CHECK, None, None) in actions",
+                        f"    game.player_action('SB', PlayerAction.CHECK)",
+                        f"    game.player_action('BB', PlayerAction.CHECK)",
+                        f"    game.player_action('BTN', PlayerAction.CHECK)",
+                        f"    assert game.betting.get_main_pot_amount() == 30  # No change",
+                    ])
+                first_betting_round = False
+            elif bet_type == "bring-in":
+                script.extend([
+                    "    assert game.state == GameState.BETTING",
+                    f"    assert game.current_player.id == '{player_ids[0]}'  # Temp assumption",
+                    "    actions = game.get_valid_actions(game.current_player.id)",
+                    "    game.player_action(game.current_player.id, PlayerAction.BET, 10)",
+                ])
+            else:
+                script.extend([
+                    "    assert game.state == GameState.BETTING",
+                    f"    assert game.current_player.id == '{player_ids[0]}'  # BTN first",
+                    "    actions = game.get_valid_actions('BTN')",
+                    "    assert (PlayerAction.CALL, 10, 10) in actions",
+                    "    game.player_action('BTN', PlayerAction.CALL, 10)",
+                    "    game.player_action('SB', PlayerAction.CALL, 5)",
+                    "    game.player_action('BB', PlayerAction.CHECK)",
+                    "    assert game.betting.get_main_pot_amount() == 30",
+                ])
+                first_betting_round = False
+
+        elif action_type == "deal":
+            location = step["deal"]["location"]
+            num_cards = sum(c["number"] for c in step["deal"]["cards"])
+            if location == "player":
+                script.extend([
+                    "    assert game.state == GameState.DEALING",
+                    f"    for pid in {player_ids}:",
+                    f"        assert len(game.table.players[pid].hand.get_cards()) == {num_cards}",
+                ])
+            elif location == "community":
+                script.extend([
+                    "    assert game.state == GameState.DEALING",
+                    f"    assert len(game.table.community_cards['default']) == {num_cards}",
+                ])
+
+        elif action_type == "separate":
+            total_cards = sum(c["number"] for c in step["separate"]["cards"])
+            subsets = [c["hole_subset"] for c in step["separate"]["cards"]]
+            script.extend([
+                "    assert game.state == GameState.DRAWING",
+                f"    assert game.current_player.id == '{action_order[0]}'  # Start with SB",
+                "    actions = game.get_valid_actions(game.current_player.id)",
+                f"    assert any(a[0] == PlayerAction.SEPARATE and a[1] == {total_cards} for a in actions)",
+                f"    for pid in {action_order}:",
+                "        hand = game.table.players[pid].hand",
+                f"        cards = hand.get_cards()[:{total_cards}]",
+                "        game.player_action(pid, PlayerAction.SEPARATE, cards=cards)",
+                *[f"        assert len(hand.get_subset('{subset}')) == 1" for subset in subsets],
+            ])
+
+        elif action_type == "draw":
+            draw_config = step["draw"]["cards"][0]
+            min_num = draw_config.get("min_number", 0)
+            max_num = draw_config["number"]
+            num_to_discard = max(min_num, min(2, max_num))
+            script.extend([
+                "    assert game.state == GameState.DRAWING",
+                f"    assert game.current_player.id == '{action_order[0]}'  # Start with SB",
+                "    actions = game.get_valid_actions(game.current_player.id)",
+                f"    assert any(a[0] == PlayerAction.DRAW and a[1] == {min_num} and a[2] == {max_num} for a in actions)",
+                f"    for pid in {action_order}:",
+                "        hand = game.table.players[pid].hand",
+                "        initial_count = len(hand.get_cards())",
+                f"        cards_to_discard = hand.get_cards()[:{num_to_discard}]",
+                f"        game.player_action(pid, PlayerAction.DRAW, cards=cards_to_discard)",
+                "        assert len(hand.get_cards()) == initial_count  # Hand size unchanged",
+            ])
+
+        elif action_type == "showdown":
+            script.extend([
+                "    assert game.state == GameState.COMPLETE",
+                "    results = game.get_hand_results()",
+                "    assert results.is_complete",
+                "    assert results.total_pot > 0",
+                "    assert len(results.hands) == 3",
+                "    assert len(results.pots) >= 1",
+                "    print('\\nShowdown Results:')",
+                "    print(results)",
+                "",
+                "    # Check pot details",
+                "    main_pot = results.pots[0]",
+                "    assert main_pot.amount == results.total_pot  # TODO: Verify expected pot size",
+                "    assert main_pot.pot_type == 'main'",
+                "    assert not main_pot.split  # TODO: Adjust if split pots expected",
+                "    assert len(main_pot.winners) == 1  # TODO: Adjust if multiple winners",
+                "    assert main_pot.winners[0] in {}".format(player_ids),
+                "    # TODO: Replace with expected winner, e.g., assert 'BTN' in main_pot.winners",
+                "",
+                "    # Check winning hand",
+                "    winning_player = main_pot.winners[0]",
+                "    winning_hand = results.hands[winning_player]",
+                "    assert winning_hand[0].hand_name  # TODO: e.g., assert 'Pair' in winning_hand[0].hand_name",
+                "    assert winning_hand[0].hand_description  # TODO: e.g., assert 'Pair of Sevens' in winning_hand[0].hand_description",
+                "",
+                "    # Check winning hands list",
+                "    assert len(results.winning_hands) == 1  # TODO: Adjust if multiple winners",
+                "    assert results.winning_hands[0].player_id == winning_player",
+                "    # TODO: Replace with expected winner, e.g., assert results.winning_hands[0].player_id == 'BTN'",
+            ])
+
+    with open(output_file_path, 'w') as f:
+        f.write("\n".join(script))
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print("Usage: python generate_poker_test.py <input_json> <output_py>")
+        sys.exit(1)
+    generate_test_script(sys.argv[1], sys.argv[2])
