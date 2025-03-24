@@ -34,21 +34,22 @@ class EvaluationType(str, Enum):
     ONE_CARD_LOW_AL = 'one_card_low_al'
     ONE_CARD_HIGH = 'one_card_high'
     ONE_CARD_HIGH_AH = 'one_card_high_ah'
-    # TWO_CARD_LOW = 'two_card_low'
-    # TWO_CARD_LOW_AH = 'two_card_low_ah'
-    # TWO_CARD_HIGH = 'two_card_high'
-    # TWO_CARD_HIGH_AL = 'two_card_high_al'
-    # TWO_CARD_HIGH_AL_RH = 'two_card_high_al_rh'
-    # THREE_CARD_LOW = 'three_card_low'
-    # THREE_CARD_LOW_AH = 'three_card_low_ah'
-    # THREE_CARD_HIGH = 'three_card_high'
-    # THREE_CARD_HIGH_AL = 'three_card_high_al'
-    # THREE_CARD_HIGH_AL_RH = 'three_card_high_al_rh'
-    # FOUR_CARD_LOW = 'four_card_low'
-    # FOUR_CARD_LOW_AH = 'four_card_low_ah'
-    # FOUR_CARD_HIGH = 'four_card_high'
-    # FOUR_CARD_HIGH_AL = 'four_card_high_al'
-    # FOUR_CARD_HIGH_AL_RH = 'four_card_high_al_rh'
+    # 2-4 card Stud evaluations
+    TWO_CARD_LOW = 'two_card_a5_low'
+    TWO_CARD_LOW_AH = 'two_card_27_low'
+    TWO_CARD_HIGH = 'two_card_high'
+    TWO_CARD_HIGH_AL = 'two_card_high_al'  # Unimplemented
+    TWO_CARD_HIGH_AL_RH = 'two_card_a5_low_high'
+    THREE_CARD_LOW = 'three_card_a5_low'
+    THREE_CARD_LOW_AH = 'three_card_27_low'
+    THREE_CARD_HIGH = 'three_card_high'
+    THREE_CARD_HIGH_AL = 'three_card_high_al'  # Unimplemented
+    THREE_CARD_HIGH_AL_RH = 'three_card_a5_low_high'
+    FOUR_CARD_LOW = 'four_card_a5_low'
+    FOUR_CARD_LOW_AH = 'four_card_27_low'
+    FOUR_CARD_HIGH = 'four_card_high'
+    FOUR_CARD_HIGH_AL = 'four_card_high_al'  # Unimplemented
+    FOUR_CARD_HIGH_AL_RH = 'four_card_a5_low_high'
 
 @dataclass
 class HandResult:

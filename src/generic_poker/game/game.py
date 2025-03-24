@@ -1315,10 +1315,17 @@ class Game:
                 logger.debug(f"Stud first-to-act in round {self.betting.betting_round + 1}: {active_players[next_idx].name}")
                 return active_players[next_idx]
             elif round_start:
-                # Later rounds (e.g., Third Street Bet): use high hand logic via determine_first_to_act
+                # For non-betting rounds (e.g., expose) or betting rounds with visible cards
+                if num_visible == 0:  # No cards visible yet (e.g., expose step)
+                    logger.debug(f"No visible cards; starting with first active player: {active_players[0].name}")
+                    return active_players[0]           
+                # Later betting rounds (e.g., Fourth Street Bet)                    
                 first_player = BringInDeterminator.determine_first_to_act(active_players, num_visible, bring_in_rule, self.rules)
+                if first_player is None:
+                    logger.warning("No first player determined; defaulting to first active player")
+                    return active_players[0]               
                 logger.debug(f"Stud first-to-act in round {self.betting.betting_round + 1}: {first_player.name}")
-                return first_player            
+                return first_player          
             elif self.current_player:
                 current_idx = active_players.index(self.current_player)
                 next_idx = (current_idx + 1) % len(active_players)

@@ -45,6 +45,7 @@ class ForcedBets:
     style: str
     rule: Optional[str] = None
     variation: Optional[str] = None
+    bringInEval: Optional[str] = None
 
 @dataclass
 class ShowdownAction:
@@ -141,13 +142,15 @@ class GameRules:
             forced_bets = ForcedBets(
                 style=forced_bets_data.get('style'),
                 rule=rule,
-                variation=forced_bets_data.get('variation')
+                variation=forced_bets_data.get('variation'),
+                bringInEval=forced_bets_data.get('bringInEval')
             )
         else:
             forced_bets = ForcedBets(
                 style='blinds',
                 rule=None,
-                variation=None
+                variation=None,
+                bringInEval=None
             )  
 
         # Parse gameplay st eps

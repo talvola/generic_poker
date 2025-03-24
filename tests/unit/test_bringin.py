@@ -4,9 +4,49 @@ from generic_poker.core.card import Card, Rank, Suit, Visibility
 from generic_poker.game.table import Player, PlayerPosition
 from generic_poker.game.bringin import BringInDeterminator, CardRule
 
+from dataclasses import dataclass
+from typing import List, Dict, Any
+
 import logging
 import sys
 
+@dataclass
+class ShowdownConfig:
+    order: str
+    starting_from: str
+    cards_required: str
+    best_hand: List[Dict[str, Any]]
+    default_action: Dict[str, Any]
+
+@dataclass
+class GameRules:
+    forced_bets: Dict[str, Any]
+    showdown: ShowdownConfig
+    # Minimal fields; omit gameplay, bettingStructures, etc.
+
+def minimal_stud_rules(rule: str = "low card", evaluation_type: str = "high") -> GameRules:
+    """
+    Create a minimal GameRules object for Stud game tests.
+    
+    Args:
+        rule: The bring-in rule (e.g., "low card", "high card", "high card ah")
+        evaluation_type: The showdown evaluation type (e.g., "high", "a5_low", "27_low")
+    
+    Returns:
+        A minimal GameRules object with forcedBets and showdown configured
+    """
+    showdown_config = ShowdownConfig(
+        order="clockwise",
+        starting_from="dealer",
+        cards_required="best five out of seven cards",
+        best_hand=[{"evaluationType": evaluation_type, "anyCards": 5}],
+        default_action={}
+    )
+    return GameRules(
+        forced_bets={"style": "bring-in", "rule": rule},
+        showdown=showdown_config
+    )
+    
 @pytest.fixture(autouse=True)
 def setup_logging():
     """Set up logging for all tests."""
@@ -79,10 +119,12 @@ def players_with_multiple_upcards():
 def test_first_round_low_card(players_with_door_cards):
     """Test first round bring-in with low card rule.   i.e., 7-Card Stud"""
     players = players_with_door_cards
+
+    rules = minimal_stud_rules(rule="low card", evaluation_type="high")
     
     # In first round with 'low card' rule, player with 2 of Clubs should go first
     first_player = BringInDeterminator.determine_first_to_act(
-        players, 1, 'low card'
+        players, 1, CardRule.LOW_CARD, rules
     )
     
     assert first_player is not None
@@ -91,10 +133,12 @@ def test_first_round_low_card(players_with_door_cards):
 def test_first_round_high_card(players_with_door_cards):
     """Test first round bring-in with high card rule.  i.e., Razz"""
     players = players_with_door_cards
+
+    rules = minimal_stud_rules(rule="high card", evaluation_type="a5_low")
     
     # In first round with 'high card' rule, player with King of Spades should go first
     first_player = BringInDeterminator.determine_first_to_act(
-        players, 1, 'high card'
+        players, 1, CardRule.HIGH_CARD, rules
     )
     
     assert first_player is not None
@@ -103,10 +147,12 @@ def test_first_round_high_card(players_with_door_cards):
 def test_first_round_low_card_ace_low(players_with_door_cards):
     """Test first round bring-in with low card (ace is low) rule.  No games currently used this"""
     players = players_with_door_cards
+
+    rules = minimal_stud_rules(rule="low card al", evaluation_type="high")
     
     # In first round with 'low card al' rule, player with Ace of Diamonds should go first
     first_player = BringInDeterminator.determine_first_to_act(
-        players, 1, 'low card al'
+        players, 1, CardRule.LOW_CARD_AL, rules
     )
     
     assert first_player is not None
@@ -115,10 +161,12 @@ def test_first_round_low_card_ace_low(players_with_door_cards):
 def test_first_round_low_card_ace_low_razz_high(players_with_door_cards):
     """Test first round bring-in with low card (ace is low) rule.  Razz High special rules"""
     players = players_with_door_cards
+
+    rules = minimal_stud_rules(rule="low card al", evaluation_type="a5_low_high")
     
     # In first round with 'low card al' rule, player with Ace of Diamonds should go first
     first_player = BringInDeterminator.determine_first_to_act(
-        players, 1, 'low card al rh'
+        players, 1, CardRule.LOW_CARD_AL_RH, rules
     )
     
     assert first_player is not None
@@ -128,9 +176,11 @@ def test_first_round_high_card_ace_high(players_with_door_cards):
     """Test first round bring-in with high card (ace is high) rule.  i.e., 2-7 Razz (unusual)"""
     players = players_with_door_cards
     
+    rules = minimal_stud_rules(rule="high card", evaluation_type="27_low")
+
     # In first round with 'high card' rule, player with King of Spades should go first
     first_player = BringInDeterminator.determine_first_to_act(
-        players, 1, 'high card ah'
+        players, 1, CardRule.HIGH_CARD_AH, rules
     )
     
     assert first_player is not None
@@ -139,11 +189,13 @@ def test_first_round_high_card_ace_high(players_with_door_cards):
 def test_later_round_standard_stud(players_with_multiple_upcards):
     """Test later round first-to-act in standard 7-card stud."""
     players = players_with_multiple_upcards
+
+    rules = minimal_stud_rules(rule="low card", evaluation_type="high")
     
     # In later rounds of standard stud, player with highest hand showing goes first
     # Player 1 has 2-2 showing, which is the highest
     first_player = BringInDeterminator.determine_first_to_act(
-        players, 2, 'low card'
+        players, 2, CardRule.LOW_CARD, rules
     )
     
     assert first_player is not None
@@ -152,11 +204,13 @@ def test_later_round_standard_stud(players_with_multiple_upcards):
 def test_later_round_razz(players_with_multiple_upcards):
     """Test later round first-to-act in Razz."""
     players = players_with_multiple_upcards
+
+    rules = minimal_stud_rules(rule="high card", evaluation_type="a5_low")
     
     # In later rounds of Razz, player with lowest hand showing goes first
     # Player 2 has A-2 showing, which is the lowest
     first_player = BringInDeterminator.determine_first_to_act(
-        players, 2, 'high card'
+        players, 2, CardRule.HIGH_CARD, rules
     )
     
     assert first_player is not None
@@ -165,11 +219,13 @@ def test_later_round_razz(players_with_multiple_upcards):
 def test_later_round_razz_high(players_with_multiple_upcards):
     """Test later round first-to-act in Razz High."""
     players = players_with_multiple_upcards
+
+    rules = minimal_stud_rules(rule="low card al", evaluation_type="a5_low_high")
     
     # In later rounds of Razz High, best unpaired hand showing goes first
     # Player 4 has K-Q showing, which is the lowest
     first_player = BringInDeterminator.determine_first_to_act(
-        players, 2, 'low card al rh'
+        players, 2, CardRule.LOW_CARD_AL_RH, rules
     )
     
     assert first_player is not None
@@ -178,11 +234,13 @@ def test_later_round_razz_high(players_with_multiple_upcards):
 def test_later_round_27_razz(players_with_multiple_upcards):
     """Test later round first-to-act in Razz High."""
     players = players_with_multiple_upcards
+
+    rules = minimal_stud_rules(rule="high card", evaluation_type="27_low")
     
     # In later rounds of Razz High, best unpaired hand showing goes first
     # Player 3 has 8-7 showing, which is the lowest
     first_player = BringInDeterminator.determine_first_to_act(
-        players, 2, 'high card ah'
+        players, 2, CardRule.HIGH_CARD_AH, rules
     )
     
     assert first_player is not None
@@ -190,6 +248,8 @@ def test_later_round_27_razz(players_with_multiple_upcards):
     
 def test_no_visible_cards():
     """Test handling of players with no visible cards."""
+    rules = minimal_stud_rules(rule="low card", evaluation_type="high")
+
     # Create players without any face-up cards
     player1 = Player(id="p1", name="Alice", stack=500)
     player1.hand.add_card(Card(Rank.TWO, Suit.CLUBS, Visibility.FACE_DOWN))
@@ -201,10 +261,12 @@ def test_no_visible_cards():
     
     # Should default to first player
     first_player = BringInDeterminator.determine_first_to_act(
-        players, 1, 'low card'
+        players, 1, CardRule.LOW_CARD, rules
     )
     
-    assert first_player is players[0]
+    # changed interface to return None if no player has a visible card
+#    assert first_player is players[0]
+    assert not first_player
 
 def test_get_visible_cards():
     """Test extraction of visible cards from player's hand."""
@@ -220,6 +282,8 @@ def test_get_visible_cards():
     assert visible_cards[1].rank == Rank.KING
 
 def test_first_round_low_card_al():
+    rules = minimal_stud_rules(rule="low card al", evaluation_type="a5_low_high")
+
     """Test first round bring-in with low card Ace-low rule."""
     # Create players with visible door cards
     player1 = Player(id="p1", name="Alice", stack=500)
@@ -232,7 +296,7 @@ def test_first_round_low_card_al():
     
     # In first round with 'low card al' rule, player with Ace should go first (Ace is low)
     first_player = BringInDeterminator.determine_first_to_act(
-        players, 1, 'low card al'
+        players, 1, CardRule.LOW_CARD_AL, rules
     )
     
     assert first_player is not None
@@ -240,6 +304,8 @@ def test_first_round_low_card_al():
 
 def test_five_card_stud_third_round():
     """Test third round first-to-act in Five-Card Stud."""
+    rules = minimal_stud_rules(rule="low card", evaluation_type="high")
+
     # Create players with three visible cards each
     player1 = Player(id="p1", name="Alice", stack=500)
     # Player 1 has three of a kind showing
@@ -259,7 +325,7 @@ def test_five_card_stud_third_round():
     
     # In standard stud, player with three of a kind should go first (better hand)
     first_player = BringInDeterminator.determine_first_to_act(
-        players, 3, 'low card'
+        players, 3, CardRule.LOW_CARD, rules
     )
     
     assert first_player is not None
