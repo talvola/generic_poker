@@ -2,6 +2,68 @@ import json
 from typing import Dict, List, Any
 import sys
 import os
+import subprocess
+import json
+import re
+
+def update_test_with_json(script_path: str):
+    """Run the test script, capture JSON showdown output, and update assertions."""
+    # Run the test with pytest
+    result = subprocess.run(
+        ["pytest", script_path, "-s"],
+        capture_output=True,
+        text=True
+    )
+    if result.returncode != 0:
+        print(f"Test failed: {result.stderr}")
+        return
+
+    output = result.stdout
+    # Extract JSON block using regex
+    json_pattern = r"Showdown Results \(JSON\):\n(.*?)\n(?=PASSED|\Z)"
+    match = re.search(json_pattern, output, re.DOTALL)
+    if not match:
+        print("Could not find JSON output in test results")
+        return
+    json_str = match.group(1).strip()
+    try:
+        results = json.loads(json_str)
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse JSON: {e}")
+        print(f"Extracted JSON: {json_str}")
+        return
+
+    # Read the original script
+    with open(script_path, 'r') as f:
+        lines = f.readlines()
+
+    # Update showdown section
+    updated_lines = []
+    in_showdown = False
+    for line in lines:
+        if "Step" in line and "Showdown" in line:
+            in_showdown = True
+        if in_showdown:
+            if "assert main_pot.amount == results.total_pot" in line:
+                line = f"    assert main_pot.amount == {results['total_pot']}  # Updated from run\n"
+            elif "assert main_pot.winners[0] in" in line:
+                winner = results['pots'][0]['winners'][0]
+                line = f"    assert main_pot.winners[0] == '{winner}'  # Updated from run\n"
+            elif "assert winning_hand[0].hand_name" in line and "TODO" in line:
+                hand_name = results['winning_hands'][0]['hand_name']
+                line = f"    assert winning_hand[0].hand_name == '{hand_name}'  # Updated from run\n"
+            elif "assert winning_hand[0].hand_description" in line and "TODO" in line:
+                hand_desc = results['winning_hands'][0]['hand_description']
+                line = f"    assert winning_hand[0].hand_description == '{hand_desc}'  # Updated from run\n"
+            elif "assert results.winning_hands[0].player_id == winning_player" in line:
+                winner = results['winning_hands'][0]['player_id']
+                line = f"    assert results.winning_hands[0].player_id == '{winner}'  # Updated from run\n"
+        updated_lines.append(line)
+
+    # Write back updated script
+    with open(script_path, 'w') as f:
+        f.writelines(updated_lines)
+    print(f"Updated {script_path} with JSON results")
 
 def generate_test_script(json_file_path: str, output_file_path: str) -> None:
     """Generate a pytest script for a poker game defined in a JSON file."""
@@ -80,6 +142,7 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
         "        game.table.community_cards.clear()",
         "    game.table.clear_hands = patched_clear_hands",
         "    game.table.deck = create_predetermined_deck()",
+        "    assert len(game.table.deck.cards) >= 52, 'MockDeck should have at least 52 cards'",
         "    return game",
         "",
         "@pytest.fixture(autouse=True)",
@@ -118,10 +181,11 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
             if bet_type == "blinds":
                 script.extend([
                     "    assert game.state == GameState.BETTING",
-                    f"    assert game.table.players['{player_ids[1]}'].stack == 495  # SB",
-                    f"    assert game.table.players['{player_ids[2]}'].stack == 490  # BB",
+                    f"    assert game.table.players['{player_ids[1]}'].stack == 495  # SB posted 5",
+                    f"    assert game.table.players['{player_ids[2]}'].stack == 490  # BB posted 10",
                     f"    assert game.table.players['{player_ids[0]}'].stack == 500  # BTN",
                     "    assert game.betting.get_main_pot_amount() == 15",
+                    "    print('Stacks after blinds:', {{pid: game.table.players[pid].stack for pid in {}}})".format(player_ids),
                 ])
             elif bet_type in ["small", "big"]:
                 bet_amount = 10 if bet_type == "small" else 20
@@ -135,7 +199,11 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
                         f"    game.player_action('BTN', PlayerAction.CALL, {bet_amount})",
                         f"    game.player_action('SB', PlayerAction.CALL, {bet_amount - 5})  # SB completes to {bet_amount}",
                         f"    game.player_action('BB', PlayerAction.CHECK)  # BB already in for {bet_amount}",
-                        f"    assert game.betting.get_main_pot_amount() == 30",
+                        "    assert game.betting.get_main_pot_amount() == 30",
+                        f"    assert game.table.players['BTN'].stack == {500 - bet_amount}  # BTN called {bet_amount}",
+                        f"    assert game.table.players['SB'].stack == {495 - (bet_amount - 5)}  # SB completed",
+                        f"    assert game.table.players['BB'].stack == 490  # BB unchanged",
+                        "    print('Stacks after pre-flop:', {{pid: game.table.players[pid].stack for pid in {}}})".format(player_ids),
                     ])
                 else:
                     script.extend([
@@ -143,10 +211,14 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
                         f"    assert game.current_player.id == {first_player}  # SB first post-flop",
                         f"    actions = game.get_valid_actions({first_player})",
                         "    assert (PlayerAction.CHECK, None, None) in actions",
-                        f"    game.player_action('SB', PlayerAction.CHECK)",
-                        f"    game.player_action('BB', PlayerAction.CHECK)",
-                        f"    game.player_action('BTN', PlayerAction.CHECK)",
-                        f"    assert game.betting.get_main_pot_amount() == 30  # No change",
+                        "    game.player_action('SB', PlayerAction.CHECK)",
+                        "    game.player_action('BB', PlayerAction.CHECK)",
+                        "    game.player_action('BTN', PlayerAction.CHECK)",
+                        "    assert game.betting.get_main_pot_amount() == 30  # No change",
+                        "    assert game.table.players['BTN'].stack == 490  # Unchanged from pre-flop",
+                        "    assert game.table.players['SB'].stack == 490  # Unchanged from pre-flop",
+                        "    assert game.table.players['BB'].stack == 490  # Unchanged",
+                        "    print('Stacks after post-flop:', {{pid: game.table.players[pid].stack for pid in {}}})".format(player_ids),
                     ])
                 first_betting_round = False
             elif bet_type == "bring-in":
@@ -225,8 +297,10 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
                 "    assert results.total_pot > 0",
                 "    assert len(results.hands) == 3",
                 "    assert len(results.pots) >= 1",
-                "    print('\\nShowdown Results:')",
+                "    print('\\nShowdown Results (Human):')",
                 "    print(results)",
+                "    print('\\nShowdown Results (JSON):')",
+                "    print(results.to_json())",
                 "",
                 "    # Check pot details",
                 "    main_pot = results.pots[0]",
@@ -252,8 +326,11 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
     with open(output_file_path, 'w') as f:
         f.write("\n".join(script))
 
+# Integrate into main
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python generate_poker_test.py <input_json> <output_py>")
+    if len(sys.argv) < 3:
+        print("Usage: python generate_poker_test.py <input_json> <output_py> [--auto-update]")
         sys.exit(1)
     generate_test_script(sys.argv[1], sys.argv[2])
+    if "--auto-update" in sys.argv:
+        update_test_with_json(sys.argv[2])
