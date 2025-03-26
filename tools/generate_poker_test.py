@@ -108,8 +108,7 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
         "    def __init__(self, named_cards):",
         "        super().__init__(include_jokers=False)",
         "        self.cards.clear()",
-        "        # Add named cards in reverse order (last dealt first)",
-        "        for card in reversed(named_cards):",
+        "        for card in named_cards:",
         "            self.cards.append(card)",
         "        # Add remaining cards from a standard deck in deterministic order",
         "        all_cards = [Card(rank, suit) for suit in [Suit.SPADES, Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS] "
@@ -117,8 +116,9 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
         "                                 Rank.EIGHT, Rank.NINE, Rank.TEN, Rank.JACK, Rank.QUEEN, Rank.KING, Rank.ACE]]",
         "        used_cards = {(c.rank, c.suit) for c in named_cards}",
         "        remaining_cards = [c for c in all_cards if (c.rank, c.suit) not in used_cards]",
-        "        for card in reversed(remaining_cards):",
+        "        for card in remaining_cards:",
         "            self.cards.append(card)",
+        "        self.cards.reverse()",
         "",
         "def create_predetermined_deck():",
         '    """Create a deck with predetermined cards followed by the rest of a standard deck."""',
@@ -129,6 +129,7 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
         "        Card(Rank.QUEEN, Suit.CLUBS), Card(Rank.QUEEN, Suit.SPADES), Card(Rank.JACK, Suit.HEARTS),",
         "        Card(Rank.TEN, Suit.DIAMONDS), Card(Rank.TEN, Suit.HEARTS), Card(Rank.NINE, Suit.SPADES),",
         "        Card(Rank.TWO, Suit.SPADES), Card(Rank.TWO, Suit.DIAMONDS), Card(Rank.TWO, Suit.HEARTS),",
+        "        Card(Rank.SEVEN, Suit.DIAMONDS), Card(Rank.SIX, Suit.CLUBS), Card(Rank.THREE, Suit.SPADES),",
         "    ]",
         "    return MockDeck(named_cards)",
         "",
@@ -274,7 +275,7 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
                     f"        assert len(game.table.players[pid].hand.get_cards()) == {num_cards}",
                     f"    print(f'\\nStep {step_idx} - Player Hands:')",
                     "    for pid in {}:".format(player_ids),
-                    "        print(f'{{pid}}: {{[str(c) for c in game.table.players[pid].hand.get_cards()]}}')",
+                    f"        print(f'{{pid}}: {{[str(c) for c in game.table.players[pid].hand.get_cards()]}}')",
                 ])
             elif location == "community":
                 total_so_far = community_card_counts.get(step_idx, num_cards)  # Use cumulative total
@@ -321,6 +322,25 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
                 f"        game.player_action(pid, PlayerAction.DRAW, cards=cards_to_discard)",
                 "        assert len(hand.get_cards()) == initial_count  # Hand size unchanged",
             ])
+
+        elif action_type == "discard":
+            discard_config = step["discard"]["cards"][0]
+            num_to_discard = discard_config["number"]
+            script.extend([
+                "    assert game.state == GameState.DRAWING",
+                f"    assert game.current_player.id == '{action_order[0]}'  # Start with SB",
+                "    actions = game.get_valid_actions(game.current_player.id)",
+                f"    assert any(a[0] == PlayerAction.DISCARD and a[1] == {num_to_discard} for a in actions)",
+                f"    for pid in {action_order}:",
+                "        hand = game.table.players[pid].hand",
+                "        initial_count = len(hand.get_cards())",
+                f"        cards_to_discard = hand.get_cards()[:{num_to_discard}]",
+                f"        game.player_action(pid, PlayerAction.DISCARD, cards=cards_to_discard)",
+                f"        assert len(hand.get_cards()) == initial_count - {num_to_discard}  # Hand size reduced by discards",
+                f"    print(f'\\nStep {step_idx} - Post-Discard Hands:')",
+                f"    for pid in {action_order}:",
+                f"        print(f'{{pid}}: {{[str(c) for c in game.table.players[pid].hand.get_cards()]}}')",
+            ])            
 
         elif action_type == "showdown":
             script.extend([
