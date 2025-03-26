@@ -44,7 +44,14 @@ def update_test_with_json(script_path: str):
             in_showdown = True
         if in_showdown:
             if "assert main_pot.amount == results.total_pot" in line:
-                line = f"    assert main_pot.amount == {results['total_pot']}  # Updated from run\n"
+                # Replace with per-pot amount check
+                line = "    # Check each pot’s amount\n"
+                for i, pot in enumerate(results['pots']):
+                    updated_lines.append(f"    assert results.pots[{i}].amount == {pot['amount']}  # {pot['hand_type']} pot\n")
+                continue  # Skip adding the original line
+            elif "assert main_pot.pot_type == 'main'" in line:
+                # Keep this as-is for the first pot, but we’ll check others below
+                line = f"    assert main_pot.pot_type == '{results['pots'][0]['pot_type']}'  # Updated from run\n"
             elif "assert not main_pot.split" in line:
                 is_split = results['pots'][0]['split']
                 line = f"    assert main_pot.split == {is_split}  # Updated from run\n"
@@ -79,7 +86,7 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
         game_rules = json.load(f)
 
     file_base_name = os.path.splitext(os.path.basename(json_file_path))[0]
-    game_name = game_rules["game"].replace(" ", "_").lower()
+    game_name = game_rules["game"].replace(" ", "_").replace("-","_").replace("'","_").lower()
     uses_blinds = any(step.get("bet", {}).get("type") == "blinds" for step in game_rules["gamePlay"])
     player_ids = ["BTN", "SB", "BB"] if uses_blinds else ["p1", "p2", "p3"]
     action_order = ["SB", "BB", "BTN"] if uses_blinds else player_ids
@@ -173,6 +180,14 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
 
     first_betting_round = True
 
+    # Calculate cumulative community cards per step
+    community_card_counts = {}
+    total_community_cards = 0
+    for step_idx, step in enumerate(game_rules["gamePlay"]):
+        if "deal" in step and step["deal"]["location"] == "community":
+            total_community_cards += sum(c["number"] for c in step["deal"]["cards"])
+            community_card_counts[step_idx] = total_community_cards    
+
     for step_idx, step in enumerate(game_rules["gamePlay"]):
         step_name = step["name"].replace(" ", "_").lower()
         action_type = list(step.keys())[0]
@@ -255,28 +270,38 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
             if location == "player":
                 script.extend([
                     "    assert game.state == GameState.DEALING",
-                    f"    for pid in {player_ids}:",
+                    "    for pid in {}:".format(player_ids),
                     f"        assert len(game.table.players[pid].hand.get_cards()) == {num_cards}",
+                    f"    print(f'\\nStep {step_idx} - Player Hands:')",
+                    "    for pid in {}:".format(player_ids),
+                    "        print(f'{{pid}}: {{[str(c) for c in game.table.players[pid].hand.get_cards()]}}')",
                 ])
             elif location == "community":
+                total_so_far = community_card_counts.get(step_idx, num_cards)  # Use cumulative total
                 script.extend([
                     "    assert game.state == GameState.DEALING",
-                    f"    assert len(game.table.community_cards['default']) == {num_cards}",
+                    f"    assert len(game.table.community_cards['default']) == {total_so_far}",
+                    f"    print(f'\\nStep {step_idx} - Community Cards:')",
+                    "    print([str(c) for c in game.table.community_cards['default']])",
                 ])
 
         elif action_type == "separate":
             total_cards = sum(c["number"] for c in step["separate"]["cards"])
             subsets = [c["hole_subset"] for c in step["separate"]["cards"]]
+            subset_sizes = {c["hole_subset"]: c["number"] for c in step["separate"]["cards"]}
             script.extend([
                 "    assert game.state == GameState.DRAWING",
                 f"    assert game.current_player.id == '{action_order[0]}'  # Start with SB",
                 "    actions = game.get_valid_actions(game.current_player.id)",
                 f"    assert any(a[0] == PlayerAction.SEPARATE and a[1] == {total_cards} for a in actions)",
-                f"    for pid in {action_order}:",
+                "    for pid in {}:".format(action_order),  # Added colon here
                 "        hand = game.table.players[pid].hand",
                 f"        cards = hand.get_cards()[:{total_cards}]",
                 "        game.player_action(pid, PlayerAction.SEPARATE, cards=cards)",
-                *[f"        assert len(hand.get_subset('{subset}')) == 1" for subset in subsets],
+                *[f"        assert len(hand.get_subset('{subset}')) == {subset_sizes[subset]}  # {subset}" for subset in subsets],
+                f"    print(f'\\nStep {step_idx} - Post-Separate Hands:')",
+                "    for pid in {}:".format(action_order),  # Added colon here
+                *[f"        print(f'{{pid}} - {subset}: {{[str(c) for c in game.table.players[pid].hand.get_subset(\"{subset}\")]}}')" for subset in subsets],
             ])
 
         elif action_type == "draw":
