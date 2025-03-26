@@ -2,7 +2,7 @@
 import pytest
 from generic_poker.game.game import Game, GameState, PlayerAction
 from generic_poker.config.loader import BettingStructure
-from test_helpers import create_test_game
+from tests.test_helpers import create_test_game
 
 import logging 
 import sys 

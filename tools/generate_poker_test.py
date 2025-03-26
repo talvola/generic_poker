@@ -92,7 +92,7 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
         "from generic_poker.core.card import Card, Rank, Suit",
         "from generic_poker.game.betting import BettingStructure",
         "from generic_poker.core.deck import Deck",
-        "from test_helpers import load_rules_from_file",
+        "from tests.test_helpers import load_rules_from_file",
         "import logging",
         "import sys",
         "",
