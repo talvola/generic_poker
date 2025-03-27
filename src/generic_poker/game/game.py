@@ -2158,6 +2158,43 @@ class Game:
 
         best_hand = None
 
+        # Handle new "combinations" syntax under "bestHand"
+        if "combinations" in showdown_rules:
+            for combo in showdown_rules["combinations"]:
+                required_hole = combo["holeCards"]
+                required_community = combo["communityCards"]
+
+                # Skip if not enough cards available
+                if len(hole_cards) < required_hole or len(comm_cards) < required_community:
+                    logger.debug(
+                        f"Skipping combo for {player.id}: {required_hole} hole, "
+                        f"{required_community} comm (have {len(hole_cards)} hole, {len(comm_cards)} comm)"
+                    )
+                    continue
+
+                # Generate all possible combinations for this requirement
+                hole_combos = (
+                    [tuple()] if required_hole == 0 
+                    else list(itertools.combinations(hole_cards, required_hole))
+                )
+                comm_combos = (
+                    [tuple()] if required_community == 0 
+                    else list(itertools.combinations(comm_cards, required_community))
+                )
+
+                # Try each combination
+                for hole_combo in hole_combos:
+                    for comm_combo in comm_combos:
+                        hand = list(hole_combo) + list(comm_combo)
+                        if best_hand is None or evaluator.compare_hands(hand, best_hand, eval_type) > 0:
+                            best_hand = hand
+
+            if best_hand:
+                return best_hand
+            else:
+                logger.warning(f"No valid hand combinations for player {player.id}")
+                return []
+        
         # Handle different types of hand compositions
         if "anyCards" in showdown_rules:
             total_cards = showdown_rules["anyCards"]
