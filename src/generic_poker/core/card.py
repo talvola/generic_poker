@@ -31,7 +31,7 @@ class Rank(Enum):
     QUEEN = 'Q'
     KING = 'K'
     ACE = 'A'
-    JOKER = '*'  # For jokers
+    JOKER = 'R'  # For jokers
     
     def __str__(self) -> str:
         return self.value
@@ -66,7 +66,7 @@ RANK_NAMES: Dict[str, str] = {
     '4': 'Four',
     '3': 'Three',
     '2': 'Two',
-    '*': 'Joker'
+    'R': 'Joker'
 }
 
 class Visibility(Enum):
@@ -80,7 +80,7 @@ class WildType(Enum):
     NATURAL = auto()     # Card is always wild (like a Joker)
     NAMED = auto()       # Card is designated wild by game rules
     MATCHING = auto()    # Card is wild if matches some condition
-
+    BUG = auto()         # Card is a bug (Ace or straight/flush)
 
 @dataclass
 class Card:
@@ -103,7 +103,7 @@ class Card:
     def __str__(self) -> str:
         """String representation in format 'As' for Ace of spades."""
         if self.rank == Rank.JOKER:
-            return '*j'  # Special format for Jokers
+            return 'Rj'  # Special format for Jokers
         return f"{self.rank}{self.suit}"
     
     def __eq__(self, other: object) -> bool:
@@ -121,9 +121,11 @@ class Card:
         )
     
     def make_wild(self, wild_type: WildType) -> None:
-        """Make this card wild, but prevent Jokers from changing their wild type."""
-        if self.rank == Rank.JOKER and self.suit == Suit.JOKER:
-            return  # Prevent modifying Joker's wild type
+        """Make this card wild, but prevent Jokers from changing their wild type unless specified."""
+        if self.rank == Rank.JOKER and self.suit == Suit.JOKER and self.wild_type == WildType.NATURAL:
+            if wild_type == WildType.BUG:
+                self.wild_type = wild_type  # Allow changing to BUG
+            return
         self.is_wild = True
         self.wild_type = wild_type
     

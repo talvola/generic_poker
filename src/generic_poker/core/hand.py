@@ -5,6 +5,8 @@ from collections import defaultdict
 from .card import Card, Visibility, Rank, Suit
 from .containers import CardContainer
 
+import logging
+logger = logging.getLogger(__name__)
 
 class PlayerHand(CardContainer):
     """
@@ -112,6 +114,44 @@ class PlayerHand(CardContainer):
         """Remove all cards from the hand."""
         self.cards.clear()
         self.subsets.clear()
+
+    @classmethod
+    def from_string(cls, hand_str: str) -> List[Card]:
+        """
+        Create a Hand from a string representation.
+        
+        Args:
+            hand_str: String of concatenated card representations (e.g., "AsAhJs9s5s")
+                      Each card is 2 characters: rank (A, K, Q, J, T, 9-2, X for Joker)
+                      followed by suit (s, h, d, c, j for Joker).
+        
+        Returns:
+            Hand instance with the parsed cards
+            
+        Raises:
+            ValueError: If the string format is invalid (e.g., wrong length, invalid cards)
+        """
+        # Validate the string length (each card is 2 characters)
+        if len(hand_str) % 2 != 0:
+            raise ValueError(f"Invalid hand string length: {hand_str} (must be multiple of 2)")
+
+        # Split the string into 2-character chunks
+        card_strings = [hand_str[i:i+2] for i in range(0, len(hand_str), 2)]
+
+        # Create an empty list
+        hand = []
+
+        # Convert each card string to a Card object
+        for i, card_str in enumerate(card_strings):
+            try:
+                card = Card.from_string(card_str)
+            except ValueError as e:
+                raise ValueError(f"Invalid card at position {i+1} in hand string '{hand_str}': {e}")
+
+            hand.append(card)
+
+        logger.debug(f"Created hand from string '{hand_str}': {[str(c) for c in hand]}")
+        return hand        
         
     @property
     def size(self) -> int:

@@ -2,7 +2,7 @@
 from typing import List, Optional, Set
 import random
 
-from .card import Card, Rank, Suit, Visibility
+from .card import Card, Rank, Suit, Visibility, WildType
 from .containers import CardContainer
 
 from enum import Enum, auto
@@ -21,7 +21,7 @@ class Deck(CardContainer):
         include_jokers: Whether deck includes jokers
     """
     
-    def __init__(self, include_jokers: bool = False, deck_type: DeckType = DeckType.STANDARD):
+    def __init__(self, include_jokers: int = 0, deck_type: DeckType = DeckType.STANDARD):
         """
         Initialize a new deck.
         
@@ -31,7 +31,7 @@ class Deck(CardContainer):
         self.cards: List[Card] = []
         self._initialize_deck(include_jokers, deck_type)
         
-    def _initialize_deck(self, include_jokers: bool, deck_type: DeckType) -> None:
+    def _initialize_deck(self, include_jokers: int, deck_type: DeckType) -> None:
         """Create a fresh deck of cards based on the deck type."""
 
         if deck_type == DeckType.SHORT_TA:
@@ -47,10 +47,10 @@ class Deck(CardContainer):
                 self.cards.append(Card(rank=rank, suit=suit))
                 
         # Add jokers if requested
-        if include_jokers:
+        if include_jokers > 0:
             self.cards.extend([
-                Card(Rank.JOKER, Suit.JOKER, is_wild=True) 
-                for _ in range(2)
+                Card(Rank.JOKER, Suit.JOKER, is_wild=True, wild_type=WildType.NATURAL)
+                for _ in range(include_jokers)
             ])
     
     def shuffle(self, times: int = 1) -> None:

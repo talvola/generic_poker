@@ -68,9 +68,13 @@
             },
             {
               "type": "integer"
+            },
+            {
+              "type": "string",
+              "enum": ["remaining"]
             }
           ],
-          "description": "Number of hole cards required or list of indices"
+          "description": "Number of hole cards required, list of indices, or 'remaining' for all remaining cards"
         },
         "communityCards": {
           "oneOf": [
@@ -120,20 +124,53 @@
           },
           "description": "Simplified list of allowed community card subsets"
         },   
-        "wildCard": {
-          "type": "object",
-          "properties": {
-            "communityCards": {
-              "type": "string",
-              "description": "Wild card rule for community cards"
+        "wildCards": {
+          "type": "array",
+          "description": "List of wild card rules that apply to this hand evaluation",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["joker", "rank", "lowest_community", "lowest_hole"],
+                "description": "Specifies the wild card rule type"
+              },
+              "count": {
+                "type": "integer",
+                "description": "Number of wild cards (optional, e.g., number of Jokers)"
+              },
+              "rank": {
+                "type": "string",
+                "description": "Rank that is wild (only for type 'rank')"
+              },
+              "subset": {
+                "type": "string",
+                "description": "Subset of cards to evaluate (e.g., 'default', 'Board')"
+              },
+              "visibility": {
+                "type": "string",
+                "enum": ["face down", "face up"],
+                "description": "Visibility condition for lowest_hole (e.g., 'face down')"
+              },
+              "match": {
+                "type": "string",
+                "enum": ["rank"],
+                "description": "Match condition that defines wild cards (e.g., 'rank')"
+              },
+              "scope": {
+                "type": "string",
+                "enum": ["player", "global"],
+                "description": "Scope of wildness (default is global)"
+              },
+              "role": {
+                "type": "string",
+                "enum": ["wild", "bug"],
+                "description": "Wildness behavior: 'wild' (any card) or 'bug' (Ace or straight/flush)"
+              }
             },
-            "otherCards": {
-              "type": "string",
-              "description": "Wild card rule for other cards"
-            }
-          },
-          "additionalProperties": false,
-          "description": "Wild card rules"
+            "required": ["type", "role"],
+            "additionalProperties": false
+          }
         },
         "qualifier": {
           "type": "array",
@@ -149,8 +186,31 @@
         "minimumCards": {
           "type": "integer",
           "description": "The minimum number of cards required for the hand to qualify"
-        }        
-      },
+        },
+        "zeroCardsPipValue": {
+          "type": "integer",
+          "description": "Pip value assigned to a hand with 0 cards (e.g., 0 for best low in American/Canadian Scarney)"
+        },        
+        "combinations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "holeCards": {
+                "type": "integer",
+                "description": "Number of hole cards to use in this combination"
+              },
+              "communityCards": {
+                "type": "integer",
+                "description": "Number of community cards to use in this combination"
+              }
+            },
+            "required": ["holeCards", "communityCards"],
+            "additionalProperties": false
+          },
+          "description": "List of allowed combinations of hole and community cards to form the hand"
+        }
+      },       
       "required": ["evaluationType"],
       "additionalProperties": false
     }
@@ -195,7 +255,11 @@
           "type": "integer",
           "enum": [20, 36, 52],
           "description": "Number of cards in the deck"
-        }
+        },
+        "jokers": {
+          "type": "integer",
+          "description": "Number of jokers in the deck"
+        }        
       },
       "required": ["type", "cards"],
       "additionalProperties": false
@@ -225,6 +289,11 @@
               "type": {
                 "type": "string",
                 "description": "Type of bet"
+              },
+              "zeroCardsBetting": {
+                "type": "string",
+                "enum": ["call_only", "normal"],
+                "description": "Betting restriction for players with 0 cards (e.g., 'call_only' for Canadian Scarney)"
               }
             },
             "required": ["type"],
@@ -251,8 +320,11 @@
                       "description": "State of the cards (face up or face down)"
                     },
                     "community_subset": {
+                      "description": "Subset of community cards (e.g., 'Board', 'Discard')"
+                    },
+                    "subset": {
                       "type": "string",
-                      "description": "Subset of cards if applicable"
+                      "description": "Subset of cards (e.g., 'Board', 'Discard')"
                     }
                   },
                   "required": ["number", "state"]
@@ -272,7 +344,20 @@
                   "properties": {
                     "rule": {
                       "type": "string",
-                      "description": "Rule for discarding cards"
+                      "description": "Rule for discarding cards (e.g., 'matching ranks')"
+                    },
+                    "subset": { 
+                      "type": "string",
+                      "description": "Subset of cards to compare for the discard rule (e.g., 'Discard')"
+                    },
+                    "discardLocation": { 
+                      "type": "string",
+                      "enum": ["community", "discard_pile"],
+                      "description": "Where to place discarded cards (e.g., 'community' for Scarney)"
+                    },
+                    "discardSubset": { 
+                      "type": "string",
+                      "description": "Subset of the discard location to place cards (e.g., 'Discard')"
                     },
                     "hole_subset": {
                       "type": "string",
@@ -294,7 +379,8 @@
                   },
                   "anyOf": [
                     { "required": ["hole_subset"] },
-                    { "required": ["number"] }
+                    { "required": ["number"] },
+                    { "required": ["rule", "subset"] } 
                   ],
                   "additionalProperties": false
                 }

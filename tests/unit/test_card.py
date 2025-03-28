@@ -25,7 +25,7 @@ def test_card_string_representation():
     
     # Test Joker
     joker = Card(Rank.JOKER, Suit.JOKER, is_wild=True, wild_type=WildType.NATURAL)
-    assert str(joker) == "*j"
+    assert str(joker) == "Rj"
 
 
 def test_card_equality():

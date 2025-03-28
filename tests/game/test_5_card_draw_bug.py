@@ -30,16 +30,15 @@ def create_predetermined_deck():
         Card(Rank.ACE, Suit.HEARTS), Card(Rank.NINE, Suit.DIAMONDS), Card(Rank.JACK, Suit.SPADES),
         Card(Rank.KING, Suit.HEARTS), Card(Rank.KING, Suit.CLUBS), Card(Rank.JACK, Suit.DIAMONDS),
         Card(Rank.QUEEN, Suit.HEARTS), Card(Rank.KING, Suit.DIAMONDS), Card(Rank.TEN, Suit.SPADES),
-        Card(Rank.QUEEN, Suit.CLUBS), Card(Rank.QUEEN, Suit.SPADES), Card(Rank.JACK, Suit.HEARTS),
-        Card(Rank.TEN, Suit.DIAMONDS), Card(Rank.TEN, Suit.HEARTS), Card(Rank.NINE, Suit.SPADES),
+        Card(Rank.QUEEN, Suit.CLUBS), Card(Rank.QUEEN, Suit.SPADES), Card(Rank.ACE, Suit.SPADES),
+        Card(Rank.TEN, Suit.DIAMONDS), Card(Rank.TEN, Suit.HEARTS), Card(Rank.JOKER, Suit.JOKER),
         Card(Rank.TWO, Suit.SPADES), Card(Rank.TWO, Suit.DIAMONDS), Card(Rank.TWO, Suit.HEARTS),
-        Card(Rank.SEVEN, Suit.DIAMONDS), Card(Rank.SIX, Suit.CLUBS), Card(Rank.ACE, Suit.SPADES),
     ]
     return MockDeck(named_cards)
 
 def setup_test_game():
     """Setup a 3-player five_card_draw game with a mock deck."""
-    rules = load_rules_from_file('5_card_draw')
+    rules = load_rules_from_file('5_card_draw_bug')
     game = Game(
         rules=rules,
         structure=BettingStructure.LIMIT,
@@ -92,9 +91,6 @@ def test_five_card_draw_minimal_flow():
     assert game.state == GameState.DEALING
     for pid in ['BTN', 'SB', 'BB']:
         assert len(game.table.players[pid].hand.get_cards()) == 5
-    print(f'\nStep 1 - Player Hands:')
-    for pid in ['BTN', 'SB', 'BB']:
-        print(f'{pid}: {[str(c) for c in game.table.players[pid].hand.get_cards()]}')
     # Step 2: Initial Bet
     game._next_step()  # initial_bet
     assert game.current_step == 2
@@ -154,20 +150,20 @@ def test_five_card_draw_minimal_flow():
 
     # Check pot details
     main_pot = results.pots[0]
-    assert results.pots[0].amount == 30  # Unspecified pot
-    assert main_pot.pot_type == 'main'  # Updated from run
-    assert main_pot.split == False  # Updated from run
-    assert len(main_pot.winners) == 1  # Updated from run
-    assert sorted(main_pot.winners) == ['BTN']  # Updated from run
+    assert main_pot.amount == 30  # Updated from run
+    assert main_pot.pot_type == 'main'
+    assert not main_pot.split  # TODO: Adjust if split pots expected
+    assert len(main_pot.winners) == 1  # TODO: Adjust if multiple winners
+    assert main_pot.winners[0] == 'BB'  # Updated from run
     # TODO: Replace with expected winner, e.g., assert 'BTN' in main_pot.winners
 
     # Check winning hand
     winning_player = main_pot.winners[0]
     winning_hand = results.hands[winning_player]
     assert winning_hand[0].hand_name == 'One Pair'  # Updated from run
-    assert winning_hand[0].hand_description == 'Pair of Queens'  # Updated from run
+    assert winning_hand[0].hand_description == 'Pair of Aces'  # Updated from run
 
     # Check winning hands list
-    assert len(results.winning_hands) == 1  # Updated from run
-    assert results.winning_hands[0].player_id == 'BTN'  # Updated from run
+    assert len(results.winning_hands) == 1  # TODO: Adjust if multiple winners
+    assert results.winning_hands[0].player_id == 'BB'  # Updated from run
     # TODO: Replace with expected winner, e.g., assert results.winning_hands[0].player_id == 'BTN'

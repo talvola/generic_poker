@@ -13,7 +13,7 @@ def test_deck_initialization():
 
 def test_deck_with_jokers():
     """Test deck creation with jokers."""
-    deck = Deck(include_jokers=True)  # Changed from num_jokers
+    deck = Deck(include_jokers=2)  
     assert deck.size == 54
     
     # Check jokers

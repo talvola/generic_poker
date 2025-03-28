@@ -28,7 +28,7 @@ The **references** field is an optional array of URLs that point to external res
 
 | Field | Name | Type | Definition | Required |
 | ----- | ---- | ---- | ---------- | -------- |
-| **type** | Deck Type | String | Type of deck. Allowed value: "standard" | Yes |
+| **type** | Deck Type | String | Type of deck. | Yes |
 | **cards** | Number of Cards | Integer | Number of cards in the deck. Allowed values: 52 (standard deck), 36 (deck with cards 2-5 removed) | Yes |
 
 ### Deck Types
@@ -48,6 +48,7 @@ The `cards` field in the deck object should match the number of cards in the cho
 | **style** | Bet Style | String | Style of forced bets (e.g., "bring-in", "blinds", "antes"). | Yes |
 | **rule** | Bet Rule | String | Rule for hand evaluation for bring-in bets.   Currently supported values are 'high card', 'low card', 'high card ah' and 'low card al'. | Yes |
 | **variation** | Bet Variation | String | Optional variation on the standard bring-in rules to support unusual hand evaluation.   "a5 low high" is the only currently supported variation.  | No |
+| **bringInEval** | Bring-in Evaluation | String | Evaluation type from bestHand to use for bring-in with multiple cards | No |
 
 ### Game Play Array
 
@@ -79,6 +80,7 @@ Each object in the cards array has the following properties:
 | ----- | ---- | ---- | ---------- | -------- |
 | **number** | Number of Cards | Integer | Number of cards to deal | Yes |
 | **state** | Card State | String | State of the cards (face up or face down) | Yes |
+| **community_subset** | Community Subset | String | Subset of cards if applicable | No |
 | **subset** | Card Subset | String | Subset of cards if applicable | No |
 
 #### Draw Object
@@ -128,9 +130,12 @@ Each object in the cards array has the following properties:
 | Field | Name | Type | Definition | Required |
 | ----- | ---- | ---- | ---------- | -------- |
 | **rule** | Discard Rule | String | Rule for discarding cards | No |
-| **subset** | Subset of Cards | String | Subset of cards for discarding | No |
+| **hole_subset** | Subset of Cards | String | Subset of cards for discarding | No |
 | **number** | Number of Cards | Integer | Number of cards to discard | No |
 | **state** | Card State | String | State of the discarded cards (face up or face down) | No |
+| **discardLocation** | Discard Location | String |  | No |
+| **discardSubset** | Discard Subset | String | ) | No |
+| **entire_subset** | Entire Subset | String |  | No |
 
 If **state** of 'face up' is used, the cards will appear to all players.  
 
@@ -236,12 +241,15 @@ The following is the Showdown object for the game definition:
 | **anyCards** | Any Cards | Integer | Number of any cards required | No |
 | **holeCardsAllowed** | Allowed Hole Cards | Array of Objects | Allowed combinations of hole card subsets | No |
 | **communityCardsAllowed** | Allowed Community Cards | Array of Objects | Allowed combinations of community card subsets | No |
-| **communitySubsetsAllowed** | Allowed Community Subsets | Array of Strings | List of allowed community subsets | No |
-| **subset** | Subset | String | Specific subset of cards to be used for this hand evaluation (deprecated) | No |
-| **wildCard** | Wild Card | Object | Wild card rules | No |
+| **communitySubsetsAllowed** | Allowed Community Subsets | Array of Strings | List of allowed community subsets (deprecated?) | No |
+| **hole_subset** | Subset | String | Subset of hole cards used in evaluation | No |
+| **community_subset** | Subset | String | Subset of community cards used in evaluation | No |
+| **wildCards** | Wild Card | Array of Objects | List of wild card rules for the hand evaluation | No |
 | **qualifier** | Qualifier | Array of Integers | Qualifier for the hand | No |
 | **padding** | Padding | Boolean | If true, pads out the hole cards to the specified length if there are fewer cards | No |
 | **minimumCards** | Minimum Cards | Integer | The minimum number of cards required for the hand to qualify | No |
+| **zeroCardsPipValue** | Pip Value for Zero Cards | Integer | Value assigned when no cards are held (for pip-based games) | No |
+| **combinations** | Combinations | Array of Objects | Specific allowed hole/community combinations | No |
 
 Evaluation Types currently supported are:
 
@@ -326,38 +334,39 @@ This object is used in the `holeCardsAllowed` and `communityCardsAllowed` fields
 
 | Field | Name | Type | Definition | Required |
 | ----- | ---- | ---- | ---------- | -------- |
-| **subsets** | Allowed Subsets | Array of Strings | List of allowed subsets for this combination | Yes |
-| **indices** | Card Indices | Array of Integers | List of indices for the allowed cards | No |
+| **hole_subsets** | Allowed Subsets | Array of Strings | List of allowed subsets for this combination | Yes |
 
 For example,
 
 ```json               
 "holeCardsAllowed": [
     {
-        "subsets": ["Point","Hole Card"],
-        "indices": [0,0]
+        "hole_subsets": ["Point","Hole Card 1"]
     },
     {
-        "subsets": ["Point","Hole Card"],
-        "indices": [0,1]
+        "hole_subsets": ["Point","Hole Card 2"]
     }
 ]
 ```
 
-This indicates that there are 2 choices of hold cards to use - card 0 in the Point subset, and either card 0 or 1 in the Hold Card subset.   
+This indicates that there are 2 choices of hole cards to use - the Point subset with the Hole Card 1 subset, or the Point subset with the Hole Card 2 subset 
 
-If **indicies** are not present, then all cards in the subset are available to be used.
+**communityCardsAllowed** supports a **flat array of strings** (simplified version).
 
-**communityCardsAllowed** works in the same manner.   There is an array of subsets and an optional array of indicies to specify specific cards to use.
+#### Wild Cards Object
 
-#### Wild Card Object
-
-This object is used in the `wildCard` field of the Best Hand Object.
+Each object in the `wildCards` array includes:
 
 | Field | Name | Type | Definition | Required |
 | ----- | ---- | ---- | ---------- | -------- |
-| **communityCards** | Community Card Rule | String | Wild card rule for community cards | No |
-| **otherCards** | Other Cards Rule | String | Wild card rule for other cards | No |
+| **type** | Wild Type | String | One of `joker`, `rank`, `lowest_community`, `lowest_hole` | No |
+| **count** | Count | Integer | Optional – used for validation (e.g., number of Jokers) | No |
+| **rank** | Rank | String | Required for `rank` type | No |
+| **subset** | Subset | String | For `lowest_*` types | No |
+| **visibility** | Visibility | String | e.g., `"face down"` (for `lowest_hole`) | No |
+| **match** | Match | String | e.g., `"rank"` | No |
+| **scope** | Scope | String | `"player"` or `"global"` (default) | No |
+| **role** | Role | String | `"wild"` or `"bug"` (required) | No |
 
 This describes what rules define wild cards in the game.   Currently, only one set of values is supported:
 

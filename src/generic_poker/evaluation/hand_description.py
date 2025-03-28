@@ -22,6 +22,8 @@ class HandDescriber:
         # 21 (pseudo-blackjack) variants
         EvaluationType.GAME_21: 'all_card_hands_description_21.csv',
         EvaluationType.GAME_21_6: 'all_card_hands_description_21_6.csv',
+        # Wild card hands
+        EvaluationType.HIGH_WILD: 'all_card_hands_description_high_wild_bug.csv',
     }
 
     def __init__(self, eval_type: EvaluationType):
@@ -156,6 +158,40 @@ class HandDescriber:
                 return self._describe_four_of_kind(cards_used)
             elif hand_result.rank == 2:  # Straight Flush
                 return self._describe_straight_flush(cards_used)
+            
+        elif self.eval_type in EvaluationType.HIGH_WILD:
+            # for wild hands, let's use this approach:
+            # we know the rank and ordered_rank of the hand
+            # we will look up an entry from the HIGH evaluation 
+            # for the equivalent rank (the rank - 1) to get a sample
+            # hand, and then use that description.    
+            #
+            # Five of a kind will still be handled normally.
+            if hand_result.rank == 1:  # Five of a Kind
+                return self._describe_five_of_kind(cards_used)         
+                
+            high_cards = evaluator.get_sample_hand(EvaluationType.HIGH, hand_result.rank - 1, hand_result.ordered_rank)
+            
+            if hand_result.rank == 11:  # High Card
+                return self._describe_high_card(high_cards)            
+            elif hand_result.rank == 10:  # Pair
+                return self._describe_pair(high_cards)
+            elif hand_result.rank == 9:  # Two Pair
+                return self._describe_two_pair(high_cards)
+            elif hand_result.rank == 8:  # Three of a Kind
+                return self._describe_three_of_kind(high_cards)
+            elif hand_result.rank == 7:  # Straight
+                return self._describe_straight(high_cards)
+            elif hand_result.rank == 6:  # Flush
+                return self._describe_flush(high_cards)
+            elif hand_result.rank == 5:  # Full House
+                return self._describe_full_house(high_cards)
+            elif hand_result.rank == 4:  # Four of a Kind
+                return self._describe_four_of_kind(high_cards)
+            elif hand_result.rank == 3:  # Straight Flush
+                return self._describe_straight_flush(high_cards)            
+            elif hand_result.rank == 1:  # Five of a Kind
+                return self._describe_five_of_kind(high_cards)            
 
         elif self.eval_type in EvaluationType.LOW_A5:
             if hand_result.rank == 6:
@@ -262,7 +298,7 @@ class HandDescriber:
         rank_counts = {}
         for rank in ranks:
             rank_counts[rank] = rank_counts.get(rank, 0) + 1
-            
+
         for rank, count in rank_counts.items():
             if count == 2:
                 return f"Pair of {rank.plural_name}"
@@ -287,3 +323,15 @@ class HandDescriber:
         """Generate detailed description for Straight."""
         highest_rank = self._get_highest_rank(cards)
         return f"{highest_rank.full_name}-high Straight"
+    
+    def _describe_five_of_kind(self, cards: List[Card]) -> str:
+        """Generate detailed description for five of a Kind."""
+        ranks = [card.rank for card in cards]
+        rank_counts = {}
+        for rank in ranks:
+            rank_counts[rank] = rank_counts.get(rank, 0) + 1
+            
+        for rank, count in rank_counts.items():
+            if count == 4:
+                return f"Five {rank.plural_name}"
+        return "Five of a Kind"    

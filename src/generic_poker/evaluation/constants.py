@@ -27,11 +27,14 @@ RANKS_20_CARD = ['A', 'K', 'Q', 'J', 'T']
 # Special for 6-card low pip count games
 BASE_RANKS_PADDED = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2', 'X']
 
+# Put Joker at the beginning
+BASE_RANKS_JOKER = ['R', 'A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2']
+
 # Map evaluation types to rank orderings
 RANK_ORDERS = {
     # High hand games use base ordering
     'high': BASE_RANKS,
-    'high_wild': BASE_RANKS,
+    'high_wild_bug': BASE_RANKS_JOKER,
     # 2-7 Lowball can use same ranks
     '27_low': BASE_RANKS,
     # Pip games can also use the same ranks
@@ -96,7 +99,7 @@ HAND_SIZES = {
     '6': 5,
     'zero': 5,
     '21': 5,
-    'high_wild': 5,
+    'high_wild_bug': 5,
     'badugi': 4,
     'badugi_ah': 4,
     'hidugi': 4,

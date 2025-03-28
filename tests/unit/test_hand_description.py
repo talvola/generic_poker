@@ -1,6 +1,6 @@
 """Tests for the HandDescriber class."""
 import pytest
-from generic_poker.core.card import Card, Rank, Suit
+from generic_poker.core.card import Card, Rank, Suit, WildType
 from generic_poker.evaluation.evaluator import EvaluationType
 from generic_poker.evaluation.hand_description import HandDescriber
 
@@ -104,6 +104,36 @@ def test_low_pair_descriptions():
     assert describer.describe_hand(cards) == "One Pair"
     assert describer.describe_hand_detailed(cards) == "Pair of Queens"
 
+def test_low_pair_wild_descriptions():
+    """Test detailed descriptions for pairs, two pairs, etc."""
+    describer = HandDescriber(EvaluationType.HIGH_WILD)
+
+    bug = Card(Rank.JOKER, Suit.JOKER)  # Define a joker card for wild type
+    bug.make_wild(WildType.BUG)  # Set the joker to be a bug
+    # Test Pair of Aces using Joker
+    cards = [
+        Card(Rank.TEN, Suit.HEARTS),
+        bug,
+        Card(Rank.JACK, Suit.CLUBS),
+        Card(Rank.NINE, Suit.SPADES),
+        Card(Rank.ACE, Suit.HEARTS)
+    ]
+    assert describer.describe_hand(cards) == "One Pair"
+    assert describer.describe_hand_detailed(cards) == "Pair of Aces"
+
+    wild = Card(Rank.JOKER, Suit.JOKER)  # Define a joker card for wild type
+    wild.make_wild(WildType.NATURAL)  # Set the joker to be a wild
+    # Test Pair of Aces using Joker
+    cards = [
+        Card(Rank.TEN, Suit.HEARTS),
+        wild,
+        Card(Rank.JACK, Suit.CLUBS),
+        Card(Rank.NINE, Suit.SPADES),
+        Card(Rank.FIVE, Suit.HEARTS)
+    ]
+    assert describer.describe_hand(cards) == "One Pair"
+    assert describer.describe_hand_detailed(cards) == "Pair of Jacks"
+
 def test_high_card_description():
     """Test high card description."""
     describer = HandDescriber(EvaluationType.HIGH)
@@ -156,6 +186,24 @@ def test_straight_and_flush_descriptions():
     assert describer.describe_hand(cards) == "Flush"
     assert describer.describe_hand_detailed(cards) == "King-high Flush"
 
+def test_straight_wild_description():
+    """Test detailed descriptions for straights and flushes."""
+    describer = HandDescriber(EvaluationType.HIGH_WILD)
+    
+    bug = Card(Rank.JOKER, Suit.JOKER)  # Define a joker card for wild type
+    bug.make_wild(WildType.BUG)  # Set the joker to be a bug
+
+    # Test Ace-high Straight
+    cards = [
+        Card(Rank.ACE, Suit.HEARTS),
+        Card(Rank.KING, Suit.CLUBS),
+        Card(Rank.QUEEN, Suit.DIAMONDS),
+        bug,
+        Card(Rank.TEN, Suit.HEARTS)
+    ]
+    assert describer.describe_hand(cards) == "Straight"
+    assert describer.describe_hand_detailed(cards) == "Ace-high Straight"
+
 def test_three_of_kind_description():
     """Test description for three of a kind."""
     describer = HandDescriber(EvaluationType.HIGH)
@@ -170,6 +218,42 @@ def test_three_of_kind_description():
     ]
     assert describer.describe_hand(cards) == "Three of a Kind"
     assert describer.describe_hand_detailed(cards) == "Three Queens"
+
+def test_three_of_kind_wild_description():
+    """Test description for three of a kind."""
+    describer = HandDescriber(EvaluationType.HIGH_WILD)
+    
+    wild = Card(Rank.JOKER, Suit.JOKER)  # Define a joker card for wild type
+    wild.make_wild(WildType.NATURAL)  # Set the joker to be a wild
+
+    # Test Three of a Kind (Queens)
+    cards = [
+        Card(Rank.QUEEN, Suit.HEARTS),
+        wild,
+        Card(Rank.QUEEN, Suit.CLUBS),
+        Card(Rank.JACK, Suit.SPADES),
+        Card(Rank.NINE, Suit.HEARTS)
+    ]
+    assert describer.describe_hand(cards) == "Three of a Kind"
+    assert describer.describe_hand_detailed(cards) == "Three Queens"
+
+def test_five_of_kind_wild_description():
+    """Test description for three of a kind."""
+    describer = HandDescriber(EvaluationType.HIGH_WILD)
+    
+    wild = Card(Rank.JOKER, Suit.JOKER)  # Define a joker card for wild type
+    wild.make_wild(WildType.NATURAL)  # Set the joker to be a wild
+
+    # Test Three of a Kind (Queens)
+    cards = [
+        Card(Rank.QUEEN, Suit.HEARTS),
+        wild,
+        Card(Rank.QUEEN, Suit.CLUBS),
+        Card(Rank.QUEEN, Suit.SPADES),
+        Card(Rank.QUEEN, Suit.DIAMONDS)
+    ]
+    assert describer.describe_hand(cards) == "Five of a Kind"
+    assert describer.describe_hand_detailed(cards) == "Five Queens"
 
 def test_a5_description():
     """Test detailed descriptions for hands using A-5."""

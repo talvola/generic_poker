@@ -12,7 +12,7 @@ from generic_poker.game.betting import (
     BettingStructure, BetType, PlayerBet
 )
 from generic_poker.game.bringin import BringInDeterminator, CardRule
-from generic_poker.core.card import Card, Visibility
+from generic_poker.core.card import Card, Visibility, WildType, Rank
 from generic_poker.evaluation.evaluator import EvaluationType, evaluator
 
 logger = logging.getLogger(__name__)
@@ -1043,13 +1043,10 @@ class Game:
             entire_subset = card_config.get("entire_subset", False)            
             face_up = card_config.get("state", "face down") == "face up"
 
-            discard_config = self.current_discard_config
-            rule = discard_config["cards"][0]["rule"]
-            subset = discard_config["cards"][0]["subset"]
-            state = discard_config["cards"][0]["state"]
-            discard_location = discard_config["cards"][0].get("discardLocation", "discard_pile")
-            discard_subset = discard_config["cards"][0].get("discardSubset", "default")
-            failure_action = discard_config["cards"][0].get("failureAction", "none")            
+            rule = card_config.get("rule", "none")  # Default to "none" if not specified
+            state = card_config.get("state", "face down")  # Default to face down if not specified
+            discard_location = card_config.get("discardLocation", "discard_pile")  # Default to discard pile if not specified
+            discard_subset = card_config.get("discardSubset", "default")  # Default to "default" if not specified        
         elif is_draw:
             card_config = self.current_draw_config["cards"][0]
             max_discard = card_config.get("number", 0)
@@ -1741,6 +1738,50 @@ class Game:
         
         self.state = GameState.COMPLETE
 
+    def apply_wild_cards(self, player: Player, comm_cards: List[Card], wild_rules: List[dict]) -> None:
+        """Apply wild card rules to the player's hand and community cards."""
+        logger.debug(f"Applying wild card rules for player {player.name} with community cards: {comm_cards} and wild rules: {wild_rules}") 
+        for rule in wild_rules:
+            rule_type = rule["type"]
+            role = rule.get("role", "wild")
+            wild_type = WildType.BUG if role == "bug" else WildType.NAMED
+
+            if rule_type == "joker":
+                # Jokers are already marked as wild, adjust role if needed
+                for card in player.hand.get_cards() + comm_cards:
+                    if card.rank == Rank.JOKER:
+                        card.make_wild(wild_type)
+
+            elif rule_type == "rank":
+                rank = Rank(rule["rank"])
+                for card in player.hand.get_cards() + comm_cards:
+                    if card.rank == rank:
+                        card.make_wild(wild_type)
+
+            elif rule_type == "lowest_community":
+                subset = rule.get("subset", "default")
+                if not comm_cards:
+                    continue
+                # Sort by rank (A low, K high)
+                sorted_cards = sorted(comm_cards, key=lambda c: list(Rank).index(c.rank))
+                lowest_rank = sorted_cards[0].rank
+                for card in player.hand.get_cards() + comm_cards:
+                    if card.rank == lowest_rank:
+                        card.make_wild(wild_type)
+
+            elif rule_type == "lowest_hole":
+                subset = rule.get("subset", "default")
+                visibility = Visibility.FACE_DOWN if rule.get("visibility") == "face down" else Visibility.FACE_UP
+                hole_cards = player.hand.get_subset(subset) if subset != "default" else player.hand.get_cards()
+                eligible_cards = [c for c in hole_cards if c.visibility == visibility]
+                if not eligible_cards:
+                    continue
+                sorted_cards = sorted(eligible_cards, key=lambda c: list(Rank).index(c.rank))
+                lowest_rank = sorted_cards[0].rank
+                for card in player.hand.get_cards():  # Player-specific
+                    if card.rank == lowest_rank:
+                        card.make_wild(wild_type)
+
     def _evaluate_hands_for_config(
         self,
         players: List[Player],
@@ -2197,6 +2238,9 @@ class Game:
         """
         from generic_poker.evaluation.evaluator import evaluator
         import itertools
+
+        logger.info(f"_find_best_hand_for_player({player.id},{community_cards},{showdown_rules},{eval_type}'")
+
         
         hole_subset = showdown_rules.get("hole_subset", "default")
         community_subset = showdown_rules.get("community_subset", "default")
@@ -2237,6 +2281,10 @@ class Game:
                 logger.warning(f"Community subset '{comm_subset}' not found for player {player.id}")
 
         best_hand = None
+
+        # check for wild cards before rest of processing
+        if "wildCards" in showdown_rules:
+            self.apply_wild_cards(player, comm_cards=comm_cards, wild_rules=showdown_rules["wildCards"])
 
         # Handle new "combinations" syntax under "bestHand"
         if "combinations" in showdown_rules:

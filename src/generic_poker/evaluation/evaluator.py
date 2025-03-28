@@ -5,13 +5,14 @@ from typing import List, Dict, Optional, Type, Any, cast
 from pathlib import Path
 
 from generic_poker.core.card import Card
+from generic_poker.core.hand import PlayerHand
 from generic_poker.evaluation.eval_types.base import BaseEvaluator, HandRanking
 
 
 class EvaluationType(str, Enum):
     """Types of poker hand evaluation."""
     HIGH = 'high'                # Traditional high-hand poker
-    HIGH_WILD = 'high_wild'      # High-hand with wild cards
+    HIGH_WILD = 'high_wild_bug'  # High-hand with wild cards
     LOW_A5 = 'a5_low'           # A-5 lowball
     LOW_27 = '27_low'           # 2-7 lowball
     LOW_A5_HIGH = 'a5_low_high' # A-5 lowball, but highest unpaired hand
@@ -116,7 +117,6 @@ class HandEvaluator:
             self,
             cards: List[Card],
             eval_type: EvaluationType,
-            wild_cards: Optional[List[Card]] = None,
             qualifier: Optional[List[int]] = None
         ) -> HandResult:
             """
@@ -132,7 +132,7 @@ class HandEvaluator:
                 HandResult with evaluation details
             """
             evaluator = self.get_evaluator(eval_type)
-            ranking = evaluator.evaluate(cards, wild_cards)
+            ranking = evaluator.evaluate(cards)
             
             # Convert HandRanking to HandResult
             result = HandResult.from_ranking(ranking) if ranking else HandResult(rank=0)
@@ -142,6 +142,30 @@ class HandEvaluator:
                 return HandResult(rank=0)  # Return an invalid hand result
 
             return result
+    
+    def get_sample_hand(
+            self,
+            eval_type: EvaluationType,
+            rank: int,
+            ordered_rank: int
+    ) -> List[Card]:
+            """
+            Get a sample hand for a specific evaluation type and rank.
+            
+            Args:
+                eval_type: Type of evaluation to use
+                rank: Primary rank to retrieve
+                ordered_rank: Secondary ordering within the primary rank
+            Returns:
+                HandResult: Sample hand for the specified rank and ordered rank
+            """
+            evaluator = self.get_evaluator(eval_type)
+            hand_str = evaluator.get_sample_hand(rank, ordered_rank)
+
+            # turn the hand_str into a list of cards
+
+            hand = PlayerHand.from_string(hand_str)
+            return hand
     
     def sort_cards(self, cards: List[Card], eval_type: Optional[EvaluationType] = None) -> List[Card]:
         """
