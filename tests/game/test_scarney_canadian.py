@@ -42,7 +42,7 @@ def create_predetermined_deck():
 
 def setup_test_game():
     """Setup a 3-player scarney game with a mock deck."""
-    rules = load_rules_from_file('scarney_american')
+    rules = load_rules_from_file('scarney_canadian')
     game = Game(
         rules=rules,
         structure=BettingStructure.LIMIT,
@@ -276,7 +276,7 @@ def test_scarney_minimal_flow():
 
     game.player_action('SB', PlayerAction.CHECK)
     actions = game.get_valid_actions('BB')
-    assert (PlayerAction.BET, 20, 20) in actions      
+    assert (PlayerAction.BET, 20, 20) not in actions      
     game.player_action('BB', PlayerAction.CHECK)
     actions = game.get_valid_actions('BTN')
     assert (PlayerAction.BET, 20, 20) in actions
@@ -289,7 +289,6 @@ def test_scarney_minimal_flow():
     assert game.table.players['BB'].stack == 490  # Unchanged
 
     print('Stacks after post-flop:', {pid: game.table.players[pid].stack for pid in ['BTN', 'SB', 'BB']})
-
     # Step 12: Showdown
     game._next_step()  # showdown
     assert game.current_step == 12

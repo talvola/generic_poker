@@ -513,60 +513,69 @@ class Game:
                     valid_actions.append((PlayerAction.CALL, total_amount, total_amount))
             else:
                 valid_actions.append((PlayerAction.CHECK, None, None))
-                
-             # Determine possible BET or RAISE
-            if player.stack > required_bet:
-                current_total = self.betting.current_bet
-                is_stud = self.rules.forced_bets.style == "bring-in"
-                step_type = step.action_config["type"]
-                bet_size = self.small_bet if step_type == "small" else self.big_bet
+
+            # default to None
+            zero_cards_betting = step.action_config["zeroCardsBetting"] if "zeroCardsBetting" in step.action_config else None
+            hole_cards = player.hand.get_cards()
+
+            if zero_cards_betting is not None and zero_cards_betting == "call_only" and len(hole_cards) == 0:
+                    logger.debug(f"Zero cards betting mode is 'call_only' for step {self.current_step}. Only allowing call or check.")
+                    logger.debug(f"Valid actions for {player_id}: {valid_actions}")
+                    return valid_actions  # Only allow call in zero cards betting mode
+            else:
+                # Determine possible BET or RAISE
+                if player.stack > required_bet:
+                    current_total = self.betting.current_bet
+                    is_stud = self.rules.forced_bets.style == "bring-in"
+                    step_type = step.action_config["type"]
+                    bet_size = self.small_bet if step_type == "small" else self.big_bet
+                        
+                    active_players = [p for p in self.table.get_position_order() if p.is_active]
+                    bring_in_idx = next((i for i, p in enumerate(active_players) if self.betting.current_bets.get(p.id, PlayerBet()).posted_blind), -1)
+                    acted_count = sum(1 for b in self.betting.current_bets.values() if b.has_acted or b.posted_blind)
+                    is_first_after_bring_in = (is_stud and step_type == "small" and bring_in_idx != -1 and 
+                                            active_players[(bring_in_idx + 1) % len(active_players)].id == player_id and
+                                            acted_count <= 1)
+
+                    current_bet = self.betting.current_bets.get(player_id, PlayerBet()).amount
+
+                    if is_first_after_bring_in:
+                        # First player after bring-in in limit Stud
+                        logger.debug(f"First player after bring-in")   
+                        action = PlayerAction.BET  # Or COMPLETE if added
+                        min_amount = self.small_bet  # 10
+                        max_amount = min_amount if self.betting_structure == BettingStructure.LIMIT else self.betting.get_max_bet(player_id, BetType.SMALL, player.stack)
+                        logger.debug(f"  BET min_amount: {min_amount}")   
+                        logger.debug(f"  BET max_amount: {max_amount}") 
+                    elif current_total == 0:
+                        action = PlayerAction.BET
+                        #min_amount = self.betting.get_min_bet(player_id, BetType.BIG)
+                        min_amount = bet_size  # 10 for "small", 20 for "big"
+                        max_amount = min_amount if self.betting_structure == BettingStructure.LIMIT else self.betting.get_max_bet(player_id, BetType.SMALL if step_type == "small" else BetType.BIG, player.stack)
+                        logger.debug(f"  BET min_amount: {min_amount}")   
+                        logger.debug(f"  BET max_amount: {max_amount}")   
+                    else:
+                        action = PlayerAction.RAISE
+                        min_amount = self.betting.get_min_raise(player_id)
+                    # max_amount = self.betting.get_max_bet(player_id, BetType.BIG, player.stack)  
+                        max_amount = min_amount if self.betting_structure == BettingStructure.LIMIT else self.betting.get_max_bet(player_id, BetType.BIG, player.stack)
+                        logger.debug(f"  RAISE min_amount: {min_amount}")   
+                        logger.debug(f"  RAISE max_amount: {max_amount}")                                    
+
+                    # moved to above
+                    # max_amount = self.betting.get_max_bet(player_id, BetType.BIG, player.stack)
+
+                    logger.debug(f"Player: {player_id}, Required Bet: {required_bet}, Current Total: {current_total}")
+                    logger.debug(f"Min Amount: {min_amount}, Max Amount: {max_amount}")                
                     
-                active_players = [p for p in self.table.get_position_order() if p.is_active]
-                bring_in_idx = next((i for i, p in enumerate(active_players) if self.betting.current_bets.get(p.id, PlayerBet()).posted_blind), -1)
-                acted_count = sum(1 for b in self.betting.current_bets.values() if b.has_acted or b.posted_blind)
-                is_first_after_bring_in = (is_stud and step_type == "small" and bring_in_idx != -1 and 
-                                        active_players[(bring_in_idx + 1) % len(active_players)].id == player_id and
-                                        acted_count <= 1)
-
-                current_bet = self.betting.current_bets.get(player_id, PlayerBet()).amount
-
-                if is_first_after_bring_in:
-                    # First player after bring-in in limit Stud
-                    logger.debug(f"First player after bring-in")   
-                    action = PlayerAction.BET  # Or COMPLETE if added
-                    min_amount = self.small_bet  # 10
-                    max_amount = min_amount if self.betting_structure == BettingStructure.LIMIT else self.betting.get_max_bet(player_id, BetType.SMALL, player.stack)
-                    logger.debug(f"  BET min_amount: {min_amount}")   
-                    logger.debug(f"  BET max_amount: {max_amount}") 
-                elif current_total == 0:
-                    action = PlayerAction.BET
-                    #min_amount = self.betting.get_min_bet(player_id, BetType.BIG)
-                    min_amount = bet_size  # 10 for "small", 20 for "big"
-                    max_amount = min_amount if self.betting_structure == BettingStructure.LIMIT else self.betting.get_max_bet(player_id, BetType.SMALL if step_type == "small" else BetType.BIG, player.stack)
-                    logger.debug(f"  BET min_amount: {min_amount}")   
-                    logger.debug(f"  BET max_amount: {max_amount}")   
-                else:
-                    action = PlayerAction.RAISE
-                    min_amount = self.betting.get_min_raise(player_id)
-                   # max_amount = self.betting.get_max_bet(player_id, BetType.BIG, player.stack)  
-                    max_amount = min_amount if self.betting_structure == BettingStructure.LIMIT else self.betting.get_max_bet(player_id, BetType.BIG, player.stack)
-                    logger.debug(f"  RAISE min_amount: {min_amount}")   
-                    logger.debug(f"  RAISE max_amount: {max_amount}")                                    
-
-                # moved to above
-                # max_amount = self.betting.get_max_bet(player_id, BetType.BIG, player.stack)
-
-                logger.debug(f"Player: {player_id}, Required Bet: {required_bet}, Current Total: {current_total}")
-                logger.debug(f"Min Amount: {min_amount}, Max Amount: {max_amount}")                
-                
-                # ✅ Normal raise if player has enough chips
-                #if player.stack + current_bet >= min_amount:
-                if player.stack >= min_amount:
-                    valid_actions.append((action, min_amount, max_amount))
-                else:
-                    # All-in raise if stack can't meet min raise
-                    all_in_amount = player.stack + current_bet
-                    valid_actions.append((action, all_in_amount, all_in_amount))        
+                    # ✅ Normal raise if player has enough chips
+                    #if player.stack + current_bet >= min_amount:
+                    if player.stack >= min_amount:
+                        valid_actions.append((action, min_amount, max_amount))
+                    else:
+                        # All-in raise if stack can't meet min raise
+                        all_in_amount = player.stack + current_bet
+                        valid_actions.append((action, all_in_amount, all_in_amount))        
                   
             logger.debug(f"Valid actions for {player_id}: {valid_actions}")
             return valid_actions        
