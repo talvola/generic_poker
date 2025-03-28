@@ -1033,6 +1033,14 @@ class Game:
             subset = card_config.get("hole_subset")
             entire_subset = card_config.get("entire_subset", False)            
             face_up = card_config.get("state", "face down") == "face up"
+
+            discard_config = self.current_discard_config
+            rule = discard_config["cards"][0]["rule"]
+            subset = discard_config["cards"][0]["subset"]
+            state = discard_config["cards"][0]["state"]
+            discard_location = discard_config["cards"][0].get("discardLocation", "discard_pile")
+            discard_subset = discard_config["cards"][0].get("discardSubset", "default")
+            failure_action = discard_config["cards"][0].get("failureAction", "none")            
         elif is_draw:
             card_config = self.current_draw_config["cards"][0]
             max_discard = card_config.get("number", 0)
@@ -1052,16 +1060,7 @@ class Game:
                     draw_amount = len(cards) + draw_amount_config.get("amount", 0)
                     # Ensure non-negative
                     draw_amount = max(0, draw_amount)
-        
-        # Validate discard count
-        if len(cards) > max_discard:
-            logger.warning(f"{player.name} trying to discard too many cards: {len(cards)} > {max_discard}")
-            return False
-            
-        if len(cards) < min_discard:
-            logger.warning(f"{player.name} trying to discard too few cards: {len(cards)} < {min_discard}")
-            return False
-        
+               
         # If entire_subset is true, validate the cards match an existing subset
         if entire_subset:
             player_subsets = player.hand.subsets
@@ -1076,15 +1075,51 @@ class Game:
             if not valid_discard:
                 logger.warning(f"Player {player.name} discarded {cards}, but it doesn’t match an entire subset")
                 return False
-        else:
-            logger.info(f"{player.name} discards {len(cards)} cards: {cards}")
         
-        # Remove cards from hand and add to discard pile
-        for card in cards:
-            player.hand.remove_card(card)
-            if face_up:
-                card.visibility = Visibility.FACE_UP
-            self.table.discard_pile.add_card(card)
+        # see if we have an automated rule for discards - cards array parameter not used
+        if is_discard and rule == "matching ranks":
+            # Get the ranks of the cards in the specified subset (e.g., "Discard" board)
+            if discard_location == "community":
+                discard_cards = self.table.community_cards.get(discard_subset, [])
+            else:
+                # nothing else supported yet
+                discard_cards = []   
+
+            discard_ranks = {card.rank for card in discard_cards}
+
+            hole_cards = player.hand.get_cards()
+            cards_to_discard = [card for card in hole_cards if card.rank in discard_ranks]
+
+            # Perform the discard
+            for card in cards_to_discard:
+                player.hand.remove_card(card)
+                if discard_location == "community":
+                    self.table.community_cards[discard_subset].append(card)
+                    card.visibility = Visibility.FACE_UP if state == "face up" else Visibility.FACE_DOWN
+                else:
+                    self.table.discard_pile[discard_subset].append(card)
+                    card.visibility = Visibility.FACE_UP if state == "face up" else Visibility.FACE_DOWN
+
+            logger.info(f"Player {player.id} discarded {len(cards_to_discard)} cards matching ranks {discard_ranks}")
+        else:
+            # use what the player specified
+            # Validate discard count
+            if len(cards) > max_discard:
+                logger.warning(f"{player.name} trying to discard too many cards: {len(cards)} > {max_discard}")
+                return False
+                
+            if len(cards) < min_discard:
+                logger.warning(f"{player.name} trying to discard too few cards: {len(cards)} < {min_discard}")
+                return False            
+
+            # Remove cards from hand and add to discard pile
+            for card in cards:
+                player.hand.remove_card(card)
+                if face_up:
+                    card.visibility = Visibility.FACE_UP
+                self.table.discard_pile.add_card(card)
+
+            logger.info(f"{player.name} discards {len(cards)} cards: {cards}")                
         
         if is_draw:
             # Draw new cards if applicable
@@ -1720,7 +1755,12 @@ class Game:
 
         describer = HandDescriber(eval_type)
         results = {}
-        
+
+        if "zeroCardsPipValue" in hand_config:
+            zero_cards_pip_value = hand_config["zeroCardsPipValue"]     
+        else:
+            zero_cards_pip_value = None  # Default to None if not specified in the config
+
         for player in players:
             # Find the player's best hand for this configuration
             best_hand = self._find_best_hand_for_player(
@@ -1730,7 +1770,24 @@ class Game:
                 eval_type
             )
           
+            # allow an empty hand to play if it has value
+            if zero_cards_pip_value is not None and not best_hand:
+                logger.info(f"Player {player.name} has no valid hand for {hand_type}, but zeroCardsPipValue is set to {zero_cards_pip_value}. Assigning a default hand.")
+                # create results
+                results[player.id] = HandResult(
+                    player_id=player.id,
+                    cards=[],
+                    hand_name="No Cards",
+                    hand_description="No Cards",
+                    hand_type=hand_type,
+                    evaluation_type=eval_type.value,
+                    community_cards=self.table.community_cards
+                )
+
+                return results
+            
             if not best_hand:
+                logger.info(f"Player {player.name} has no valid hand for {hand_type}. Skipping...")
                 continue
             
             # Create hand result
@@ -2109,7 +2166,7 @@ class Game:
             raise ValueError("No results available - hand may have ended without showdown")
             
         return self.last_hand_result
-
+       
     def _find_best_hand_for_player(
         self,
         player: Player,
@@ -2133,6 +2190,9 @@ class Game:
         import itertools
         
         hole_subset = showdown_rules.get("hole_subset", "default")
+        community_subset = showdown_rules.get("community_subset", "default")
+        padding = showdown_rules.get("padding", False)
+        logger.debug(f"Finding best hand for player {player.id} with eval_type '{eval_type}' - using community subset '{community_subset}' and padding={padding}")
         if hole_subset and hole_subset != "default":
             # Use specific subset if specified (e.g., SHESHE)
             hole_cards = player.hand.get_subset(hole_subset)
@@ -2145,6 +2205,17 @@ class Game:
             if not hole_cards:
                 logger.warning(f"No cards in hand for player {player.id}")
                 return []
+            
+        if not hole_cards and "minimumCards" in showdown_rules:
+            minimum_cards = showdown_rules["minimumCards"]
+            if minimum_cards > 0:
+                logger.warning(f"Player {player.id} has 0 cards, needs {minimum_cards} to qualify")
+                return []
+            # Handle 0-card variants
+            if "zeroCardsPipValue" in showdown_rules and eval_type.startswith("low_pip"):
+                # For low pip evaluation, return an empty hand with a pip value
+                # The evaluator will use zeroCardsPipValue (e.g., 0 for best low)
+                return []            
         
         # If no community cards exist (e.g., Stud), use hole cards only
         if not community_cards:
@@ -2194,7 +2265,7 @@ class Game:
             else:
                 logger.warning(f"No valid hand combinations for player {player.id}")
                 return []
-        
+                       
         # Handle different types of hand compositions
         if "anyCards" in showdown_rules:
             total_cards = showdown_rules["anyCards"]
@@ -2227,7 +2298,9 @@ class Game:
             if not comm_cards and len(hole_cards) == total_cards:
                 return hole_cards
             
-            if len(all_cards) < total_cards:
+            # if we are padding, then don't check the length of all_cards against total_cards
+            # because we want to allow padding to fill in the gaps
+            if len(all_cards) < total_cards and not padding:
                 # Not enough cards total
                 logger.warning(
                     f"Not enough cards for player {player.id}: "
@@ -2286,12 +2359,17 @@ class Game:
         
         # Handle cases with specific requirements for hole and/or community cards
         elif "holeCards" in showdown_rules or "communityCards" in showdown_rules:
+            logger.debug(f"Evaluating showdown rules for player {player.id} with hole cards: {hole_cards} and community cards: {comm_cards}")
             # Get requirements (default to 0 if not specified)
             required_hole = showdown_rules.get("holeCards", 0)
             required_community = showdown_rules.get("communityCards", 0)
+            logger.debug(
+                f"Required hole cards: {required_hole}, Required community cards: {required_community} "
+                f"(player {player.id} has {len(hole_cards)} hole and {len(comm_cards)} community)"
+            )
             
-            # Ensure we have enough cards to evaluate
-            if len(hole_cards) < required_hole or len(comm_cards) < required_community:
+            # Ensure we have enough cards to evaluate (if padding, we will get enough so OK)
+            if (len(hole_cards) < required_hole or len(comm_cards) < required_community) and not padding:
                 logger.warning(
                     f"Not enough cards for player {player.id}: "
                     f"Has {len(hole_cards)} hole cards (need {required_hole}) and "
@@ -2300,12 +2378,13 @@ class Game:
                 return []
             
             # Generate combinations only for categories with requirements > 0
-            hole_combos = [tuple()] if required_hole == 0 else list(itertools.combinations(hole_cards, required_hole))
+            # use the minimum of the cards we have and the required list, since padding will take care of the rest
+            hole_combos = [tuple()] if required_hole == 0 else list(itertools.combinations(hole_cards, min(len(hole_cards),required_hole)))
             community_combos = [tuple()] if required_community == 0 else list(itertools.combinations(comm_cards, required_community))
             
             # Try all combinations and find the best
             for hole_combo in hole_combos:
-                for comm_combo in community_combos:
+                for comm_combo in community_combos:                 
                     # Combine the two sets of cards
                     hand = list(hole_combo) + list(comm_combo)
                     
@@ -2317,6 +2396,7 @@ class Game:
                         if evaluator.compare_hands(hand, best_hand, eval_type) > 0:
                             best_hand = hand
             
+            logger.debug(f'Best hand found for player {player.id} using showdown rules: {best_hand}')
             return best_hand
               
         # Default: just use all hole cards

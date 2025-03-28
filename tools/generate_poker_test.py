@@ -325,7 +325,11 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
 
         elif action_type == "discard":
             discard_config = step["discard"]["cards"][0]
-            num_to_discard = discard_config["number"]
+            # protect against number being optional
+            if "number" not in discard_config:
+                num_to_discard = 1  # placeholder
+            else:
+                num_to_discard = discard_config["number"]
             script.extend([
                 "    assert game.state == GameState.DRAWING",
                 f"    assert game.current_player.id == '{action_order[0]}'  # Start with SB",

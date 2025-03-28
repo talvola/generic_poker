@@ -125,6 +125,9 @@ HAND_SIZES = {
     '21_6': 6
 }
 
+# evaluation types which require padding to evaluate
+PADDED_TYPES = {'low_pip_6_cards'}
+
 # Alternative organization by size
 EVAL_TYPES_BY_SIZE = {
     size: {eval_type for eval_type, req_size in HAND_SIZES.items() if req_size == size}

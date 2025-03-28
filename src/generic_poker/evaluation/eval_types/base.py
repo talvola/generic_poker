@@ -8,7 +8,7 @@ import csv
 from generic_poker.core.card import Card, Rank, Suit
 from generic_poker.evaluation.types import HandRanking
 from generic_poker.evaluation.constants import (
-    SUIT_ORDER, RANK_ORDERS, HAND_SIZES, RANK_ONLY_TYPES
+    SUIT_ORDER, RANK_ORDERS, HAND_SIZES, RANK_ONLY_TYPES, PADDED_TYPES
 )
 from generic_poker.evaluation.cache import HandRankingsCache
 
@@ -30,6 +30,8 @@ class BaseEvaluator(ABC):
         self.rank_order = RANK_ORDERS[eval_type]
         self.rank_only = eval_type in RANK_ONLY_TYPES
         self.rankings = self._rankings_cache.get_rankings(eval_type, rankings_file)
+        self.padding_required = eval_type in PADDED_TYPES
+        self.hand_size = HAND_SIZES[eval_type]
         
     def _cards_to_string(self, cards: List[Card]) -> str:
         """
@@ -38,14 +40,16 @@ class BaseEvaluator(ABC):
         For rank-only formats (like '49', 'zero'): "AAAT8"
         For regular formats: "AsKsQsJsTs"
         """
+
+        # should fix this - padding should create actual cards
         if self.rank_only:
-            return ''.join(card.rank.value for card in cards)
+            return ''.join(getattr(getattr(card, 'rank', None), 'value', 'X') for card in cards)
         else:
             return ''.join(f"{card.rank.value}{card.suit.value}" for card in cards)
 
     def _validate_hand_size(self, cards: List[Card]) -> None:
         """Ensure hand has correct number of cards."""
-        if len(cards) != self.required_size:
+        if len(cards) != self.required_size and not self.padding_required:
             raise ValueError(
                 f"{self.eval_type} evaluation requires exactly {self.required_size} cards"
             )

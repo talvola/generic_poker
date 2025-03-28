@@ -1,0 +1,182 @@
+{
+    "game": "Scarney (abby99 rules)",
+    "players": {
+        "min": 2,
+        "max": 6
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 6,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Pre-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Board"
+                    },
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Discard"
+                    }
+                ]
+            },
+            "name": "Deal Flop"
+        },
+        {
+            "discard": {
+                "cards": [
+                    {
+                        "rule": "matching ranks",
+                        "subset": "Discard",
+                        "state": "face up",
+                        "discardLocation": "community",
+                        "discardSubset": "Discard"   
+                    }
+                ]
+            },
+            "name": "Discard Matching Ranks"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Post-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 2,
+                        "state": "face up",
+                        "subset": "Board"
+                    },
+                    {
+                        "number": 2,
+                        "state": "face up",
+                        "subset": "Discard"
+                    }
+                ]
+            },
+            "name": "Deal Turn"
+        },
+        {
+            "discard": {
+                "cards": [
+                    {
+                        "rule": "matching ranks",
+                        "subset": "Discard",
+                        "state": "face up",
+                        "discardLocation": "community",
+                        "discardSubset": "Discard"   
+                    }
+                ]
+            },
+            "name": "Discard Matching Ranks"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Turn Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Discard"
+                    }
+                ]
+            },
+            "name": "Deal River"
+        },
+        {
+            "discard": {
+                "cards": [
+                    {
+                        "rule": "matching ranks",
+                        "subset": "Discard",
+                        "state": "face up",
+                        "discardLocation": "community",
+                        "discardSubset": "Discard"                        
+                    }
+                ]
+            },
+            "name": "Discard Matching Ranks"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "River Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "all cards",
+        "bestHand": [
+            {
+                "name": "High",
+                "evaluationType": "high",
+                "anyCards": 5,
+                "community_subset": "Board"
+            },
+            {
+                "name": "Lowest Total",
+                "evaluationType": "low_pip_6_cards",
+                "holeCards": 6,
+                "padding": true,
+                "minimumCards": 1
+            }
+        ]
+    }
+}
