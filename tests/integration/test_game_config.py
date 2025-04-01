@@ -55,17 +55,30 @@ def validate_betting_sequence(rules: GameRules):
     Raises:
         ValueError: If betting sequence is invalid
     """
-    bet_steps = [
-        step for step in rules.gameplay 
-        if step.action_type == GameActionType.BET
-    ]
+    bet_steps = []
+    for step in rules.gameplay:
+        if step.action_type == GameActionType.BET:
+            bet_steps.append(step)
+        elif step.action_type == GameActionType.GROUPED:
+            # Check if any action in the group is a bet
+            if any("bet" in action for action in step.action_config):
+                bet_steps.append(step)
     
     if not bet_steps:
         raise ValueError("Game must have at least one betting round")
     
     # Check first betting step is blinds/antes if present
-    if bet_steps[0].action_config["type"] not in ["blinds", "antes"]:
-        raise ValueError("First betting step must be blinds or antes")
+    first_bet_step = bet_steps[0]
+    if first_bet_step.action_type == GameActionType.BET:
+        if first_bet_step.action_config["type"] not in ["blinds", "antes"]:
+            raise ValueError("First betting step must be blinds or antes")
+    elif first_bet_step.action_type == GameActionType.GROUPED:
+        # Find the first bet action in the group
+        for action in first_bet_step.action_config:
+            if "bet" in action:
+                if action["bet"]["type"] not in ["blinds", "antes"]:
+                    raise ValueError("First betting action in grouped step must be blinds or antes")
+                break
 
 
 def validate_card_requirements(rules: GameRules):
@@ -79,20 +92,28 @@ def validate_card_requirements(rules: GameRules):
         ValueError: If card requirements are inconsistent
     """
     # Count cards dealt to players
-    player_cards = sum(
-        sum(c["number"] for c in step.action_config["cards"])
-        for step in rules.gameplay
-        if step.action_type == GameActionType.DEAL 
-        and step.action_config["location"] == "player"
-    )
+    player_cards = 0
+    community_cards = 0
     
-    # Count community cards
-    community_cards = sum(
-        sum(c["number"] for c in step.action_config["cards"])
-        for step in rules.gameplay
-        if step.action_type == GameActionType.DEAL 
-        and step.action_config["location"] == "community"
-    )
+    for step in rules.gameplay:
+        if step.action_type == GameActionType.DEAL:
+            config = step.action_config
+            for c in config["cards"]:
+                num = c["number"]
+                if config["location"] == "player":
+                    player_cards += num
+                elif config["location"] == "community":
+                    community_cards += num
+        elif step.action_type == GameActionType.GROUPED:
+            for action in step.action_config:
+                if "deal" in action:
+                    config = action["deal"]
+                    for c in config["cards"]:
+                        num = c["number"]
+                        if config["location"] == "player":
+                            player_cards += num
+                        elif config["location"] == "community":
+                            community_cards += num
     
     # Validate against showdown requirements
     for hand_rule in rules.showdown.best_hand:

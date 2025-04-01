@@ -74,6 +74,34 @@ def setup_logging():
         force=True
     )
 
+def test_lazy_pineapple_8_bet():
+    """Test minimal flow for lazy_pineapple_8 from start to showdown."""
+    game = setup_test_game()
+    game.start_hand()
+    # Step 0: Post Blinds
+    assert game.current_step == 0
+    assert game.state == GameState.BETTING
+    assert game.table.players['SB'].stack == 495  # SB posted 5
+    assert game.table.players['BB'].stack == 490  # BB posted 10
+    assert game.table.players['BTN'].stack == 500  # BTN
+    assert game.betting.get_main_pot_amount() == 15
+    print('Stacks after blinds:', {pid: game.table.players[pid].stack for pid in ['BTN', 'SB', 'BB']})
+    # Step 1: Deal Hole Cards
+    game._next_step()  # deal_hole_cards
+    assert game.current_step == 1
+    assert game.state == GameState.DEALING
+    for pid in ['BTN', 'SB', 'BB']:
+        assert len(game.table.players[pid].hand.get_cards()) == 3
+    print(f'\nStep 1 - Player Hands:')
+    for pid in ['BTN', 'SB', 'BB']:
+        print(f'{pid}: {[str(c) for c in game.table.players[pid].hand.get_cards()]}')
+    # Step 2: Pre-Flop Bet
+    game._next_step()  # pre-flop_bet
+    assert game.current_step == 2
+    assert game.state == GameState.BETTING
+    assert game.current_player.id == 'BTN'  # BTN first pre-flop
+    actions = game.get_valid_actions('BTN')
+
 def test_lazy_pineapple_8_minimal_flow():
     """Test minimal flow for lazy_pineapple_8 from start to showdown."""
     game = setup_test_game()

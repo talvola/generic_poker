@@ -502,7 +502,7 @@ class LimitBettingManager(BettingManager):
         to_call = self.current_bet - current_bet
         bet_size = self.small_bet if bet_type == BetType.SMALL else self.big_bet
 
-        logger.debug(f"current_bet={current_bet}, to_call={to_call}, bet_size={bet_size}")
+        logger.debug(f"current_bet={current_bet}, to_call={to_call}, bet_size={bet_size}, bet_type={bet_type}")
 
         if amount == 0:  # Check/fold always valid
             return True

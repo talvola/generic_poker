@@ -71,10 +71,10 @@
             },
             {
               "type": "string",
-              "enum": ["remaining"]
+              "enum": ["remaining","all"]
             }
           ],
-          "description": "Number of hole cards required, list of indices, or 'remaining' for all remaining cards"
+          "description": "Number of hole cards required, list of indices, 'remaining' for all remaining cards, or 'all' for all available hole cards"
         },
         "communityCards": {
           "oneOf": [
@@ -213,7 +213,268 @@
       },       
       "required": ["evaluationType"],
       "additionalProperties": false
-    }
+    },
+    "bet": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Type of bet"
+        },
+        "zeroCardsBetting": {
+          "type": "string",
+          "enum": ["call_only", "normal"],
+          "description": "Betting restriction for players with 0 cards (e.g., 'call_only' for Canadian Scarney)"
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    "deal": {
+      "type": "object",
+      "properties": {
+        "location": {
+          "type": "string",
+          "description": "Location of the deal (player or community)"
+        },
+        "cards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "description": "Number of cards to deal"
+              },
+              "state": {
+                "type": "string",
+                "description": "State of the cards (face up or face down)"
+              },
+              "community_subset": {
+                "description": "Subset of community cards (e.g., 'Board', 'Discard')"
+              },
+              "subset": {
+                "type": "string",
+                "description": "Subset of cards (e.g., 'Board', 'Discard')"
+              }
+            },
+            "required": ["number", "state"]
+          }
+        }
+      },
+      "required": ["location", "cards"],
+      "additionalProperties": false
+    },
+    "discard": {
+      "type": "object",
+      "properties": {
+        "cards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rule": {
+                "type": "string",
+                "description": "Rule for discarding cards (e.g., 'matching ranks')"
+              },
+              "subset": { 
+                "type": "string",
+                "description": "Subset of cards to compare for the discard rule (e.g., 'Discard')"
+              },
+              "discardLocation": { 
+                "type": "string",
+                "enum": ["community", "discard_pile"],
+                "description": "Where to place discarded cards (e.g., 'community' for Scarney)"
+              },
+              "discardSubset": { 
+                "type": "string",
+                "description": "Subset of the discard location to place cards (e.g., 'Discard')"
+              },
+              "hole_subset": {
+                "type": "string",
+                "description": "Subset of cards to discard (e.g., 'Hand 1', or 'any' for any subset)"
+              },
+              "oncePerStep": {
+                "type": "boolean",
+                "description": "If true, discard happens only once per grouped step",
+                "default": false
+              },  
+              "min_number": {
+                "type": "integer",
+                "description": "Minimum number of cards that must be drawn"
+              },                                       
+              "number": {
+                "type": "integer",
+                "description": "Number of cards to discard"
+              },
+              "state": {
+                "type": "string",
+                "description": "State of the discarded cards (face up or face down)"
+              },
+              "entire_subset": {
+                "type": "boolean",
+                "description": "If true, the discarded cards must be an entire named subset",
+                "default": false
+              }                    
+            },
+            "anyOf": [
+              { "required": ["hole_subset"] },
+              { "required": ["number"] },
+              { "required": ["rule", "subset"] } 
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["cards"],
+      "additionalProperties": false
+    },
+    "draw": {
+      "type": "object",
+      "properties": {
+        "cards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "description": "Number of cards to draw"
+              },
+              "min_number": {
+                "type": "integer",
+                "description": "Minimum number of cards that must be drawn"
+              },                    
+              "state": {
+                "type": "string",
+                "description": "State of the cards (face up or face down)"
+              },
+              "hole_subset": {
+                "type": "string",
+                "description": "Subset of player's hand to draw from/to"
+              },
+              "draw_amount": {
+                "type": "object",
+                "properties": {
+                  "relative_to": {
+                    "type": "string",
+                    "enum": ["discard"],
+                    "description": "Specifies that the draw amount is relative to the discard amount"
+                  },
+                  "amount": {
+                    "type": "integer",
+                    "description": "The difference between the draw amount and the discard amount"
+                  }
+                },
+                "required": ["relative_to", "amount"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["number", "state"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["cards"],
+      "additionalProperties": false
+    },          
+    "remove": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Remove cards action"
+    },
+    "expose": {
+      "type": "object",
+      "properties": {
+        "cards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "description": "Number of cards to expose"
+              },
+              "state": {
+                "type": "string",
+                "description": "State of the cards (face up or face down)"
+              }
+            },
+            "required": ["number", "state"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["cards"],
+      "additionalProperties": false
+    },
+    "pass": {
+      "type": "object",
+      "properties": {
+        "cards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "number": {
+                "type": "integer",
+                "description": "Number of cards to pass"
+              },
+              "direction": {
+                "type": "string",
+                "enum": ["left", "right", "across"],
+                "description": "Direction to pass the cards"
+              },
+              "state": {
+                "type": "string",
+                "enum": ["face up", "face down"],
+                "description": "State of the cards being passed"
+              }
+            },
+            "required": ["number", "direction", "state"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["cards"],
+      "additionalProperties": false
+    },          
+    "separate": {
+      "type": "object",
+      "properties": {
+        "cards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hole_subset": {
+                "type": "string",
+                "description": "Name of the subset"
+              },
+              "number": {
+                "type": "integer",
+                "description": "Number of cards in the subset"
+              }
+            },
+            "required": ["hole_subset", "number"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["cards"],
+      "additionalProperties": false
+    },
+    "showdown": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Type of showdown"
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    }    
   },  
   "properties": {
     "game": {
@@ -283,260 +544,37 @@
             "type": "string",
             "description": "Name of the gameplay step"
           },
-          "bet": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "description": "Type of bet"
-              },
-              "zeroCardsBetting": {
-                "type": "string",
-                "enum": ["call_only", "normal"],
-                "description": "Betting restriction for players with 0 cards (e.g., 'call_only' for Canadian Scarney)"
-              }
-            },
-            "required": ["type"],
-            "additionalProperties": false
-          },
-          "deal": {
-            "type": "object",
-            "properties": {
-              "location": {
-                "type": "string",
-                "description": "Location of the deal (player or community)"
-              },
-              "cards": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "number": {
-                      "type": "integer",
-                      "description": "Number of cards to deal"
-                    },
-                    "state": {
-                      "type": "string",
-                      "description": "State of the cards (face up or face down)"
-                    },
-                    "community_subset": {
-                      "description": "Subset of community cards (e.g., 'Board', 'Discard')"
-                    },
-                    "subset": {
-                      "type": "string",
-                      "description": "Subset of cards (e.g., 'Board', 'Discard')"
-                    }
-                  },
-                  "required": ["number", "state"]
-                }
-              }
-            },
-            "required": ["location", "cards"],
-            "additionalProperties": false
-          },
-          "discard": {
-            "type": "object",
-            "properties": {
-              "cards": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "rule": {
-                      "type": "string",
-                      "description": "Rule for discarding cards (e.g., 'matching ranks')"
-                    },
-                    "subset": { 
-                      "type": "string",
-                      "description": "Subset of cards to compare for the discard rule (e.g., 'Discard')"
-                    },
-                    "discardLocation": { 
-                      "type": "string",
-                      "enum": ["community", "discard_pile"],
-                      "description": "Where to place discarded cards (e.g., 'community' for Scarney)"
-                    },
-                    "discardSubset": { 
-                      "type": "string",
-                      "description": "Subset of the discard location to place cards (e.g., 'Discard')"
-                    },
-                    "hole_subset": {
-                      "type": "string",
-                      "description": "Subset of cards to discard (e.g., 'Hand 1', or 'any' for any subset)"
-                    },
-                    "number": {
-                      "type": "integer",
-                      "description": "Number of cards to discard"
-                    },
-                    "state": {
-                      "type": "string",
-                      "description": "State of the discarded cards (face up or face down)"
-                    },
-                    "entire_subset": {
-                      "type": "boolean",
-                      "description": "If true, the discarded cards must be an entire named subset",
-                      "default": false
-                    }                    
-                  },
-                  "anyOf": [
-                    { "required": ["hole_subset"] },
-                    { "required": ["number"] },
-                    { "required": ["rule", "subset"] } 
-                  ],
-                  "additionalProperties": false
-                }
-              }
-            },
-            "required": ["cards"],
-            "additionalProperties": false
-          },
-          "draw": {
-            "type": "object",
-            "properties": {
-              "cards": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "number": {
-                      "type": "integer",
-                      "description": "Number of cards to draw"
-                    },
-                    "min_number": {
-                      "type": "integer",
-                      "description": "Minimum number of cards that must be drawn"
-                    },                    
-                    "state": {
-                      "type": "string",
-                      "description": "State of the cards (face up or face down)"
-                    },
-                    "hole_subset": {
-                      "type": "string",
-                      "description": "Subset of player's hand to draw from/to"
-                    },
-                    "draw_amount": {
-                      "type": "object",
-                      "properties": {
-                        "relative_to": {
-                          "type": "string",
-                          "enum": ["discard"],
-                          "description": "Specifies that the draw amount is relative to the discard amount"
-                        },
-                        "amount": {
-                          "type": "integer",
-                          "description": "The difference between the draw amount and the discard amount"
-                        }
-                      },
-                      "required": ["relative_to", "amount"],
-                      "additionalProperties": false
-                    }
-                  },
-                  "required": ["number", "state"],
-                  "additionalProperties": false
-                }
-              }
-            },
-            "required": ["cards"],
-            "additionalProperties": false
+          "groupedActions": {
+            "type": "array",
+            "description": "List of actions to execute together for each player in turn order",
+            "items": {
+              "oneOf": [
+                { "$ref": "#/definitions/bet" },
+                { "$ref": "#/definitions/deal" },
+                { "$ref": "#/definitions/discard" },
+                { "$ref": "#/definitions/draw" },
+                { "$ref": "#/definitions/remove" },
+                { "$ref": "#/definitions/expose" },
+                { "$ref": "#/definitions/pass" },
+                { "$ref": "#/definitions/separate" },
+                { "$ref": "#/definitions/showdown" }
+              ]
+            }
           },          
-          "remove": {
-            "type": "object",
-            "additionalProperties": true,
-            "description": "Remove cards action"
-          },
-          "expose": {
-            "type": "object",
-            "properties": {
-              "cards": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "number": {
-                      "type": "integer",
-                      "description": "Number of cards to expose"
-                    },
-                    "state": {
-                      "type": "string",
-                      "description": "State of the cards (face up or face down)"
-                    }
-                  },
-                  "required": ["number", "state"],
-                  "additionalProperties": false
-                }
-              }
-            },
-            "required": ["cards"],
-            "additionalProperties": false
-          },
-          "pass": {
-            "type": "object",
-            "properties": {
-              "cards": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "number": {
-                      "type": "integer",
-                      "description": "Number of cards to pass"
-                    },
-                    "direction": {
-                      "type": "string",
-                      "enum": ["left", "right", "across"],
-                      "description": "Direction to pass the cards"
-                    },
-                    "state": {
-                      "type": "string",
-                      "enum": ["face up", "face down"],
-                      "description": "State of the cards being passed"
-                    }
-                  },
-                  "required": ["number", "direction", "state"],
-                  "additionalProperties": false
-                }
-              }
-            },
-            "required": ["cards"],
-            "additionalProperties": false
-          },          
-          "separate": {
-            "type": "object",
-            "properties": {
-              "cards": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "hole_subset": {
-                      "type": "string",
-                      "description": "Name of the subset"
-                    },
-                    "number": {
-                      "type": "integer",
-                      "description": "Number of cards in the subset"
-                    }
-                  },
-                  "required": ["hole_subset", "number"],
-                  "additionalProperties": false
-                }
-              }
-            },
-            "required": ["cards"],
-            "additionalProperties": false
-          },
-          "showdown": {
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "description": "Type of showdown"
-              }
-            },
-            "required": ["type"],
-            "additionalProperties": false
-          }
+          "bet": { "$ref": "#/definitions/bet" },
+          "deal": { "$ref": "#/definitions/deal" },
+          "discard": { "$ref": "#/definitions/discard" },
+          "draw": { "$ref": "#/definitions/draw" },
+          "remove": { "$ref": "#/definitions/remove" },
+          "expose": { "$ref": "#/definitions/expose" },
+          "pass": { "$ref": "#/definitions/pass" },
+          "separate": { "$ref": "#/definitions/separate" },
+          "showdown": { "$ref": "#/definitions/showdown" }
         },
-        "required": ["name"],
+        "oneOf": [
+          { "required": ["name", "groupedActions"] },
+          { "required": ["name"], "properties": { "groupedActions": { "not": {} } } }
+        ],
         "additionalProperties": false
       }
     },

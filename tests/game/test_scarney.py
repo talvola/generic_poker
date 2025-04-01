@@ -135,20 +135,17 @@ def test_scarney_minimal_flow():
     pid = 'SB'
     hand = game.table.players[pid].hand
     initial_count = len(hand.get_cards())
-    cards_to_discard = hand.get_cards()[:1]
-    game.player_action(pid, PlayerAction.DISCARD, cards=cards_to_discard)
+    game.player_action(pid, PlayerAction.DISCARD, cards=[])
     assert len(hand.get_cards()) == initial_count - 1  # Hand size reduced by discards        
     pid = 'BB'
     hand = game.table.players[pid].hand
     initial_count = len(hand.get_cards())
-    cards_to_discard = hand.get_cards()[:1]
-    game.player_action(pid, PlayerAction.DISCARD, cards=cards_to_discard)
+    game.player_action(pid, PlayerAction.DISCARD, cards=[])
     assert len(hand.get_cards()) == initial_count - 4  # Hand size reduced by discards     
     pid = 'BTN'
     hand = game.table.players[pid].hand
     initial_count = len(hand.get_cards())
-    cards_to_discard = hand.get_cards()[:1]
-    game.player_action(pid, PlayerAction.DISCARD, cards=cards_to_discard)
+    game.player_action(pid, PlayerAction.DISCARD, cards=[])
     assert len(hand.get_cards()) == initial_count - 1  # Hand size reduced by discards  
 
     print(f'\nStep 4 - Post-Discard Hands:')

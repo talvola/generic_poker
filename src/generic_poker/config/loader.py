@@ -1,7 +1,7 @@
 """Game configuration loading and parsing."""
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Union
 import json
 from pathlib import Path
 
@@ -26,7 +26,7 @@ class GameActionType(Enum):
     DISCARD = auto()
     REMOVE = auto()
     SHOWDOWN = auto()
-
+    GROUPED = auto()  # New type for grouped actions
 
 @dataclass
 class DealAction:
@@ -58,8 +58,7 @@ class GameStep:
     """A single step in the game sequence."""
     name: str
     action_type: GameActionType
-    action_config: Dict[str, Any]
-
+    action_config: Union[Dict[str, Any], List[Dict[str, Any]]]  # Supports single or grouped actions
 
 @dataclass
 class ShowdownConfig:
@@ -153,25 +152,32 @@ class GameRules:
                 bringInEval=None
             )  
 
-        # Parse gameplay st eps
+        # Parse gameplay steps
         gameplay = []
         for step in data['gamePlay']:
-            action_type = None
-            action_config = {}
-            
-            # Determine action type and config
-            for key in step.keys():
-                if key == 'name':
-                    continue
-                try:
-                    action_type = GameActionType[key.upper()]
-                    action_config = step[key]
-                    break
-                except KeyError:
-                    continue
-            
-            if action_type is None:
-                raise ValueError(f"Invalid game step: {step}")
+            if "groupedActions" in step:
+                # Handle grouped actions
+                action_type = GameActionType.GROUPED
+                action_config = step["groupedActions"]
+                # Optional: Validate each action in the group
+                for action in action_config:
+                    if not any(key.lower() in action for key in GameActionType.__members__.keys() if key != "GROUPED"):
+                        raise ValueError(f"Invalid action in groupedActions: {action}")
+            else:
+                # Handle single action
+                action_type = None
+                action_config = {}
+                for key in step.keys():
+                    if key == 'name':
+                        continue
+                    try:
+                        action_type = GameActionType[key.upper()]
+                        action_config = step[key]
+                        break
+                    except KeyError:
+                        continue
+                if action_type is None:
+                    raise ValueError(f"Invalid game step: {step}")
                 
             gameplay.append(GameStep(
                 name=step['name'],

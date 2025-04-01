@@ -29,17 +29,17 @@ def create_predetermined_deck():
     named_cards = [
         Card(Rank.ACE, Suit.HEARTS), Card(Rank.NINE, Suit.DIAMONDS), Card(Rank.JACK, Suit.SPADES),
         Card(Rank.KING, Suit.HEARTS), Card(Rank.KING, Suit.CLUBS), Card(Rank.JACK, Suit.DIAMONDS),
-        Card(Rank.QUEEN, Suit.HEARTS), Card(Rank.KING, Suit.DIAMONDS), Card(Rank.TEN, Suit.SPADES),
-        Card(Rank.QUEEN, Suit.CLUBS), Card(Rank.QUEEN, Suit.SPADES), Card(Rank.JACK, Suit.HEARTS),
-        Card(Rank.TEN, Suit.DIAMONDS), Card(Rank.TEN, Suit.HEARTS), Card(Rank.NINE, Suit.SPADES),
+        Card(Rank.QUEEN, Suit.HEARTS), Card(Rank.FOUR, Suit.DIAMONDS), Card(Rank.TEN, Suit.SPADES),
+        Card(Rank.QUEEN, Suit.CLUBS), Card(Rank.FIVE, Suit.SPADES), Card(Rank.JACK, Suit.HEARTS),
+        Card(Rank.TEN, Suit.DIAMONDS), Card(Rank.ACE, Suit.HEARTS), Card(Rank.NINE, Suit.SPADES),
         Card(Rank.TWO, Suit.SPADES), Card(Rank.TWO, Suit.DIAMONDS), Card(Rank.TWO, Suit.HEARTS),
         Card(Rank.SEVEN, Suit.DIAMONDS), Card(Rank.SIX, Suit.CLUBS), Card(Rank.THREE, Suit.SPADES),
     ]
     return MockDeck(named_cards)
 
 def setup_test_game():
-    """Setup a 3-player pineapple_8 game with a mock deck."""
-    rules = load_rules_from_file('pineapple_8')
+    """Setup a 3-player scrotum_8 game with a mock deck."""
+    rules = load_rules_from_file('scrotum')
     game = Game(
         rules=rules,
         structure=BettingStructure.LIMIT,
@@ -74,8 +74,7 @@ def setup_logging():
         force=True
     )
 
-def test_pineapple_8_raise_test():
-    """Test minimal flow for pineapple_8 from start to showdown."""
+def test_sack_showdown():
     game = setup_test_game()
     game.start_hand()
     # Step 0: Post Blinds
@@ -86,94 +85,96 @@ def test_pineapple_8_raise_test():
     assert game.table.players['BTN'].stack == 500  # BTN
     assert game.betting.get_main_pot_amount() == 15
     print('Stacks after blinds:', {pid: game.table.players[pid].stack for pid in ['BTN', 'SB', 'BB']})
-    # Step 1: Deal Hole Cards
-    game._next_step()  # deal_hole_cards
-    assert game.current_step == 1
-    assert game.state == GameState.DEALING
-    for pid in ['BTN', 'SB', 'BB']:
-        assert len(game.table.players[pid].hand.get_cards()) == 3
-    print(f'\nStep 1 - Player Hands:')
-    for pid in ['BTN', 'SB', 'BB']:
-        print(f'{pid}: {[str(c) for c in game.table.players[pid].hand.get_cards()]}')
-    # Step 2: Pre-Flop Bet
-    game._next_step()  # pre-flop_bet
-    assert game.current_step == 2
-    assert game.state == GameState.BETTING
-    assert game.current_player.id == 'BTN'  # BTN first pre-flop
-    actions = game.get_valid_actions('BTN')
-    assert (PlayerAction.CALL, 10, 10) in actions
-    game.player_action('BTN', PlayerAction.CALL, 10)
-    game.player_action('SB', PlayerAction.RAISE, 20)  # SB completes to 10
-    game.player_action('BB', PlayerAction.CALL, 20)  # BB raise to 20
-    game.player_action('BTN', PlayerAction.CALL, 20)
-    assert game.betting.get_main_pot_amount() == 60
-    assert game.table.players['BTN'].stack == 480  # BTN called 10
-    assert game.table.players['SB'].stack == 480  # SB completed
-    assert game.table.players['BB'].stack == 480  # BB unchanged
-    print('Stacks after pre-flop:', {pid: game.table.players[pid].stack for pid in ['BTN', 'SB', 'BB']})
 
-def test_pineapple_8_minimal_flow():
-    """Test minimal flow for pineapple_8 from start to showdown."""
-    game = setup_test_game()
-    game.start_hand()
-    # Step 0: Post Blinds
-    assert game.current_step == 0
-    assert game.state == GameState.BETTING
-    assert game.table.players['SB'].stack == 495  # SB posted 5
-    assert game.table.players['BB'].stack == 490  # BB posted 10
-    assert game.table.players['BTN'].stack == 500  # BTN
-    assert game.betting.get_main_pot_amount() == 15
-    print('Stacks after blinds:', {pid: game.table.players[pid].stack for pid in ['BTN', 'SB', 'BB']})
     # Step 1: Deal Hole Cards
     game._next_step()  # deal_hole_cards
     assert game.current_step == 1
     assert game.state == GameState.DEALING
     for pid in ['BTN', 'SB', 'BB']:
-        assert len(game.table.players[pid].hand.get_cards()) == 3
+        assert len(game.table.players[pid].hand.get_cards()) == 5
     print(f'\nStep 1 - Player Hands:')
     for pid in ['BTN', 'SB', 'BB']:
         print(f'{pid}: {[str(c) for c in game.table.players[pid].hand.get_cards()]}')
-    # Step 2: Pre-Flop Bet
-    game._next_step()  # pre-flop_bet
+    initial_count = 5
+
+    # Step 2: Grouped Actions - Bet and Discard
+    game._next_step()  # First part of grouped action is betting
     assert game.current_step == 2
     assert game.state == GameState.BETTING
+    assert game.current_substep == 0
+
     assert game.current_player.id == 'BTN'  # BTN first pre-flop
     actions = game.get_valid_actions('BTN')
     assert (PlayerAction.CALL, 10, 10) in actions
     game.player_action('BTN', PlayerAction.CALL, 10)
-    game.player_action('SB', PlayerAction.CALL, 5)  # SB completes to 10
+    # second part of the grouped action is discarding
+    assert game.current_step == 2
+    assert game.state == GameState.DRAWING
+    assert game.current_substep == 1    
+    assert game.current_player.id == 'BTN'  # still should be BTN acting
+    actions = game.get_valid_actions('BTN')
+    assert (PlayerAction.DISCARD, 0, 4) in actions
+    # each player will discard separate amount of cards - BTN will do 4
+    hand = game.table.players['BTN'].hand
+    cards_to_discard = hand.get_cards()[:4]
+    game.player_action('BTN', PlayerAction.DISCARD, cards=cards_to_discard)   
+    hand = game.table.players['BTN'].hand
+    assert len(hand.get_cards()) == initial_count - 4  # Hand size reduced by discards
+
+    # now to SB for their bet action
+    assert game.current_player.id == 'SB' 
+    assert game.current_substep == 0    
+    assert game.current_step == 2
+    assert game.state == GameState.BETTING
+    actions = game.get_valid_actions('SB')
+    assert (PlayerAction.CALL, 10, 10) in actions
+    game.player_action('SB', PlayerAction.CALL, 10)  # SB completes to 10
+    # and discard
+    assert game.current_step == 2
+    assert game.state == GameState.DRAWING
+    assert game.current_substep == 1    
+    assert game.current_player.id == 'SB'  # still should be SB acting
+    actions = game.get_valid_actions('SB')
+    assert (PlayerAction.DISCARD, 0, 4) in actions
+    # each player will discard separate amount of cards - SB will do 2
+    hand = game.table.players['SB'].hand
+    cards_to_discard = hand.get_cards()[:2]
+    game.player_action('SB', PlayerAction.DISCARD, cards=cards_to_discard)   
+    hand = game.table.players['SB'].hand
+    assert len(hand.get_cards()) == initial_count - 2  # Hand size reduced by discards
+
+    # now to BB for their bet action
+    assert game.current_player.id == 'BB' 
+    assert game.current_substep == 0    
+    assert game.current_step == 2
+    assert game.state == GameState.BETTING
+    actions = game.get_valid_actions('BB')
+    assert (PlayerAction.CHECK, None, None) in actions
     game.player_action('BB', PlayerAction.CHECK)  # BB already in for 10
-    assert game.betting.get_main_pot_amount() == 30
-    assert game.table.players['BTN'].stack == 490  # BTN called 10
-    assert game.table.players['SB'].stack == 490  # SB completed
-    assert game.table.players['BB'].stack == 490  # BB unchanged
-    print('Stacks after pre-flop:', {pid: game.table.players[pid].stack for pid in ['BTN', 'SB', 'BB']})
-    # Step 3: Discard One
+    # and discard
+    assert game.current_step == 2
+    assert game.state == GameState.DRAWING
+    assert game.current_substep == 1    
+    assert game.current_player.id == 'BB'  # still should be BTN acting
+    actions = game.get_valid_actions('BB')
+    assert (PlayerAction.DISCARD, 0, 4) in actions
+    # each player will discard separate amount of cards - BB will do 0 (empty list?)
+    game.player_action('BB', PlayerAction.DISCARD, cards=[])
+    hand = game.table.players['BB'].hand
+    assert len(hand.get_cards()) == initial_count  # no discards    
+
+    # Step 3: Deal Flop
     game._next_step()  # discard_one
     assert game.current_step == 3
-    assert game.state == GameState.DRAWING
-    assert game.current_player.id == 'SB'  # Start with SB
-    actions = game.get_valid_actions(game.current_player.id)
-    assert any(a[0] == PlayerAction.DISCARD and a[1] == 1 for a in actions)
-    for pid in ['SB', 'BB', 'BTN']:
-        hand = game.table.players[pid].hand
-        initial_count = len(hand.get_cards())
-        cards_to_discard = hand.get_cards()[:1]
-        game.player_action(pid, PlayerAction.DISCARD, cards=cards_to_discard)
-        assert len(hand.get_cards()) == initial_count - 1  # Hand size reduced by discards
-    print(f'\nStep 3 - Post-Discard Hands:')
-    for pid in ['SB', 'BB', 'BTN']:
-        print(f'{pid}: {[str(c) for c in game.table.players[pid].hand.get_cards()]}')
-    # Step 4: Deal Flop
-    game._next_step()  # deal_flop
-    assert game.current_step == 4
     assert game.state == GameState.DEALING
     assert len(game.table.community_cards['default']) == 3
-    print(f'\nStep 4 - Community Cards:')
+
+    print(f'\nStep 3 - Community Cards:')
     print([str(c) for c in game.table.community_cards['default']])
-    # Step 5: Post-Flop Bet
+
+    # Step 4: Post-Flop Bet
     game._next_step()  # post-flop_bet
-    assert game.current_step == 5
+    assert game.current_step == 4
     assert game.state == GameState.BETTING
     assert game.current_player.id == 'SB'  # SB first post-flop
     actions = game.get_valid_actions('SB')
@@ -186,16 +187,18 @@ def test_pineapple_8_minimal_flow():
     assert game.table.players['SB'].stack == 490  # Unchanged from pre-flop
     assert game.table.players['BB'].stack == 490  # Unchanged
     print('Stacks after post-flop:', {pid: game.table.players[pid].stack for pid in ['BTN', 'SB', 'BB']})
-    # Step 6: Deal Turn
+
+    # Step 5: Deal Turn
     game._next_step()  # deal_turn
-    assert game.current_step == 6
+    assert game.current_step == 5
     assert game.state == GameState.DEALING
     assert len(game.table.community_cards['default']) == 4
-    print(f'\nStep 6 - Community Cards:')
+    print(f'\nStep 5 - Community Cards:')
     print([str(c) for c in game.table.community_cards['default']])
-    # Step 7: Turn Bet
+
+    # Step 6: Turn Bet
     game._next_step()  # turn_bet
-    assert game.current_step == 7
+    assert game.current_step == 6
     assert game.state == GameState.BETTING
     assert game.current_player.id == 'SB'  # SB first post-flop
     actions = game.get_valid_actions('SB')
@@ -208,16 +211,18 @@ def test_pineapple_8_minimal_flow():
     assert game.table.players['SB'].stack == 490  # Unchanged from pre-flop
     assert game.table.players['BB'].stack == 490  # Unchanged
     print('Stacks after post-flop:', {pid: game.table.players[pid].stack for pid in ['BTN', 'SB', 'BB']})
-    # Step 8: Deal River
+    
+    # Step 7: Deal River
     game._next_step()  # deal_river
-    assert game.current_step == 8
+    assert game.current_step == 7
     assert game.state == GameState.DEALING
     assert len(game.table.community_cards['default']) == 5
-    print(f'\nStep 8 - Community Cards:')
+    print(f'\nStep 7 - Community Cards:')
     print([str(c) for c in game.table.community_cards['default']])
-    # Step 9: River Bet
+
+    # Step 8: River Bet
     game._next_step()  # river_bet
-    assert game.current_step == 9
+    assert game.current_step == 8
     assert game.state == GameState.BETTING
     assert game.current_player.id == 'SB'  # SB first post-flop
     actions = game.get_valid_actions('SB')
@@ -230,9 +235,10 @@ def test_pineapple_8_minimal_flow():
     assert game.table.players['SB'].stack == 490  # Unchanged from pre-flop
     assert game.table.players['BB'].stack == 490  # Unchanged
     print('Stacks after post-flop:', {pid: game.table.players[pid].stack for pid in ['BTN', 'SB', 'BB']})
-    # Step 10: Showdown
+
+    # Step 9: Showdown
     game._next_step()  # showdown
-    assert game.current_step == 10
+    assert game.current_step == 9
     assert game.state == GameState.COMPLETE
     results = game.get_hand_results()
     assert results.is_complete
@@ -245,21 +251,20 @@ def test_pineapple_8_minimal_flow():
     print(results.to_json())
 
     # Check pot details
-    main_pot = results.pots[0]
+    high_pot = results.pots[0]
     assert results.pots[0].amount == 30  # High Hand pot
-    assert main_pot.pot_type == 'main'  # Updated from run
-    assert main_pot.split == False  # Updated from run
-    assert len(main_pot.winners) == 1  # Updated from run
-    assert sorted(main_pot.winners) == ['BTN']  # Updated from run
+
+    assert high_pot.pot_type == 'main'  # Updated from run
+    assert high_pot.split == False  # Updated from run
+    assert len(high_pot.winners) == 1  # Updated from run
+    assert sorted(high_pot.winners) == ['BB']  # Updated from run
     # TODO: Replace with expected winner, e.g., assert 'BTN' in main_pot.winners
 
     # Check winning hand
-    winning_player = main_pot.winners[0]
+    winning_player = high_pot.winners[0]
     winning_hand = results.hands[winning_player]
-    assert winning_hand[0].hand_name == 'Full House'  # Updated from run
-    assert winning_hand[0].hand_description == 'Full House, Queens over Tens'  # Updated from run
+    assert winning_hand[0].hand_name == 'Three of a Kind'  # Updated from run
+    assert winning_hand[0].hand_description == 'Three Jacks'  # Updated from run
 
     # Check winning hands list
-    assert len(results.winning_hands) == 1  # Updated from run
-    assert results.winning_hands[0].player_id == 'BTN'  # Updated from run
-    # TODO: Replace with expected winner, e.g., assert results.winning_hands[0].player_id == 'BTN'
+    assert len(results.winning_hands) == 1 # Updated from run

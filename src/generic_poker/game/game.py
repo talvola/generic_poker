@@ -15,6 +15,8 @@ from generic_poker.game.bringin import BringInDeterminator, CardRule
 from generic_poker.core.card import Card, Visibility, WildType, Rank
 from generic_poker.evaluation.evaluator import EvaluationType, evaluator
 
+from generic_poker.evaluation.constants import HAND_SIZES
+
 logger = logging.getLogger(__name__)
 
 
@@ -302,6 +304,7 @@ class Game:
         self.state = GameState.WAITING
         self.current_step = -1  # Not started
         self.current_player: Optional[str] = None  # ID of player to act
+        self.current_substep = None  # None for non-grouped steps, integer for grouped substeps       
     
         self.last_hand_result = None  # Store the last hand result here
 
@@ -445,7 +448,116 @@ class Game:
             if player_id != self.current_player.id:  
                 logger.info(f"Not this player's turn ({player_id} vs {self.current_player.id})")
                 return []  # Not this player's turn 
+
+            step = self.rules.gameplay[self.current_step]
+            config = step.action_config  # Dict for regular steps, List for grouped steps                
                 
+            # Handle grouped actions
+            if step.action_type == GameActionType.GROUPED:
+                if self.current_substep is None or self.current_substep >= len(config):
+                    logger.warning(f"Invalid substep {self.current_substep} for grouped step {step.name}")
+                    return []
+                subaction = config[self.current_substep]
+                subaction_key = list(subaction.keys())[0]  # e.g., "bet", "discard"
+                
+                if subaction_key == "bet":
+                    if self.state != GameState.BETTING:
+                        return []
+                    bet_config = subaction["bet"]
+                    player = self.table.players[player_id]
+                    current_bet = self.betting.current_bets.get(player_id, PlayerBet()).amount
+                    required_bet = self.betting.get_required_bet(player_id)
+                    valid_actions = []
+                    
+                    if bet_config.get("type") == "bring-in":
+                        valid_actions.append((PlayerAction.BRING_IN, self.bring_in, self.bring_in))
+                        if player.stack >= self.small_bet:
+                            valid_actions.append((PlayerAction.BET, self.small_bet, self.small_bet))
+                        elif player.stack > self.bring_in:
+                            valid_actions.append((PlayerAction.BET, player.stack, player.stack))
+                        return valid_actions
+                    
+                    logger.debug(f"Player: {player_id}, Required Bet: {required_bet}, Current Bet: {current_bet}")
+                    logger.debug(f"  Stack: {player.stack}")
+                    
+                    valid_actions.append((PlayerAction.FOLD, None, None))
+                    if required_bet > 0:
+                        if player.stack >= required_bet:
+                            valid_actions.append((PlayerAction.CALL, self.betting.current_bet, self.betting.current_bet))
+                        elif player.stack > 0:
+                            total_amount = current_bet + player.stack
+                            valid_actions.append((PlayerAction.CALL, total_amount, total_amount))
+                    else:
+                        valid_actions.append((PlayerAction.CHECK, None, None))
+                    
+                    zero_cards_betting = bet_config.get("zeroCardsBetting")
+                    hole_cards = player.hand.get_cards()
+                    if zero_cards_betting == "call_only" and len(hole_cards) == 0:
+                        logger.debug(f"Zero cards betting mode is 'call_only' for substep")
+                        return valid_actions
+                    
+                    if player.stack > required_bet:
+                        current_total = self.betting.current_bet
+                        is_stud = self.rules.forced_bets.style == "bring-in"
+                        step_type = bet_config.get("type", "small")
+                        bet_size = self.small_bet if step_type == "small" else self.big_bet
+                        
+                        active_players = [p for p in self.table.get_position_order() if p.is_active]
+                        bring_in_idx = next((i for i, p in enumerate(active_players) if self.betting.current_bets.get(p.id, PlayerBet()).posted_blind), -1)
+                        acted_count = sum(1 for b in self.betting.current_bets.values() if b.has_acted or b.posted_blind)
+                        is_first_after_bring_in = (is_stud and step_type == "small" and bring_in_idx != -1 and 
+                                                active_players[(bring_in_idx + 1) % len(active_players)].id == player_id and
+                                                acted_count <= 1)
+                        
+                        if is_first_after_bring_in:
+                            action = PlayerAction.BET
+                            min_amount = self.small_bet
+                            max_amount = min_amount if self.betting_structure == BettingStructure.LIMIT else self.betting.get_max_bet(player_id, BetType.SMALL, player.stack)
+                        elif current_total == 0:
+                            action = PlayerAction.BET
+                            min_amount = bet_size
+                            max_amount = min_amount if self.betting_structure == BettingStructure.LIMIT else self.betting.get_max_bet(player_id, BetType.SMALL if step_type == "small" else BetType.BIG, player.stack)
+                        else:
+                            action = PlayerAction.RAISE
+                            min_amount = self.betting.get_min_raise(player_id)
+                            max_amount = min_amount if self.betting_structure == BettingStructure.LIMIT else self.betting.get_max_bet(player_id, BetType.BIG, player.stack)
+                        
+                        if player.stack >= min_amount:
+                            valid_actions.append((action, min_amount, max_amount))
+                        else:
+                            all_in_amount = player.stack + current_bet
+                            valid_actions.append((action, all_in_amount, all_in_amount))
+                    
+                    logger.debug(f"Valid actions for {player_id}: {valid_actions}")
+                    return valid_actions
+                
+                elif subaction_key == "discard" and self.state == GameState.DRAWING:
+                    card_config = subaction["discard"]["cards"][0]
+                    max_discard = card_config.get("number", 0)
+                    min_discard = card_config.get("min_number", max_discard)  # Default to max if min not specified
+                    return [(PlayerAction.DISCARD, min_discard, max_discard)]
+                
+                elif subaction_key == "draw" and self.state == GameState.DRAWING:
+                    card_config = subaction["draw"]["cards"][0]
+                    max_discard = card_config.get("number", 0)
+                    min_discard = card_config.get("min_number", 0)
+                    return [(PlayerAction.DRAW, min_discard, max_discard)]
+                
+                elif subaction_key == "separate" and self.state == GameState.DRAWING:
+                    total_cards = sum(cfg["number"] for cfg in subaction["separate"]["cards"])
+                    return [(PlayerAction.SEPARATE, total_cards, total_cards)]
+                
+                elif subaction_key == "expose" and self.state == GameState.DRAWING:
+                    total_cards = sum(cfg["number"] for cfg in subaction["expose"]["cards"])
+                    return [(PlayerAction.EXPOSE, total_cards, total_cards)]
+                
+                elif subaction_key == "pass" and self.state == GameState.DRAWING:
+                    config = subaction["pass"]["cards"][0]
+                    num_to_pass = config["number"]
+                    return [(PlayerAction.PASS, num_to_pass, num_to_pass)]
+                
+                return []  # Invalid state or sub-action
+                    
             # For discard state, return discard actions
             if self.state == GameState.DRAWING:
                 is_discard = getattr(self, "current_discard_config", None) is not None
@@ -580,6 +692,16 @@ class Game:
             logger.debug(f"Valid actions for {player_id}: {valid_actions}")
             return valid_actions        
         
+    def _is_first_betting_round(self):
+        for i, step in enumerate(self.rules.gameplay):
+            if step.action_type == GameActionType.BET and step.action_config.get("type") == "small":
+                return i == self.current_step
+            elif step.action_type == GameActionType.GROUPED:
+                for j, subaction in enumerate(step.action_config):
+                    if "bet" in subaction and subaction["bet"].get("type") == "small":
+                        return i == self.current_step and self.current_substep == j
+        return False
+        
     def player_action(
             self,
             player_id: str,
@@ -609,6 +731,266 @@ class Game:
                     error="Not your turn"
                 )
                 
+            # Get the current step
+            step = self.rules.gameplay[self.current_step]
+
+            # Handle grouped actions
+            if step.action_type == GameActionType.GROUPED:
+                subactions = step.action_config  # List of sub-action configs
+                if not hasattr(self, 'grouped_step_completed'):
+                    self.grouped_step_completed = set()  # Players who’ve completed initial bet
+                    self.discard_completed = set()  # Players who’ve discarded (for oncePerStep)
+
+                current_subaction = subactions[self.current_substep]
+                subaction_key = list(current_subaction.keys())[0]  # e.g., "bet", "discard"
+
+                logger.debug(f"Current subaction: {subaction_key} for {player.name}") 
+
+                # Process the current sub-action
+                if "bet" in subaction_key and action in [PlayerAction.CHECK, PlayerAction.CALL, PlayerAction.BET, PlayerAction.RAISE, PlayerAction.FOLD]:
+                    if self.state != GameState.BETTING:
+                        return ActionResult(success=False, error="Cannot bet in current state")
+                    if action == PlayerAction.FOLD:
+                        player.is_active = False
+                        bet = self.betting.current_bets.get(player_id, PlayerBet())
+                        bet.has_acted = True
+
+                        # Check if only one player remains
+                        if len(active_players) == 1:
+                            self._handle_fold_win(active_players)
+                            return ActionResult(success=True, state_changed=True)      
+                    elif action == PlayerAction.CHECK:
+                        current_bet = self.betting.current_bets.get(player_id, PlayerBet())
+                        required_bet = self.betting.get_required_bet(player_id)      
+
+                        if required_bet > 0:
+                            logger.warning(f"{player.name} cannot check - must call ${required_bet}")
+                            return ActionResult(
+                                success=False,
+                                error="Cannot check - must call or fold"
+                            )    
+                        
+                        current_bet.has_acted = True  # Mark them as having acted
+                        self.betting.current_bets[player_id] = current_bet  # Record check  
+
+                    elif action == PlayerAction.CALL:
+                        call_amount = self.betting.get_required_bet(player_id)
+                        current_bet = self.betting.current_bets.get(player_id, PlayerBet())
+                        total_bet = self.betting.current_bet  # Target amount       
+
+                        # Handle all-in calls
+                        if call_amount > player.stack:
+                            call_amount = player.stack
+                            total_bet = current_bet.amount + call_amount
+                            logger.info(f"{player.name} calls all-in for ${call_amount}")
+                        else:
+                            logger.info(f"{player.name} calls ${call_amount}")                                         
+
+                        # Place the total bet amount
+                        self.betting.place_bet(player_id, total_bet, player.stack)
+                        player.stack -= call_amount  # Deduct only the additional amount needed
+
+                    # unlikely this would be part of a nested run, but for completeness
+                    elif action == PlayerAction.BRING_IN:
+                        valid_actions = self.get_valid_actions(player_id)
+                        valid_bet = next((a for a in valid_actions if a[0] == PlayerAction.BRING_IN), None)
+                        if not valid_bet or amount != valid_bet[1]:
+                            return ActionResult(success=False, error=f"Invalid bring-in amount: ${amount}")
+                        logger.info(f"{player.name} brings in for ${amount}")
+                        self.betting.place_bet(player_id, amount, player.stack, is_forced=True)
+                        player.stack -= amount  # Already deducted additional amount
+
+                    else: # BET, RAISE
+                        # Validate bet/raise amount
+                        valid_actions = self.get_valid_actions(player_id)
+                        valid_bet = next((a for a in valid_actions if a[0] == action), None)
+                        if not valid_bet or (action in [PlayerAction.BET, PlayerAction.RAISE] and amount not in range(valid_bet[1], valid_bet[2] + 1)):
+                            return ActionResult(success=False, error=f"Invalid bet action or amount: ${amount}")
+                        
+                        current_bet = self.betting.current_bets.get(player_id, PlayerBet())
+                        current_ante = self.betting.pot.total_antes.get(f"round_{self.betting.pot.current_round}_{player_id}", 0)
+                        
+                        # Adjust for all-in
+                        if amount >= player.stack:  # Changed from > to >=
+                            logger.info(f"{player.name} is going all-in with ${player.stack}")
+                            amount = player.stack + current_bet.amount  # Include what's already in
+                            additional = player.stack  # Take entire remaining stack   
+                        else:
+                            # Normal raise
+                            # Ante is included in current_bet, but not in the amount, so need to adjust
+                            additional = amount - current_bet.amount + current_ante                  
+
+                        if additional > player.stack:
+                            return ActionResult(
+                                success=False,
+                                error="Not enough chips to complete this action"
+                            )
+                        
+                        # I don't understand the logic here - need to test stud games and blind games
+                        #bet_type = BetType.SMALL if (self.rules.forced_bets.style == "bring-in" and 
+                        #                        current_subaction["type"] == "small") else BetType.BIG   
+                        logger.debug(f"Current subaction: {current_subaction}")
+                        bet_type = BetType.SMALL if current_subaction["bet"]["type"] == "small" else BetType.BIG
+                                                                   
+                        self.betting.place_bet(player_id, amount, player.stack, bet_type=bet_type)
+                        player.stack -= additional
+
+                    # Advance player after every bet
+                    active_players = set(p.id for p in self.table.get_active_players())
+                    if player_id not in self.grouped_step_completed:
+                        self.grouped_step_completed.add(player_id)
+                        self.current_substep += 1  # Move to discard for initial bet
+                    else:
+                        # Additional betting, stay at substep 0
+                        self.current_player = self.next_player(round_start=False)
+                        if self.betting.round_complete() and self.grouped_step_completed == active_players:
+                            logger.info(f"Grouped step {step.name} complete")
+                            if self.auto_progress:
+                                self._next_step()
+                            for attr in ["current_discard_config", "current_draw_config", "current_separate_config", "current_expose_config", "current_pass_config"]:
+                                if hasattr(self, attr):
+                                    delattr(self, attr)
+                            delattr(self, 'discard_completed')
+                            return ActionResult(success=True, state_changed=True)
+                        return ActionResult(success=True)
+               
+                elif "discard" in subaction_key and action == PlayerAction.DISCARD:
+                    if self.state != GameState.DRAWING:
+                        return ActionResult(success=False, error="Cannot discard in current state")
+                    discard_config = current_subaction["discard"]
+                    once_per_step = discard_config["cards"][0].get("oncePerStep", False)     
+                    if once_per_step and player_id in self.discard_completed:
+                        return ActionResult(success=False, error="Discard already completed")   
+                    if not cards and len(cards) > 0:  # Allow empty list for 0 discards
+                        return ActionResult(success=False, error="No cards specified when required")                                                    
+                    if not self._handle_discard_action(player, cards):
+                        return ActionResult(success=False, error="Invalid discard action")
+                    # Log discard completion
+                    logger.info(f"{player.name} discards {len(cards)} cards: {cards}") 
+                    self.discard_completed.add(player_id)
+                    # Advance substep or player
+                    self.current_substep += 1                    
+                
+                elif "draw" in subaction_key and action == PlayerAction.DRAW:
+                    if self.state != GameState.DRAWING:
+                        return ActionResult(success=False, error="Cannot draw in current state")
+                    if not cards:
+                        return ActionResult(success=False, error="No draw specified")
+                    if not hasattr(self, '_handle_draw_action') or not self._handle_draw_action(player, cards):
+                        return ActionResult(success=False, error="Draw action not supported")
+                    # Log discard completion
+                    logger.info(f"{player.name} draws {len(cards)} cards: {cards}")                     
+                    # Advance substep or player
+                    self.current_substep += 1   
+
+                elif "separate" in subaction_key and action == PlayerAction.SEPARATE:
+                    if self.state != GameState.DRAWING or not hasattr(self, "current_separate_config"):
+                        return ActionResult(success=False, error="Cannot separate in current state")
+                    if not cards:
+                        return ActionResult(success=False, error="No cards specified")
+                    if not self._handle_separate_action(player, cards):
+                        return ActionResult(success=False, error="Invalid separation")
+                    logger.info(f"{player.name} separates their cards: {cards}")                     
+                    # Advance substep or player
+                    self.current_substep += 1   
+
+                elif "expose" in subaction_key and action == PlayerAction.EXPOSE:
+                    if self.state != GameState.DRAWING or not hasattr(self, "current_expose_config"):
+                        return ActionResult(success=False, error="Cannot expose in current state")
+                    if not cards:
+                        return ActionResult(success=False, error="No cards specified")
+                    if not self._validate_expose_action(player, cards):
+                        return ActionResult(success=False, error="Invalid exposure")
+                    self.pending_exposures[player_id] = cards
+                    logger.info(f"{player.name} exposes {len(cards)} cards: {cards}")                     
+                    # Advance substep or player
+                    self.current_substep += 1   
+
+                elif "pass" in subaction_key and action == PlayerAction.PASS:
+                    if self.state != GameState.DRAWING or not hasattr(self, "current_pass_config"):
+                        return ActionResult(success=False, error="Cannot pass in current state")
+                    if not cards:
+                        return ActionResult(success=False, error="No cards specified")
+                    if not self._validate_pass_action(player, cards):
+                        return ActionResult(success=False, error="Invalid pass")
+                    active_players = [p for p in self.table.players.values() if p.is_active]
+                    current_idx = active_players.index(player)
+                    recipient_idx = (current_idx + 1) % len(active_players)
+                    recipient_id = active_players[recipient_idx].id
+                    self.pending_passes[player_id] = (cards[0], recipient_id)
+                    logger.info(f"{player.name} passes {len(cards)} cards: {cards}")                     
+                    # Advance substep or player
+                    self.current_substep += 1   
+
+                else:
+                    return ActionResult(success=False, error=f"Invalid action {action} for substep {subaction_key}")
+                
+                active_players = [p for p in self.table.players.values() if p.is_active]
+                if self.current_substep >= len(subactions):
+                    # Player completed all sub-actions
+                    self.current_substep = 0
+                    if self.betting.round_complete() and self.grouped_step_completed == active_players:
+                        logger.info(f"Grouped step {step.name} complete")
+                        if self.auto_progress:
+                            self._next_step()
+                        for attr in ["current_discard_config", "current_draw_config", "current_separate_config", "current_expose_config", "current_pass_config"]:
+                            if hasattr(self, attr):
+                                delattr(self, attr)
+                        delattr(self, 'discard_completed')
+                        return ActionResult(success=True, state_changed=True)
+                    else:
+                        # Move to next player, reset to betting if round incomplete
+                        self.current_player = self.next_player(round_start=False)
+                        first_subaction = subactions[0]
+                        first_key = list(first_subaction.keys())[0]
+                        if "bet" in first_key:
+                            self.state = GameState.BETTING
+                            bet_config = first_subaction["bet"]
+                            if bet_config.get("type") not in ["antes", "blinds", "bring-in"] and not self.betting.round_complete():
+                                is_first_betting_round = self._is_first_betting_round()
+                                self.betting.new_round(is_first_betting_round)
+                        elif "discard" in first_key:
+                            self.state = GameState.DRAWING
+                            self._setup_discard_round(first_subaction["discard"])
+                        elif "draw" in first_key:
+                            self.state = GameState.DRAWING
+                            self._setup_draw_round(first_subaction["draw"])
+                        elif "separate" in first_key:
+                            self.state = GameState.DRAWING
+                            self._setup_separate_round(first_subaction["separate"])
+                        elif "expose" in first_key:
+                            self.state = GameState.DRAWING
+                            self._setup_expose_round(first_subaction["expose"])
+                        elif "pass" in first_key:
+                            self.state = GameState.DRAWING
+                            self._setup_pass_round(first_subaction["pass"])         
+                else:
+                    # Move to next sub-action for current player
+                    next_subaction = subactions[self.current_substep]
+                    next_key = list(next_subaction.keys())[0]
+                    if "bet" in next_key:
+                        self.state = GameState.BETTING
+                        bet_config = next_subaction["bet"]
+                        if bet_config.get("type") not in ["antes", "blinds", "bring-in"]:
+                            self.betting.new_round(self._is_first_betting_round())
+                    elif "discard" in next_key:
+                        self.state = GameState.DRAWING
+                        self._setup_discard_round(next_subaction["discard"])      
+                    elif "draw" in next_key:
+                        self.state = GameState.DRAWING
+                        self._setup_draw_round(next_subaction["draw"])
+                    elif "separate" in next_key:
+                        self.state = GameState.DRAWING
+                        self._setup_separate_round(next_subaction["separate"])
+                    elif "expose" in next_key:
+                        self.state = GameState.DRAWING
+                        self._setup_expose_round(next_subaction["expose"])
+                    elif "pass" in next_key:
+                        self.state = GameState.DRAWING
+                        self._setup_pass_round(next_subaction["pass"])                                                                     
+
+                return ActionResult(success=True)            
+
             # Handle discard / draw actions
             if action == PlayerAction.DISCARD or action == PlayerAction.DRAW:
                 if self.state != GameState.DRAWING:
@@ -859,8 +1241,13 @@ class Game:
                     # ✅ Place the bet and deduct from stack
                     logger.info(f"{player.name} {action.value}s to ${amount}")
                     step = self.rules.gameplay[self.current_step]
-                    bet_type = BetType.SMALL if (self.rules.forced_bets.style == "bring-in" and 
-                                                step.action_config["type"] == "small") else BetType.BIG                    
+                    #bet_type = BetType.SMALL if (self.rules.forced_bets.style == "bring-in" and 
+                    #                            step.action_config["type"] == "small") else BetType.BIG                    
+                    bet_type = BetType.SMALL if step.action_config["type"] == "small" else BetType.BIG
+                    logger.debug(f"bet_type={bet_type} self.rules.forced_bets.style={self.rules.forced_bets.style} step.action_config={step.action_config}")
+                    logger.debug(f"  step.action_config[type]={step.action_config['type']}")
+
+
                     self.betting.place_bet(player_id, amount, player.stack, bet_type=bet_type)
                     player.stack -= additional
 
@@ -903,7 +1290,58 @@ class Game:
             step = self.rules.gameplay[self.current_step]
             logger.info(f"Processing step {self.current_step}: {step.name}")
                            
-            if step.action_type == GameActionType.BET:
+            if step.action_type == GameActionType.GROUPED:
+                logger.info(f"Starting grouped step: {step.name}")
+                self.current_substep = 0  # Start with the first sub-action
+                # Assume action_config is a list like ["bet", "discard"]
+                first_subaction = step.action_config[self.current_substep]
+
+                # Set state based on the first sub-action
+                if "bet" in first_subaction:
+                    bet_config = first_subaction["bet"]
+                    self.state = GameState.BETTING
+                    if bet_config.get("type") in ["antes", "blinds", "bring-in"]:
+                        self.handle_forced_bets(bet_config["type"])
+                        if self.auto_progress:
+                            self._next_step()
+                            return
+                    else:
+                        logger.info(f"Starting betting round in grouped step: {step.name}")
+                        # Determine if this is the first betting round
+                        is_first_betting_round = False
+                        for i, s in enumerate(self.rules.gameplay[:self.current_step + 1]):
+                            # Check prior steps and current step up to this point
+                            if s.action_type == GameActionType.BET and s.action_config.get("type") == "small":
+                                is_first_betting_round = (i == self.current_step)
+                            elif s.action_type == GameActionType.GROUPED:
+                                for subaction in s.action_config:
+                                    if "bet" in subaction and subaction["bet"].get("type") == "small":
+                                        is_first_betting_round = (i == self.current_step and subaction == first_subaction)
+                                        break
+                                if is_first_betting_round:
+                                    break
+                        preserve_bet = is_first_betting_round
+                        self.betting.new_round(preserve_bet)
+                        self.current_player = self.next_player(round_start=True)
+                elif "discard" in first_subaction:
+                    self.state = GameState.DRAWING
+                    self._setup_discard_round(step.action_config[self.current_substep])
+                elif "draw" in first_subaction:
+                    self.state = GameState.DRAWING
+                    self._setup_draw_round(step.action_config[self.current_substep])
+                elif "separate" in first_subaction:
+                    self.state = GameState.DRAWING
+                    self._setup_separate_round(step.action_config[self.current_substep])                    
+                elif "expose" in first_subaction:
+                    self.state = GameState.DRAWING
+                    self._setup_expose_round(step.action_config[self.current_substep])    
+                elif "pass" in first_subaction:
+                    self.state = GameState.DRAWING
+                    self._setup_pass_round(step.action_config[self.current_substep])    
+                # Add other sub-action types as needed (e.g., "separate", "expose")
+                self.current_player = self.next_player(round_start=True)
+
+            elif step.action_type == GameActionType.BET:
                 if step.action_config["type"] in ["antes", "blinds", "bring-in"]:
                     self.handle_forced_bets(step.action_config["type"])  # Use new method with bet_type
                     self.state = GameState.BETTING  # Set here for all forced bets
@@ -912,12 +1350,19 @@ class Game:
                 else:
                     logger.info(f"Starting betting round: {step.name}")
                     self.state = GameState.BETTING
-                    is_first_betting_round = False
+                    first_bet_step = None
                     for i, s in enumerate(self.rules.gameplay):
                         if s.action_type == GameActionType.BET and s.action_config.get("type") == "small":
-                            is_first_betting_round = (i == self.current_step)
+                            first_bet_step = i
                             break
-                    preserve_bet = is_first_betting_round
+                        elif s.action_type == GameActionType.GROUPED:
+                            for subaction in s.action_config:
+                                if "bet" in subaction and subaction["bet"].get("type") == "small":
+                                    first_bet_step = i
+                                    break
+                            if first_bet_step is not None:
+                                break
+                    preserve_bet = (first_bet_step == self.current_step)
                     self.betting.new_round(preserve_bet)
                     self.current_player = self.next_player(round_start=True)
 
@@ -1033,28 +1478,32 @@ class Game:
         is_discard = getattr(self, "current_discard_config", None) is not None
         is_draw = getattr(self, "current_draw_config", None) is not None
 
-        # discard is the simpler case
-        if is_discard:
-            card_config = self.current_discard_config["cards"][0]
-            max_discard = card_config.get("number", 0)
-            min_discard = card_config.get("number", 0)
-            num_to_discard = card_config.get("number", 0)
-            subset = card_config.get("hole_subset")
-            entire_subset = card_config.get("entire_subset", False)            
-            face_up = card_config.get("state", "face down") == "face up"
+        logger.debug(f"Handling discard action for {player.name}: {cards} - is_discard: {is_discard}, is_draw: {is_draw}")
 
-            rule = card_config.get("rule", "none")  # Default to "none" if not specified
-            state = card_config.get("state", "face down")  # Default to face down if not specified
-            discard_location = card_config.get("discardLocation", "discard_pile")  # Default to discard pile if not specified
-            discard_subset = card_config.get("discardSubset", "default")  # Default to "default" if not specified        
-        elif is_draw:
-            card_config = self.current_draw_config["cards"][0]
-            max_discard = card_config.get("number", 0)
-            min_discard = card_config.get("min_number", 0)
-            entire_subset = False # Draw doesn't support subsets
-            face_up = card_config.get("state", "face down") == "face up"            
+        if not (is_discard or is_draw):
+            logger.warning("No discard or draw config set")
+            return False
+    
+        config = self.current_discard_config if is_discard else self.current_draw_config
+        card_config = config["cards"][0]
+        max_discard = card_config.get("number", 0)
+        min_discard = card_config.get("min_number", 0 if is_draw else max_discard)
+
+        # Skip count validation for automated rules like "matching ranks"
+        rule = card_config.get("rule", "none")
+        if rule != "matching ranks":
+            if len(cards) < min_discard or len(cards) > max_discard:
+                logger.warning(f"Invalid discard count: {len(cards)} not in range [{min_discard}, {max_discard}]")
+                return False
+            
+            for card in cards:
+                if card not in player.hand.cards:
+                    logger.warning(f"Card {card} not in {player.name}'s hand")
+                    return False      
+
+        face_up = card_config.get("state", "face down") == "face up"
+        entire_subset = card_config.get("entire_subset", False)               
         
-        # will support draws later
         if is_draw:
             # Determine draw amount (if any)
             draw_amount = len(cards)  # Default: draw same number as discard
@@ -1066,9 +1515,16 @@ class Game:
                     draw_amount = len(cards) + draw_amount_config.get("amount", 0)
                     # Ensure non-negative
                     draw_amount = max(0, draw_amount)
-               
+
+        # handle some values only in discard
+        if is_discard:
+            rule = card_config.get("rule", "none")  # Default to "none" if not specified
+            state = card_config.get("state", "face down")  # Default to face down if not specified
+            discard_location = card_config.get("discardLocation", "discard_pile")  # Default to discard pile if not specified
+            discard_subset = card_config.get("discardSubset", "default")  # Default to "default" if not specified         
+
         # If entire_subset is true, validate the cards match an existing subset
-        if entire_subset:
+        if is_discard and entire_subset:
             player_subsets = player.hand.subsets
             valid_discard = False
             for subset_name, subset_cards in player_subsets.items():
@@ -1096,6 +1552,10 @@ class Game:
             hole_cards = player.hand.get_cards()
             cards_to_discard = [card for card in hole_cards if card.rank in discard_ranks]
 
+            if not cards_to_discard:
+                logger.debug(f"No cards to discard for {player.name} matching ranks {discard_ranks}")
+                return True  # Still successful if no matches
+            
             # Perform the discard
             for card in cards_to_discard:
                 player.hand.remove_card(card)
@@ -1107,7 +1567,7 @@ class Game:
                     card.visibility = Visibility.FACE_UP if state == "face up" else Visibility.FACE_DOWN
 
             logger.info(f"Player {player.id} discarded {len(cards_to_discard)} cards matching ranks {discard_ranks}")
-        else:
+        else: # used in draw and discard
             # use what the player specified
             # Validate discard count
             if len(cards) > max_discard:
@@ -1423,11 +1883,23 @@ class Game:
         
         # Determine if this is the first voluntary betting round
         is_first_betting_round = False
+        first_bet_step = None
         for i, step in enumerate(self.rules.gameplay):
             if step.action_type == GameActionType.BET and step.action_config.get("type") == "small":
-                is_first_betting_round = (i == self.current_step)
+                first_bet_step = i
                 break
+            elif step.action_type == GameActionType.GROUPED:
+                for j, subaction in enumerate(step.action_config):
+                    if "bet" in subaction and subaction["bet"].get("type") == "small":
+                        first_bet_step = i
+                        break
+                if first_bet_step is not None:
+                    break
 
+        # If this is the first betting step encountered, it’s the first round
+        is_first_betting_round = (first_bet_step == self.current_step)
+
+        logger.debug(f"First betting round: {is_first_betting_round} and round_start: {round_start}")
         if round_start:
             if is_first_betting_round:
                 # First betting round (e.g., pre-flop in Hold'em): Start with BTN in 3-player
@@ -2246,6 +2718,8 @@ class Game:
         community_subset = showdown_rules.get("community_subset", "default")
         padding = showdown_rules.get("padding", False)
         logger.debug(f"Finding best hand for player {player.id} with eval_type '{eval_type}' - using community subset '{community_subset}' and padding={padding}")
+        
+        # Get hole cards
         if hole_subset and hole_subset != "default":
             # Use specific subset if specified (e.g., SHESHE)
             hole_cards = player.hand.get_subset(hole_subset)
@@ -2270,21 +2744,26 @@ class Game:
                 # The evaluator will use zeroCardsPipValue (e.g., 0 for best low)
                 return []            
         
-        # If no community cards exist (e.g., Stud), use hole cards only
-        if not community_cards:
-            logger.debug(f"No community cards available for {player.id}, using hole cards only")
-            comm_cards = []
-        else:
-            comm_subset = showdown_rules.get("community_subset", "default")
-            comm_cards = community_cards.get(comm_subset, [])
-            if not comm_cards and comm_subset != "default":
-                logger.warning(f"Community subset '{comm_subset}' not found for player {player.id}")
+        # # If no community cards exist (e.g., Stud), use hole cards only
+        # if not community_cards:
+        #     logger.debug(f"No community cards available for {player.id}, using hole cards only")
+        #     comm_cards = []
+        # else:
+        #     comm_subset = showdown_rules.get("community_subset", "default")
+        #     comm_cards = community_cards.get(comm_subset, [])
+        #     if not comm_cards and comm_subset != "default":
+        #         logger.warning(f"Community subset '{comm_subset}' not found for player {player.id}")
 
-        best_hand = None
+        # Get community cards
+        comm_cards = community_cards.get(community_subset, []) if community_cards else []
+        if not comm_cards and community_subset != "default":
+            logger.warning(f"Community subset '{community_subset}' not found for player {player.id}")
 
-        # check for wild cards before rest of processing
+        # Apply wild cards if present
         if "wildCards" in showdown_rules:
             self.apply_wild_cards(player, comm_cards=comm_cards, wild_rules=showdown_rules["wildCards"])
+
+        best_hand = None
 
         # Handle new "combinations" syntax under "bestHand"
         if "combinations" in showdown_rules:
@@ -2420,6 +2899,18 @@ class Game:
             # Get requirements (default to 0 if not specified)
             required_hole = showdown_rules.get("holeCards", 0)
             required_community = showdown_rules.get("communityCards", 0)
+
+            # Special case for "all" hole cards
+            if required_hole == "all":
+                required_hole = len(hole_cards)  # Use all available hole cards
+                # Dynamically calculate community cards based on eval_type hand size
+                total_cards_needed = HAND_SIZES.get(eval_type, 5)  # Default to 5 if eval_type not found
+                required_community = max(0, total_cards_needed - required_hole)
+                # Cap by available community cards
+                required_community = min(required_community, len(comm_cards))
+            else:
+                required_hole = int(required_hole)  # Ensure numeric for other cases
+
             logger.debug(
                 f"Required hole cards: {required_hole}, Required community cards: {required_community} "
                 f"(player {player.id} has {len(hole_cards)} hole and {len(comm_cards)} community)"

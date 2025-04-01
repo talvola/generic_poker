@@ -227,6 +227,10 @@ class Table:
             # For post-flop betting, SB acts first
             return positions[1]
             
+
+    def get_active_players(self) -> List[Player]:
+        return [p for p in self.players.values() if p.is_active]
+
     def deal_hole_cards(self, num_cards: int, face_up: bool = False, subset: str = "default") -> None:
         """
         Deal hole cards to all active players.
