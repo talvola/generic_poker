@@ -101,7 +101,7 @@ def test_sack_showdown():
     game._next_step()  # First part of grouped action is betting
     assert game.current_step == 2
     assert game.state == GameState.BETTING
-    assert game.current_substep == 0
+    assert game.action_handler.current_substep == 0
 
     assert game.current_player.id == 'BTN'  # BTN first pre-flop
     actions = game.get_valid_actions('BTN')
@@ -110,7 +110,7 @@ def test_sack_showdown():
     # second part of the grouped action is discarding
     assert game.current_step == 2
     assert game.state == GameState.DRAWING
-    assert game.current_substep == 1    
+    assert game.action_handler.current_substep == 1    
     assert game.current_player.id == 'BTN'  # still should be BTN acting
     actions = game.get_valid_actions('BTN')
     assert (PlayerAction.DISCARD, 0, 4) in actions
@@ -123,7 +123,7 @@ def test_sack_showdown():
 
     # now to SB for their bet action
     assert game.current_player.id == 'SB' 
-    assert game.current_substep == 0    
+    assert game.action_handler.current_substep == 0    
     assert game.current_step == 2
     assert game.state == GameState.BETTING
     actions = game.get_valid_actions('SB')
@@ -132,7 +132,7 @@ def test_sack_showdown():
     # and discard
     assert game.current_step == 2
     assert game.state == GameState.DRAWING
-    assert game.current_substep == 1    
+    assert game.action_handler.current_substep == 1    
     assert game.current_player.id == 'SB'  # still should be SB acting
     actions = game.get_valid_actions('SB')
     assert (PlayerAction.DISCARD, 0, 4) in actions
@@ -145,7 +145,7 @@ def test_sack_showdown():
 
     # now to BB for their bet action
     assert game.current_player.id == 'BB' 
-    assert game.current_substep == 0    
+    assert game.action_handler.current_substep == 0    
     assert game.current_step == 2
     assert game.state == GameState.BETTING
     actions = game.get_valid_actions('BB')
@@ -154,7 +154,7 @@ def test_sack_showdown():
     # and discard
     assert game.current_step == 2
     assert game.state == GameState.DRAWING
-    assert game.current_substep == 1    
+    assert game.action_handler.current_substep == 1    
     assert game.current_player.id == 'BB'  # still should be BTN acting
     actions = game.get_valid_actions('BB')
     assert (PlayerAction.DISCARD, 0, 4) in actions

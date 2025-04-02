@@ -620,7 +620,7 @@ def test_format_actions_for_display():
     game._next_step()  # Move to initial bet
     
     # Test BTN's formatted actions
-    formatted_actions = game.format_actions_for_display('BTN')
+    formatted_actions = game.action_handler.format_actions_for_display('BTN')
     assert len(formatted_actions) == 3
     assert "Fold" in formatted_actions
     assert "Call $10 (+$10)" in formatted_actions
@@ -634,7 +634,7 @@ def test_format_actions_for_display():
     print(f"Call action details: {call_action}")    
     
     # Test SB's formatted actions (SB has already put in $5 for the blind)
-    formatted_actions = game.format_actions_for_display('SB')
+    formatted_actions = game.action_handler.format_actions_for_display('SB')
     assert len(formatted_actions) == 3
     assert "Fold" in formatted_actions
     assert "Call $10 (+$5)" in formatted_actions
@@ -644,7 +644,7 @@ def test_format_actions_for_display():
     game.player_action('SB', PlayerAction.CALL, 10)
     
     # Test BB's formatted actions (BB has already put in $10 for the blind)
-    formatted_actions = game.format_actions_for_display('BB')
+    formatted_actions = game.action_handler.format_actions_for_display('BB')
     assert len(formatted_actions) == 3
     assert "Fold" in formatted_actions
     assert "Check" in formatted_actions
@@ -663,7 +663,7 @@ def test_format_actions_for_display_after_raise():
     game.player_action('BTN', PlayerAction.RAISE, 20)
 
     # Test SB's formatted actions after a raise
-    formatted_actions = game.format_actions_for_display('SB')
+    formatted_actions = game.action_handler.format_actions_for_display('SB')
     assert len(formatted_actions) == 3
     assert "Fold" in formatted_actions
     assert "Call $20 (+$15)" in formatted_actions
@@ -673,7 +673,7 @@ def test_format_actions_for_display_after_raise():
     game.player_action('SB', PlayerAction.CALL, 20)
     
     # Test BB's formatted actions
-    formatted_actions = game.format_actions_for_display('BB')
+    formatted_actions = game.action_handler.format_actions_for_display('BB')
     assert len(formatted_actions) == 3
     assert "Fold" in formatted_actions
     assert "Call $20 (+$10)" in formatted_actions

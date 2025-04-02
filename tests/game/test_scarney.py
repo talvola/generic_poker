@@ -1,7 +1,8 @@
 """Minimal end-to-end test for scarney."""
 import pytest
 from generic_poker.config.loader import GameRules
-from generic_poker.game.game import Game, GameState, PlayerAction
+from generic_poker.game.game import Game
+from generic_poker.game.game_state import GameState, PlayerAction
 from generic_poker.core.card import Card, Rank, Suit
 from generic_poker.game.betting import BettingStructure
 from generic_poker.core.deck import Deck
