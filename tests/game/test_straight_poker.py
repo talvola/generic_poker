@@ -474,7 +474,7 @@ def test_next_step_initial_bet():
     result = game.player_action(game.current_player.id, PlayerAction.CALL, 10)
     # check result - success, and no state change since there are more players
     assert result.success == True
-    assert result.state_changed == False 
+    assert result.advance_step == False 
 
     # check the player's stack - should be $490
     assert game.table.players['BTN'].stack == 490
@@ -509,7 +509,7 @@ def test_next_step_initial_bet():
     result = game.player_action(game.current_player.id, PlayerAction.CALL, 5)
     # check result - success, and no state change since there are more players
     assert result.success == True
-    assert result.state_changed == False
+    assert result.advance_step == False
 
     # check the player's stack - should be $490
     assert game.table.players['SB'].stack == 490
@@ -567,7 +567,7 @@ def test_next_step_initial_bet_nl():
     result = game.player_action(game.current_player.id, PlayerAction.CALL, 10)
     # check result - success, and no state change since there are more players
     assert result.success == True
-    assert result.state_changed == False 
+    assert result.advance_step == False 
 
     # check the player's stack - should be $490
     assert game.table.players['BTN'].stack == 490
@@ -602,7 +602,7 @@ def test_next_step_initial_bet_nl():
     result = game.player_action(game.current_player.id, PlayerAction.CALL, 5)
     # check result - success, and no state change since there are more players
     assert result.success == True
-    assert result.state_changed == False
+    assert result.advance_step == False
 
     # check the player's stack - should be $490
     assert game.table.players['SB'].stack == 490

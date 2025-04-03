@@ -54,6 +54,7 @@ class BettingManager(ABC):
         self.betting_round: int = 0  # Track which betting round we're in
         self.last_raise_size = 0 # Track minimum raise rules (still needed?)
         self.small_bet: int = 0  
+        self.bring_in_posted = False  # Track if bring-in has been posted
         
     def get_main_pot_amount(self) -> int:
         """Get the amount in the current round's main pot."""
@@ -303,7 +304,10 @@ class BettingManager(ABC):
         # Update current bet if this is highest, and isn't an ante which doesn't impact the pot
         if not is_ante:
             self.current_bet = max(self.current_bet, amount)
-        
+
+        if bet_type == BetType.BRING_IN:  # Or check PlayerAction.BRING_IN depending on implementation
+            self.bring_in_posted = True  # Set flag when bring-in is posted
+
         logger.debug(f"After bet: current_bet={self.current_bet}, "
                     f"last_raise_size={self.last_raise_size}, "
                     f"pot={self.pot.total}, "
@@ -410,6 +414,7 @@ class BettingManager(ABC):
             self.betting_round += 1
             self.pot.end_betting_round()  # Start new Pot round
         self.current_bet = current
+        self.bring_in_posted = False  # Reset at the start of each betting round
 
         logger.debug(f"Starting betting round {self.betting_round}: preserve_bet={preserve_current_bet}, "
                     f"current_bet={self.current_bet}, "
@@ -502,7 +507,7 @@ class LimitBettingManager(BettingManager):
         to_call = self.current_bet - current_bet
         bet_size = self.small_bet if bet_type == BetType.SMALL else self.big_bet
 
-        logger.debug(f"current_bet={current_bet}, to_call={to_call}, bet_size={bet_size}, bet_type={bet_type}")
+        logger.debug(f"current_bet={current_bet}, to_call={to_call}, bet_size={bet_size}")
 
         if amount == 0:  # Check/fold always valid
             return True

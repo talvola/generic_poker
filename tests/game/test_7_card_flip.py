@@ -184,7 +184,9 @@ def test_game_bringin():
     
     exposing_player = game.current_player.id
     cards_to_expose = game.table.players[exposing_player].hand.cards[:2]  # expose the first two cards
-    game.player_action(exposing_player, PlayerAction.EXPOSE, cards=cards_to_expose)
+    result = game.player_action(exposing_player, PlayerAction.EXPOSE, cards=cards_to_expose)
+    assert result.success
+    assert not result.advance_step  # still more players to act in this step
 
     # cards are still face down here
     assert game.table.players[exposing_player].hand.cards[0].visibility == Visibility.FACE_DOWN
@@ -192,7 +194,9 @@ def test_game_bringin():
 
     exposing_player = game.current_player.id
     cards_to_expose = game.table.players[exposing_player].hand.cards[:2]  # expose the first two cards
-    game.player_action(exposing_player, PlayerAction.EXPOSE, cards=cards_to_expose)
+    result = game.player_action(exposing_player, PlayerAction.EXPOSE, cards=cards_to_expose)
+    assert result.success
+    assert not result.advance_step  # still more players to act in this step
 
     # cards are still face down here
     assert game.table.players[exposing_player].hand.cards[0].visibility == Visibility.FACE_DOWN
@@ -200,7 +204,10 @@ def test_game_bringin():
 
     exposing_player = game.current_player.id
     cards_to_expose = game.table.players[exposing_player].hand.cards[:2]  # expose the first two cards
-    game.player_action(exposing_player, PlayerAction.EXPOSE, cards=cards_to_expose)
+    result = game.player_action(exposing_player, PlayerAction.EXPOSE, cards=cards_to_expose)
+
+    assert result.success
+    assert result.advance_step  # everyone has exposed their cards
 
     # Check cards are now face up since last player acted
     assert game.table.players["p1"].hand.cards[0].visibility == Visibility.FACE_UP
@@ -229,7 +236,8 @@ def test_game_bringin():
     # Charlie posts bring-in ($3)
     result = game.player_action("p3", PlayerAction.BRING_IN, 3)
     assert result.success
-    assert not result.state_changed  # Still in bring-in step
+    assert result.advance_step  # bring-in is over
+
     # P1 and P2 unchanged
     assert game.table.players['p1'].stack == 499  # Ante deducted
     assert game.table.players['p2'].stack == 499

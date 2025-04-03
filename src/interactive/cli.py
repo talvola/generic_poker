@@ -1,7 +1,8 @@
 from typing import Tuple, Optional, List
 from generic_poker.game.game import Game, PlayerAction, GameActionType
 from generic_poker.game.game_state import GameState
-from generic_poker.core.card import Card
+from generic_poker.core.card import Card, Visibility
+from generic_poker.game.table import Player
 from .display import display_game_state
 
 def get_player_action(game: Game, player: 'Player') -> Tuple[PlayerAction, int]:
@@ -35,7 +36,7 @@ def get_player_action(game: Game, player: 'Player') -> Tuple[PlayerAction, int]:
             return action, min_amt or 0
         print("Invalid choice.")
 
-def get_discard_action(game: Game, player: 'Player') -> Tuple[PlayerAction, int, Optional[List[Card]]]:
+def get_discard_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Optional[List[Card]]]:
     """Prompt the current player to select cards to discard, or handle forced discards."""
     step = game.rules.gameplay[game.current_step]
     discard_config = step.action_config["cards"][0]  # Assume one discard object for now
@@ -92,6 +93,83 @@ def get_discard_action(game: Game, player: 'Player') -> Tuple[PlayerAction, int,
         except ValueError:
             print("Invalid input. Use space-separated numbers (e.g., '1 3 5').")
 
+def get_expose_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Optional[List[Card]]]:
+    """
+    Prompt the player to select cards to expose based on valid game actions.
+    
+    Args:
+        game: The current Game instance.
+        player: The Player instance making the action.
+    
+    Returns:
+        Tuple containing:
+        - PlayerAction.EXPOSE: The action type.
+        - int: Amount (set to 0, as it's not used for expose).
+        - Optional[List[Card]]: List of cards to expose, or empty list if none.
+    """
+    # Get the player's hand
+    hand = player.hand.get_cards()
+    if not hand:
+        print(f"\n{player.name}'s Turn | No cards to expose")
+        return PlayerAction.EXPOSE, 0, []
+
+    # Retrieve valid actions for the player
+    valid_actions = game.get_valid_actions(player.id)
+    expose_action = next((a for a in valid_actions if a[0] == PlayerAction.EXPOSE), None)
+    if not expose_action:
+        print(f"\n{player.name}'s Turn | Exposing not allowed")
+        return PlayerAction.EXPOSE, 0, []
+
+    # Extract minimum and maximum number of cards to expose
+    _, min_expose, max_expose = expose_action
+
+    # Display player's turn and their cards
+    print(f"\n{player.name}'s Turn | Stack: ${player.stack}")
+    print("Your cards:")
+    for i, card in enumerate(hand, 1):
+        visibility = "face up" if card.visibility == Visibility.FACE_UP else "face down"
+        print(f"{i}: {card} ({visibility})")
+
+    # Prompt for card selection
+    prompt = f"Select {min_expose} to {max_expose} cards to expose (e.g., '1 3'):"
+    print(prompt)
+
+    while True:
+        choice = input("Enter card numbers: ").strip()
+        # Handle empty input (only allowed if min_expose is 0)
+        if not choice and min_expose == 0:
+            return PlayerAction.EXPOSE, 0, []
+        elif not choice:
+            print(f"Must expose at least {min_expose} card{'s' if min_expose != 1 else ''}.")
+            continue
+
+        try:
+            # Convert input to zero-based indices
+            indices = [int(x) - 1 for x in choice.split()]
+            
+            # Validate indices are within range
+            if not all(0 <= i < len(hand) for i in indices):
+                print("Invalid card numbers. Try again.")
+                continue
+            
+            # Check number of cards selected is within min and max
+            num_expose = len(indices)
+            if num_expose < min_expose or num_expose > max_expose:
+                print(f"Must expose between {min_expose} and {max_expose} cards.")
+                continue
+            
+            # Ensure no duplicate selections
+            if len(indices) != len(set(indices)):
+                print("Duplicate card numbers. Try again.")
+                continue
+            
+            # Create list of cards to expose
+            cards_to_expose = [hand[i] for i in indices]
+            return PlayerAction.EXPOSE, 0, cards_to_expose
+        
+        except ValueError:
+            print("Invalid input. Use space-separated numbers (e.g., '1 3').")
+
 def run_game(game: Game) -> None:
     """Run an interactive poker game."""
     print(f"Starting {game.rules.game} Game")
@@ -115,10 +193,18 @@ def run_game(game: Game) -> None:
                     print(f"Error: {result.error}")
                 elif result.advance_step:
                     game._next_step()
+            elif step.action_type == GameActionType.EXPOSE and game.current_player:
+                action, amount, cards = get_expose_action(game, game.current_player)
+                result = game.player_action(game.current_player.id, action, amount, cards)
+                print(f"results: {result}")
+                if not result.success:
+                    print(f"Error: {result.error}")
+                elif result.advance_step:
+                    game._next_step()
             elif step.action_type == GameActionType.DRAW:
                 input("\nPress Enter to proceed...")
                 game._next_step()
-            elif step.action_type == GameActionType.BET and "type" in step.action_config and step.action_config["type"] in ["antes", "blinds", "bring-in"]:
+            elif step.action_type == GameActionType.BET and "type" in step.action_config and step.action_config["type"] in ["antes", "blinds"]:
                 input("\nPress Enter to post forced bets...")
                 game._next_step()
             elif game.state == GameState.BETTING and game.current_player:

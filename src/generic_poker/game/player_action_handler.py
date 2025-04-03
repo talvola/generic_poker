@@ -105,12 +105,13 @@ class PlayerActionHandler:
 
     def _get_betting_actions(self, player_id: str, bet_config: Dict) -> List[Tuple[PlayerAction, Optional[int], Optional[int]]]:
         """Helper method to get betting actions."""
+        logger.debug(f"Getting betting actions for player {player_id} with bet_config: {bet_config} ({self.game.betting.bring_in_posted})")
         player = self.game.table.players[player_id]
         current_bet = self.game.betting.current_bets.get(player_id, PlayerBet()).amount
         required_bet = self.game.betting.get_required_bet(player_id)
         valid_actions = []
 
-        if bet_config.get("type") == "bring-in":
+        if bet_config.get("type") == "bring-in" and not self.game.betting.bring_in_posted:
             valid_actions.append((PlayerAction.BRING_IN, self.game.bring_in, self.game.bring_in))
             if player.stack >= self.game.small_bet:
                 valid_actions.append((PlayerAction.BET, self.game.small_bet, self.game.small_bet))
@@ -146,6 +147,8 @@ class PlayerActionHandler:
                                        active_players[(bring_in_idx + 1) % len(active_players)].id == player_id and
                                        acted_count <= 1)
 
+            logger.debug(f"Player {player.name} (ID: {player_id}) is first after bring-in: {is_first_after_bring_in}, current_total: {current_total}")
+            logger.debug(f"  is_stud= {is_stud}, step_type: {step_type}, bring_in_idx: {bring_in_idx}, acted_count: {acted_count}, active: {active_players[(bring_in_idx + 1) % len(active_players)].id}")
             if is_first_after_bring_in:
                 action = PlayerAction.BET
                 min_amount = self.game.small_bet
@@ -178,7 +181,7 @@ class PlayerActionHandler:
             cards: Cards involved in the action (e.g., discard)
 
         Returns:
-            ActionResult with success, error, state_changed, and advance_step flags
+            ActionResult with success, error, and advance_step flags
         """
         player = self.game.table.players[player_id]
         if player_id != self.game.current_player.id:
@@ -205,7 +208,7 @@ class PlayerActionHandler:
             logger.info(f"{player.name} {'discards' if action == PlayerAction.DISCARD else 'draws'} {len(cards)} cards: {cards}")
             self.game.current_player = self.game.next_player(round_start=False)
             if self._check_discard_round_complete():
-                return ActionResult(success=True, state_changed=True, advance_step=True)
+                return ActionResult(success=True, advance_step=True)
             return ActionResult(success=True)
 
         if action == PlayerAction.SEPARATE:
@@ -218,7 +221,7 @@ class PlayerActionHandler:
             logger.info(f"{player.name} separates their cards: {cards}")
             self.game.current_player = self.game.next_player(round_start=False)
             if self._check_separate_round_complete():
-                return ActionResult(success=True, state_changed=True, advance_step=True)
+                return ActionResult(success=True, advance_step=True)
             return ActionResult(success=True)
 
         if action == PlayerAction.EXPOSE:
@@ -233,7 +236,7 @@ class PlayerActionHandler:
             self.game.current_player = self.game.next_player(round_start=False)
             if self._check_expose_round_complete():
                 self._apply_all_exposures()
-                return ActionResult(success=True, state_changed=True, advance_step=True)
+                return ActionResult(success=True, advance_step=True)
             return ActionResult(success=True)
 
         if action == PlayerAction.PASS:
@@ -251,7 +254,7 @@ class PlayerActionHandler:
             self.game.current_player = self.game.next_player(round_start=False)
             if self._check_pass_round_complete():
                 self._apply_all_passes()
-                return ActionResult(success=True, state_changed=True, advance_step=True)
+                return ActionResult(success=True, advance_step=True)
             return ActionResult(success=True)
 
         # Betting actions
@@ -403,7 +406,7 @@ class PlayerActionHandler:
         # Check if the grouped step is complete
         if self.grouped_step_completed == active_players and self.game.betting.round_complete():
             logger.info("All players completed grouped step and betting round is complete")
-            return ActionResult(success=True, state_changed=True, advance_step=True)
+            return ActionResult(success=True, advance_step=True)
 
         return ActionResult(success=True)  
 
@@ -413,7 +416,7 @@ class PlayerActionHandler:
             return ActionResult(success=True)
         self.game.current_player = self.game.next_player(round_start=False)
         if round_complete:
-            return ActionResult(success=True, state_changed=True, advance_step=True)
+            return ActionResult(success=True, advance_step=True)
         return ActionResult(success=True)
     
     def _calculate_bet_amounts(self, player_id: str, action: PlayerAction, amount: int, current_bet: int, current_ante: int) -> Tuple[int, int]:
@@ -449,6 +452,7 @@ class PlayerActionHandler:
         # Determine bet_type from step configuration
         step = self.game.rules.gameplay[self.game.current_step]
         bet_config = step.action_config[self.current_substep].get("bet", {}) if step.action_type == GameActionType.GROUPED else step.action_config
+        is_bring_in_step = bet_config.get("type") == "bring-in"
         bet_type = BetType.SMALL if bet_config.get("type") == "small" else BetType.BIG
         if action == PlayerAction.BRING_IN:
             bet_type = BetType.BRING_IN
@@ -460,7 +464,7 @@ class PlayerActionHandler:
             active_players = [p for p in self.game.table.get_position_order() if p.is_active]
             if len(active_players) == 1:
                 self.game._handle_fold_win(active_players)
-                return ActionResult(success=True, state_changed=True, advance_step=True)
+                return ActionResult(success=True, advance_step=True)
             logger.info(f"{player.name} folds")
             return self._advance_player_if_needed(manage_player, False)
 
@@ -493,7 +497,10 @@ class PlayerActionHandler:
                 return ActionResult(success=False, error=f"Invalid bring-in amount: ${amount}")
             logger.info(f"{player.name} brings in for ${amount}")
             self._place_bet(player_id, amount, amount, BetType.BRING_IN, is_forced=True)
-            return self._advance_player_if_needed(manage_player, False)         
+            result = self._advance_player_if_needed(manage_player, False)
+            if is_bring_in_step:
+                result.advance_step = True
+            return result
 
         elif action == PlayerAction.BET or action == PlayerAction.RAISE:
             valid_bet = next((a for a in valid_actions if a[0] == action), None)
@@ -508,7 +515,10 @@ class PlayerActionHandler:
                 return ActionResult(success=False, error="Not enough chips")
             logger.info(f"{player.name} {action.value.lower()}s ${total_amount}")
             self._place_bet(player_id, total_amount, additional_amount, bet_type)
-            return self._advance_player_if_needed(manage_player, self.game.betting.round_complete())        
+            result = self._advance_player_if_needed(manage_player, self.game.betting.round_complete())
+            if is_bring_in_step:
+                result.advance_step = True
+            return result     
 
         logger.warning(f"Unsupported betting action by {player.name}: {action}")
         return ActionResult(success=False, error=f"Unsupported betting action: {action}")

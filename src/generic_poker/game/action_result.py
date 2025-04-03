@@ -6,6 +6,4 @@ class ActionResult:
     """Result of a player action."""
     success: bool
     error: Optional[str] = None
-    state_changed: bool = False
     advance_step: bool = False
-    

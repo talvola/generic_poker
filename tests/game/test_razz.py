@@ -224,7 +224,7 @@ def test_game_bringin():
     # Bob posts bring-in ($3)
     result = game.player_action("p2", PlayerAction.BRING_IN, 3)
     assert result.success
-    assert not result.state_changed  # Still in bring-in step
+    assert result.advance_step  # Done with bring-in step
     # P1 and P3 unchanged
     assert game.table.players['p1'].stack == 499  # Ante deducted
     assert game.table.players['p3'].stack == 499

@@ -128,19 +128,19 @@ def test_basic_call_sequence():
     # Button calls
     result = game.player_action("BTN", PlayerAction.CALL, 10)
     assert result.success
-    assert not result.state_changed  # Round shouldn't be over
+    assert not result.advance_step  # Round shouldn't be over
     assert game.current_player.id == "SB"  # Should move to SB
     
     # Small blind calls
     result = game.player_action("SB", PlayerAction.CALL, 10)
     assert result.success
-    assert not result.state_changed
+    assert not result.advance_step
     assert game.current_player.id == "BB"  # Should move to BB
     
     # Big blind checks
     result = game.player_action("BB", PlayerAction.CHECK, 0)
     assert result.success
-    assert result.state_changed  # Round should end
+    assert result.advance_step  # Round should end
     
     # Verify final state
     assert game.betting.get_main_pot_amount() == 30  # All players put in 10
@@ -168,19 +168,19 @@ def test_basic_fold_sequence():
     # Button folds
     result = game.player_action("BTN", PlayerAction.FOLD, 0)
     assert result.success
-    assert not result.state_changed
+    assert not result.advance_step
     assert game.current_player.id == "SB"
 
     # Small blind calls (needs $5 more to match BB’s $10)
     result = game.player_action("SB", PlayerAction.CALL, 10)  # Adjust amount
     assert result.success
-    assert not result.state_changed
+    assert not result.advance_step
     assert game.current_player.id == "BB"
 
     # Big blind checks
     result = game.player_action("BB", PlayerAction.CHECK, 0)
     assert result.success
-    assert result.state_changed  # Betting round ends
+    assert result.advance_step  # Betting round ends
     assert game.betting.get_main_pot_amount() == 20  # SB: 5+5=10, BB: 10
 
     game._next_step()  # Move to Showdown (Step 3)
@@ -220,7 +220,7 @@ def test_hand_with_showdown(test_hands):
     # BB checks
     result = game.player_action("BB", PlayerAction.CHECK, 0)
     assert result.success
-    assert result.state_changed  # Should move to showdown
+    assert result.advance_step  # Should move to showdown
     
     game._next_step()  # Move to Showdown (Step 3)
     assert game.current_step == 3
@@ -287,7 +287,7 @@ def test_split_pot_scenario():
     
     result = game.player_action("BB", PlayerAction.CHECK, 0)
     assert result.success
-    assert result.state_changed
+    assert result.advance_step
     
     game._next_step()  # Move to Showdown (Step 3)
     assert game.current_step == 3
@@ -323,13 +323,13 @@ def test_all_fold_to_one():
     # BTN folds
     result = game.player_action("BTN", PlayerAction.FOLD, 0)
     assert result.success
-    assert not result.state_changed
+    assert not result.advance_step
     assert game.current_player.id == "SB"
 
     # SB folds
     result = game.player_action("SB", PlayerAction.FOLD, 0)
     assert result.success
-    assert result.state_changed  # Hand ends when all but one fold
+    assert result.advance_step  # Hand ends when all but one fold
     
     # BB wins the pot without showdown
     assert game.state == GameState.COMPLETE
@@ -372,7 +372,7 @@ def test_raise_and_calls(test_hands):
     # BTN raises to 20
     result = game.player_action("BTN", PlayerAction.RAISE, 20)
     assert result.success
-    assert not result.state_changed
+    assert not result.advance_step
     assert game.betting.current_bet == 20
     assert game.table.players["BTN"].stack == initial_stacks["BTN"] - 20
     assert game.betting.get_main_pot_amount() == 15 + 20 # SB + BB + BTN raise
@@ -380,12 +380,12 @@ def test_raise_and_calls(test_hands):
     # SB calls 20
     result = game.player_action("SB", PlayerAction.CALL, 20)
     assert result.success
-    assert not result.state_changed
+    assert not result.advance_step
     
     # BB calls additional 10
     result = game.player_action("BB", PlayerAction.CALL, 20)
     assert result.success
-    #assert result.state_changed  # Round should complete
+    assert result.advance_step  # Round should complete
         
     # Verify pot and stacks after the raise round
     assert game.betting.get_main_pot_amount() == 60  # Everyone put in 20
