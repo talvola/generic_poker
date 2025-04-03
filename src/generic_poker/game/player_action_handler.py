@@ -15,6 +15,7 @@ class PlayerActionHandler:
         """Initialize with a reference to the Game instance."""
         self.game = game
         # Action-related state variables
+        self.first_player_in_round: Optional[str] = None  # ID of the first player to act in the current non-betting round
         self.current_substep: Optional[int] = None
         self.grouped_step_completed: set = set()
         self.player_completed_subactions: Dict[str, Set[int]] = {}  # {player_id: set of completed subaction indices}
@@ -406,24 +407,49 @@ class PlayerActionHandler:
 
         return ActionResult(success=True)  
 
+    def _advance_player_if_needed(self, manage_player: bool, round_complete: bool) -> ActionResult:
+        """Advance player and check round completion if manage_player is True."""
+        if not manage_player:
+            return ActionResult(success=True)
+        self.game.current_player = self.game.next_player(round_start=False)
+        if round_complete:
+            return ActionResult(success=True, state_changed=True, advance_step=True)
+        return ActionResult(success=True)
+    
+    def _calculate_bet_amounts(self, player_id: str, action: PlayerAction, amount: int, current_bet: int, current_ante: int) -> Tuple[int, int]:
+        """Calculate total and additional amounts for a bet, handling all-in and antes."""
+        player = self.game.table.players[player_id]
+        if action == PlayerAction.CALL:
+            total_amount = self.game.betting.current_bet
+            additional_amount = self.game.betting.get_required_bet(player_id)
+            if additional_amount > player.stack:
+                additional_amount = player.stack
+                total_amount = current_bet + additional_amount
+        else:  # BET or RAISE
+            if amount >= player.stack + current_bet:
+                logger.info(f"{player.name} is going all-in with ${player.stack}")
+                additional_amount = player.stack
+                total_amount = player.stack + current_bet
+            else:
+                additional_amount = amount - current_bet + current_ante
+                total_amount = amount
+        return total_amount, additional_amount
+    
+    def _place_bet(self, player_id: str, total_amount: int, additional_amount: int, bet_type: BetType, is_forced: bool = False) -> None:
+        """Place a bet and update player stack."""
+        player = self.game.table.players[player_id]
+        self.game.betting.place_bet(player_id, total_amount, player.stack, bet_type=bet_type, is_forced=is_forced)
+        player.stack -= additional_amount    
+
     def _handle_betting_action(self, player_id: str, action: PlayerAction, amount: int, manage_player: bool = True) -> ActionResult:
         """Handle betting-related actions, advancing player only if manage_player is True."""
         player = self.game.table.players[player_id]
         valid_actions = self.get_valid_actions(player_id)
 
-        # Determine bet_type from the current step or substep configuration
+        # Determine bet_type from step configuration
         step = self.game.rules.gameplay[self.game.current_step]
-        if step.action_type == GameActionType.GROUPED:
-            # For grouped actions, use the current substep's bet configuration
-            subaction = step.action_config[self.current_substep]
-            bet_config = subaction.get("bet", {})
-        else:
-            # For standalone betting steps, use the step's action configuration
-            bet_config = step.action_config
-
-        # Set bet_type based on the configuration (default to BIG if unspecified)
+        bet_config = step.action_config[self.current_substep].get("bet", {}) if step.action_type == GameActionType.GROUPED else step.action_config
         bet_type = BetType.SMALL if bet_config.get("type") == "small" else BetType.BIG
-        # Override bet_type for bring-in
         if action == PlayerAction.BRING_IN:
             bet_type = BetType.BRING_IN
 
@@ -435,75 +461,56 @@ class PlayerActionHandler:
             if len(active_players) == 1:
                 self.game._handle_fold_win(active_players)
                 return ActionResult(success=True, state_changed=True, advance_step=True)
-            if manage_player:
-                self.game.current_player = self.game.next_player(round_start=False)
-            return ActionResult(success=True)
+            logger.info(f"{player.name} folds")
+            return self._advance_player_if_needed(manage_player, False)
 
         elif action == PlayerAction.CHECK:
-            if self.game.betting.get_required_bet(player_id) > 0:
+            required_bet = self.game.betting.get_required_bet(player_id)
+            if required_bet > 0:
+                logger.debug(f"{player.name} cannot check; must call ${required_bet}")
                 return ActionResult(success=False, error="Cannot check - must call or fold")
             current_bet = self.game.betting.current_bets.get(player_id, PlayerBet())
             current_bet.has_acted = True
             self.game.betting.current_bets[player_id] = current_bet
-            if manage_player and self.game.betting.round_complete():
-                return ActionResult(success=True, state_changed=True, advance_step=True)
-            if manage_player:
-                self.game.current_player = self.game.next_player(round_start=False)
-            return ActionResult(success=True)
+            logger.info(f"{player.name} checks")
+            return self._advance_player_if_needed(manage_player, self.game.betting.round_complete())
 
         elif action == PlayerAction.CALL:
-            call_amount = self.game.betting.get_required_bet(player_id)
-            current_bet = self.game.betting.current_bets.get(player_id, PlayerBet())
-            total_bet = self.game.betting.current_bet
-            if call_amount > player.stack:
-                call_amount = player.stack
-                total_bet = current_bet.amount + call_amount
-            self.game.betting.place_bet(player_id, total_bet, player.stack, bet_type=bet_type)
-            player.stack -= call_amount
-            if manage_player and self.game.betting.round_complete():
-                return ActionResult(success=True, state_changed=True, advance_step=True)            
-            if manage_player:
-                self.game.current_player = self.game.next_player(round_start=False)            
-            return ActionResult(success=True)            
+            current_bet = self.game.betting.current_bets.get(player_id, PlayerBet()).amount
+            current_ante = self.game.betting.pot.total_antes.get(f"round_{self.game.betting.pot.current_round}_{player_id}", 0)
+            total_amount, additional_amount = self._calculate_bet_amounts(player_id, action, amount, current_bet, current_ante)
+            if additional_amount > player.stack:
+                logger.debug(f"{player.name} needs ${additional_amount} to call but has ${player.stack}")
+                return ActionResult(success=False, error="Not enough chips")
+            logger.info(f"{player.name} calls ${additional_amount}")
+            self._place_bet(player_id, total_amount, additional_amount, bet_type)
+            return self._advance_player_if_needed(manage_player, self.game.betting.round_complete())          
 
         elif action == PlayerAction.BRING_IN:
             valid_bring_in = next((a for a in valid_actions if a[0] == PlayerAction.BRING_IN), None)
             if not valid_bring_in or amount != valid_bring_in[1]:
+                logger.debug(f"Invalid bring-in for {player.name}: ${amount}, expected ${valid_bring_in[1] if valid_bring_in else 'N/A'}")
                 return ActionResult(success=False, error=f"Invalid bring-in amount: ${amount}")
             logger.info(f"{player.name} brings in for ${amount}")
-            self.game.betting.place_bet(player_id, amount, player.stack, is_forced=True, bet_type=BetType.BRING_IN)
-            player.stack -= amount
-            if manage_player:
-                self.game.current_player = self.game.next_player(round_start=False)
-            return ActionResult(success=True)           
+            self._place_bet(player_id, amount, amount, BetType.BRING_IN, is_forced=True)
+            return self._advance_player_if_needed(manage_player, False)         
 
         elif action == PlayerAction.BET or action == PlayerAction.RAISE:
             valid_bet = next((a for a in valid_actions if a[0] == action), None)
             if not valid_bet or amount not in range(valid_bet[1], valid_bet[2] + 1):
+                logger.debug(f"Invalid {action.value} for {player.name}: ${amount}, expected range ${valid_bet[1]}-${valid_bet[2] if valid_bet else 'N/A'}")
                 return ActionResult(success=False, error=f"Invalid {action.value} amount: ${amount}")
             current_bet = self.game.betting.current_bets.get(player_id, PlayerBet()).amount
             current_ante = self.game.betting.pot.total_antes.get(f"round_{self.game.betting.pot.current_round}_{player_id}", 0)
-
-            # Calculate additional amount, adjusting for ante if present
-            if amount >= player.stack + current_bet:  # All-in case
-                logger.info(f"{player.name} is going all-in with ${player.stack}")
-                additional_amount = player.stack
-                amount = player.stack + current_bet  # Total contribution
-            else:
-                additional_amount = amount - current_bet + current_ante  # Add ante back to ensure full amount
-            
+            total_amount, additional_amount = self._calculate_bet_amounts(player_id, action, amount, current_bet, current_ante)
             if additional_amount > player.stack:
+                logger.debug(f"{player.name} needs ${additional_amount} but has ${player.stack}")
                 return ActionResult(success=False, error="Not enough chips")
-            
-            self.game.betting.place_bet(player_id, amount, player.stack, bet_type=bet_type)
-            player.stack -= additional_amount
+            logger.info(f"{player.name} {action.value.lower()}s ${total_amount}")
+            self._place_bet(player_id, total_amount, additional_amount, bet_type)
+            return self._advance_player_if_needed(manage_player, self.game.betting.round_complete())        
 
-            if manage_player:
-                self.game.current_player = self.game.next_player(round_start=False)
-                if self.game.betting.round_complete():
-                    return ActionResult(success=True, state_changed=True, advance_step=True)
-            return ActionResult(success=True)            
-
+        logger.warning(f"Unsupported betting action by {player.name}: {action}")
         return ActionResult(success=False, error=f"Unsupported betting action: {action}")
 
     def _update_state_for_next_subaction(self, subactions: List[Dict]) -> None:
@@ -589,9 +596,11 @@ class PlayerActionHandler:
         return True
 
     def _check_discard_round_complete(self) -> bool:
-        """Check if the discard/draw round is complete."""
-        active_players = [p for p in self.game.table.get_position_order() if p.is_active]
-        return len(active_players) > 0 and self.game.current_player == active_players[0].id
+        """Check if the discard/draw round is complete by seeing if we've cycled back to the first player."""
+        if self.first_player_in_round is None:
+            logger.warning("First player in round not set")
+            return False
+        return self.game.current_player.id == self.first_player_in_round
 
     def _handle_separate_action(self, player: Player, cards: List[Card]) -> bool:
         """Handle separating cards into subsets."""

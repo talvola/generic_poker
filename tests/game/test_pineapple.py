@@ -293,7 +293,9 @@ def test_game_results_showdown():
 
     # actually discard the cards - this will advance current player, so be sure to use our saved discarding_player
     cards_to_discard = [game.table.players[discarding_player].hand.cards[0]]  # discard the first card
-    game.player_action('SB', PlayerAction.DISCARD, cards=cards_to_discard)
+    result = game.player_action('SB', PlayerAction.DISCARD, cards=cards_to_discard)
+    assert result.success
+    assert not result.advance_step  # still more players to act in this step
 
     player_cards = game.table.players[discarding_player].hand.get_cards()
     assert len(player_cards) == 2
@@ -303,12 +305,16 @@ def test_game_results_showdown():
     # other players similarly discard
     discarding_player = game.current_player.id
     cards_to_discard = [game.table.players[discarding_player].hand.cards[1]]  # discard the second card
-    game.player_action('BB', PlayerAction.DISCARD, cards=cards_to_discard)
+    result = game.player_action('BB', PlayerAction.DISCARD, cards=cards_to_discard)
+    assert result.success
+    assert not result.advance_step  # still more players to act in this step
     player_cards = game.table.players[discarding_player].hand.get_cards()
     assert len(player_cards) == 2    
     discarding_player = game.current_player.id
     cards_to_discard = [game.table.players[discarding_player].hand.cards[2]]  # discard the third card
-    game.player_action('BTN', PlayerAction.DISCARD, cards=cards_to_discard)
+    result = game.player_action('BTN', PlayerAction.DISCARD, cards=cards_to_discard)
+    assert result.success
+    assert result.advance_step  # all players have discarded
     player_cards = game.table.players[discarding_player].hand.get_cards()
     assert len(player_cards) == 2    
 
