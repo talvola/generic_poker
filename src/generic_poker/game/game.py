@@ -544,11 +544,12 @@ class Game:
             num_cards = card_config["number"]
             state = card_config["state"]
             subset = card_config.get("subset", "default")  # Default to "default" if not specified
+            hole_subset = card_config.get("hole_subset", "default")  # Default to "default" if not specified
             face_up = state == "face up"
             
             if location == "player":
                 logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to each player ({state})")
-                self.table.deal_hole_cards(num_cards, face_up=face_up)
+                self.table.deal_hole_cards(num_cards, subset=hole_subset, face_up=face_up)
             else:  # community
                 logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to community subset '{subset}' ({state})")
                 self.table.deal_community_cards(num_cards, subset=subset, face_up=face_up)               

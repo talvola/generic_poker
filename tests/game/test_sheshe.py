@@ -176,22 +176,29 @@ def test_game_results_showdown():
     player = game.current_player.id
     hand = game.table.players[player].hand
     cards = hand.get_cards()[:5]  # Take first 5 cards
-    game.player_action('SB', PlayerAction.SEPARATE, cards=cards)
+    result = game.player_action('SB', PlayerAction.SEPARATE, cards=cards)
+    assert result.success   # action was successful
+    assert result.advance_step == False  # not time to go to next step yet
+
     assert len(hand.get_subset("Hold'em")) == 2
     assert len(hand.get_subset("Super Hold'em")) == 3
     assert len(hand.get_subset("default")) == 0
-
     assert len(hand.get_cards()) == 5
 
     # do the same with other players
     player = game.current_player.id
     hand = game.table.players[player].hand
     cards = hand.get_cards()[:5]  # Take first 5 cards
-    game.player_action('BB', PlayerAction.SEPARATE, cards=cards)
+    result = game.player_action('BB', PlayerAction.SEPARATE, cards=cards)
+    assert result.success   # action was successful
+    assert result.advance_step == False  # not time to go to next step yet
+
     player = game.current_player.id
     hand = game.table.players[player].hand
     cards = hand.get_cards()[:5]  # Take first 5 cards    
-    game.player_action('BTN', PlayerAction.SEPARATE, cards=cards)
+    result = game.player_action('BTN', PlayerAction.SEPARATE, cards=cards)
+    assert result.success   # action was successful
+    assert result.advance_step   # all players have acted - time to advance
 
     # Step 3: Pre-Flop Bet
     game._next_step()  # Move to pre-flop bet

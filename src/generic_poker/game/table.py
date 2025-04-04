@@ -233,11 +233,12 @@ class Table:
 
     def deal_hole_cards(self, num_cards: int, face_up: bool = False, subset: str = "default") -> None:
         """
-        Deal hole cards to all active players.
-        
+        Deal hole cards to all active players and assign them to a specified subset.
+
         Args:
             num_cards: Number of cards to deal to each player
             face_up: Whether to deal the cards face up (default: False)
+            subset: Name of the subset to assign the cards to (default: "default")
         """
         active_players = [p for p in self.players.values() if p.is_active]
         
@@ -245,8 +246,10 @@ class Table:
             for player in active_players:
                 card = self.deck.deal_card(face_up=face_up)  # Pass face_up to Deck
                 if card:
-                    logger.info(f"  Dealt {card} to player {player.name}")
-                    player.hand.add_card(card)             
+                    logger.info(f"  Dealt {card} to player {player.name} in subset '{subset}'")
+                    player.hand.add_card(card)  # Add to the hand's card list
+                    if subset and subset != "default":  # Only assign to subset if specified and not "default"
+                        player.hand.add_to_subset(card, subset)     
                     
     def deal_community_cards(self, num_cards: int, subset: str = "default", face_up: bool = True) -> None:
         """

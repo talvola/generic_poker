@@ -559,6 +559,7 @@ class PlayerActionHandler:
         card_config = config["cards"][0]
         max_discard = card_config.get("number", 0)
         min_discard = card_config.get("min_number", 0 if is_draw else max_discard)
+        subset = card_config.get("hole_subset", "default")  # Get the subset for drawing
 
         if card_config.get("rule", "none") != "matching ranks":
             if len(cards) < min_discard or len(cards) > max_discard or any(card not in player.hand.cards for card in cards):
@@ -602,6 +603,9 @@ class PlayerActionHandler:
                 draw_amount = len(self.game.table.deck.cards)
             new_cards = self.game.table.deck.deal_cards(draw_amount)
             player.hand.add_cards(new_cards)
+            if subset and subset != "default":  # Assign new cards to the specified subset
+                for card in new_cards:
+                    player.hand.add_to_subset(card, subset)
 
         return True
 

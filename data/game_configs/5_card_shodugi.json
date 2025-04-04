@@ -1,0 +1,172 @@
+{
+    "game": "5-Card Shodugi",
+    "references": [
+        "https://www.pokerchipforum.com/threads/abby99s-mixed-game-cards.14205/"
+    ],
+    "players": {
+        "min": 2,
+        "max": 7
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },        
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Initial Cards"
+        },
+        {
+            "separate": {
+                "cards": [
+                    {
+                        "hole_subset": "Holdem",
+                        "number": 2
+                    },
+                    {
+                        "hole_subset": "Badugi",
+                        "number": 3
+                    }
+                ]
+            },
+            "name": "Separate Hold'em and Badugi Hands"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "First Betting Round"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Flop"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Post-Flop Betting Round"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face down",
+                        "hole_subset": "Badugi"
+                    }
+                ]
+            },
+            "name": "Deal Extra Badugi Card"
+        },
+        {
+            "draw": {
+                "cards": [
+                    {
+                        "number": 4,
+                        "state": "face down",
+                        "hole_subset": "Badugi"
+                    }
+                ]
+            },
+            "name": "Badugi Draw"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 2,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Turn"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Turn Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal River"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "River Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "two hole cards from Hold'em subset and three community cards for Hold'em hand; four cards from Badugi subset for Badugi hand",
+        "bestHand": [
+            {
+                "name": "Hold'em Hand",
+                "evaluationType": "high",
+                "anyCards": 5,
+                "holeCardsAllowed": [
+                    {
+                        "hole_subsets": ["Holdem"]
+                    }
+                ]
+            },
+            {
+                "name": "Badugi Hand",
+                "evaluationType": "badugi",
+                "holeCards": 4,
+                "holeCardsAllowed": [
+                    {
+                        "hole_subsets": ["Badugi"]
+                    }
+                ]
+            }
+        ]
+    }
+}
