@@ -106,7 +106,9 @@ def test_sack_showdown():
     assert game.current_player.id == 'BTN'  # BTN first pre-flop
     actions = game.get_valid_actions('BTN')
     assert (PlayerAction.CALL, 10, 10) in actions
-    game.player_action('BTN', PlayerAction.CALL, 10)
+    result = game.player_action('BTN', PlayerAction.CALL, 10)
+    assert result.success   # action was successful
+    assert result.advance_step == False  # not time to go to next step yet
     # second part of the grouped action is discarding
     assert game.current_step == 2
     assert game.state == GameState.DRAWING
@@ -158,8 +160,12 @@ def test_sack_showdown():
     assert game.current_player.id == 'BB'  # still should be BTN acting
     actions = game.get_valid_actions('BB')
     assert (PlayerAction.DISCARD, 0, 4) in actions
+
     # each player will discard separate amount of cards - BB will do 0 (empty list?)
-    game.player_action('BB', PlayerAction.DISCARD, cards=[])
+    result = game.player_action('BB', PlayerAction.DISCARD, cards=[])
+    assert result.success   # action was successful
+    assert result.advance_step  # all players have bet/discarded
+    
     hand = game.table.players['BB'].hand
     assert len(hand.get_cards()) == initial_count  # no discards    
 

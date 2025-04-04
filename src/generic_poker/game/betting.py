@@ -311,7 +311,8 @@ class BettingManager(ABC):
         logger.debug(f"After bet: current_bet={self.current_bet}, "
                     f"last_raise_size={self.last_raise_size}, "
                     f"pot={self.pot.total}, "
-                    f"current_bets={[(pid, bet.amount) for pid, bet in self.current_bets.items()]}")
+#                    f"current_bets={[(pid, bet.amount) for pid, bet in self.current_bets.items()]}")
+                    f"current_bets={[(pid, bet.amount, 'acted' if bet.has_acted else 'not acted', 'blind' if bet.posted_blind else 'not blind') for pid, bet in self.current_bets.items()]}")
 
     def get_amount_to_add(self, player_id: str, proposed_total: int) -> int:
         """
@@ -373,7 +374,6 @@ class BettingManager(ABC):
         2. All active players have matched the current bet or are all-in
         """
         active_players = [p.id for p in self.table.players.values() if p.is_active]
-        logger.debug(f"Checking if round complete. Current bets: {[(pid, bet.amount, bet.has_acted) for pid, bet in self.current_bets.items()]}")
         
         if len(self.current_bets) != len(active_players):
             logger.debug("Round not complete - not all players acted")
@@ -405,16 +405,17 @@ class BettingManager(ABC):
             # Continue same round, preserve current bet but reset 'has_acted' flags
             current = self.current_bet
             # Keep all bets but reset has_acted for everyone, not just blinds
-            for bet in self.current_bets.values():
-                bet.has_acted = False
+            # Note: not sure if we want to do this if continuing a round - the blinds should not be set
+            #for bet in self.current_bets.values():
+            #    bet.has_acted = False
         else:
             # True new round (e.g., after dealing)
             self.current_bets.clear()
             current = 0
             self.betting_round += 1
             self.pot.end_betting_round()  # Start new Pot round
+            self.bring_in_posted = False  # Reset at the start of each betting round
         self.current_bet = current
-        self.bring_in_posted = False  # Reset at the start of each betting round
 
         logger.debug(f"Starting betting round {self.betting_round}: preserve_bet={preserve_current_bet}, "
                     f"current_bet={self.current_bet}, "

@@ -39,7 +39,10 @@ def get_player_action(game: Game, player: 'Player') -> Tuple[PlayerAction, int]:
 def get_discard_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Optional[List[Card]]]:
     """Prompt the current player to select cards to discard, or handle forced discards."""
     step = game.rules.gameplay[game.current_step]
-    discard_config = step.action_config["cards"][0]  # Assume one discard object for now
+    if step.action_type == GameActionType.GROUPED:
+        discard_config = step.action_config[game.action_handler.current_substep]
+    else:
+        discard_config = step.action_config["cards"][0]  # Assume one discard object for now
     
     # Check for forced discard
     if "rule" in discard_config:
@@ -181,39 +184,44 @@ def run_game(game: Game) -> None:
         while game.state != GameState.COMPLETE:
             display_game_state(game)
             step = game.rules.gameplay[game.current_step]
-            
+            print("Step:", step.name)
+            print("Action Type:", step.action_type)
+
+            # Handle non-player actions
             if step.action_type == GameActionType.DEAL:
-                input("\nPress Enter to proceed...")
-                game._next_step()
-            elif step.action_type == GameActionType.DISCARD and game.current_player:
-                action, amount, cards = get_discard_action(game, game.current_player)
-                result = game.player_action(game.current_player.id, action, amount, cards)
-                print(f"results: {result}")
-                if not result.success:
-                    print(f"Error: {result.error}")
-                elif result.advance_step:
-                    game._next_step()
-            elif step.action_type == GameActionType.EXPOSE and game.current_player:
-                action, amount, cards = get_expose_action(game, game.current_player)
-                result = game.player_action(game.current_player.id, action, amount, cards)
-                print(f"results: {result}")
-                if not result.success:
-                    print(f"Error: {result.error}")
-                elif result.advance_step:
-                    game._next_step()
-            elif step.action_type == GameActionType.DRAW:
                 input("\nPress Enter to proceed...")
                 game._next_step()
             elif step.action_type == GameActionType.BET and "type" in step.action_config and step.action_config["type"] in ["antes", "blinds"]:
                 input("\nPress Enter to post forced bets...")
                 game._next_step()
-            elif game.state == GameState.BETTING and game.current_player:
-                action, amount = get_player_action(game, game.current_player)
-                result = game.player_action(game.current_player.id, action, amount)
-                if not result.success:
-                    print(f"Error: {result.error}")
-                elif result.advance_step:
-                    game._next_step()
+            elif game.current_player:
+                # Inner loop to handle all subactions for the current player
+                while game.current_player:
+                    if step.action_type == GameActionType.GROUPED:
+                        action_dict = step.action_config[game.action_handler.current_substep]
+                        action_name = list(action_dict.keys())[0]  # This will be 'bet'
+                        action_type = GameActionType[action_name.upper()]  # Convert 'bet' -> 'BET'
+                    else:
+                        action_type = step.action_type
+
+                    if game.state == GameState.BETTING:
+                        action, amount = get_player_action(game, game.current_player)
+                        result = game.player_action(game.current_player.id, action, amount)
+                    elif action_type == GameActionType.DISCARD and game.current_player:
+                        action, amount, cards = get_discard_action(game, game.current_player)
+                        result = game.player_action(game.current_player.id, action, amount, cards)
+                    elif action_type == GameActionType.EXPOSE and game.current_player:
+                        action, amount, cards = get_expose_action(game, game.current_player)
+                        result = game.player_action(game.current_player.id, action, amount, cards)                                          
+                    else:
+                        print(f"Unhandled game state: {game.state}")
+                        break                        
+
+                    if not result.success:
+                        print(f"Error: {result.error}")
+
+                    if result.advance_step:
+                        game._next_step()
 
         # Display final state and results
         display_game_state(game)
