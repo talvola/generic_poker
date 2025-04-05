@@ -1,16 +1,16 @@
 """Deck implementation."""
 from typing import List, Optional, Set
 import random
+from enum import Enum, auto
 
 from .card import Card, Rank, Suit, Visibility, WildType
 from .containers import CardContainer
 
-from enum import Enum, auto
-
-class DeckType(Enum):
-    STANDARD = auto()
-    SHORT_TA = auto()   # for games like Royal Hold'em (T, J, Q, K, A)
-    SHORT_6A = auto()   # for games like Six-Plus Hold'em (6 - A)
+class DeckType(str, Enum):
+    """Types of poker decks."""
+    STANDARD = "standard"    # Full 52-card deck
+    SHORT_TA = "short_ta"    # T-A only (20 cards)
+    SHORT_6A = "short_6a"    # 6-A (36 cards)
 
 class Deck(CardContainer):
     """

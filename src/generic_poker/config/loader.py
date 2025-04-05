@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from generic_poker.core.card import Card, Rank, Suit, Visibility
+from generic_poker.core.deck import DeckType
 
 
 class BettingStructure(Enum):
@@ -225,16 +226,14 @@ class GameRules:
             raise ValueError("Maximum players must be >= minimum players")
             
         # Validate deck
-        if self.deck_type not in ['standard', 'short_6a', 'short_ta']:
+        if self.deck_type not in DeckType.__members__.values():
             raise ValueError(f"Invalid deck type: {self.deck_type}")
-            
-        # Map deck types to expected sizes
         deck_sizes = {
-            'standard': 52,
-            'short_6a': 36,
-            'short_ta': 20
+            DeckType.STANDARD: 52,
+            DeckType.SHORT_6A: 36,
+            DeckType.SHORT_TA: 20
         }
-        if self.deck_size != deck_sizes[self.deck_type]:
+        if self.deck_size != deck_sizes[DeckType(self.deck_type)]:
             raise ValueError(f"Invalid deck size {self.deck_size} for type {self.deck_type}")
 
         # Validate gameplay sequence

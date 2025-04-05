@@ -13,6 +13,7 @@ from generic_poker.game.betting import (
 )
 from generic_poker.game.bringin import BringInDeterminator, CardRule
 from generic_poker.core.card import Card, Visibility, WildType, Rank
+from generic_poker.core.deck import Deck, DeckType
 from generic_poker.evaluation.evaluator import EvaluationType, evaluator
 
 from generic_poker.evaluation.constants import HAND_SIZES
@@ -240,11 +241,18 @@ class Game:
                 f"Betting structure {structure} not allowed for {rules.game}"
             )
             
+        # Convert rules.deck_type string to DeckType enum
+        try:
+            deck_type = DeckType(rules.deck_type)
+        except ValueError:
+            deck_type = DeckType.STANDARD  # Default to STANDARD if invalid
+
         self.rules = rules
         self.table = Table(
             max_players=rules.max_players,
             min_buyin=min_buyin,
-            max_buyin=max_buyin
+            max_buyin=max_buyin,
+            deck_type=deck_type 
         )
 
         # Betting rules

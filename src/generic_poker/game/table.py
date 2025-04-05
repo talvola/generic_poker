@@ -5,7 +5,7 @@ from typing import List, Dict, Optional
 from enum import Enum
 
 from generic_poker.core.card import Card, Visibility
-from generic_poker.core.deck import Deck
+from generic_poker.core.deck import Deck, DeckType
 from generic_poker.core.hand import PlayerHand
 
 logger = logging.getLogger(__name__)
@@ -80,7 +80,7 @@ class Table:
         max_buyin: Maximum buy-in amount
     """
     
-    def __init__(self, max_players: int, min_buyin: int, max_buyin: int):
+    def __init__(self, max_players: int, min_buyin: int, max_buyin: int, deck_type: DeckType = DeckType.STANDARD):
         """
         Initialize a new table.
         
@@ -88,17 +88,18 @@ class Table:
             max_players: Maximum number of players allowed
             min_buyin: Minimum buy-in amount
             max_buyin: Maximum buy-in amount
+            deck_type: Type of deck to use (default: STANDARD)
         """
         self.max_players = max_players
         self.min_buyin = min_buyin
         self.max_buyin = max_buyin
-        
+        self.deck_type = deck_type  # Store the deck type
+  
         self.players: Dict[str, Player] = {}  # id -> Player
         self.button_pos: int = 0  # Index of button position
-        self.deck = Deck()
+        self.deck = Deck(deck_type=self.deck_type)
         self.discard_pile = Deck()  # New discard pile
         self.discard_pile.clear()  # Ensure it's empty
-#        self.community_cards: List[Card] = []
         self.community_cards: Dict[str, List[Card]] = {}
        
     def add_player(self, player_id: str, name: str, buyin: int) -> None:
@@ -303,9 +304,10 @@ class Table:
         return len(self.community_cards.get(subset, []))                    
 
     def clear_hands(self) -> None:
-        """Clear all player hands and community cards."""
+        """Clear all player hands, community cards, and reset the deck."""
         for player in self.players.values():
             player.hand.clear()
-        self.community_cards.clear()  # Clears the dictionary
+        self.community_cards.clear()
         self.discard_pile.clear()
-        self.deck = Deck()
+        self.deck = Deck(deck_type=self.deck_type)  # Use stored deck_type
+       
