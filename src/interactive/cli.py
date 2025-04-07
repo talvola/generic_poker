@@ -10,15 +10,14 @@ def get_player_action(game: Game, player: 'Player') -> Tuple[PlayerAction, int]:
     valid_actions = game.get_valid_actions(player.id)
     print(f"\n{player.name}'s Turn | Stack: ${player.stack}")
 
-    all_cards = player.hand.get_cards()
-    subsets = player.hand.subsets
+    # Display cards grouped by visibility
     print("Cards:")
-    for subset_name, subset_cards in subsets.items():
-        cards_str = " ".join(str(c) for c in subset_cards) if subset_cards else "None"
-        print(f"  {subset_name}: {cards_str}")
-    unassigned = [c for c in all_cards if not any(c in sc for sc in subsets.values())]
-    if unassigned:
-        print(f"  Unassigned: {' '.join(str(c) for c in unassigned)}")
+    hole_cards = [c for c in player.hand.get_cards() if c.visibility == Visibility.FACE_DOWN]
+    upcards = [c for c in player.hand.get_cards() if c.visibility == Visibility.FACE_UP]
+    if hole_cards:
+        print("  Hole Cards: " + " ".join(str(c) for c in hole_cards))
+    if upcards:
+        print("  Upcards: " + " ".join(str(c) for c in upcards))
 
     print("Options:")
     for i, (action, min_amt, max_amt) in enumerate(valid_actions, 1):
@@ -28,7 +27,7 @@ def get_player_action(game: Game, player: 'Player') -> Tuple[PlayerAction, int]:
             print(f"{i}: {action.value}")
         else:
             print(f"{i}: {action.value} ${min_amt}-${max_amt}")
-    
+
     while True:
         choice = input("Choose action (number): ").strip()
         if choice.isdigit() and 1 <= int(choice) <= len(valid_actions):
@@ -312,13 +311,14 @@ def run_game(game: Game) -> None:
         while game.state != GameState.COMPLETE:
             display_game_state(game)
             step = game.rules.gameplay[game.current_step]
-            print("Step:", step.name)
-            print("Action Type:", step.action_type)
 
             # Handle non-player actions
             if step.action_type == GameActionType.DEAL:
                 input("\nPress Enter to proceed...")
                 game._next_step()
+            elif step.action_type == GameActionType.REMOVE:
+                input("\nPress Enter to remove board cards...")
+                game._next_step()                
             elif step.action_type == GameActionType.BET and "type" in step.action_config and step.action_config["type"] in ["antes", "blinds"]:
                 input("\nPress Enter to post forced bets...")
                 game._next_step()
@@ -356,9 +356,7 @@ def run_game(game: Game) -> None:
                         print(f"Error: {result.error}")
 
                     if result.advance_step:
-                        print(f"Advancing to next step: from {action_type}")
                         game._next_step()
-                        print(f" to {game.rules.gameplay[game.current_step].action_type}")
                         break  # Exit inner loop to re-evaluate the new step in the outer loop
 
         # Display final state and results

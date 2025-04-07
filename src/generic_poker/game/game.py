@@ -16,7 +16,7 @@ from generic_poker.core.card import Card, Visibility, WildType, Rank
 from generic_poker.core.deck import Deck, DeckType
 from generic_poker.evaluation.evaluator import EvaluationType, evaluator
 
-from generic_poker.evaluation.constants import HAND_SIZES
+from generic_poker.evaluation.constants import HAND_SIZES, BASE_RANKS
 
 from generic_poker.game.action_result import ActionResult
 from generic_poker.game.player_action_handler import PlayerActionHandler
@@ -78,6 +78,7 @@ class HandResult:
     evaluation_type: str  # "high", "low", etc.
     hand_type: str = "Hand"  # from game config showdown
     community_cards: List[Card] = field(default_factory=list)  # Community cards if applicable
+    used_hole_cards: List[Card] = field(default_factory=list)  # Cards used in the hand
     rank: int = 0  # Internal rank value (lower is better for low games)
     
     def __str__(self) -> str:
@@ -95,14 +96,15 @@ class HandResult:
             "evaluation_type": self.evaluation_type,
             "hand_type": self.hand_type,
             "community_cards": [str(card) for card in self.community_cards],
+            "used_hole_cards": [str(card) for card in self.used_hole_cards],  # Added for Omaha Hi/Hi
             "rank": self.rank
-        }    
+        }
 
 @dataclass
 class GameResult:
     """Complete results of a poker hand."""
     pots: List[PotResult]  # Results for each pot
-    hands: Dict[str, HandResult]  # Hand results by player ID
+    hands: Dict[str, List[HandResult]]  # Hand results by player ID, now a list
     winning_hands: List[HandResult]  # List of winning hands (may be multiple)
     is_complete: bool = True  # Whether the hand played to completion
     
@@ -121,7 +123,7 @@ class GameResult:
         """String representation of the game result."""
         lines = [f"Game Result (Complete: {self.is_complete})"]
         lines.append(f"Total pot: ${self.total_pot}")
-        
+
         # Group pot results by type (high/low)
         pot_groups = {}
         for pot in self.pots:
@@ -129,23 +131,32 @@ class GameResult:
             if pot_type not in pot_groups:
                 pot_groups[pot_type] = []
             pot_groups[pot_type].append(pot)
-        
+
         # Display pot results by group
         lines.append("\nPot Results:")
         for pot_type, pots in pot_groups.items():
             lines.append(f"\n{pot_type} Pot Division:")
             for pot in pots:
                 lines.append(f"- {pot}")
-        
+
         # Create a mapping of hand type to all hands of that type
         all_hands_by_type = {}
         for player_id, player_hands in self.hands.items():
-            for hand in player_hands:
+            # Handle both list and dict cases for player_hands
+            if isinstance(player_hands, dict):
+                hands_iter = player_hands.values()
+            elif isinstance(player_hands, list):
+                hands_iter = player_hands
+            else:
+                raise ValueError(f"Unexpected type for player_hands: {type(player_hands)}")
+
+            for hand in hands_iter:
                 hand_type = getattr(hand, 'hand_type', 'Unspecified')
                 if hand_type not in all_hands_by_type:
                     all_hands_by_type[hand_type] = []
                 all_hands_by_type[hand_type].append(hand)
-        
+
+        # [Rest of the method remains unchanged]
         # Create a mapping of hand type to winning hands of that type
         winning_hands_by_type = {}
         for hand in self.winning_hands:
@@ -153,33 +164,31 @@ class GameResult:
             if hand_type not in winning_hands_by_type:
                 winning_hands_by_type[hand_type] = []
             winning_hands_by_type[hand_type].append(hand)
-        
+
         # Get winning hand player IDs by type
         winning_players_by_type = {}
         for hand_type, hands in winning_hands_by_type.items():
             winning_players_by_type[hand_type] = {hand.player_id for hand in hands}
-        
+
         # Display each hand type section
         for hand_type, all_hands in all_hands_by_type.items():
             lines.append(f"\n{hand_type}:")
-            
+
             # Winning hands for this type
             winning_hands = winning_hands_by_type.get(hand_type, [])
             if winning_hands:
                 lines.append("\tWinning Hands:")
                 for hand in winning_hands:
                     lines.append(f"\t\t- {hand}")
-            
+
             # Losing hands for this type
-            # Find hands that aren't in the winning hands
             winning_ids = winning_players_by_type.get(hand_type, set())
             losing_hands = [hand for hand in all_hands if hand.player_id not in winning_ids]
-            
             if losing_hands:
                 lines.append("\tLosing Hands:")
                 for hand in losing_hands:
                     lines.append(f"\t\t- {hand}")
-        
+
         return "\n".join(lines)
 
     def to_json(self) -> str:
@@ -508,6 +517,13 @@ class Game:
                 if self.auto_progress:  
                     self._next_step()
 
+            elif step.action_type == GameActionType.REMOVE:
+                logger.debug(f"Handling deal action: {step.action_config}")
+                self.state = GameState.DEALING
+                self._handle_remove(step.action_config)
+                if self.auto_progress:  
+                    self._next_step()                    
+
             # treating discard and draw (which is discard/draw) separately for now,
             # but could be refactored to be the same thing
             elif step.action_type == GameActionType.DISCARD:
@@ -562,7 +578,61 @@ class Game:
                 logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to community subset '{subset}' ({state})")
                 self.table.deal_community_cards(num_cards, subset=subset, face_up=face_up)               
                 
- 
+    def _handle_remove(self, config: Dict[str, Any]) -> None:
+        """Handle a remove action by removing board subsets based on river card ranks."""
+        # Validate the action type
+        if config.get("type") != "subset":
+            logger.warning(f"Unsupported remove type: {config.get('type')}")
+            return
+
+        # Get the criteria and subsets from the config
+        criteria = config.get("criteria")
+        subsets = config.get("subsets", ["Board 1", "Board 2", "Board 3"])  # Default if not specified
+
+        if not subsets:
+            logger.warning("No subsets specified for removal")
+            return
+
+        # For now, support only the tournament variation criteria
+        if criteria not in ["Lowest River Card", "lowest_river_card_unless_all_same"]:
+            logger.warning(f"Unsupported remove criteria: {criteria}")
+            return
+
+        # Collect river cards from each subset
+        river_cards = {}
+        for subset in subsets:
+            if subset in self.table.community_cards and len(self.table.community_cards[subset]) >= 5:
+                river_card = self.table.community_cards[subset][-1]  # Last card is the river
+                river_cards[subset] = river_card.rank
+            else:
+                logger.warning(f"Subset {subset} does not have enough cards for river removal")
+                continue
+
+        if not river_cards:
+            logger.warning("No valid subsets available for removal")
+            return
+
+        # Get all ranks
+        ranks = list(river_cards.values())
+        # Tournament rule: if all river cards have the same rank, keep all boards
+        if all(rank == ranks[0] for rank in ranks):
+            logger.info("All river cards have the same rank; no boards removed")
+            return
+
+        # Use BASE_RANKS to determine the actual rank position (lower index = higher rank)
+        # Convert Enum values to their string representation for comparison
+        rank_positions = {subset: BASE_RANKS.index(rank.value) for subset, rank in river_cards.items()}
+
+        # Find the lowest rank (highest index in BASE_RANKS)
+        max_position = max(rank_positions.values())
+        # Identify subsets to remove (those with the lowest rank)
+        to_remove = [subset for subset, position in rank_positions.items() if position == max_position]
+
+        # Remove the identified subsets
+        for subset in to_remove:
+            if subset in self.table.community_cards:
+                del self.table.community_cards[subset]
+                logger.info(f"Removed subset {subset} due to lowest river card rank")                 
                               
     def handle_forced_bets(self, bet_type: str):
         """Handle forced bets (antes or blinds) at the start of a hand."""
@@ -773,17 +843,13 @@ class Game:
         return active_players[0]
     
     def _handle_fold_win(self, active_players: List[Player]) -> None:
-        """Handle pot award when all but one player folds."""
         logger.info("All but one player folded - hand complete")
         
-        # Get total pot amount before awarding
         total_pot = self.betting.get_total_pot()
         
-        # Award the pot
         self.state = GameState.COMPLETE
         self.betting.award_pots(active_players)
         
-        # Create hand results only for active players (winners) but without showing cards
         hand_results = {}
         for player in active_players:
             hand_result = HandResult(
@@ -791,11 +857,14 @@ class Game:
                 cards=[],
                 hand_name="Not shown",
                 hand_description="Hand not shown - won uncontested",
-                evaluation_type="unknown"
+                evaluation_type="unknown",
+                hand_type="Uncontested"  # Optional: for clarity
             )
-            hand_results[player.id] = [hand_result]  # Wrap in a list
+            hand_results[player.id] = [hand_result]
         
-        # Create pot result
+        # Fix: Include all winning hands
+        winning_hands = [hand for player_hands in hand_results.values() for hand in player_hands]
+        
         pot_result = PotResult(
             amount=total_pot,
             winners=[p.id for p in active_players],
@@ -804,11 +873,10 @@ class Game:
             eligible_players=set(p.id for p in active_players)
         )
         
-        # Store the result
         self.last_hand_result = GameResult(
             pots=[pot_result],
             hands=hand_results,
-            winning_hands=list(hand_results.values())[0],  # First list of hands
+            winning_hands=winning_hands,  # Updated
             is_complete=True
         )
 
@@ -831,7 +899,7 @@ class Game:
         
         # Initialize structures for tracking results
         pot_results = []
-        hand_results = {}
+        hand_results = {}  # player_id -> {config_name: HandResult}
         winning_hands = []
         
         # Get total pot amount for tracking
@@ -852,39 +920,77 @@ class Game:
         logger.info(f"Showdown with {len(best_hand_configs)} possible hands to win")  
 
         # Process each hand configuration
-        for config_index, hand_config in enumerate(best_hand_configs):
-            config_name = hand_config.get('name', f"Configuration {config_index+1}")
-            eval_type = EvaluationType(hand_config.get('evaluationType', 'high'))
-            qualifier = hand_config.get('qualifier', None)
+        for config in best_hand_configs:
+            config_name = config.get('name', f"Configuration {len(hand_results)+1}")
+            eval_type = EvaluationType(config.get('evaluationType', 'high'))
+            qualifier = config.get('qualifier', None)
             
             logger.info(f"  Evaluating {config_name} with evaluation type {eval_type}")  
             if qualifier:
                 logger.info(f"    with qualifier {qualifier}")  
 
-            # Find best hands for this configuration
-            config_results = self._evaluate_hands_for_config(
-                active_players, 
-                hand_config, 
-                eval_type
-            )
-           
-            # Update the overall hand results
-            for player_id, result in config_results.items():
-                if player_id not in hand_results:
-                    hand_results[player_id] = []
+            config_results = {}
+            if 'usesUnusedFrom' in config:
+                # Handle configurations like "Remaining Two Cards"
+                ref_config_name = config['usesUnusedFrom']
+                for player in active_players:
+                    if player.id in hand_results and ref_config_name in hand_results[player.id]:
+                        ref_result = hand_results[player.id][ref_config_name]
+                        used_hole = ref_result.used_hole_cards
+                        all_hole = player.hand.get_cards()
+                        unused_hole = [c for c in all_hole if c not in used_hole]
+                        required_hole = config.get("holeCards", 2)
+                        required_community = config.get("communityCards", 0)
 
-                hand_results[player_id].append(result)
-                logger.info(f"  Player {player_id} has {result.hand_description}")  
+                        if len(unused_hole) < required_hole:
+                            logger.warning(f"Player {player.id} has insufficient unused hole cards for {config_name}")
+                            config_results[player.id] = None
+                            continue
+
+                        hand = unused_hole[:required_hole]  # Take required number of unused hole cards
+                        if required_community > 0:
+                            comm_cards = self.table.community_cards.get('default', [])
+                            if len(comm_cards) >= required_community:
+                                hand.extend(list(itertools.combinations(comm_cards, required_community))[0])
+
+                        evaluation = evaluator.evaluate_hand(hand, eval_type)
+
+                        from generic_poker.evaluation.hand_description import HandDescriber
+                        describer = HandDescriber(eval_type)
+                        result = HandResult(
+                            player_id=player.id,     
+                            cards=hand,                                                   
+                            hand_name=describer.describe_hand(hand),
+                            hand_description=describer.describe_hand_detailed(hand),
+                            hand_type=config_name,
+                            evaluation_type=eval_type.value,
+                            used_hole_cards=unused_hole[:required_hole]  # Used hole cards are the hand's hole cards
+                        )
+                        config_results[player.id] = result
+                    else:
+                        logger.warning(f"Referenced config '{ref_config_name}' not found for player {player.id}")
+                        config_results[player.id] = None
+            else:
+                # Normal evaluation for configurations like "High Hand"
+                config_results = self._evaluate_hands_for_config(active_players, config, eval_type)
+           
+            # Update hand_results with config_results
+            for player_id, result in config_results.items():
+                if result:  # Only store if there's a valid result
+                    if player_id not in hand_results:
+                        hand_results[player_id] = {}
+                    hand_results[player_id][config_name] = result
+                    logger.info(f"  Player {player_id} has {result.hand_description} for {config_name}")
             
             # Award pots for this configuration
             pot_winners, had_winners = self._award_pots_for_config(
                 active_players,
                 config_results,
                 eval_type,
-                hand_config,
+                config,
                 pot_percentage,
                 original_main_pot,
-                original_side_pots                
+                original_side_pots
             )
             had_any_winners = had_any_winners or had_winners
             
@@ -897,7 +1003,7 @@ class Game:
                 # Add winning hands to the list with proper type
                 for pot_result in pot_winners:
                     for winner_id in pot_result.winners:
-                        if winner_id in config_results:
+                        if winner_id in config_results and config_results[winner_id]:
                             winning_hand = config_results[winner_id]
                             winning_hand.hand_type = config_name
                             winning_hands.append(winning_hand)
@@ -961,7 +1067,7 @@ class Game:
                 # Also mark all hands as "winning" in this case
                 for player in active_players:
                     if player.id in hand_results:
-                        for hand in hand_results[player.id]:
+                        for hand in hand_results[player.id].values():
                             hand.hand_type = "Split (No Qualifier)"
                             winning_hands.append(hand)             
 
@@ -989,11 +1095,10 @@ class Game:
                         # Update the hand results
                         for player_id, result in alt_results.items():
                             if player_id not in hand_results:
-                                hand_results[player_id] = []
-                            
-                            # Set the hand_type attribute on the result
-                            result.hand_type = alt_name
-                            hand_results[player_id].append(result)
+                                hand_results[player_id] = {}
+                            if result:
+                                result.hand_type = alt_name
+                                hand_results[player_id][alt_name] = result
                         
                         # Award pots using the alternate evaluation
                         alt_winners, had_alt_winners = self._award_alternate_pots(
@@ -1010,7 +1115,7 @@ class Game:
                         # Add winning hands
                         for pot_result in alt_winners:
                             for winner_id in pot_result.winners:
-                                if winner_id in alt_results:
+                                if winner_id in alt_results and alt_results[winner_id]:
                                     winning_hand = alt_results[winner_id]
                                     winning_hand.hand_type = alt_name
                                     alt_winning_hands.append(winning_hand)
@@ -1022,7 +1127,7 @@ class Game:
         # Store the complete game result
         self.last_hand_result = GameResult(
             pots=awarded_pot_results,
-            hands=hand_results,
+            hands={pid: list(results.values()) for pid, results in hand_results.items()},
             winning_hands=winning_hands,
             is_complete=True
         )
@@ -1099,7 +1204,6 @@ class Game:
         from generic_poker.evaluation.hand_description import HandDescriber
         
         hand_type = hand_config.get('name', "Hand")
-
         describer = HandDescriber(eval_type)
         results = {}
 
@@ -1110,7 +1214,7 @@ class Game:
 
         for player in players:
             # Find the player's best hand for this configuration
-            best_hand = self._find_best_hand_for_player(
+            best_hand, used_hole_cards = self._find_best_hand_for_player(
                 player,
                 self.table.community_cards,
                 hand_config,
@@ -1118,7 +1222,7 @@ class Game:
             )
           
             # allow an empty hand to play if it has value
-            if zero_cards_pip_value is not None and not best_hand:
+            if not best_hand and zero_cards_pip_value is not None:
                 logger.info(f"Player {player.name} has no valid hand for {hand_type}, but zeroCardsPipValue is set to {zero_cards_pip_value}. Assigning a default hand.")
                 # create results
                 results[player.id] = HandResult(
@@ -1128,16 +1232,17 @@ class Game:
                     hand_description="No Cards",
                     hand_type=hand_type,
                     evaluation_type=eval_type.value,
-                    community_cards=self.table.community_cards
+                    community_cards=self.table.community_cards,
+                    used_hole_cards=[]  # No hole cards used for an empty hand
                 )
 
-                return results
-            
+                continue
+
             if not best_hand:
                 logger.info(f"Player {player.name} has no valid hand for {hand_type}. Skipping...")
                 continue
             
-            # Create hand result
+            # Create hand result with used_hole_cards
             results[player.id] = HandResult(
                 player_id=player.id,
                 cards=best_hand,
@@ -1145,7 +1250,8 @@ class Game:
                 hand_description=describer.describe_hand_detailed(best_hand),
                 hand_type=hand_type,
                 evaluation_type=eval_type.value,
-                community_cards=self.table.community_cards
+                community_cards=self.table.community_cards,
+                used_hole_cards=used_hole_cards
             )
         
         return results
@@ -1520,18 +1626,20 @@ class Game:
         community_cards: Dict[str, List[Card]],
         showdown_rules: dict,
         eval_type: str
-    ) -> List[Card]:
+    ) -> tuple[List[Card], List[Card]]:
         """
         Find the best possible hand for a player according to the game rules.
-        
+
         Args:
             player: The player
             community_cards: Available community cards
             showdown_rules: Showdown configuration from game rules
             eval_type: Type of hand evaluation to use
-            
+
         Returns:
-            List of cards representing the player's best hand
+            Tuple of (best_hand, used_hole_cards) where:
+                - best_hand: List of cards representing the player's best hand
+                - used_hole_cards: List of hole cards used in the best hand
         """
         from generic_poker.evaluation.evaluator import evaluator
         import itertools
@@ -1550,24 +1658,24 @@ class Game:
             hole_cards = player.hand.get_subset(hole_subset)
             if not hole_cards:
                 logger.warning(f"No cards in hole subset '{hole_subset}' for player {player.id}")
-                return []
+                return [], []
         else:
             # Use all cards if no subset specified or default (e.g., Hold'em, Stud)
             hole_cards = player.hand.get_cards()
             if not hole_cards:
                 logger.warning(f"No cards in hand for player {player.id}")
-                return []
+                return [], []
             
         if not hole_cards and "minimumCards" in showdown_rules:
             minimum_cards = showdown_rules["minimumCards"]
             if minimum_cards > 0:
                 logger.warning(f"Player {player.id} has 0 cards, needs {minimum_cards} to qualify")
-                return []
+                return [], []
             # Handle 0-card variants
             if "zeroCardsPipValue" in showdown_rules and eval_type.startswith("low_pip"):
                 # For low pip evaluation, return an empty hand with a pip value
                 # The evaluator will use zeroCardsPipValue (e.g., 0 for best low)
-                return []            
+                return [], []
         
         # # If no community cards exist (e.g., Stud), use hole cards only
         # if not community_cards:
@@ -1589,6 +1697,7 @@ class Game:
             self.apply_wild_cards(player, comm_cards=comm_cards, wild_rules=showdown_rules["wildCards"])
 
         best_hand = None
+        best_used_hole_cards = []
 
         # Handle new "combinations" syntax under "bestHand"
         if "combinations" in showdown_rules:
@@ -1620,17 +1729,19 @@ class Game:
                         hand = list(hole_combo) + list(comm_combo)
                         if best_hand is None or evaluator.compare_hands(hand, best_hand, eval_type) > 0:
                             best_hand = hand
+                            best_used_hole_cards = list(hole_combo)
 
             if best_hand:
-                return best_hand
+                return best_hand, best_used_hole_cards
             else:
                 logger.warning(f"No valid hand combinations for player {player.id}")
-                return []
+                return [], []
                        
         # Handle different types of hand compositions
         if "anyCards" in showdown_rules:
             total_cards = showdown_rules["anyCards"]
             allowed_combinations = showdown_rules.get("holeCardsAllowed", [])
+            all_cards = hole_cards + comm_cards
 
             if allowed_combinations:
                 # Evaluate each allowed combination
@@ -1644,20 +1755,20 @@ class Game:
                             hand = list(hand_combo)
                             if best_hand is None or evaluator.compare_hands(hand, best_hand, eval_type) > 0:
                                 best_hand = hand            
-    
+                                best_used_hole_cards = [c for c in hand if c in hole_cards]
+
             else:
-                # Fallback to all hole cards
-                all_cards = hole_cards + comm_cards
                 if len(all_cards) >= total_cards:
                     for hand_combo in itertools.combinations(all_cards, total_cards):
                         hand = list(hand_combo)
                         if best_hand is None or evaluator.compare_hands(hand, best_hand, eval_type) > 0:
                             best_hand = hand
+                            best_used_hole_cards = [c for c in hand if c in hole_cards]
             
             # If there are no community cards or exactly the right number of hole cards,
             # we can just use the hole cards (straight poker case)
             if not comm_cards and len(hole_cards) == total_cards:
-                return hole_cards
+                return hole_cards, hole_cards
             
             # if we are padding, then don't check the length of all_cards against total_cards
             # because we want to allow padding to fill in the gaps
@@ -1668,9 +1779,8 @@ class Game:
                     f"Has {len(hole_cards)} hole cards and {len(comm_cards)} community cards "
                     f"(need {total_cards} total)"
                 )
-                return []
-            
-            return best_hand or [] 
+                return [], []
+            return best_hand or [], best_used_hole_cards
                    
         # Handle cases with multiple possible combinations of hole and community cards
         elif "holeCards" in showdown_rules and isinstance(showdown_rules["holeCards"], list):
@@ -1708,16 +1818,52 @@ class Game:
                         else:
                             if evaluator.compare_hands(hand, best_hand, eval_type) > 0:
                                 best_hand = hand
+                                best_used_hole_cards = list(hole_combo)
 
             # If we found a valid hand, return it
             if best_hand:
-                return best_hand
+                return best_hand, best_used_hole_cards
             else:
                 logger.warning(
                     f"No valid hand combinations for player {player.id}"
                 )
-                return []            
-        
+                return [], []         
+            
+        # Handle cases with community card combinations
+        elif "holeCards" in showdown_rules and "communityCardCombinations" in showdown_rules:
+            combinations = showdown_rules["communityCardCombinations"]
+            required_hole = showdown_rules.get("holeCards", 0)
+            total_cards = showdown_rules.get("totalCards", 5)  # Default to 5 if not specified
+            required_community = total_cards - required_hole
+
+            for combo in combinations:
+                # Collect cards from all subsets in this combination
+                comm_cards = []
+                for subset in combo:
+                    if subset not in community_cards:
+                        logger.debug(f"Subset '{subset}' not available for combination {combo} for player {player.id}")
+                        break
+                    comm_cards.extend(community_cards[subset])
+                else:  # Proceed only if all subsets were found (no break occurred)
+                    if len(comm_cards) < required_community:
+                        logger.warning(f"Combination {combo} has {len(comm_cards)} cards, need {required_community} for player {player.id}")
+                        continue
+
+                    # Generate combinations
+                    hole_combos = list(itertools.combinations(hole_cards, required_hole))
+                    community_combos = list(itertools.combinations(comm_cards, required_community))
+
+                    # Evaluate all combinations for this combination
+                    for hole_combo in hole_combos:
+                        for comm_combo in community_combos:
+                            hand = list(hole_combo) + list(comm_combo)
+                            if best_hand is None or evaluator.compare_hands(hand, best_hand, eval_type) > 0:
+                                best_hand = hand  
+                                best_used_hole_cards = list(hole_combo)                            
+
+            logger.debug(f'Best hand found for player {player.id} using showdown rules: {best_hand}')
+            return best_hand if best_hand else [], best_used_hole_cards
+
         # Handle cases with specific requirements for hole and/or community cards
         elif "holeCards" in showdown_rules or "communityCards" in showdown_rules:
             logger.debug(f"Evaluating showdown rules for player {player.id} with hole cards: {hole_cards} and community cards: {comm_cards}")
@@ -1730,9 +1876,8 @@ class Game:
                 required_hole = len(hole_cards)  # Use all available hole cards
                 # Dynamically calculate community cards based on eval_type hand size
                 total_cards_needed = HAND_SIZES.get(eval_type, 5)  # Default to 5 if eval_type not found
-                required_community = max(0, total_cards_needed - required_hole)
                 # Cap by available community cards
-                required_community = min(required_community, len(comm_cards))
+                required_community = min(max(0, total_cards_needed - required_hole), len(comm_cards))
             else:
                 required_hole = int(required_hole)  # Ensure numeric for other cases
 
@@ -1748,7 +1893,7 @@ class Game:
                     f"Has {len(hole_cards)} hole cards (need {required_hole}) and "
                     f"{len(comm_cards)} community cards (need {required_community})"
                 )
-                return []
+                return [], []
             
             # Generate combinations only for categories with requirements > 0
             # use the minimum of the cards we have and the required list, since padding will take care of the rest
@@ -1768,12 +1913,14 @@ class Game:
                         # Use compare_hands to determine which is better
                         if evaluator.compare_hands(hand, best_hand, eval_type) > 0:
                             best_hand = hand
+                            best_used_hole_cards = list(hole_combo)
             
             logger.debug(f'Best hand found for player {player.id} using showdown rules: {best_hand}')
-            return best_hand
+            return best_hand if best_hand else [], best_used_hole_cards
               
         # Default: just use all hole cards
-        return hole_cards
+        return hole_cards, hole_cards
+
 
     def _find_winners(
         self,

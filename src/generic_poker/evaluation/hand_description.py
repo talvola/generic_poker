@@ -24,6 +24,8 @@ class HandDescriber:
         EvaluationType.GAME_21_6: 'all_card_hands_description_21_6.csv',
         # Wild card hands
         EvaluationType.HIGH_WILD: 'all_card_hands_description_high_wild_bug.csv',
+        # Less than 5 cards
+        EvaluationType.TWO_CARD_HIGH: 'all_card_hands_description_two_card_high.csv',       
     }
 
     def __init__(self, eval_type: EvaluationType):
@@ -226,6 +228,12 @@ class HandDescriber:
                 return self._describe_four_of_kind(cards_used)
             elif hand_result.rank == 9:  # Straight Flush
                 return self._describe_straight_flush(cards_used)
+            
+        elif self.eval_type in EvaluationType.TWO_CARD_HIGH:
+            if hand_result.rank == 2:  # High Card
+                return self._describe_high_card(cards_used)            
+            elif hand_result.rank == 1:  # Pair            
+                return self._describe_pair(cards_used)
                 
         # Default to basic description if no detailed version available
         return basic_desc

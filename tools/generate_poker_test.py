@@ -86,7 +86,7 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
         game_rules = json.load(f)
 
     file_base_name = os.path.splitext(os.path.basename(json_file_path))[0]
-    game_name = game_rules["game"].replace(" ", "_").replace("-","_").replace("'","_").replace("'","_").lower()
+    game_name = game_rules["game"].replace(" ", "_").replace("-","_").replace("'","_").replace("'","_").replace("/","_").lower()
     uses_blinds = any(step.get("bet", {}).get("type") == "blinds" for step in game_rules["gamePlay"])
     player_ids = ["BTN", "SB", "BB"] if uses_blinds else ["p1", "p2", "p3"]
     action_order = ["SB", "BB", "BTN"] if uses_blinds else player_ids

@@ -1,0 +1,180 @@
+{
+    "game": "Oklahoma",
+    "references": [
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
+        "https://www.barge.org/rulebook/oklahoma.html"
+    ],
+    "players": {
+        "min": 2,
+        "max": 9
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 4,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Pre-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Board 1"
+                    },
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Board 2"
+                    },
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Board 3"
+                    }
+                ]
+            },
+            "name": "Deal Flop"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Post-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 1"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 2"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 3"
+                    }
+                ]
+            },
+            "name": "Deal Turn"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Turn Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 1"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 2"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 3"
+                    }
+                ]
+            },
+            "name": "Deal River"
+        },
+        {
+            "remove": {
+                "type": "subset",
+                "criteria": "lowest_river_card_unless_all_same",
+                "subsets": ["Board 1", "Board 2", "Board 3"]
+            },
+            "name": "Remove Board Subsets with Lowest River Card Unless All Same"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "River Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "all cards",
+        "bestHand": [
+            {
+                "name": "High",
+                "evaluationType": "high",
+                "holeCards": 2,
+                "communityCards": 3,
+                "communityCardCombinations": [
+                    ["Board 1"],
+                    ["Board 2"],
+                    ["Board 3"]
+                ]
+            },
+            {
+                "name": "Low",
+                "evaluationType": "a5_low",
+                "holeCards": 2,
+                "communityCards": 3,
+                "communityCardCombinations": [
+                    ["Board 1"],
+                    ["Board 2"],
+                    ["Board 3"]
+                ],
+                "qualifier": [
+                    1,
+                    56
+                ]
+            }
+        ]
+    }
+}

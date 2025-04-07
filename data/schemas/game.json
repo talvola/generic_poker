@@ -116,14 +116,18 @@
               "required": ["hole_subsets"]
           }
         },
-        "communityCardsAllowed": {
+        "communityCardCombinations": {
           "type": "array",
           "items": {
-            "type": "string",
-            "description": "List of allowed community card subsets (simplified from cardSubsetAllowed)"
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Name of a community card subset (e.g., 'Board 1', 'Top Flop')"
+            },
+            "description": "A combination of community card subsets to be used together"
           },
-          "description": "Simplified list of allowed community card subsets"
-        },   
+          "description": "List of allowed combinations of community card subsets. Each inner array represents a valid combination of subsets whose cards are combined for hand evaluation."
+        },
         "wildCards": {
           "type": "array",
           "description": "List of wild card rules that apply to this hand evaluation",
@@ -209,6 +213,10 @@
             "additionalProperties": false
           },
           "description": "List of allowed combinations of hole and community cards to form the hand"
+        },
+        "usesUnusedFrom": {
+          "type": "string",
+          "description": "Name of the hand configuration from which to use the unused hole cards"
         }
       },       
       "required": ["evaluationType"],
@@ -380,8 +388,32 @@
     },          
     "remove": {
       "type": "object",
-      "additionalProperties": true,
-      "description": "Remove cards action"
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Descriptive name of the remove step"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["subset"],
+          "description": "Type of removal (e.g., 'subset' for community card subsets)"
+        },
+        "criteria": {
+          "type": "string",
+          "enum": ["lowest_river_card_unless_all_same"],
+          "description": "Criteria for determining which subsets to remove"
+        },
+        "subsets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of community card subsets to evaluate for removal"
+        }
+      },
+      "required": ["type", "criteria", "subsets"],
+      "additionalProperties": false,
+      "description": "Remove cards action configuration"
     },
     "expose": {
       "type": "object",
@@ -548,17 +580,20 @@
             "type": "array",
             "description": "List of actions to execute together for each player in turn order",
             "items": {
-              "oneOf": [
-                { "$ref": "#/definitions/bet" },
-                { "$ref": "#/definitions/deal" },
-                { "$ref": "#/definitions/discard" },
-                { "$ref": "#/definitions/draw" },
-                { "$ref": "#/definitions/remove" },
-                { "$ref": "#/definitions/expose" },
-                { "$ref": "#/definitions/pass" },
-                { "$ref": "#/definitions/separate" },
-                { "$ref": "#/definitions/showdown" }
-              ]
+              "type": "object",
+              "maxProperties": 1,
+              "properties": {
+                "bet": { "$ref": "#/definitions/bet" },
+                "deal": { "$ref": "#/definitions/deal" },
+                "discard": { "$ref": "#/definitions/discard" },
+                "draw": { "$ref": "#/definitions/draw" },
+                "remove": { "$ref": "#/definitions/remove" },
+                "expose": { "$ref": "#/definitions/expose" },
+                "pass": { "$ref": "#/definitions/pass" },
+                "separate": { "$ref": "#/definitions/separate" },
+                "showdown": { "$ref": "#/definitions/showdown" }
+              },
+              "additionalProperties": false
             }
           },          
           "bet": { "$ref": "#/definitions/bet" },

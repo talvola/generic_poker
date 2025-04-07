@@ -13,7 +13,7 @@
     ],
     "forcedBets": {
         "style": "bring-in",
-        "rule": "low card"
+        "rule": "high card"
     },
     "gamePlay": [
         {

@@ -304,6 +304,11 @@ def test_game_results_showdown():
     # Only one hand in 2-11 Poker (high hand)
     assert len(hand) == 1 
 
+    hand = results.hands['BB']
+    print(f"hand type: {type(hand)}, value: {hand}")
+    assert len(hand) == 1
+    assert "Full House" in hand[0].hand_name
+
     assert "Full House" in hand[0].hand_name
     assert "Full House, Jacks over Tens" in hand[0].hand_description
     
