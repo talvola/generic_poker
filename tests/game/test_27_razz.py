@@ -181,8 +181,8 @@ def test_game_bringin():
                                          'p2': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
                                          'p3': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False)}
     # also test total_bets and total_antes from Pot
-    assert game.betting.pot.total_bets == {'round_2_p1': 1, 'round_2_p2': 1, 'round_2_p3': 1}
-    assert game.betting.pot.total_antes == {'round_2_p1': 1, 'round_2_p2': 1, 'round_2_p3': 1}
+    assert game.betting.pot.total_bets == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 1}
+    assert game.betting.pot.total_antes == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 1}
 
     # Step 1: Deal Hole Cards (2 down, 1 up)
     game._next_step()
@@ -202,8 +202,8 @@ def test_game_bringin():
                                          'p2': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
                                          'p3': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False)}
     # also test total_bets and total_antes from Pot
-    assert game.betting.pot.total_bets == {'round_2_p1': 1, 'round_2_p2': 1, 'round_2_p3': 1}
-    assert game.betting.pot.total_antes == {'round_2_p1': 1, 'round_2_p2': 1, 'round_2_p3': 1}
+    assert game.betting.pot.total_bets == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 1}
+    assert game.betting.pot.total_antes == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 1}
 
     # Step 2: Post Bring-In
     game._next_step()
@@ -239,8 +239,8 @@ def test_game_bringin():
                                          'p3': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
                                          'p2': PlayerBet(amount=4, has_acted=False, posted_blind=True, is_all_in=False)}
     # also test total_bets and total_antes from Pot
-    assert game.betting.pot.total_bets == {'round_2_p1': 1, 'round_2_p2': 4, 'round_2_p3': 1}
-    assert game.betting.pot.total_antes == {'round_2_p1': 1, 'round_2_p2': 1, 'round_2_p3': 1}    
+    assert game.betting.pot.total_bets == {'round_1_p1': 1, 'round_1_p2': 4, 'round_1_p3': 1}
+    assert game.betting.pot.total_antes == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 1}    
 
     # Step 3: Third Street Bet (others can act)
     game._next_step()

@@ -143,6 +143,7 @@ class Pot:
         self.is_all_in.clear()
         self.ante_total = 0
         self._create_new_round()
+        self.current_round = 1
 
     @property
     def total(self, exclude_antes: bool = False) -> int:
