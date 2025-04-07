@@ -420,7 +420,16 @@ class BettingManager(ABC):
         logger.debug(f"Starting betting round {self.betting_round}: preserve_bet={preserve_current_bet}, "
                     f"current_bet={self.current_bet}, "
                     f"current_bets={[(pid, bet.amount, 'acted' if bet.has_acted else 'not acted', 'blind' if bet.posted_blind else 'not blind') for pid, bet in self.current_bets.items()]}")
-        
+     
+    def new_hand(self) -> None:
+        """Start a new hand."""
+        self.current_bets.clear()
+        self.current_bet = 0
+        self.betting_round = 0
+        self.bring_in_posted = False
+        self.last_raise_size = 0  # Reset last raise size for new hand
+        self.pot.new_hand()  # Reset pot for new hand
+        logger.debug("New hand started: current_bet=0, betting_round=0, current_bets cleared")
 
 class LimitBettingManager(BettingManager):
     """Betting manager for limit games."""

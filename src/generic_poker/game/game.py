@@ -394,7 +394,7 @@ class Game:
             
         # Reset state
         self.table.clear_hands()
-        self.betting.new_round(preserve_current_bet=False)
+        self.betting.new_hand()
 
         self.current_step = 0
         self.state = GameState.BETTING 

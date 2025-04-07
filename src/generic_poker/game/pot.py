@@ -135,6 +135,15 @@ class Pot:
         
         logger.debug(f"\nStarting round {self.current_round}")
         
+    def new_hand(self):
+        # re-initialize pots for next hand
+        self.round_pots.clear()
+        self.total_bets.clear()
+        self.total_antes.clear()
+        self.is_all_in.clear()
+        self.ante_total = 0
+        self._create_new_round()
+
     @property
     def total(self, exclude_antes: bool = False) -> int:
         current = self.round_pots[-1]

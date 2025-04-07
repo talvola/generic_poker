@@ -1,0 +1,162 @@
+{
+    "game": "Omaha 3-2-1 Hi/Lo",
+    "references": [
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
+    ],
+    "players": {
+        "min": 2,
+        "max": 9
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 4,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Pre-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Top Flop"
+                    },
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Middle Flop"
+                    },
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Bottom Flop"
+                    }
+                ]
+            },
+            "name": "Deal Flop"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Post-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Top Turn"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Botton Turn"
+                    }
+                ]
+            },
+            "name": "Deal Turn"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Turn Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "River"
+                    }
+                ]
+            },
+            "name": "Deal River"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "River Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "all cards",
+        "bestHand": [
+            {
+                "name": "High Hand",
+                "evaluationType": "high",
+                "holeCards": 2,
+                "communityCards": 3,
+                "communityCardCombinations": [
+                    ["Top Flop", "Top Turn", "River"],
+                    ["Top Flop", "Bottom Turn", "River"],
+                    ["Middle Flop", "Top Turn", "River"],
+                    ["Middle Flop", "Bottom Turn", "River"],
+                    ["Bottom Flop", "Top Turn", "River"],
+                    ["Bottom Flop", "Bottom Turn", "River"]
+                ]
+            },
+            {
+                "name": "Low Hand",
+                "evaluationType": "a5_low",
+                "holeCards": 2,
+                "communityCards": 3,
+                "communityCardCombinations": [
+                    ["Top Flop", "Top Turn", "River"],
+                    ["Top Flop", "Bottom Turn", "River"],
+                    ["Middle Flop", "Top Turn", "River"],
+                    ["Middle Flop", "Bottom Turn", "River"],
+                    ["Bottom Flop", "Top Turn", "River"],
+                    ["Bottom Flop", "Bottom Turn", "River"]
+                ],
+                "qualifier": [
+                    1,
+                    56
+                ]                
+            }          
+        ]
+    }
+}
