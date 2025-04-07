@@ -1870,6 +1870,7 @@ class Game:
             # Get requirements (default to 0 if not specified)
             required_hole = showdown_rules.get("holeCards", 0)
             required_community = showdown_rules.get("communityCards", 0)
+            allowed_combinations = showdown_rules.get("holeCardsAllowed", [])  # Add support for holeCardsAllowed
 
             # Special case for "all" hole cards
             if required_hole == "all":
@@ -1885,6 +1886,16 @@ class Game:
                 f"Required hole cards: {required_hole}, Required community cards: {required_community} "
                 f"(player {player.id} has {len(hole_cards)} hole and {len(comm_cards)} community)"
             )
+
+            # Filter hole cards based on allowed subsets if specified
+            if allowed_combinations:
+                usable_hole_cards = []
+                for combo in allowed_combinations:
+                    for subset_name in combo["hole_subsets"]:
+                        usable_hole_cards.extend(player.hand.get_subset(subset_name))
+                hole_cards = usable_hole_cards  # Restrict to allowed subsets
+            else:
+                hole_cards = hole_cards  # Use all hole cards if no restriction            
             
             # Ensure we have enough cards to evaluate (if padding, we will get enough so OK)
             if (len(hole_cards) < required_hole or len(comm_cards) < required_community) and not padding:
