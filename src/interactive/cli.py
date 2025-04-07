@@ -81,6 +81,13 @@ def get_discard_action(game: Game, player: Player) -> Tuple[PlayerAction, int, O
     if not hand:
         print(f"\n{player.name}'s Turn | No cards to discard")
         return PlayerAction.DISCARD, 0, []
+    
+    valid_actions = game.get_valid_actions(player.id)
+    discard_action = next((a for a in valid_actions if a[0] == PlayerAction.DISCARD), None)
+    if not discard_action:
+        print(f"\n{player.name}'s Turn | Discarding not allowed")
+        return PlayerAction.DISCARD, 0, []
+    _, min_discards, max_discards = discard_action    
 
     print(f"\n{player.name}'s Turn | Stack: ${player.stack}")
     print("Your cards:")
