@@ -1,11 +1,11 @@
 {
-    "game": "Draw-Deucey - Triple Draw",
+    "game": "Showmaha 8",
     "references": [
         "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
-    ],        
+    ],    
     "players": {
         "min": 2,
-        "max": 6
+        "max": 9
     },
     "deck": {
         "type": "standard",
@@ -28,7 +28,7 @@
                 "location": "player",
                 "cards": [
                     {
-                        "number": 5,
+                        "number": 4,
                         "state": "face down"
                     }
                 ]
@@ -39,10 +39,22 @@
             "bet": {
                 "type": "small"
             },
-            "name": "Pre-Draw Bet"
+            "name": "Pre-Flop Bet"
         },
         {
-            "draw": {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Flop"
+        },
+        {
+            "expose": {
                 "cards": [
                     {
                         "number": 2,
@@ -50,47 +62,49 @@
                     }
                 ]
             },
-            "name": "First Draw"
+            "name": "Expose Two Cards"
         },
         {
             "bet": {
                 "type": "small"
             },
-            "name": "Post-Draw Bet #1"
+            "name": "Post-Flop Bet"
         },
         {
-            "draw": {
+            "deal": {
+                "location": "community",
                 "cards": [
                     {
-                        "number": 2,
-                        "state": "face down"
+                        "number": 1,
+                        "state": "face up"
                     }
                 ]
             },
-            "name": "Second Draw"
+            "name": "Deal Turn"
         },
         {
             "bet": {
                 "type": "big"
             },
-            "name": "Post-Draw Bet #2"
+            "name": "Turn Bet"
         },
         {
-            "draw": {
+            "deal": {
+                "location": "community",
                 "cards": [
                     {
-                        "number": 2,
-                        "state": "face down"
+                        "number": 1,
+                        "state": "face up"
                     }
                 ]
             },
-            "name": "Third Draw"
+            "name": "Deal River"
         },
         {
             "bet": {
                 "type": "big"
             },
-            "name": "Post-Draw Bet #3"
+            "name": "River Bet"
         },
         {
             "showdown": {
@@ -102,20 +116,22 @@
     "showdown": {
         "order": "clockwise",
         "startingFrom": "dealer",
-        "cardsRequired": "all cards",
+        "cardsRequired": "two hole cards, three community cards",
         "bestHand": [
             {
-                "name": "High",
+                "name": "High Hand",
                 "evaluationType": "high",
-                "anyCards": 5
+                "holeCards": 2,
+                "communityCards": 3
             },
             {
-                "name": "2-7 Lowball",
-                "evaluationType": "27_low",
-                "anyCards": 5,
+                "name": "Low Hand",
+                "evaluationType": "a5_low",
+                "holeCards": 2,
+                "communityCards": 3,
                 "qualifier": [
                     1,
-                    246
+                    56
                 ]
             }
         ]

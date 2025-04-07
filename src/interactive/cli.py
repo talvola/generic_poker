@@ -123,6 +123,13 @@ def get_expose_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Op
         print(f"\n{player.name}'s Turn | No cards to expose")
         return PlayerAction.EXPOSE, 0, []
 
+    valid_actions = game.get_valid_actions(player.id)
+    expose_action = next((a for a in valid_actions if a[0] == PlayerAction.EXPOSE), None)
+    if not expose_action:
+        print(f"\n{player.name}'s Turn | Exposing not allowed")
+        return PlayerAction.EXPOSE, 0, []
+    _, min_expose, max_expose = expose_action
+
     print(f"\n{player.name}'s Turn | Stack: ${player.stack}")
     print("Your cards:")
     subsets = player.hand.subsets
@@ -303,10 +310,11 @@ def get_draw_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Opti
 def run_game(game: Game) -> None:
     """Run an interactive poker game."""
     print(f"Starting {game.rules.game} Game")
+
+    initial_stacks = {pid: p.stack for pid, p in game.table.players.items()}
     game.start_hand()
 
     while True:
-        initial_stacks = {pid: p.stack for pid, p in game.table.players.items()}
         
         while game.state != GameState.COMPLETE:
             display_game_state(game)
@@ -389,6 +397,7 @@ def run_game(game: Game) -> None:
             break
         
         # Start new hand with the updated button position
+        initial_stacks = {pid: p.stack for pid, p in game.table.players.items()}
         game.start_hand()
     
     display_game_state(game)
