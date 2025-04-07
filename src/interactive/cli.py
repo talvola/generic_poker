@@ -10,14 +10,33 @@ def get_player_action(game: Game, player: 'Player') -> Tuple[PlayerAction, int]:
     valid_actions = game.get_valid_actions(player.id)
     print(f"\n{player.name}'s Turn | Stack: ${player.stack}")
 
-    # Display cards grouped by visibility
+    # Display cards grouped by subset
     print("Cards:")
-    hole_cards = [c for c in player.hand.get_cards() if c.visibility == Visibility.FACE_DOWN]
-    upcards = [c for c in player.hand.get_cards() if c.visibility == Visibility.FACE_UP]
-    if hole_cards:
-        print("  Hole Cards: " + " ".join(str(c) for c in hole_cards))
-    if upcards:
-        print("  Upcards: " + " ".join(str(c) for c in upcards))
+    all_cards = player.hand.get_cards()
+    subsets = player.hand.subsets  # Access the subsets defaultdict
+
+    # Display named subsets
+    for subset_name, subset_cards in subsets.items():
+        if subset_cards:
+            # For the current player, show face-down cards as their actual value
+            cards_display = " ".join(
+                str(card) if card.visibility == Visibility.FACE_DOWN or card.visibility == Visibility.FACE_UP
+                else "**"  # This else clause is technically unreachable but kept for clarity
+                for card in subset_cards
+            )
+            print(f"  {subset_name}: {cards_display}")
+        else:
+            print(f"  {subset_name}: None")
+
+    # Display unassigned cards (if any)
+    unassigned = [c for c in all_cards if not any(c in sc for sc in subsets.values())]
+    if unassigned:
+        unassigned_display = " ".join(
+            str(card) if card.visibility == Visibility.FACE_DOWN or card.visibility == Visibility.FACE_UP
+            else "**"  # Unreachable but included for completeness
+            for card in unassigned
+        )
+        print(f"  Unassigned: {unassigned_display}")
 
     print("Options:")
     for i, (action, min_amt, max_amt) in enumerate(valid_actions, 1):
