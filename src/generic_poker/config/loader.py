@@ -1,5 +1,5 @@
 """Game configuration loading and parsing."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import List, Dict, Optional, Any, Union
 import json
@@ -68,7 +68,8 @@ class ShowdownConfig:
     starting_from: str
     cards_required: str
     best_hand: List[Dict[str, Any]]
-    default_action: Dict[str, Any]
+    globalDefaultAction: Dict[str, Any] = field(default_factory=dict)  # Renamed from default_action
+    defaultActions: List[Dict[str, Any]] = field(default_factory=list)  # Added
 
 @dataclass
 class GameRules:
@@ -193,7 +194,8 @@ class GameRules:
             starting_from=showdown_data['startingFrom'],
             cards_required=showdown_data['cardsRequired'],
             best_hand=showdown_data['bestHand'],
-            default_action=showdown_data.get('defaultAction', {})
+            globalDefaultAction=showdown_data.get('globalDefaultAction', {}),  # Maps JSON key to new field name
+            defaultActions=showdown_data.get('defaultActions', [])       # Loads new field
         )
 
         rules = cls(

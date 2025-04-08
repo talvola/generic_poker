@@ -12,7 +12,7 @@ from generic_poker.game.betting import (
     BettingStructure, BetType, PlayerBet
 )
 from generic_poker.game.bringin import BringInDeterminator, CardRule
-from generic_poker.core.card import Card, Visibility, WildType, Rank
+from generic_poker.core.card import Card, Visibility, WildType, Rank, Suit
 from generic_poker.core.deck import Deck, DeckType
 from generic_poker.evaluation.evaluator import EvaluationType, evaluator
 
@@ -886,6 +886,7 @@ class Game:
         
         Evaluates all active players' hands and awards pots.
         Handles multiple hand configurations for split pot games.
+        Supports per-configuration alternate rules and global default actions.
         """
         active_players = [p for p in self.table.players.values() if p.is_active]
         if not active_players:
@@ -895,8 +896,9 @@ class Game:
         # Get showdown rules
         showdown_rules = self.rules.showdown
         best_hand_configs = showdown_rules.best_hand
-        default_action = showdown_rules.default_action
-        
+        default_actions = showdown_rules.defaultActions  # Per-configuration alternate rules
+        global_default_action = showdown_rules.globalDefaultAction  # Global fallback
+                
         # Initialize structures for tracking results
         pot_results = []
         hand_results = {}  # player_id -> {config_name: HandResult}
@@ -953,8 +955,6 @@ class Game:
                             if len(comm_cards) >= required_community:
                                 hand.extend(list(itertools.combinations(comm_cards, required_community))[0])
 
-                        evaluation = evaluator.evaluate_hand(hand, eval_type)
-
                         from generic_poker.evaluation.hand_description import HandDescriber
                         describer = HandDescriber(eval_type)
                         result = HandResult(
@@ -1008,11 +1008,63 @@ class Game:
                             winning_hand.hand_type = config_name
                             winning_hands.append(winning_hand)
             else:
-                # Save the pot results even though no winners
-                # This ensures they show up in the game result
-                for pot_result in pot_winners:
-                    pot_result.winners = []  # Clear winners list
-                    awarded_pot_results.append(pot_result)
+                # No winners due to qualifier not met; check for per-configuration default actions
+                applicable_actions = [da for da in default_actions if config_name in da.get('appliesTo', [])]
+                if applicable_actions:
+                    logger.debug(f"No winners for {config_name}; applying default action")
+                    for default_action in applicable_actions:
+                        action = default_action.get('action', {})
+                        if action.get('type') == 'evaluate_special':
+                            # Apply special evaluation (e.g., highest spade in hole)
+                            best_players, best_cards_dict = self._find_best_players_for_special(
+                                active_players=active_players,
+                                criterion=action['evaluation'].get('criterion'),
+                                suit=action['evaluation'].get('suit'),
+                                from_source=action['evaluation'].get('from'),
+                                subsets=action['evaluation'].get('subsets', ['default'])
+                            )
+                            if best_players:
+                                # Award this configuration's pot portion to the best players
+                                special_pot_winners = self._award_special_pot(
+                                    best_players=best_players,
+                                    main_pot=original_main_pot,
+                                    side_pots=original_side_pots,
+                                    pot_percentage=pot_percentage,
+                                    config_name=config_name
+                                )
+                                awarded_portions += 1
+                                awarded_pot_results.extend(special_pot_winners)
+                                had_any_winners = True
+                                # Record the winning hands dynamically
+                                for player in best_players:
+                                    qualifying_cards = best_cards_dict.get(player.id, [])
+                                    criterion = action['evaluation'].get('criterion', 'unknown')
+                                    suit = action['evaluation'].get('suit', '')
+                                    # Format criterion and suit: replace underscores with spaces and capitalize each word
+                                    criterion_formatted = ' '.join(word.capitalize() for word in criterion.split('_'))
+                                    suit_formatted = ' '.join(word.capitalize() for word in suit.split('_')) if suit else ''
+                                    hand_name = f"{criterion_formatted} {suit_formatted}".strip() if suit else criterion_formatted
+                                    hand_description = f"{hand_name} ({', '.join(str(c) for c in qualifying_cards)})" if qualifying_cards else hand_name
+
+                                    special_hand = HandResult(
+                                        player_id=player.id,
+                                        cards=qualifying_cards,
+                                        hand_name=hand_name,
+                                        hand_description=hand_description,
+                                        hand_type=config_name,
+                                        evaluation_type="special",
+                                        used_hole_cards=qualifying_cards,
+                                        community_cards=[]
+                                    )
+                                    if player.id not in hand_results:
+                                        hand_results[player.id] = {}
+                                    hand_results[player.id][config_name] = special_hand
+                                    winning_hands.append(special_hand)
+                if not applicable_actions or not any(pot_result.winners for pot_result in awarded_pot_results[-len(pot_winners):]):
+                    # No applicable action or no winners found; record empty pot results
+                    for pot_result in pot_winners:
+                        pot_result.winners = []
+                        awarded_pot_results.append(pot_result)
                
         # If some portions were not awarded, redistribute to the winners of other portions
         if awarded_portions > 0 and awarded_portions < len(best_hand_configs):
@@ -1029,11 +1081,11 @@ class Game:
                 )
 
         # Handle default action if no winners in any division
-        if not had_any_winners and default_action and default_action.get('condition') == 'no_qualifier_met':
-            logger.debug("No player qualified for any hand - handling default action")
-            action = default_action.get('action')
+        if not had_any_winners and global_default_action and global_default_action.get('condition') == 'no_qualifier_met':
+            logger.debug("No player qualified for any hand - handling global default action")
+            action_type = global_default_action.get('action')
             
-            if action == 'split_pot':
+            if action_type == 'split_pot':
                 logger.debug("   split_pot: split the pot among all active players")
                 # For 'split_pot' action, split the pot among all active players
                 self._handle_split_among_active(active_players, original_main_pot, original_side_pots)
@@ -1071,7 +1123,7 @@ class Game:
                             hand.hand_type = "Split (No Qualifier)"
                             winning_hands.append(hand)             
 
-            elif action == 'best_hand':
+            elif action_type == 'best_hand':
                 logger.debug("   best_hand: evaluate hands using the alternate evaluation type")
                 # For 'best_hand' action, evaluate hands using the alternate evaluation type
                 alternate_configs = default_action.get('bestHand', [])
@@ -1122,7 +1174,7 @@ class Game:
                     
                     # Use the alternate results
                     awarded_pot_results = alt_pot_results
-                    winning_hands = alt_winning_hands                               
+                    winning_hands = alt_winning_hands                                             
 
         # Store the complete game result
         self.last_hand_result = GameResult(
@@ -1140,6 +1192,123 @@ class Game:
         
         self.state = GameState.COMPLETE
 
+
+    def _find_best_players_for_special(self, active_players, criterion, suit, from_source, subsets):
+        """
+        Find the best players and their qualifying cards based on a special evaluation criterion.
+        
+        Args:
+            active_players (list): List of Player objects.
+            criterion (str): Evaluation criterion (e.g., "highest_rank").
+            suit (str): Suit to evaluate (e.g., "spades").
+            from_source (str): Source of cards (e.g., "hole_cards").
+            subsets (list): Subsets of cards to consider (e.g., ["default"]).
+        
+        Returns:
+            tuple: (list of Player objects, dict of player_id -> list of Card objects)
+        """
+        if criterion != "highest_rank" or from_source != "hole_cards":
+            logger.warning(f"Unsupported special evaluation: criterion={criterion}, from={from_source}")
+            return [], {}
+    
+        # Convert JSON suit string to Suit enum
+        suit_map = {
+            "clubs": Suit.CLUBS,
+            "diamonds": Suit.DIAMONDS,
+            "hearts": Suit.HEARTS,
+            "spades": Suit.SPADES,
+            "club": Suit.CLUBS,
+            "diamond": Suit.DIAMONDS,
+            "heart": Suit.HEARTS,
+            "spade": Suit.SPADES,            
+            "joker": Suit.JOKER,
+            "c": Suit.CLUBS,
+            "d": Suit.DIAMONDS,
+            "h": Suit.HEARTS,
+            "s": Suit.SPADES,
+            "j": Suit.JOKER
+        }
+        try:
+            suit_enum = suit_map[suit.lower()] if suit else None
+        except KeyError:
+            logger.error(f"Invalid suit specified: {suit}")
+            return [], {}      
+            
+        best_rank_index = len(BASE_RANKS)  # Worst possible index (lower index = better rank)
+        best_players = []
+        best_cards_dict = {}  # player_id -> list of qualifying cards
+        
+        for player in active_players:
+            if from_source == "hole_cards":
+                hole_cards = player.hand.get_cards()
+                if suit_enum:
+                    suit_cards = [card for card in hole_cards if card.suit == suit_enum]
+                else:
+                    suit_cards = hole_cards  # No suit filter if not specified
+
+                if suit_cards:
+                    highest_card = min(suit_cards, key=lambda c: BASE_RANKS.index(c.rank.value))
+                    rank_index = BASE_RANKS.index(highest_card.rank.value)
+                    if rank_index < best_rank_index:
+                        best_rank_index = rank_index
+                        best_players = [player]
+                        best_cards_dict = {player.id: [highest_card]}
+                    elif rank_index == best_rank_index:
+                        best_players.append(player)
+                        best_cards_dict[player.id] = [highest_card]
+        
+        logger.debug(f"Best players for {suit} {criterion}: {[p.id for p in best_players]} with cards: {best_cards_dict}")
+        return best_players, best_cards_dict
+    
+    def _award_special_pot(self, best_players, main_pot, side_pots, pot_percentage, config_name):
+        """
+        Award a pot portion to players based on a special evaluation.
+        
+        Args:
+            best_players (list): List of Player objects who won.
+            main_pot (int): Main pot amount.
+            side_pots (list): List of side pot amounts.
+            pot_percentage (float): Percentage of the pot for this configuration.
+            config_name (str): Name of the configuration (e.g., "Low Hand").
+        
+        Returns:
+            list: List of PotResult objects.
+        """
+        pot_results = []
+        winner_ids = [p.id for p in best_players]
+        
+        # Main pot portion
+        main_amount = int(main_pot * pot_percentage)
+        if main_amount > 0:
+            pot_result = PotResult(
+                amount=main_amount,
+                winners=winner_ids,
+                pot_type="main",
+                hand_type=config_name,
+                eligible_players=set(p.id for p in best_players)
+            )
+            pot_results.append(pot_result)
+        
+        # Side pots portion
+        for i, side_amount in enumerate(side_pots):
+            portion_amount = int(side_amount * pot_percentage)
+            if portion_amount > 0:
+                eligible_ids = self.betting.get_side_pot_eligible_players(i)
+                eligible_winners = [p.id for p in best_players if p.id in eligible_ids]
+                if eligible_winners:
+                    pot_result = PotResult(
+                        amount=portion_amount,
+                        winners=eligible_winners,
+                        pot_type="side",
+                        hand_type=config_name,
+                        side_pot_index=i,
+                        eligible_players=set(eligible_ids)
+                    )
+                    pot_results.append(pot_result)
+        
+        logger.debug(f"Awarded {config_name} pot portion to {winner_ids}")
+        return pot_results
+    
     def apply_wild_cards(self, player: Player, comm_cards: List[Card], wild_rules: List[dict]) -> None:
         """Apply wild card rules to the player's hand and community cards."""
         logger.debug(f"Applying wild card rules for player {player.name} with community cards: {comm_cards} and wild rules: {wild_rules}") 
