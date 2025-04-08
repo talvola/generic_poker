@@ -46,7 +46,53 @@
       },
       "required": ["style", "rule"],
       "additionalProperties": false
-    },     
+    },   
+    "action": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["split_pot", "best_hand", "evaluate_special"],
+          "description": "Type of action to perform"
+        },
+        "bestHand": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/bestHandItem" },
+          "description": "Alternate hand evaluation rules for 'best_hand' action"
+        },
+        "evaluation": {
+          "type": "object",
+          "properties": {
+            "criterion": {
+              "type": "string",
+              "enum": ["highest_rank", "lowest_rank"],
+              "description": "Criterion for evaluating cards (e.g., 'highest_rank')"
+            },
+            "suit": {
+              "type": "string",
+              "enum": ["clubs", "diamonds", "hearts", "spades", "club", "diamond", "heart", "spade", "joker", "c", "d", "h", "s", "j", "river_card_suit"],
+              "description": "Suit to evaluate, or 'river_card_suit' for dynamic suit from river card"
+            },
+            "from": {
+              "type": "string",
+              "enum": ["hole_cards", "community_cards"],
+              "description": "Source of cards to evaluate"
+            },
+            "subsets": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Subsets of cards to consider (e.g., ['default'])"
+            }
+          },
+          "required": ["criterion", "from"],
+          "additionalProperties": false,
+          "description": "Evaluation rules for 'evaluate_special' action"
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": false,
+      "description": "Action specification with type and optional parameters"
+    },      
     "bestHandItem": {
       "type": "object",
       "properties": {
@@ -634,29 +680,48 @@
             "$ref": "#/definitions/bestHandItem"
           }
         },
-        "defaultAction": {
+        "globalDefaultAction": {
           "type": "object",
           "properties": {
             "condition": {
               "type": "string",
-              "description": "Condition for applying the default action"
+              "enum": ["no_qualifier_met"],
+              "description": "Condition under which the global default action is applied"
             },
             "action": {
-              "type": "string",
+              "$ref": "#/definitions/action",
               "description": "Action to take when the condition is met"
-            },
-            "bestHand": {
-              "type": "array",
-              "items": {
-                "$ref": "#/definitions/bestHandItem"
-              },
-              "description": "Hand evaluation rules for the default action"
             }
           },
           "required": ["condition", "action"],
           "additionalProperties": false,
-          "description": "Default action to take under specific conditions"
-        }        
+          "description": "Global default action applied when no hand configurations have winners"
+        },
+        "defaultActions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "condition": {
+                "type": "string",
+                "enum": ["no_qualifier_met"],
+                "description": "Condition under which this default action is applied"
+              },
+              "appliesTo": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Names of bestHand configurations this action applies to"
+              },
+              "action": {
+                "$ref": "#/definitions/action",
+                "description": "Action to take when the condition is met for the specified configurations"
+              }
+            },
+            "required": ["condition", "appliesTo", "action"],
+            "additionalProperties": false
+          },
+          "description": "List of per-configuration default actions applied when specific qualifiers are not met"
+        }      
       },
       "required": ["order", "startingFrom", "cardsRequired", "bestHand"],
       "additionalProperties": false

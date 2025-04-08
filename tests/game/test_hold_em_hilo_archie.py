@@ -239,9 +239,11 @@ def setup_test_game_with_mock_deck():
                     ]
                 }
             ],
-            "defaultAction": {
+            "globalDefaultAction": {
                 "condition": "no_qualifier_met",
-                "action": "split_pot"
+                "action": {
+                    "type": "split_pot"
+                }
             }
         }
     }

@@ -1083,7 +1083,8 @@ class Game:
         # Handle default action if no winners in any division
         if not had_any_winners and global_default_action and global_default_action.get('condition') == 'no_qualifier_met':
             logger.debug("No player qualified for any hand - handling global default action")
-            action_type = global_default_action.get('action')
+            action = global_default_action.get('action')
+            action_type = action.get('type', 'split_pot')
             
             if action_type == 'split_pot':
                 logger.debug("   split_pot: split the pot among all active players")
@@ -1126,7 +1127,7 @@ class Game:
             elif action_type == 'best_hand':
                 logger.debug("   best_hand: evaluate hands using the alternate evaluation type")
                 # For 'best_hand' action, evaluate hands using the alternate evaluation type
-                alternate_configs = default_action.get('bestHand', [])
+                alternate_configs = action.get('bestHand', [])
                 
                 if alternate_configs:
                     # Process each alternate hand configuration
@@ -1211,7 +1212,7 @@ class Game:
             logger.warning(f"Unsupported special evaluation: criterion={criterion}, from={from_source}")
             return [], {}
     
-        # Convert JSON suit string to Suit enum
+        # Suit mapping for static suits
         suit_map = {
             "clubs": Suit.CLUBS,
             "diamonds": Suit.DIAMONDS,
@@ -1220,7 +1221,7 @@ class Game:
             "club": Suit.CLUBS,
             "diamond": Suit.DIAMONDS,
             "heart": Suit.HEARTS,
-            "spade": Suit.SPADES,            
+            "spade": Suit.SPADES,
             "joker": Suit.JOKER,
             "c": Suit.CLUBS,
             "d": Suit.DIAMONDS,
@@ -1228,11 +1229,30 @@ class Game:
             "s": Suit.SPADES,
             "j": Suit.JOKER
         }
-        try:
-            suit_enum = suit_map[suit.lower()] if suit else None
-        except KeyError:
-            logger.error(f"Invalid suit specified: {suit}")
-            return [], {}      
+        
+        # Determine the suit enum
+        if suit == "river_card_suit":
+            try:
+                community_cards = self.table.community_cards.get('default', [])
+                if not community_cards:
+                    logger.error("No community cards available to determine river card suit")
+                    return [], {}
+                river_card = community_cards[-1]  # Last card is the river
+                suit_enum = river_card.suit
+                suit_name = river_card.suit.name.lower()  # For logging/description
+            except IndexError:
+                logger.error("Failed to access river card from community cards")
+                return [], {}
+        elif suit:
+            try:
+                suit_enum = suit_map[suit.lower()]
+                suit_name = suit  # Use the JSON-provided suit name for description
+            except KeyError:
+                logger.error(f"Invalid suit specified: {suit}")
+                return [], {}
+        else:
+            suit_enum = None
+            suit_name = ""
             
         best_rank_index = len(BASE_RANKS)  # Worst possible index (lower index = better rank)
         best_players = []

@@ -203,16 +203,18 @@ def setup_test_game_with_mock_deck():
                     ]
                 }
             ],
-            "defaultAction": {
+            "globalDefaultAction": {
                 "condition": "no_qualifier_met",
-                "action": "best_hand",
-                "bestHand": [
-                    {
-                        "name": "2-7 Lowball",
-                        "evaluationType": "27_low",
-                        "anyCards": 5
-                    }
-                ]
+                "action": {
+                    "type": "best_hand",
+                    "bestHand": [
+                        {
+                            "name": "2-7 Lowball",
+                            "evaluationType": "27_low",
+                            "anyCards": 5
+                        }
+                    ]
+                }
             }
         }
 }

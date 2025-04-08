@@ -1,8 +1,11 @@
 {
-    "game": "Hold'em Hi/Lo Archie-Style",
+    "game": "6-Card Stampler",
+    "references": [
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
+    ],            
     "players": {
         "min": 2,
-        "max": 9
+        "max": 7
     },
     "deck": {
         "type": "standard",
@@ -25,7 +28,7 @@
                 "location": "player",
                 "cards": [
                     {
-                        "number": 2,
+                        "number": 6,
                         "state": "face down"
                     }
                 ]
@@ -102,32 +105,39 @@
     "showdown": {
         "order": "clockwise",
         "startingFrom": "dealer",
-        "cardsRequired": "all cards",
+        "cardsRequired": "two hole cards, three community cards",
         "bestHand": [
             {
-                "name": "High",
+                "name": "High Hand",
                 "evaluationType": "high",
-                "anyCards": 5,
-                "qualifier": [
-                    9,
-                    1320
-                ]
+                "holeCards": 2,
+                "communityCards": 3
             },
             {
-                "name": "Low",
+                "name": "Low Hand",
                 "evaluationType": "a5_low",
-                "anyCards": 5,
+                "holeCards": 2,
+                "communityCards": 3,
                 "qualifier": [
                     1,
                     56
                 ]
             }
         ],
-        "globalDefaultAction": {
-            "condition": "no_qualifier_met",
-            "action": {
-                "type": "split_pot"
+        "defaultActions": [
+            {
+                "condition": "no_qualifier_met",
+                "appliesTo": ["Low Hand"],
+                "action": {
+                    "type": "evaluate_special",
+                    "evaluation": {
+                        "criterion": "highest_rank",
+                        "suit": "spade",
+                        "from": "hole_cards",
+                        "subsets": ["default"]
+                    }
+                }
             }
-        }
+        ]     
     }
 }

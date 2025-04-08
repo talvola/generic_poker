@@ -125,7 +125,9 @@
         ],
         "globalDefaultAction": {
             "condition": "no_qualifier_met",
-            "action": "split_pot"
+            "action": {
+                "type": "split_pot"
+            }
         }
     }
 }
