@@ -196,7 +196,11 @@ class BringInDeterminator:
         else:
             # Multi-hand game: use bringInEval if specified, else default to first
             forced_bets = rules.forced_bets
-            base_eval = forced_bets.bringInEval
+            try:
+                base_eval = forced_bets.bringInEval if forced_bets.bringInEval else best_hands[0]["evaluationType"]
+            except (AttributeError, ValueError):
+                logger.debug("bringInEval not specified or invalid, defaulting to first bestHand evaluation type")
+                base_eval = best_hands[0]["evaluationType"]
 
         if num_cards >= 5:
             return EvaluationType(base_eval)
