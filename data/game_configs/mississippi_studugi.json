@@ -1,0 +1,130 @@
+{
+    "game": "Mississippi Studugi",
+    "references": [
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
+    ],    
+    "players": {
+        "min": 2,
+        "max": 7
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "Pot Limit"
+    ],
+    "forcedBets": {
+        "style": "blinds"
+    },
+    "bettingOrder": {
+        "initial": "after_big_blind",
+        "subsequent": "high_hand"
+    },
+    "gamePlay": [
+        {"bet": {"type": "blinds"}, "name": "Post Blinds"},
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 2,
+                        "state": "face down"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Initial Bet"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 2,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Fifth Street"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Fifth Street Bet"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Sixth Street"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Sixth Street Bet"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Seventh Street"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Seventh Street Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "all five cards",
+        "bestHand": [
+            {
+                "evaluationType": "high",
+                "anyCards": 5
+            },
+            {
+                "name": "Badugi",
+                "evaluationType": "badugi",
+                "anyCards": 4,
+                "qualifier": [
+                    1,
+                    715
+                ]
+            }            
+        ]
+    }
+}
