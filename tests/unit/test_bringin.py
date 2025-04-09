@@ -21,10 +21,11 @@ class ShowdownConfig:
 @dataclass
 class GameRules:
     forced_bets: Dict[str, Any]
+    betting_order: Dict[str, Any]
     showdown: ShowdownConfig
     # Minimal fields; omit gameplay, bettingStructures, etc.
 
-def minimal_stud_rules(rule: str = "low card", evaluation_type: str = "high") -> GameRules:
+def minimal_stud_rules(rule: str = "low card", evaluation_type: str = "high", subsequent: str = "high_hand") -> GameRules:
     """
     Create a minimal GameRules object for Stud game tests.
     
@@ -44,6 +45,7 @@ def minimal_stud_rules(rule: str = "low card", evaluation_type: str = "high") ->
     )
     return GameRules(
         forced_bets={"style": "bring-in", "rule": rule},
+        betting_order=[{"initial": "bring_in", "subsequent": subsequent}],
         showdown=showdown_config
     )
     
@@ -166,7 +168,7 @@ def test_first_round_low_card_ace_low_razz_high(players_with_door_cards):
     
     # In first round with 'low card al' rule, player with Ace of Diamonds should go first
     first_player = BringInDeterminator.determine_first_to_act(
-        players, 1, CardRule.LOW_CARD_AL_RH, rules
+        players, 1, CardRule.LOW_CARD_AL, rules
     )
     
     assert first_player is not None
@@ -225,7 +227,7 @@ def test_later_round_razz_high(players_with_multiple_upcards):
     # In later rounds of Razz High, best unpaired hand showing goes first
     # Player 4 has K-Q showing, which is the lowest
     first_player = BringInDeterminator.determine_first_to_act(
-        players, 2, CardRule.LOW_CARD_AL_RH, rules
+        players, 2, CardRule.LOW_CARD_AL, rules
     )
     
     assert first_player is not None
@@ -249,24 +251,14 @@ def test_later_round_27_razz(players_with_multiple_upcards):
 def test_no_visible_cards():
     """Test handling of players with no visible cards."""
     rules = minimal_stud_rules(rule="low card", evaluation_type="high")
-
-    # Create players without any face-up cards
     player1 = Player(id="p1", name="Alice", stack=500)
     player1.hand.add_card(Card(Rank.TWO, Suit.CLUBS, Visibility.FACE_DOWN))
-    
     player2 = Player(id="p2", name="Bob", stack=500)
     player2.hand.add_card(Card(Rank.TEN, Suit.SPADES, Visibility.FACE_DOWN))
-    
     players = [player1, player2]
-    
-    # Should default to first player
-    first_player = BringInDeterminator.determine_first_to_act(
-        players, 1, CardRule.LOW_CARD, rules
-    )
-    
-    # changed interface to return None if no player has a visible card
-#    assert first_player is players[0]
-    assert not first_player
+
+    first_player = BringInDeterminator.determine_first_to_act(players, 1, CardRule.LOW_CARD, rules)
+    assert first_player is None, "Expected None when no visible cards are present"
 
 def test_get_visible_cards():
     """Test extraction of visible cards from player's hand."""

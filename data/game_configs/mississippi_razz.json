@@ -1,5 +1,8 @@
 {
-    "game": "Razz",
+    "game": "Mississippi Razz",
+    "references": [
+        "https://www.barge.org/rulebook/mississippi-stud-and-variants.html"
+    ],    
     "players": {
         "min": 2,
         "max": 7
@@ -9,18 +12,22 @@
         "cards": 52
     },
     "bettingStructures": [
-        "Limit"
+        "Limit",
+        "Pot Limit"
     ],
     "forcedBets": {
-        "style": "bring-in",
-        "rule": "high card"
+        "style": "blinds"
+    },
+    "bettingOrder": {
+        "initial": "after_big_blind",
+        "subsequent": "high_hand"
     },
     "gamePlay": [
         {
             "bet": {
-                "type": "antes"
+                "type": "blinds"
             },
-            "name": "Post Antes"
+            "name": "Post Blinds"
         },
         {
             "deal": {
@@ -40,12 +47,6 @@
         },
         {
             "bet": {
-                "type": "bring-in"
-            },
-            "name": "Post Bring-In"
-        },
-        {
-            "bet": {
                 "type": "small"
             },
             "name": "Initial Bet"
@@ -55,7 +56,7 @@
                 "location": "player",
                 "cards": [
                     {
-                        "number": 1,
+                        "number": 2,
                         "state": "face up"
                     }
                 ]
@@ -105,24 +106,6 @@
             "name": "Fifth Street Bet"
         },
         {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face down"
-                    }
-                ]
-            },
-            "name": "Deal Sixth Street"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "Sixth Street Bet"
-        },
-        {
             "showdown": {
                 "type": "final"
             },
@@ -135,6 +118,7 @@
         "cardsRequired": "all five cards",
         "bestHand": [
             {
+                "name": "Low Hand",
                 "evaluationType": "a5_low",
                 "anyCards": 5
             }

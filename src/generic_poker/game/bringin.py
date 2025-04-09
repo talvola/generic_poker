@@ -5,20 +5,13 @@ from typing import List, Dict, Optional, Tuple, Any
 import logging
 
 from generic_poker.core.card import Card, Visibility
-from generic_poker.game.table import Player
+from generic_poker.game.player import Player
 from generic_poker.evaluation.evaluator import evaluator, EvaluationType
+from generic_poker.evaluation.cardrule import CardRule
 from generic_poker.config.loader import GameRules
 
 logger = logging.getLogger(__name__)
-
-class CardRule(Enum):
-    """Types of card rules for bring-in determination."""
-    LOW_CARD = 'low card'          # Standard 7-Card Stud (Ace high, 2 low)
-    LOW_CARD_AL = 'low card al'    # Unusual - low card bring-in (Ace low)
-    LOW_CARD_AL_RH = 'low card al rh'  # Razz High - low card bring-in (Ace low), other rounds use Razz High evaluation
-    HIGH_CARD = 'high card'        # For A-5 low games like Razz (King high, Ace low)
-    HIGH_CARD_AH = 'high card ah'  # For 2-7 low games (Ace high, 2 low)
-   
+  
 class BringInDeterminator:
     """
     Determines which player acts first in stud poker games based on exposed cards.
@@ -28,193 +21,132 @@ class BringInDeterminator:
     the specific card ranking rules in effect.
     """
     
-    # Mapping of number of exposed cards and rules to evaluation types
-    # Razz High breaks the pattern.    In the future, probalby want to 
-    # explicitly call out in the game rules two sets of bring-in rules
-    # instead of trying to derive here
-    # EVAL_MAPPINGS = {
-    #     1: {  # First round - one card showing
-    #         CardRule.LOW_CARD: EvaluationType.ONE_CARD_LOW,          # Lowest card by high ranking
-    #         CardRule.LOW_CARD_AL: EvaluationType.ONE_CARD_LOW_AL,     # Lowest card with A low
-    #         CardRule.LOW_CARD_AL_RH: EvaluationType.ONE_CARD_LOW_AL,     # Lowest card with A low (Razz High)
-    #         CardRule.HIGH_CARD: EvaluationType.ONE_CARD_HIGH,       # Highest card with A low
-    #         CardRule.HIGH_CARD_AH: EvaluationType.ONE_CARD_HIGH_AH       # Highest card by high ranking
-    #     },
-    #     2: {  # Two cards showing
-    #         CardRule.LOW_CARD: EvaluationType.TWO_CARD_HIGH,          # Highest hand by high ranking
-    #         CardRule.LOW_CARD_AL: EvaluationType.TWO_CARD_HIGH_AL,     # Highest hand by A5 low ranking
-    #         CardRule.LOW_CARD_AL_RH: EvaluationType.TWO_CARD_HIGH_AL_RH,     # Highest hand by A5 low ranking (Razz High)
-    #         CardRule.HIGH_CARD: EvaluationType.TWO_CARD_LOW,       # Lowest hand by A5 low ranking
-    #         CardRule.HIGH_CARD_AH: EvaluationType.TWO_CARD_LOW_AH     # Lowest hand by 2-7 ranking
-    #     },
-    #     3: {  # Three cards showing
-    #         CardRule.LOW_CARD: EvaluationType.THREE_CARD_HIGH,
-    #         CardRule.LOW_CARD_AL: EvaluationType.THREE_CARD_HIGH_AL,
-    #         CardRule.LOW_CARD_AL_RH: EvaluationType.THREE_CARD_HIGH_AL_RH,
-    #         CardRule.HIGH_CARD: EvaluationType.THREE_CARD_LOW,
-    #         CardRule.HIGH_CARD_AH: EvaluationType.THREE_CARD_LOW_AH
-    #     },
-    #     4: {  # Four cards showing
-    #         CardRule.LOW_CARD: EvaluationType.FOUR_CARD_HIGH,
-    #         CardRule.LOW_CARD_AL: EvaluationType.FOUR_CARD_HIGH_AL,
-    #         CardRule.LOW_CARD_AL_RH: EvaluationType.FOUR_CARD_HIGH_AL_RH,
-    #         CardRule.HIGH_CARD: EvaluationType.FOUR_CARD_LOW,
-    #         CardRule.HIGH_CARD_AH: EvaluationType.FOUR_CARD_LOW_AH
-    #     },
-    #     5: {  # Five cards showing
-    #         CardRule.LOW_CARD: EvaluationType.HIGH,
-    #         CardRule.LOW_CARD_AL: EvaluationType.LOW_A5,        # no game uses this currently
-    #         CardRule.LOW_CARD_AL_RH: EvaluationType.LOW_A5_HIGH,
-    #         CardRule.HIGH_CARD: EvaluationType.LOW_A5,
-    #         CardRule.HIGH_CARD_AH: EvaluationType.LOW_27
-    #     }
-    # }
-    
-    # Whether high hand or low hand goes first after first round
-    # POST_FIRST_ROUND_MAPPING = {
-    #     CardRule.LOW_CARD: "high",         # In standard stud, high hand goes first
-    #     CardRule.LOW_CARD_AL: "high",      # In stud/8, high hand goes first
-    #     CardRule.HIGH_CARD: "low",         # In Razz, low hand goes first
-    #     CardRule.HIGH_CARD_AH: "low"       # In 2-7 stud, low hand goes first
-    # }
-
     ONE_CARD_EVALS = {
         CardRule.LOW_CARD: EvaluationType.ONE_CARD_LOW,
         CardRule.LOW_CARD_AL: EvaluationType.ONE_CARD_LOW_AL,
-        CardRule.LOW_CARD_AL_RH: EvaluationType.ONE_CARD_LOW_AL,
         CardRule.HIGH_CARD: EvaluationType.ONE_CARD_HIGH,
         CardRule.HIGH_CARD_AH: EvaluationType.ONE_CARD_HIGH_AH
     }    
     
-    @classmethod
-    # def get_evaluation_type(cls, num_cards: int, card_rule: CardRule) -> EvaluationType:
-    #     """
-    #     Get the evaluation type based on number of visible cards and rule.
-        
-    #     Args:
-    #         num_cards: Number of visible cards
-    #         card_rule: Rule for evaluating cards
-            
-    #     Returns:
-    #         Appropriate evaluation type
-    #     """
-    #     if num_cards not in cls.EVAL_MAPPINGS:
-    #         # Default to using the 5-card evaluation if number not found
-    #         num_cards = 5
-            
-    #     return cls.EVAL_MAPPINGS[num_cards][card_rule]
     
     # @classmethod
-    # def determine_first_to_act(
-    #     cls,
-    #     players: List[Player],
-    #     round_num: int,
-    #     card_rule: str
-    # ) -> Optional[Player]:
+    # def determine_first_to_act(cls, players: List[Player], num_cards: int, card_rule: CardRule, rules: 'GameRules') -> Optional[Player]:
     #     """
-    #     Determine which player acts first based on stud poker rules.
+    #     Determine the first player to act based on visible cards and rules.
         
     #     Args:
     #         players: List of active players
-    #         round_num: Current betting round (1-indexed)
-    #         card_rule: Rule for determining first to act
-    #         community_cards: Optional community cards (if any)
-            
+    #         num_cards: Number of visible cards (1-5 typically)
+    #         card_rule: Bring-in rule (e.g., LOW_CARD)
+    #         showdown_rules: Showdown configuration to derive evaluation type
+        
     #     Returns:
-    #         Player who should act first or None if no eligible players
+    #         Player who must act first
     #     """
-    #     if not players:
-    #         return None
-            
-    #     # Convert string rule to enum
-    #     try:
-    #         rule = CardRule(card_rule)
-    #     except ValueError:
-    #         logger.warning(f"Unknown card rule: {card_rule}, defaulting to 'low card'")
-    #         rule = CardRule.LOW_CARD
+    #     from generic_poker.evaluation.evaluator import evaluator
+
+    #     logger.debug(f"Determining first to act with num_cards={num_cards}, card_rule={card_rule}, players={len(players)}")
+    #     # For 1 card, use the predefined evaluation
+    #     if num_cards == 1:
+    #         eval_type = cls.ONE_CARD_EVALS[card_rule]
+    #         player_cards = {p: p.hand.get_cards(visible_only=True)[:1] for p in players}
+    #     else:
+    #         # Derive evaluation type from showdown
+    #         eval_type = cls._get_dynamic_eval_type(num_cards, card_rule, rules)
+    #         player_cards = {p: p.hand.get_cards(visible_only=True)[:num_cards] for p in players}
+
+    #     logger.debug(f"Eval type: {eval_type}")
+    #     logger.debug(f"Player cards: {[(p.name, [c.__str__() for c in cards]) for p, cards in player_cards.items()]}")
+
+    #     # Compare hands to find the "best" (lowest or highest per eval_type)
+    #     best_player = None
+    #     best_hand = None
+    #     for player, cards in player_cards.items():
+    #         if not cards:
+    #             logger.debug(f"No visible cards for player {player.name}")
+    #             continue
+    #         if best_hand is None or evaluator.compare_hands(cards, best_hand, eval_type) > 0:
+    #             best_hand = cards
+    #             best_player = player
         
-    #     # First round uses special bring-in rules
-    #     if round_num == 1:
-    #         return cls._determine_bring_in(players, rule)
-        
-    #     # Later rounds look at the highest/lowest hand showing
-    #     return cls._determine_post_first_round(players, rule)
+    #     logger.debug(f"Best player: {best_player.name if best_player else 'None'}")
+    #     return best_player
     
     @classmethod
     def determine_first_to_act(cls, players: List[Player], num_cards: int, card_rule: CardRule, rules: 'GameRules') -> Optional[Player]:
-        """
-        Determine the first player to act based on visible cards and rules.
-        
-        Args:
-            players: List of active players
-            num_cards: Number of visible cards (1-5 typically)
-            card_rule: Bring-in rule (e.g., LOW_CARD)
-            showdown_rules: Showdown configuration to derive evaluation type
-        
-        Returns:
-            Player who must act first
-        """
+        """Determine the first player to act based on visible cards."""
+
+        if not players or num_cards < 1:
+            logger.debug("No players or invalid num_cards, returning None")
+            return None
+
+        eval_type = cls._get_dynamic_eval_type(num_cards, card_rule, rules)
         from generic_poker.evaluation.evaluator import evaluator
 
-        logger.debug(f"Determining first to act with num_cards={num_cards}, card_rule={card_rule}, players={len(players)}")
-        # For 1 card, use the predefined evaluation
-        if num_cards == 1:
-            eval_type = cls.ONE_CARD_EVALS[card_rule]
-            player_cards = {p: p.hand.get_cards(visible_only=True)[:1] for p in players}
-        else:
-            # Derive evaluation type from showdown
-            eval_type = cls._get_dynamic_eval_type(num_cards, card_rule, rules)
-            player_cards = {p: p.hand.get_cards(visible_only=True)[:num_cards] for p in players}
-
-        logger.debug(f"Eval type: {eval_type}")
-        logger.debug(f"Player cards: {[(p.name, [c.__str__() for c in cards]) for p, cards in player_cards.items()]}")
-
-        # Compare hands to find the "best" (lowest or highest per eval_type)
         best_player = None
-        best_hand = None
-        for player, cards in player_cards.items():
-            if not cards:
-                logger.debug(f"No visible cards for player {player.name}")
+        best_cards = None
+        for player in players:
+            visible_cards = [c for c in player.hand.get_cards() if c.visibility == Visibility.FACE_UP][:num_cards]
+            if not visible_cards:
+                logger.debug(f"Player {player.id} has no visible cards, skipping")
                 continue
-            if best_hand is None or evaluator.compare_hands(cards, best_hand, eval_type) > 0:
-                best_hand = cards
+            if best_cards is None:
+                best_cards = visible_cards
                 best_player = player
-        
-        logger.debug(f"Best player: {best_player.name if best_player else 'None'}")
+            elif evaluator.compare_hands(visible_cards, best_cards, eval_type) > 0:
+                best_cards = visible_cards
+                best_player = player
+
+        if best_player is None:
+            logger.warning("No players with visible cards found, returning None")
         return best_player
         
     @classmethod
     def _get_dynamic_eval_type(cls, num_cards: int, card_rule: CardRule, rules: 'GameRules') -> EvaluationType:
         """Construct the evaluation type based on card count and showdown rules."""
-        best_hands = rules.showdown.best_hand  # Access attribute directly
+        logger.debug(f"Getting dynamic evaluation type for num_cards={num_cards}, card_rule={card_rule}, rules={rules}")
+
+        best_hands = rules.showdown.best_hand
         if not best_hands:
-            return EvaluationType.HIGH  # Fallback
+            logger.warning("No bestHand configurations found, falling back to HIGH")
+            return EvaluationType.HIGH
 
-        # For single-hand games, use the first bestHand
-        if len(best_hands) == 1:
-            base_eval = best_hands[0]["evaluationType"]
-        else:
-            # Multi-hand game: use bringInEval if specified, else default to first
-            forced_bets = rules.forced_bets
+        if num_cards == 1:
             try:
-                base_eval = forced_bets.bringInEval if forced_bets.bringInEval else best_hands[0]["evaluationType"]
-            except (AttributeError, ValueError):
-                logger.debug("bringInEval not specified or invalid, defaulting to first bestHand evaluation type")
+                eval_type = cls.ONE_CARD_EVALS[card_rule]
+                logger.debug(f"One card game, using eval_type: {eval_type}")
+                return eval_type
+            except KeyError:
+                logger.warning(f"Invalid card_rule '{card_rule}' for one card, defaulting to 'high'")
+                return EvaluationType.ONE_CARD_HIGH
+        else:
+            # For single-hand games, use the first bestHand
+            if len(best_hands) == 1:
                 base_eval = best_hands[0]["evaluationType"]
+                logger.debug(f"Single hand game, using base_eval: {base_eval}")
+            else:
+                # Multi-hand game: use bringInEval if specified, else default to first
+                forced_bets = rules.forced_bets
+                try:
+                    base_eval = forced_bets.bringInEval if forced_bets.bringInEval else best_hands[0]["evaluationType"]
+                    logger.debug(f"Using bringInEval: {base_eval}")
+                except (AttributeError, ValueError):
+                    logger.debug("bringInEval not specified or invalid, defaulting to first bestHand evaluation type")
+                    base_eval = best_hands[0]["evaluationType"]
 
-        if num_cards >= 5:
-            return EvaluationType(base_eval)
+            if num_cards >= 5:
+                return EvaluationType(base_eval)
         
-        # Construct e.g., "two_card_high" or "four_card_a5_low"
-        card_count_prefix = ["", "one_card", "two_card", "three_card", "four_card"][num_cards]
-        eval_type_str = f"{card_count_prefix}_{base_eval}"
-        
-        # Convert to EvaluationType
-        try:
-            return EvaluationType(eval_type_str)
-        except ValueError:
-            logger.warning(f"Unknown evaluation type '{eval_type_str}', falling back to '{base_eval}'")
-            return EvaluationType(base_eval)
+            # Construct e.g., "two_card_high" or "four_card_a5_low"
+            card_count_prefix = ["", "one_card", "two_card", "three_card", "four_card"][num_cards]
+            eval_type_str = f"{card_count_prefix}_{base_eval}"
+            
+            # Convert to EvaluationType
+            try:
+                return EvaluationType(eval_type_str)
+            except ValueError:
+                logger.warning(f"Unknown evaluation type '{eval_type_str}', falling back to '{base_eval}'")
+                return EvaluationType(base_eval)
             
     @classmethod
     def _get_visible_cards(cls, player: Player) -> List[Card]:

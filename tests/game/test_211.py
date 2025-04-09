@@ -7,6 +7,8 @@ from generic_poker.game.betting import BettingStructure
 from generic_poker.core.deck import Deck
 from generic_poker.evaluation.hand_description import HandDescriber, EvaluationType
 
+from tests.test_helpers import load_rules_from_file
+
 import json 
 import logging
 import sys
@@ -61,129 +63,10 @@ def create_predetermined_deck():
 
 def setup_test_game_with_mock_deck():
     """Create a test game with three players and a predetermined deck."""
-    rules = {
-        "game": "2-11 Poker",
-        "players": {
-            "min": 2,
-            "max": 9
-        },
-        "deck": {
-            "type": "standard",
-            "cards": 52
-        },
-        "bettingStructures": [
-            "Limit",
-            "No Limit",
-            "Pot Limit"
-        ],
-        "gamePlay": [
-            {
-                "bet": {
-                    "type": "blinds"
-                },
-                "name": "Post Blinds"
-            },
-            {
-                "deal": {
-                    "location": "player",
-                    "cards": [
-                        {
-                            "number": 4,
-                            "state": "face down"
-                        }
-                    ]
-                },
-                "name": "Deal Hole Cards"
-            },
-            {
-                "bet": {
-                    "type": "small"
-                },
-                "name": "Pre-Flop Bet"
-            },
-            {
-                "deal": {
-                    "location": "community",
-                    "cards": [
-                        {
-                            "number": 2,
-                            "state": "face up"
-                        }
-                    ]
-                },
-                "name": "Deal Flop"
-            },
-            {
-                "bet": {
-                    "type": "small"
-                },
-                "name": "Post-Flop Bet"
-            },
-            {
-                "deal": {
-                    "location": "community",
-                    "cards": [
-                        {
-                            "number": 1,
-                            "state": "face up"
-                        }
-                    ]
-                },
-                "name": "Deal Turn"
-            },
-            {
-                "bet": {
-                    "type": "big"
-                },
-                "name": "Turn Bet"
-            },
-            {
-                "deal": {
-                    "location": "community",
-                    "cards": [
-                        {
-                            "number": 1,
-                            "state": "face up"
-                        }
-                    ]
-                },
-                "name": "Deal River"
-            },
-            {
-                "bet": {
-                    "type": "big"
-                },
-                "name": "River Bet"
-            },
-            {
-                "showdown": {
-                    "type": "final"
-                },
-                "name": "Showdown"
-            }
-        ],
-        "showdown": {
-            "order": "clockwise",
-            "startingFrom": "dealer",
-            "cardsRequired": "two or three hole cards, three or two community cards",
-            "bestHand": [
-                {
-                    "evaluationType": "high",
-                    "holeCards": [
-                        2,
-                        3
-                    ],
-                    "communityCards": [
-                        3,
-                        2
-                    ]
-                }
-            ]
-        }
-    }
+    rules = load_rules_from_file('211')
     
     game = Game(
-        rules=GameRules.from_json(json.dumps(rules)),
+        rules=rules,
         structure=BettingStructure.LIMIT,
         small_bet=10,
         big_bet=20,

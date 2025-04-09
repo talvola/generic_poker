@@ -7,65 +7,14 @@ from enum import Enum
 from generic_poker.core.card import Card, Visibility
 from generic_poker.core.deck import Deck, DeckType
 from generic_poker.core.hand import PlayerHand
+from generic_poker.config.loader import GameRules
+from generic_poker.evaluation.evaluator import EvaluationType, evaluator
+from generic_poker.evaluation.cardrule import CardRule
+from generic_poker.game.bringin import BringInDeterminator
+from generic_poker.game.player import Player, PlayerPosition, Position
 
 logger = logging.getLogger(__name__)
-
-class Position(Enum):
-    """Core player positions that affect game mechanics."""
-    BUTTON = "BTN"
-    SMALL_BLIND = "SB"
-    BIG_BLIND = "BB"
-
-@dataclass
-class PlayerPosition:
-    """Represents a player's position(s) at the table."""
-    positions: List[Position]  # A player can have multiple positions in heads-up
-
-    @property
-    def value(self) -> str:
-        """Return primary position value."""
-        return self.positions[0].value if self.positions else 'NA'
-
-    def has_position(self, position: Position) -> bool:
-        """Check if player has a specific position."""
-        return position in self.positions
-    
-@dataclass
-class Player:
-    """
-    Represents a player at the table.
-    
-    Attributes:
-        id: Unique identifier for the player
-        name: Display name
-        stack: Current chip stack
-        position: Current position at table
-        hand: Current cards
-        is_active: Whether player is in current hand
-    """
-    id: str
-    name: str
-    stack: int
-    position: Optional[PlayerPosition] = None
-    hand: PlayerHand = field(default_factory=PlayerHand)  # Always initialized
-    is_active: bool = True
-
-    def __post_init__(self):
-        """Initialize player's hand if not provided."""
-        if self.hand is None:
-            self.hand = PlayerHand()
-
-    def __eq__(self, other):
-        if not isinstance(other, Player):
-            return False
-        return self.id == other.id
-
-    def __hash__(self):
-        return hash(self.id)            
-    
-def has_position(player, pos):
-    return player.position is not None and player.position.has_position(pos)
-    
+   
 class Table:
     """
     Manages the state of a poker table.
@@ -78,9 +27,17 @@ class Table:
         community_cards: Shared community cards
         min_buyin: Minimum buy-in amount
         max_buyin: Maximum buy-in amount
+        rules: Game rules configuration
     """
     
-    def __init__(self, max_players: int, min_buyin: int, max_buyin: int, deck_type: DeckType = DeckType.STANDARD):
+    def __init__(
+        self,
+        max_players: int,
+        min_buyin: int,
+        max_buyin: int,
+        deck_type: DeckType = DeckType.STANDARD,
+        rules: Optional[GameRules] = None
+    ):
         """
         Initialize a new table.
         
@@ -89,11 +46,13 @@ class Table:
             min_buyin: Minimum buy-in amount
             max_buyin: Maximum buy-in amount
             deck_type: Type of deck to use (default: STANDARD)
+            rules: Game rules configuration (optional)
         """
         self.max_players = max_players
         self.min_buyin = min_buyin
         self.max_buyin = max_buyin
         self.deck_type = deck_type  # Store the deck type
+        self.rules = rules  # Store the rules
   
         self.players: Dict[str, Player] = {}  # id -> Player
         self.button_pos: int = 0  # Index of button position
@@ -193,6 +152,74 @@ class Table:
                     
             return rotated_players
         
+    def get_player_after_big_blind(self) -> Optional[Player]:
+        """Return the first active player after the big blind."""
+        players = self.get_position_order()
+        bb_idx = next((i for i, p in enumerate(players) if p.position and p.position.has_position(Position.BIG_BLIND)), -1)
+        if bb_idx == -1:
+            return self.get_next_active_player(self.button_pos)  # Fallback
+        next_idx = (bb_idx + 1) % len(players)
+        while not players[next_idx].is_active:
+            next_idx = (next_idx + 1) % len(players)
+            if next_idx == bb_idx:  # Full circle
+                return None
+        return players[next_idx]
+
+    def get_bring_in_player(self, bring_in_amount: int) -> Optional[Player]:
+        """Return the player required to post the bring-in."""
+        active_players = [p for p in self.players.values() if p.is_active]
+        if not active_players:
+            return None
+        num_visible = sum(1 for c in active_players[0].hand.get_cards() if c.visibility == Visibility.FACE_UP)
+        bring_in_rule = CardRule(self.rules.forced_bets.rule) if self.rules and self.rules.forced_bets.rule else CardRule.LOW_CARD
+        player = BringInDeterminator.determine_first_to_act(active_players, num_visible, bring_in_rule, self.rules)
+        if player is None:
+            logger.debug("No bring-in player determined, falling back to first active player")
+            return active_players[0]  # Fallback to first active player        
+        return player
+    
+    def get_player_with_best_hand(self) -> Optional[Player]:
+        """Return the player with the best visible hand based on game rules."""
+        active_players = [p for p in self.players.values() if p.is_active]
+        if not active_players:
+            return None
+        
+        # Determine the number of visible cards (assuming all players have the same number)
+        num_visible = sum(1 for c in active_players[0].hand.get_cards() if c.visibility == Visibility.FACE_UP)
+        if num_visible == 0:
+            logger.debug("No visible cards, falling back to first active player")
+            return active_players[0]  # Fallback if no visible cards yet
+        
+        # Get the appropriate evaluation type based on the number of visible cards and rules
+        from generic_poker.game.bringin import BringInDeterminator, CardRule
+        bring_in_rule = CardRule(self.rules.forced_bets.rule) if self.rules and self.rules.forced_bets.rule else CardRule.LOW_CARD
+        eval_type = BringInDeterminator._get_dynamic_eval_type(num_visible, bring_in_rule, self.rules)
+        logger.debug(f"Evaluating best hand with {num_visible} visible cards using {eval_type}")
+
+        # Compare visible hands to find the best player
+        from generic_poker.evaluation.evaluator import evaluator
+        best_player = active_players[0]
+        best_hand = [c for c in best_player.hand.get_cards() if c.visibility == Visibility.FACE_UP][:num_visible]
+        for player in active_players[1:]:
+            visible_cards = [c for c in player.hand.get_cards() if c.visibility == Visibility.FACE_UP][:num_visible]
+            if evaluator.compare_hands(visible_cards, best_hand, eval_type) > 0:
+                best_hand = visible_cards
+                best_player = player
+        
+        logger.debug(f"Best hand player: {best_player.name} with cards {best_hand}")
+        return best_player
+    
+    def get_next_active_player(self, start_position: int) -> Optional[Player]:
+        """Return the next active player from a starting position."""
+        players = self.get_position_order()
+        start_idx = start_position % len(players)
+        next_idx = (start_idx + 1) % len(players)
+        while not players[next_idx].is_active:
+            next_idx = (next_idx + 1) % len(players)
+            if next_idx == start_idx:  # Full circle
+                return None
+        return players[next_idx]    
+
     def get_player_to_act(self, round_start: bool = False) -> Optional[Player]:
         """
         Get the next player to act.

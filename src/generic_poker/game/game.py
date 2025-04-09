@@ -1,6 +1,7 @@
 """Core game implementation controlling game flow."""
 import logging
 import json
+import itertools
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Tuple, Set
 
@@ -11,12 +12,13 @@ from generic_poker.game.betting import (
     BettingManager, LimitBettingManager, create_betting_manager,
     BettingStructure, BetType, PlayerBet
 )
-from generic_poker.game.bringin import BringInDeterminator, CardRule
+from generic_poker.game.bringin import BringInDeterminator
 from generic_poker.core.card import Card, Visibility, WildType, Rank, Suit
 from generic_poker.core.deck import Deck, DeckType
 from generic_poker.evaluation.evaluator import EvaluationType, evaluator
 
 from generic_poker.evaluation.constants import HAND_SIZES, BASE_RANKS
+from generic_poker.evaluation.cardrule import CardRule
 
 from generic_poker.game.action_result import ActionResult
 from generic_poker.game.player_action_handler import PlayerActionHandler
@@ -261,7 +263,8 @@ class Game:
             max_players=rules.max_players,
             min_buyin=min_buyin,
             max_buyin=max_buyin,
-            deck_type=deck_type 
+            deck_type=deck_type,
+            rules=rules  # Pass rules to Table
         )
 
         # Betting rules
@@ -296,6 +299,8 @@ class Game:
         self.current_player: Optional[Player] = None  # player to act
     
         self.last_hand_result = None  # Store the last hand result here
+
+        self.bring_in_player_id = None
     
 
     def get_game_description(self) -> str:
@@ -636,6 +641,7 @@ class Game:
                               
     def handle_forced_bets(self, bet_type: str):
         """Handle forced bets (antes or blinds) at the start of a hand."""
+        logger.info(f"Handling forced bets: {bet_type}")
         active_players = [p for p in self.table.players.values() if p.is_active]
         if not active_players:
             return
@@ -651,8 +657,8 @@ class Game:
                     #self.betting.pot.add_bet(player.id, amount, is_all_in=(amount == player.stack), stack_before=player.stack)
                     self.betting.place_bet(player.id, amount, player.stack + amount, is_forced=True, is_ante=True)
                     logger.info(f"{player.name} posts ante of ${amount} (Remaining stack: ${player.stack})")
-            self.current_player = None  # No player has acted yet; bring-in will determine first
-            self.betting.new_round(preserve_current_bet=True)  # Preserve ante as part of round but reset acted flags
+           # self.current_player = None  # No player has acted yet; bring-in will determine first
+           # self.betting.new_round(preserve_current_bet=True)  # Preserve ante as part of round but reset acted flags
 
         elif bet_type == "blinds":
             positions = self.table.get_position_order()
@@ -670,23 +676,24 @@ class Game:
                 bb_player.stack -= bb_amount
                 self.betting.place_bet(bb_player.id, bb_amount, bb_player.stack + bb_amount, is_forced=True)
                 logger.info(f"{bb_player.name} posts big blind of ${bb_amount}...")
-            self.current_player = self.next_player(round_start=True)
-            self.betting.new_round(preserve_current_bet=True)        
+          #  self.current_player = self.next_player(round_start=True)
+          #  self.betting.new_round(preserve_current_bet=True)        
 
         elif bet_type == "bring-in":
-            # Determine bring-in player (lowest up-card)
-            num_visible = sum(1 for c in active_players[0].hand.get_cards() if c.visibility == Visibility.FACE_UP)
-            bring_in_rule = CardRule(self.rules.forced_bets.rule)
-            bring_in_player = BringInDeterminator.determine_first_to_act(active_players, num_visible, bring_in_rule, self.rules)
+            bring_in_amount = self.bring_in or self.small_bet  # Use bring_in if set, else small_bet
+            bring_in_player = self.table.get_bring_in_player(bring_in_amount)
             if bring_in_player:
                 self.current_player = bring_in_player
                 logger.info(f"Bring-in player: {bring_in_player.name} with {bring_in_player.hand.cards[-1]}")
             else:
                 logger.error("No bring-in player determined")
                 self.current_player = active_players[0]  # Fallback
-            # Betting round starts with bring-in player, no auto-post yet
-            self.betting.new_round(preserve_current_bet=True)  # Reset bets, keep ante in pot
+            # No current_player set; next_player() will use betting_order.initial
                            
+        self.betting.new_round(preserve_current_bet=True)  # Reset bets, keep forced bets in pot
+        if bet_type != "bring-in":  # Only set current_player after bring-in if not already set
+            self.current_player = self.next_player(round_start=True)
+
     def _set_next_player_after(self, player_id: str) -> None:
         """Set the current player to the player after the specified player."""
         players = self.table.get_position_order()
@@ -707,141 +714,406 @@ class Game:
         self.current_step += 1
         self.process_current_step()
         
+    # def next_player(self, round_start: bool = False) -> Optional[Player]:
+    #     """
+    #     Determine the next player to act based on betting_order.
+
+    #     Args:
+    #         round_start: True if this is the start of a betting round
+
+    #     Returns:
+    #         Next player to act or None if no active players
+    #     """
+    #     active_players = [p for p in self.table.players.values() if p.is_active]
+    #     if not active_players:
+    #         return None
+        
+    #     # Check if this is a stud game with bring-in
+    #     is_stud_game = self.rules.forced_bets.style == "bring-in"
+
+    #     if is_stud_game:
+    #         step = self.rules.gameplay[self.current_step]
+    #         bring_in_rule = CardRule(self.rules.forced_bets.rule)
+
+    #         # Find the "Initial Bet" step dynamically
+    #         # Debug the gameplay steps
+    #         logger.debug(f"Gameplay steps: {[s.__dict__ for s in self.rules.gameplay]}")
+    #         bring_in_step_idx = next((i for i, s in enumerate(self.rules.gameplay) if s.action_config.get("type") == "bring-in"), -1)
+    #         initial_bet_step_idx = bring_in_step_idx + 1 if bring_in_step_idx != -1 else -1
+    #         logger.debug(f"  current step: {self.current_step}, bring_in_step_idx: {bring_in_step_idx}, initial_bet_step_idx: {initial_bet_step_idx}")
+
+    #         num_visible = sum(1 for c in active_players[0].hand.get_cards() if c.visibility == Visibility.FACE_UP)      
+
+    #         if round_start and step.action_config.get("type") == "bring-in":
+    #             bring_in_player = BringInDeterminator.determine_first_to_act(active_players, num_visible, bring_in_rule, self.rules)
+    #             logger.debug(f"Stud first-to-act in bring-in round: {bring_in_player.name}")
+    #             return bring_in_player
+    #         elif round_start and self.current_step == initial_bet_step_idx:  # "Initial Bet" (first small bet round)
+    #             # Start with player after last bring-in
+    #             logger.debug(f"  self.betting.current_bets = {self.betting.current_bets}")
+    #             # find the player with posted_blind = True
+    #             current_idx = next((i for i, p in enumerate(active_players) if self.betting.current_bets.get(p.id, PlayerBet()).posted_blind), -1)
+    #             #last_bring_in = next((p for p in active_players if self.betting.current_bets.get(p.id, PlayerBet()).amount > 0), active_players[0])
+    #             #current_idx = active_players.index(last_bring_in)
+    #             next_idx = (current_idx + 1) % len(active_players)
+    #             logger.debug(f"Stud first-to-act in round {self.betting.betting_round + 1}: {active_players[next_idx].name}")
+    #             return active_players[next_idx]
+    #         elif round_start:
+    #             # For non-betting rounds (e.g., expose) or betting rounds with visible cards
+    #             if num_visible == 0:  # No cards visible yet (e.g., expose step)
+    #                 logger.debug(f"No visible cards; starting with first active player: {active_players[0].name}")
+    #                 return active_players[0]           
+    #             # Later betting rounds (e.g., Fourth Street Bet)                    
+    #             first_player = BringInDeterminator.determine_first_to_act(active_players, num_visible, bring_in_rule, self.rules)
+    #             if first_player is None:
+    #                 logger.warning("No first player determined; defaulting to first active player")
+    #                 return active_players[0]               
+    #             logger.debug(f"Stud first-to-act in round {self.betting.betting_round + 1}: {first_player.name}")
+    #             return first_player          
+    #         elif self.current_player:
+    #             current_idx = active_players.index(self.current_player)
+    #             next_idx = (current_idx + 1) % len(active_players)
+    #             logger.debug(f"Stud next player: {active_players[next_idx].name}")
+    #             return active_players[next_idx]
+    #         return active_players[0]       
+            
+    #     # Blinds-based games (e.g., Hold'em)
+    #     players = self.table.get_position_order()  # BTN -> SB -> BB order
+    #     active_players = [p for p in players if p.is_active]
+    #     if not active_players:
+    #         return None            
+        
+    #     # Determine if this is the first voluntary betting round
+    #     is_first_betting_round = False
+    #     first_bet_step = None
+    #     for i, step in enumerate(self.rules.gameplay):
+    #         if step.action_type == GameActionType.BET and step.action_config.get("type") == "small":
+    #             first_bet_step = i
+    #             break
+    #         elif step.action_type == GameActionType.GROUPED:
+    #             for j, subaction in enumerate(step.action_config):
+    #                 if "bet" in subaction and subaction["bet"].get("type") == "small":
+    #                     first_bet_step = i
+    #                     break
+    #             if first_bet_step is not None:
+    #                 break
+
+    #     # If this is the first betting step encountered, it’s the first round
+    #     is_first_betting_round = (first_bet_step == self.current_step)
+
+    #     logger.debug(f"First betting round: {is_first_betting_round} and round_start: {round_start}")
+    #     if round_start:
+    #         if is_first_betting_round:
+    #             # First betting round (e.g., pre-flop in Hold'em): Start with BTN in 3-player
+    #             if len(active_players) <= 3:
+    #                 for player in players:
+    #                     if player.position and player.position.has_position(Position.BUTTON) and player.is_active:
+    #                         logger.debug(f"Pre-flop first action to BTN: {player.name}")
+    #                         return player
+    #                 logger.debug(f"BTN not active, starting with: {active_players[0].name}")
+    #                 return active_players[0]                        
+    #             else:
+    #                 bb_idx = next((i for i, p in enumerate(players) if p.has_position(Position.BIG_BLIND) and p.is_active), -1)
+    #                 next_idx = (bb_idx + 1) % len(players)
+    #                 while not players[next_idx].is_active:
+    #                     next_idx = (next_idx + 1) % len(players)                   
+    #                 logger.debug(f"Pre-flop first action to UTG: {players[next_idx].name}")
+    #                 return players[next_idx]
+    #         else:
+    #             # Subsequent rounds: Start with SB
+    #             for player in players:
+    #                 if player.position and player.position.has_position(Position.SMALL_BLIND) and player.is_active:
+    #                     logger.debug(f"Subsequent round action to SB: {player.name}")
+    #                     return player
+    #             logger.debug(f"SB not active, starting with: {active_players[0].name}")
+    #             return active_players[0]
+                    
+    #     # Subsequent actions in the round
+    #     if self.current_player:
+    #         try:
+    #             current_idx = next(i for i, p in enumerate(players) if p.id == self.current_player.id)
+    #             next_idx = (current_idx + 1) % len(players)
+    #             # Skip inactive players
+    #             while not players[next_idx].is_active:
+    #                 next_idx = (next_idx + 1) % len(players)
+    #                 if next_idx == current_idx:  # Full circle, no active players left
+    #                     return None                
+    #             logger.debug(f"Next player: {players[next_idx].name}")
+    #             return players[next_idx]
+    #         except StopIteration:
+    #             # Current player no longer active (e.g., folded); start with first active
+    #             logger.debug(f"Current player not found, starting with: {active_players[0].name}")
+    #             return active_players[0]
+
+    #     # Default: First active player
+    #     logger.debug(f"Defaulting to first active player: {active_players[0].name}")
+    #     return active_players[0]
+    
+    # def next_player(self, round_start: bool = False) -> Optional[Player]:
+    #     """
+    #     Determine the next player to act based on betting_order.
+
+    #     Args:
+    #         round_start: True if this is the start of a betting round
+
+    #     Returns:
+    #         Next player to act or None if no active players
+    #     """
+
+    #     active_players = [p for p in self.table.players.values() if p.is_active]
+    #     if not active_players:
+    #         return None
+
+    #     # Get current step configuration
+    #     current_step_config = self.rules.gameplay[self.current_step] if self.current_step < len(self.rules.gameplay) else None
+    #     is_bet_step = current_step_config and current_step_config.action_type == GameActionType.BET
+
+    #     # Determine if this is the initial forced betting round
+    #     is_initial_round = False
+    #     if is_bet_step:
+    #         bet_type = current_step_config.action_config.get("type")
+    #         is_initial_round = bet_type in ["blinds", "bring-in"]
+
+    #     # Identify forced bettors from current_bets
+    #     current_bets = self.betting.current_bets  # {player_id: PlayerBet}
+    #     forced_bettors = [pid for pid, bet in current_bets.items() if bet.posted_blind]
+
+    #     # Determine if this is the first voluntary betting round after forced bets
+    #     is_first_voluntary_betting = (
+    #         is_bet_step and
+    #         not is_initial_round and
+    #         forced_bettors and
+    #         self.betting.betting_round == 0
+    #     )
+
+    #     # Select betting order type
+    #     order_type = self.rules.betting_order.initial if is_initial_round else self.rules.betting_order.subsequent
+    #     logger.debug(f"Betting order type: {order_type}")
+
+    #     if round_start:
+    #         if is_initial_round:
+    #             # Handle forced bet posting (e.g., blinds or bring-in)
+    #             if order_type == "after_big_blind":
+    #                 next_player = self.table.get_player_after_big_blind()
+    #             elif order_type == "bring_in":
+    #                 next_player = self.table.get_bring_in_player(self.bring_in or self.small_bet)
+    #             elif order_type == "dealer":
+    #                 next_player = self.table.get_next_active_player(self.table.button_pos)
+    #             else:
+    #                 logger.warning(f"Unknown betting order '{order_type}', defaulting to dealer")
+    #                 next_player = self.table.get_next_active_player(self.table.button_pos)
+    #         elif is_first_voluntary_betting:
+    #             # Start with the player after the last forced bettor (e.g., after BB)
+    #             last_forced_bettor_id = forced_bettors[-1]  # BB is typically last
+    #             players = self.table.get_position_order()
+    #             try:
+    #                 forced_bettor_idx = next(i for i, p in enumerate(players) if p.id == last_forced_bettor_id)
+    #                 next_idx = (forced_bettor_idx + 1) % len(players)
+    #                 while not players[next_idx].is_active:
+    #                     next_idx = (next_idx + 1) % len(players)
+    #                     if next_idx == forced_bettor_idx:  # Full circle
+    #                         return None
+    #                 next_player = players[next_idx]
+    #                 logger.debug(f"First voluntary betting round: Starting with {next_player.name}")
+    #             except StopIteration:
+    #                 next_player = active_players[0]  # Fallback
+    #         else:
+    #             # Subsequent voluntary rounds (e.g., flop, turn)
+    #             if order_type == "dealer":
+    #                 next_player = self.table.get_next_active_player(self.table.button_pos)
+    #             elif order_type == "high_hand":
+    #                 next_player = self.table.get_player_with_best_hand()
+    #             else:
+    #                 logger.warning(f"Unknown betting order '{order_type}', defaulting to dealer")
+    #                 next_player = self.table.get_next_active_player(self.table.button_pos)
+
+    #         if next_player:
+    #             logger.debug(f"Round start ({order_type or 'first voluntary'}): First player is {next_player.name}")
+    #             return next_player
+    #         return active_players[0]  # Fallback
+
+    #     # Mid-round: Move to next active player
+    #     if self.current_player:
+    #         players = self.table.get_position_order()
+    #         try:
+    #             current_idx = next(i for i, p in enumerate(players) if p.id == self.current_player.id)
+    #             next_idx = (current_idx + 1) % len(players)
+    #             while not players[next_idx].is_active:
+    #                 next_idx = (next_idx + 1) % len(players)
+    #                 if next_idx == current_idx:  # Full circle
+    #                     return None
+    #             logger.debug(f"Next player: {players[next_idx].name}")
+    #             return players[next_idx]
+    #         except StopIteration:
+    #             return active_players[0]  # Fallback
+    #     return active_players[0]  # Default fallback
+    
+    # def next_player(self, round_start: bool = False) -> Optional[Player]:
+    #     logger.debug(f"Determining next player (round_start={round_start}, current_step={self.current_step})")
+        
+    #     active_players = [p for p in self.table.players.values() if p.is_active]
+    #     if not active_players:
+    #         return None
+        
+    #     # Determine if this is a voluntary betting round
+    #     is_voluntary_bet = False
+    #     current_step_config = self.rules.gameplay[self.current_step] if self.current_step < len(self.rules.gameplay) else None
+    #     if current_step_config:
+    #         if current_step_config.action_type == GameActionType.BET:
+    #             bet_type = current_step_config.action_config.get("type")
+    #             is_voluntary_bet = bet_type not in ["antes", "blinds", "bring-in"]
+    #         elif current_step_config.action_type == GameActionType.GROUPED:
+    #             substep = self.action_handler.current_substep
+    #             if substep < len(current_step_config.action_config):
+    #                 subaction = current_step_config.action_config[substep]
+    #                 if "bet" in subaction:
+    #                     bet_type = subaction["bet"].get("type")
+    #                     is_voluntary_bet = bet_type not in ["antes", "blinds", "bring-in"]
+        
+    #     # Identify forced bettors
+    #     current_bets = self.betting.current_bets  # {player_id: PlayerBet}
+    #     forced_bettors = [pid for pid, bet in current_bets.items() if bet.posted_blind]
+        
+    #     if round_start:
+    #         if self.betting.betting_round == 0 and is_voluntary_bet and forced_bettors:
+    #             # First voluntary betting round after forced bets
+    #             last_forced_bettor_id = forced_bettors[-1]  # Last player to post a blind (BB)
+    #             players = self.table.get_position_order()
+    #             try:
+    #                 forced_bettor_idx = next(i for i, p in enumerate(players) if p.id == last_forced_bettor_id)
+    #                 next_idx = (forced_bettor_idx + 1) % len(players)
+    #                 while not players[next_idx].is_active:
+    #                     next_idx = (next_idx + 1) % len(players)
+    #                     if next_idx == forced_bettor_idx:  # Full circle
+    #                         return None
+    #                 next_player = players[next_idx]
+    #                 logger.debug(f"First voluntary betting round: Starting with {next_player.name}")
+    #                 return next_player
+    #             except StopIteration:
+    #                 return active_players[0]  # Fallback
+    #         else:
+    #             # Use betting order type
+    #             order_type = self.rules.betting_order.initial if self.betting.betting_round == 0 else self.rules.betting_order.subsequent
+    #             logger.debug(f"Betting order type: {order_type} with self.betting.betting_round = {self.betting.betting_round} initial: {self.rules.betting_order.initial} subsequent: {self.rules.betting_order.subsequent}")
+    #             if order_type == "after_big_blind":
+    #                 next_player = self.table.get_player_after_big_blind()
+    #                 logger.debug(f"  after_big_blind: Starting with {next_player.name}")
+    #             elif order_type == "bring_in":
+    #                 next_player = self.table.get_bring_in_player(self.bring_in or self.small_bet)
+    #                 logger.debug(f"  bring_in: Starting with {next_player.name}")
+    #             elif order_type == "high_hand":
+    #                 next_player = self.table.get_player_with_best_hand()
+    #                 logger.debug(f"  high_hand: Starting with {next_player.name}")
+    #             elif order_type == "dealer":
+    #                 next_player = self.table.get_next_active_player(self.table.button_pos)
+    #                 logger.debug(f"  dealer: Starting with {next_player.name}")
+    #             else:
+    #                 logger.warning(f"Unknown betting order '{order_type}', defaulting to dealer")
+    #                 next_player = self.table.get_next_active_player(self.table.button_pos)
+    #                 logger.debug(f"  unknown: Starting with {next_player.name}")
+    #             if next_player:
+    #                 return next_player
+    #             return active_players[0]  # Fallback
+        
+    #     # Mid-round: Move to next active player
+    #     if self.current_player:
+    #         players = self.table.get_position_order()
+    #         try:
+    #             current_idx = next(i for i, p in enumerate(players) if p.id == self.current_player.id)
+    #             next_idx = (current_idx + 1) % len(players)
+    #             while not players[next_idx].is_active:
+    #                 next_idx = (next_idx + 1) % len(players)
+    #                 if next_idx == current_idx:  # Full circle
+    #                     return None
+    #             logger.debug(f"Next player: {players[next_idx].name}")
+    #             return players[next_idx]
+    #         except StopIteration:
+    #             return active_players[0]  # Fallback
+    #     return active_players[0]  # Default fallback    
+
     def next_player(self, round_start: bool = False) -> Optional[Player]:
-        """
-        Determine the next player to act based on game type and round state.
+        logger.debug(f"Determining next player (round_start={round_start}, current_step={self.current_step})")
         
-        Args:
-            round_start: True if this is the start of a betting round
-        
-        Returns:
-            Next player to act or None if no active players
-        """
         active_players = [p for p in self.table.players.values() if p.is_active]
         if not active_players:
             return None
         
-        # Check if this is a stud game with bring-in
-        is_stud_game = self.rules.forced_bets.style == "bring-in"
-
-        if is_stud_game:
-            step = self.rules.gameplay[self.current_step]
-            bring_in_rule = CardRule(self.rules.forced_bets.rule)
-
-            # Find the "Initial Bet" step dynamically
-            # Debug the gameplay steps
-            logger.debug(f"Gameplay steps: {[s.__dict__ for s in self.rules.gameplay]}")
-            bring_in_step_idx = next((i for i, s in enumerate(self.rules.gameplay) if s.action_config.get("type") == "bring-in"), -1)
-            initial_bet_step_idx = bring_in_step_idx + 1 if bring_in_step_idx != -1 else -1
-            logger.debug(f"  current step: {self.current_step}, bring_in_step_idx: {bring_in_step_idx}, initial_bet_step_idx: {initial_bet_step_idx}")
-
-            num_visible = sum(1 for c in active_players[0].hand.get_cards() if c.visibility == Visibility.FACE_UP)      
-
-            if round_start and step.action_config.get("type") == "bring-in":
-                bring_in_player = BringInDeterminator.determine_first_to_act(active_players, num_visible, bring_in_rule, self.rules)
-                logger.debug(f"Stud first-to-act in bring-in round: {bring_in_player.name}")
-                return bring_in_player
-            elif round_start and self.current_step == initial_bet_step_idx:  # "Initial Bet" (first small bet round)
-                # Start with player after last bring-in
-                logger.debug(f"  self.betting.current_bets = {self.betting.current_bets}")
-                # find the player with posted_blind = True
-                current_idx = next((i for i, p in enumerate(active_players) if self.betting.current_bets.get(p.id, PlayerBet()).posted_blind), -1)
-                #last_bring_in = next((p for p in active_players if self.betting.current_bets.get(p.id, PlayerBet()).amount > 0), active_players[0])
-                #current_idx = active_players.index(last_bring_in)
-                next_idx = (current_idx + 1) % len(active_players)
-                logger.debug(f"Stud first-to-act in round {self.betting.betting_round + 1}: {active_players[next_idx].name}")
-                return active_players[next_idx]
-            elif round_start:
-                # For non-betting rounds (e.g., expose) or betting rounds with visible cards
-                if num_visible == 0:  # No cards visible yet (e.g., expose step)
-                    logger.debug(f"No visible cards; starting with first active player: {active_players[0].name}")
-                    return active_players[0]           
-                # Later betting rounds (e.g., Fourth Street Bet)                    
-                first_player = BringInDeterminator.determine_first_to_act(active_players, num_visible, bring_in_rule, self.rules)
-                if first_player is None:
-                    logger.warning("No first player determined; defaulting to first active player")
-                    return active_players[0]               
-                logger.debug(f"Stud first-to-act in round {self.betting.betting_round + 1}: {first_player.name}")
-                return first_player          
-            elif self.current_player:
-                current_idx = active_players.index(self.current_player)
-                next_idx = (current_idx + 1) % len(active_players)
-                logger.debug(f"Stud next player: {active_players[next_idx].name}")
-                return active_players[next_idx]
-            return active_players[0]       
-            
-        # Blinds-based games (e.g., Hold'em)
-        players = self.table.get_position_order()  # BTN -> SB -> BB order
-        active_players = [p for p in players if p.is_active]
-        if not active_players:
-            return None            
+        # Determine if this is a voluntary betting round
+        is_voluntary_bet = False
+        current_step_config = self.rules.gameplay[self.current_step] if self.current_step < len(self.rules.gameplay) else None
+        if current_step_config:
+            if current_step_config.action_type == GameActionType.BET:
+                bet_type = current_step_config.action_config.get("type")
+                is_voluntary_bet = bet_type not in ["antes", "blinds", "bring-in"]
+            elif current_step_config.action_type == GameActionType.GROUPED:
+                substep = self.action_handler.current_substep
+                if substep < len(current_step_config.action_config):
+                    subaction = current_step_config.action_config[substep]
+                    if "bet" in subaction:
+                        bet_type = subaction["bet"].get("type")
+                        is_voluntary_bet = bet_type not in ["antes", "blinds", "bring-in"]
         
-        # Determine if this is the first voluntary betting round
-        is_first_betting_round = False
-        first_bet_step = None
-        for i, step in enumerate(self.rules.gameplay):
-            if step.action_type == GameActionType.BET and step.action_config.get("type") == "small":
-                first_bet_step = i
-                break
-            elif step.action_type == GameActionType.GROUPED:
-                for j, subaction in enumerate(step.action_config):
-                    if "bet" in subaction and subaction["bet"].get("type") == "small":
-                        first_bet_step = i
-                        break
-                if first_bet_step is not None:
-                    break
-
-        # If this is the first betting step encountered, it’s the first round
-        is_first_betting_round = (first_bet_step == self.current_step)
-
-        logger.debug(f"First betting round: {is_first_betting_round} and round_start: {round_start}")
+        # Identify forced bettors
+        current_bets = self.betting.current_bets  # {player_id: PlayerBet}
+        forced_bettors = [pid for pid, bet in current_bets.items() if bet.posted_blind]
+        
         if round_start:
-            if is_first_betting_round:
-                # First betting round (e.g., pre-flop in Hold'em): Start with BTN in 3-player
-                if len(active_players) <= 3:
-                    for player in players:
-                        if player.position and player.position.has_position(Position.BUTTON) and player.is_active:
-                            logger.debug(f"Pre-flop first action to BTN: {player.name}")
-                            return player
-                    logger.debug(f"BTN not active, starting with: {active_players[0].name}")
-                    return active_players[0]                        
-                else:
-                    bb_idx = next((i for i, p in enumerate(players) if p.has_position(Position.BIG_BLIND) and p.is_active), -1)
-                    next_idx = (bb_idx + 1) % len(players)
+            # Use initial order only for the first voluntary betting round after forced bets
+            if self.betting.betting_round == 0 and is_voluntary_bet and forced_bettors:
+                last_forced_bettor_id = forced_bettors[-1]  # Last player to post a blind (BB)
+                players = self.table.get_position_order()
+                try:
+                    forced_bettor_idx = next(i for i, p in enumerate(players) if p.id == last_forced_bettor_id)
+                    next_idx = (forced_bettor_idx + 1) % len(players)
                     while not players[next_idx].is_active:
-                        next_idx = (next_idx + 1) % len(players)                   
-                    logger.debug(f"Pre-flop first action to UTG: {players[next_idx].name}")
-                    return players[next_idx]
+                        next_idx = (next_idx + 1) % len(players)
+                        if next_idx == forced_bettor_idx:  # Full circle
+                            return None
+                    next_player = players[next_idx]
+                    logger.debug(f"First voluntary betting round: Starting with {next_player.name}")
+                    return next_player
+                except StopIteration:
+                    return active_players[0]  # Fallback
             else:
-                # Subsequent rounds: Start with SB
-                for player in players:
-                    if player.position and player.position.has_position(Position.SMALL_BLIND) and player.is_active:
-                        logger.debug(f"Subsequent round action to SB: {player.name}")
-                        return player
-                logger.debug(f"SB not active, starting with: {active_players[0].name}")
-                return active_players[0]
-                    
-        # Subsequent actions in the round
+                # Use subsequent order for all other round starts (including draw phases)
+                order_type = self.rules.betting_order.subsequent
+                logger.debug(f"Using subsequent order type: {order_type} (step={self.current_step}, betting_round={self.betting.betting_round})")
+                if order_type == "dealer":
+                    next_player = self.table.get_next_active_player(self.table.button_pos)
+                    logger.debug(f"  dealer: Starting with {next_player.name}")
+                elif order_type == "after_big_blind":
+                    next_player = self.table.get_player_after_big_blind()
+                    logger.debug(f"  after_big_blind: Starting with {next_player.name}")
+                elif order_type == "bring_in":
+                    next_player = self.table.get_bring_in_player(self.bring_in or self.small_bet)
+                    logger.debug(f"  bring_in: Starting with {next_player.name}")
+                elif order_type == "high_hand":
+                    next_player = self.table.get_player_with_best_hand()
+                    logger.debug(f"  high_hand: Starting with {next_player.name}")                    
+                else:
+                    logger.warning(f"Unsupported subsequent order '{order_type}', defaulting to dealer")
+                    next_player = self.table.get_next_active_player(self.table.button_pos)
+                    logger.debug(f"  default: Starting with {next_player.name}")
+                if next_player:
+                    return next_player
+                return active_players[0]  # Fallback
+        
+        # Mid-round: Move to next active player
         if self.current_player:
+            players = self.table.get_position_order()
             try:
                 current_idx = next(i for i, p in enumerate(players) if p.id == self.current_player.id)
                 next_idx = (current_idx + 1) % len(players)
-                # Skip inactive players
                 while not players[next_idx].is_active:
                     next_idx = (next_idx + 1) % len(players)
-                    if next_idx == current_idx:  # Full circle, no active players left
-                        return None                
+                    if next_idx == current_idx:  # Full circle
+                        return None
                 logger.debug(f"Next player: {players[next_idx].name}")
                 return players[next_idx]
             except StopIteration:
-                # Current player no longer active (e.g., folded); start with first active
-                logger.debug(f"Current player not found, starting with: {active_players[0].name}")
-                return active_players[0]
+                return active_players[0]  # Fallback
+        return active_players[0]  # Default fallback
 
-        # Default: First active player
-        logger.debug(f"Defaulting to first active player: {active_players[0].name}")
-        return active_players[0]
-    
     def _handle_fold_win(self, active_players: List[Player]) -> None:
         logger.info("All but one player folded - hand complete")
         

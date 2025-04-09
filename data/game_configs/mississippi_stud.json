@@ -1,7 +1,8 @@
 {
     "game": "Mississippi Stud",
     "references": [
-        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
+        "https://www.barge.org/rulebook/mississippi-stud-and-variants.html"
     ],    
     "players": {
         "min": 2,
@@ -12,19 +13,18 @@
         "cards": 52
     },
     "bettingStructures": [
-        "Limit"
+        "Limit",
+        "Pot Limit"
     ],
     "forcedBets": {
-        "style": "bring-in",
-        "rule": "low card"
+        "style": "blinds"
+    },
+    "bettingOrder": {
+        "initial": "after_big_blind",
+        "subsequent": "high_hand"
     },
     "gamePlay": [
-        {
-            "bet": {
-                "type": "antes"
-            },
-            "name": "Post Antes"
-        },
+        {"bet": {"type": "blinds"}, "name": "Post Blinds"},
         {
             "deal": {
                 "location": "player",
@@ -43,12 +43,6 @@
         },
         {
             "bet": {
-                "type": "bring-in"
-            },
-            "name": "Post Bring-In"
-        },
-        {
-            "bet": {
                 "type": "small"
             },
             "name": "Initial Bet"
@@ -63,49 +57,49 @@
                     }
                 ]
             },
-            "name": "Deal Third Street"
+            "name": "Deal Fifth Street"
         },
         {
             "bet": {
                 "type": "small"
             },
-            "name": "Third Street Bet"
-        },
-        {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal Fourth Street"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "Fourth Street Bet"
-        },
-        {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal Fifth Street"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
             "name": "Fifth Street Bet"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Sixth Street"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Sixth Street Bet"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Seventh Street"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Seventh Street Bet"
         },
         {
             "showdown": {
@@ -121,8 +115,7 @@
         "bestHand": [
             {
                 "evaluationType": "high",
-                "holeCards": 5,
-                "communityCards": 0
+                "anyCards": 5
             }
         ]
     }

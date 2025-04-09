@@ -497,6 +497,7 @@ class PlayerActionHandler:
                 return ActionResult(success=False, error=f"Invalid bring-in amount: ${amount}")
             logger.info(f"{player.name} brings in for ${amount}")
             self._place_bet(player_id, amount, amount, BetType.BRING_IN, is_forced=True)
+            self.game.bring_in_player_id = player_id  # Record bring-in player       
             result = self._advance_player_if_needed(manage_player, False)
             if is_bring_in_step:
                 result.advance_step = True

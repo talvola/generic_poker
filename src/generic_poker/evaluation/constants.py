@@ -139,3 +139,5 @@ EVAL_TYPES_BY_SIZE = {
 
 # Which evaluation types only use rank (no suits)
 RANK_ONLY_TYPES = {'49', 'zero', '6', '21', 'low_pip_6_cards', '58', '21_6', 'zero_6'}
+
+

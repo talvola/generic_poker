@@ -45,8 +45,13 @@ class ForcedBets:
     """Configuration for forced bets."""
     style: str
     rule: Optional[str] = None
-    variation: Optional[str] = None
     bringInEval: Optional[str] = None
+
+@dataclass
+class BettingOrder:
+    """Configuration for determining the starting player of betting rounds."""
+    initial: str
+    subsequent: str
 
 @dataclass
 class ShowdownAction:
@@ -80,8 +85,9 @@ class GameRules:
     deck_type: str
     deck_size: int
     betting_structures: List[BettingStructure]
-    gameplay: List[GameStep]
     forced_bets: ForcedBets
+    betting_order: BettingOrder
+    gameplay: List[GameStep]
     showdown: ShowdownConfig
 
     @classmethod
@@ -129,30 +135,63 @@ class GameRules:
         except ValueError as e:
             raise ValueError(f"Invalid betting structure: {e}")
 
-        # Parse forced bets - default to Blinds if nothing specified.
+        # In the loader function (e.g., load_game_rules):
+        # Parse forced bets - default to blinds if nothing specified
         forced_bets_data = data.get('forcedBets', {})
         if forced_bets_data:
-            # see if variation exists - only use in Razz High now - for backward compatibility
-            # in the future, we'll have two rules - one for the opening round, and one for 
-            # subsequent rounds, which can default to the showdown evaluation (if there is only 
-            # one specified)
-            if 'variation' in forced_bets_data and forced_bets_data.get('rule') == 'low card al':
-                rule = 'low card al rh'
-            else:
-                rule = forced_bets_data.get('rule')
+            style = forced_bets_data.get('style')
+            if style not in ["blinds", "bring-in", "antes_only"]:
+                logger.warning(f"Invalid forcedBets style '{style}', defaulting to 'blinds'")
+                style = "blinds"
             forced_bets = ForcedBets(
-                style=forced_bets_data.get('style'),
-                rule=rule,
-                variation=forced_bets_data.get('variation'),
-                bringInEval=forced_bets_data.get('bringInEval')
+                style=style,
+                rule=forced_bets_data.get('rule'),  # None if not provided
+                bringInEval=forced_bets_data.get('bringInEval')  # None if not provided
             )
+            # Validate rule is provided for bring-in style
+            if style == "bring-in" and not forced_bets.rule:
+                logger.warning("Missing 'rule' for bring-in style, defaulting to 'low card'")
+                forced_bets.rule = "low card"
         else:
             forced_bets = ForcedBets(
-                style='blinds',
+                style="blinds",
                 rule=None,
-                variation=None,
                 bringInEval=None
-            )  
+            )
+            
+        # Parse betting order - infer defaults from forcedBets if not specified
+        betting_order_data = data.get('bettingOrder', {})
+        if betting_order_data:
+            initial = betting_order_data.get('initial')
+            subsequent = betting_order_data.get('subsequent')
+            if initial not in ["after_big_blind", "bring_in", "dealer"]:
+                logger.warning(f"Invalid bettingOrder.initial '{initial}', defaulting based on forcedBets")
+                initial = None
+            if subsequent not in ["high_hand", "dealer"]:
+                logger.warning(f"Invalid bettingOrder.subsequent '{subsequent}', defaulting based on forcedBets")
+                subsequent = None
+        else:
+            initial = None
+            subsequent = None
+
+        # Set defaults based on forcedBets if bettingOrder is missing or partially invalid
+        if forced_bets.style == "blinds":
+            default_initial = "after_big_blind"
+            default_subsequent = "dealer"
+        elif forced_bets.style == "bring-in":
+            default_initial = "bring_in"
+            default_subsequent = "high_hand"
+        elif forced_bets.style == "antes_only":
+            default_initial = "dealer"
+            default_subsequent = "high_hand"
+        else:  # Fallback for invalid styles
+            default_initial = "after_big_blind"
+            default_subsequent = "dealer"
+
+        betting_order = BettingOrder(
+            initial=initial or default_initial,
+            subsequent=subsequent or default_subsequent
+        )
 
         # Parse gameplay steps
         gameplay = []
@@ -207,6 +246,7 @@ class GameRules:
             betting_structures=betting_structures,
             gameplay=gameplay,
             forced_bets=forced_bets,
+            betting_order=betting_order,
             showdown=showdown
         )
         

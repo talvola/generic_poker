@@ -1,7 +1,8 @@
 {
     "game": "Mississippi Stud 8",
     "references": [
-        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
+        "https://www.barge.org/rulebook/mississippi-stud-and-variants.html"
     ],    
     "players": {
         "min": 2,
@@ -12,18 +13,22 @@
         "cards": 52
     },
     "bettingStructures": [
-        "Limit"
+        "Limit",
+        "Pot Limit"
     ],
     "forcedBets": {
-        "style": "bring-in",
-        "rule": "low card"
+        "style": "blinds"
+    },
+    "bettingOrder": {
+        "initial": "after_big_blind",
+        "subsequent": "high_hand"
     },
     "gamePlay": [
         {
             "bet": {
-                "type": "antes"
+                "type": "blinds"
             },
-            "name": "Post Antes"
+            "name": "Post Blinds"
         },
         {
             "deal": {
@@ -40,12 +45,6 @@
                 ]
             },
             "name": "Deal Hole Cards"
-        },
-        {
-            "bet": {
-                "type": "bring-in"
-            },
-            "name": "Post Bring-In"
         },
         {
             "bet": {
@@ -122,14 +121,12 @@
             {
                 "name": "High Hand",
                 "evaluationType": "high",
-                "holeCards": 5,
-                "communityCards": 0
+                "anyCards": 5
             },
             {
                 "name": "Low Hand",
                 "evaluationType": "a5_low",
-                "holeCards": 5,
-                "communityCards": 0,
+                "anyCards": 5,
                 "qualifier": [
                     1,
                     56

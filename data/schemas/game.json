@@ -29,24 +29,41 @@
       "properties": {
         "style": {
           "type": "string",
-          "description": "Style of forced bets (i.e., bring-in, blinds, antes)"
+          "enum": ["blinds", "bring-in", "antes_only"],
+          "description": "Style of forced bets: 'blinds' for small/big blinds, 'bring-in' for Stud bring-in after antes, 'antes_only' for antes without bring-in"
         },
         "rule": {
           "type": "string",
-          "description": "Rule for hand evaluation for bring-in bets"
-        },
-        "variation": {
-          "type": "string",
-          "description": "Optional variation on the standard bring-in rules"
+          "enum": ["low card", "high card"],
+          "description": "Rule for determining the bring-in player in 'bring-in' style (e.g., 'low card', 'high card'); ignored for other styles"
         },
         "bringInEval": {
           "type": "string",
-          "description": "Evaluation type from bestHand to use for bring-in with 2+ cards (required for multi-hand games)"
-        }            
+          "description": "Evaluation type from bestHand to use for bring-in with 2+ cards in multi-hand games; defaults to first bestHand evaluation if unspecified"
+        }
       },
-      "required": ["style", "rule"],
-      "additionalProperties": false
-    },   
+      "required": ["style"],
+      "additionalProperties": false,
+      "description": "Configuration for initial forced bets in the game"
+    },
+    "bettingOrder": {
+      "type": "object",
+      "properties": {
+        "initial": {
+          "type": "string",
+          "enum": ["after_big_blind", "bring_in", "dealer"],
+          "description": "Determines the starting player for the initial betting round: 'after_big_blind' (left of big blind), 'bring_in' (bring-in player), 'dealer' (left of dealer)"
+        },
+        "subsequent": {
+          "type": "string",
+          "enum": ["high_hand", "dealer"],
+          "description": "Determines the starting player for subsequent betting rounds: 'high_hand' (highest visible hand), 'dealer' (left of dealer or first active player)"
+        }
+      },
+      "required": ["initial", "subsequent"],
+      "additionalProperties": false,
+      "description": "Rules for determining the starting player for each betting round; defaults based on forcedBets if omitted"
+    },    
     "action": {
       "type": "object",
       "properties": {
@@ -612,7 +629,10 @@
     },
     "forcedBets": {
       "$ref": "#/definitions/forcedBets"
-    },    
+    },   
+    "bettingOrder": {
+      "$ref": "#/definitions/bettingOrder"
+    },     
     "gamePlay": {
       "type": "array",
       "items": {
