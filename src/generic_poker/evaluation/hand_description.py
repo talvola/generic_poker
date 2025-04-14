@@ -26,6 +26,8 @@ class HandDescriber:
         EvaluationType.HIGH_WILD: 'all_card_hands_description_high_wild_bug.csv',
         # Less than 5 cards
         EvaluationType.TWO_CARD_HIGH: 'all_card_hands_description_two_card_high.csv',       
+        # Special hands
+        EvaluationType.NE_SEVEN_CARD_HIGH: 'all_card_hands_description_ne_seven_card_high.csv',
     }
 
     def __init__(self, eval_type: EvaluationType):
@@ -234,6 +236,49 @@ class HandDescriber:
                 return self._describe_high_card(cards_used)            
             elif hand_result.rank == 1:  # Pair            
                 return self._describe_pair(cards_used)
+            
+        # Handle NE_SEVEN_CARD_HIGH (7-card hands)
+        elif self.eval_type == EvaluationType.NE_SEVEN_CARD_HIGH:
+            if hand_result.rank == 1:  # Grand Straight Flush
+                return self._describe_straight_flush(cards_used, prefix='Grand', min_length = 7)
+            elif hand_result.rank == 2:  # Palace
+                return self._describe_palace(cards_used)
+            elif hand_result.rank == 3:  # Long Straight Flush
+                return self._describe_straight_flush(cards_used, prefix='Long', min_length = 6)  # Treat as a straight flush
+            elif hand_result.rank == 4:  # Grand Flush
+                return self._describe_flush(cards_used, prefix='Grand', min_length = 7)
+            elif hand_result.rank == 5:  # Mansion
+                return self._describe_mansion(cards_used)
+            elif hand_result.rank == 6:  # Straight Flush
+                return self._describe_straight_flush(cards_used, min_length = 5)  # Treat as a straight flush
+            elif hand_result.rank == 7:  # Hotel
+                return self._describe_hotel(cards_used)
+            elif hand_result.rank == 8:  # Villa
+                return self._describe_villa(cards_used)
+            elif hand_result.rank == 9:  # Grand Straight
+                return self._describe_straight(cards_used, prefix='Grand', min_length = 7)
+            elif hand_result.rank == 10:  # Four of a Kind
+                return self._describe_four_of_kind(cards_used)
+            elif hand_result.rank == 11:  # Long Flush
+                return self._describe_flush(cards_used, prefix='Long', min_length = 6)
+            elif hand_result.rank == 12:  # Long Straight
+                return self._describe_straight(cards_used, prefix='Long', min_length = 6)
+            elif hand_result.rank == 13:  # Three Pair
+                return self._describe_three_pair(cards_used)
+            elif hand_result.rank == 14:  # Full House
+                return self._describe_full_house(cards_used)
+            elif hand_result.rank == 15:  # Flush
+                return self._describe_flush(cards_used)
+            elif hand_result.rank == 16:  # Straight
+                return self._describe_straight(cards_used)
+            elif hand_result.rank == 17:  # Three of a Kind
+                return self._describe_three_of_kind(cards_used)
+            elif hand_result.rank == 18:  # Two Pair
+                return self._describe_two_pair(cards_used)
+            elif hand_result.rank == 19:  # One Pair
+                return self._describe_pair(cards_used)
+            elif hand_result.rank == 20:  # High Card
+                return self._describe_high_card(cards_used)            
                 
         # Default to basic description if no detailed version available
         return basic_desc
@@ -317,19 +362,76 @@ class HandDescriber:
         highest_rank = self._get_highest_rank(cards)
         return f"{highest_rank.full_name} High"
 
-    def _describe_straight_flush(self, cards: List[Card]) -> str:
-        """Generate detailed description for Straight Flush."""
-        highest_rank = self._get_highest_rank(cards)
+    def _describe_straight_flush(self, cards: List[Card], prefix: Optional[str] = None, min_length: int = 5) -> str:
+        """
+        Generate detailed description for Straight Flush.
+        
+        Args:
+            cards: List of cards to describe.
+            prefix: Optional prefix (e.g., 'Grand', 'Long') to include in the description.
+            min_length: Minimum length of the straight flush to find (e.g., 5, 6, or 7).
+        
+        Returns:
+            Detailed description of the straight flush.
+        """
+        # Find the straight flush
+        straight_flush_cards = self._find_straight_flush(cards, min_length=min_length)
+        if not straight_flush_cards:
+            return "Invalid Straight Flush"
+        
+        # Get the highest rank of the straight flush
+        highest_rank = self._get_highest_rank(straight_flush_cards)
+        
+        if prefix:
+            return f"{highest_rank.full_name}-high {prefix} Straight Flush"
         return f"{highest_rank.full_name}-high Straight Flush"
 
-    def _describe_flush(self, cards: List[Card]) -> str:
-        """Generate detailed description for Flush."""
-        highest_rank = self._get_highest_rank(cards)
+    def _describe_flush(self, cards: List[Card], prefix: Optional[str] = None, min_length: int = 5) -> str:
+        """
+        Generate detailed description for Flush.
+        
+        Args:
+            cards: List of cards to describe.
+            prefix: Optional prefix (e.g., 'Grand', 'Long') to include in the description.
+            min_length: Minimum length of the flush to find (e.g., 5, 6, or 7).
+        
+        Returns:
+            Detailed description of the flush.
+        """
+        # Find the flush
+        flush_cards = self._find_flush(cards, min_length=min_length)
+        if not flush_cards:
+            return "Invalid Flush"
+        
+        # Get the highest rank of the flush
+        highest_rank = self._get_highest_rank(flush_cards)
+        
+        if prefix:
+            return f"{highest_rank.full_name}-high {prefix} Flush"
         return f"{highest_rank.full_name}-high Flush"
 
-    def _describe_straight(self, cards: List[Card]) -> str:
-        """Generate detailed description for Straight."""
-        highest_rank = self._get_highest_rank(cards)
+    def _describe_straight(self, cards: List[Card], prefix: Optional[str] = None, min_length: int = 5) -> str:
+        """
+        Generate detailed description for Straight.
+        
+        Args:
+            cards: List of cards to describe.
+            prefix: Optional prefix (e.g., 'Grand', 'Long') to include in the description.
+            min_length: Minimum length of the straight to find (e.g., 5, 6, or 7).
+        
+        Returns:
+            Detailed description of the straight.
+        """
+        # Find the straight
+        straight_cards = self._find_straight(cards, min_length=min_length)
+        if not straight_cards:
+            return "Invalid Straight"
+        
+        # Get the highest rank of the straight
+        highest_rank = self._get_highest_rank(straight_cards)
+        
+        if prefix:
+            return f"{highest_rank.full_name}-high {prefix} Straight"
         return f"{highest_rank.full_name}-high Straight"
     
     def _describe_five_of_kind(self, cards: List[Card]) -> str:
@@ -343,3 +445,275 @@ class HandDescriber:
             if count == 4:
                 return f"Five {rank.plural_name}"
         return "Five of a Kind"    
+    
+    def _describe_palace(self, cards: List[Card]) -> str:
+        """Generate detailed description for Palace (four of a kind + three of a kind)."""
+        ranks = [card.rank for card in cards]
+        rank_counts = {}
+        for rank in ranks:
+            rank_counts[rank] = rank_counts.get(rank, 0) + 1
+        
+        four_rank = None
+        three_rank = None
+        for rank, count in rank_counts.items():
+            if count == 4:
+                four_rank = rank
+            elif count == 3:
+                three_rank = rank
+        
+        if four_rank and three_rank:
+            return f"Palace, {four_rank.plural_name} over {three_rank.plural_name}"
+        return "Palace"
+
+    def _describe_mansion(self, cards: List[Card]) -> str:
+        """Generate detailed description for Mansion (four of a kind + pair)."""
+        ranks = [card.rank for card in cards]
+        rank_counts = {}
+        for rank in ranks:
+            rank_counts[rank] = rank_counts.get(rank, 0) + 1
+        
+        four_rank = None
+        pair_rank = None
+        for rank, count in rank_counts.items():
+            if count == 4:
+                four_rank = rank
+            elif count == 2:
+                pair_rank = rank
+        
+        if four_rank and pair_rank:
+            return f"Mansion, {four_rank.plural_name} over {pair_rank.plural_name}"
+        return "Mansion"
+
+    def _describe_villa(self, cards: List[Card]) -> str:
+        """Generate detailed description for Hotel (full house + pair)."""
+        ranks = [card.rank for card in cards]
+        rank_counts = {}
+        for rank in ranks:
+            rank_counts[rank] = rank_counts.get(rank, 0) + 1
+        
+        three_rank = None
+        pair_ranks = []
+        for rank, count in rank_counts.items():
+            if count == 3:
+                three_rank = rank
+            elif count == 2:
+                pair_ranks.append(rank)
+        
+        if three_rank and len(pair_ranks) >= 2:
+            # Take the higher pair for the full house, lower pair as the extra
+            pair_ranks.sort(key=lambda r: self.rank_order.index(r.value))
+            return f"Villa, {three_rank.plural_name} over {pair_ranks[0].plural_name} with {pair_ranks[1].plural_name}"
+        return "Villa"
+    
+    def _describe_hotel(self, cards: List[Card]) -> str:
+        """Generate detailed description for Hotel (2 three-of-a-kind)."""
+        ranks = [card.rank for card in cards]
+        rank_counts = {}
+        for rank in ranks:
+            rank_counts[rank] = rank_counts.get(rank, 0) + 1
+        
+        three_ranks = []
+        for rank, count in rank_counts.items():
+            if count == 3:
+                three_ranks.append(rank)
+        
+        if three_ranks and len(three_ranks) >= 2:
+            # Take the higher pair for the full house, lower pair as the extra
+            three_ranks.sort(key=lambda r: self.rank_order.index(r.value))
+            return f"Hotel, {three_ranks[0].plural_name} and {three_ranks[1].plural_name}"
+        
+        return "Hotel"    
+
+    def _describe_three_pair(self, cards: List[Card]) -> str:
+        """Generate detailed description for Three Pair."""
+        ranks = [card.rank for card in cards]
+        rank_counts = {}
+        for rank in ranks:
+            rank_counts[rank] = rank_counts.get(rank, 0) + 1
+        
+        pairs = [rank for rank, count in rank_counts.items() if count == 2]
+        pairs.sort(key=lambda r: self.rank_order.index(r.value))  # Highest to lowest
+        
+        if len(pairs) >= 3:
+            return f"Three Pair, {pairs[0].plural_name}, {pairs[1].plural_name}, and {pairs[2].plural_name}"
+        return "Three Pair"    
+    
+    def _find_straight_flush(self, cards: List[Card], min_length: int = 5) -> List[Card]:
+        """
+        Find the longest straight flush in the hand.
+        
+        Args:
+            cards: List of cards to analyze.
+            min_length: Minimum length of the straight flush to find (e.g., 5 for a regular straight flush, 6 for a long straight flush).
+        
+        Returns:
+            List of cards forming the straight flush, sorted highest to lowest.
+            Returns empty list if no straight flush of at least min_length is found.
+        """
+        # Group cards by suit
+        suit_groups = {}
+        for card in cards:
+            suit = card.suit
+            if suit not in suit_groups:
+                suit_groups[suit] = []
+            suit_groups[suit].append(card)
+        
+        # Check each suit for a straight flush
+        best_straight_flush = []
+        for suit, suit_cards in suit_groups.items():
+            if len(suit_cards) < min_length:
+                continue
+            
+            # Sort cards by rank (highest to lowest)
+            sorted_cards = sorted(suit_cards, key=lambda c: self.rank_order.index(c.rank.value))
+            
+            # Look for consecutive sequences
+            current_sequence = [sorted_cards[0]]
+            for i in range(1, len(sorted_cards)):
+                prev_rank_idx = self.rank_order.index(current_sequence[-1].rank.value)
+                curr_rank_idx = self.rank_order.index(sorted_cards[i].rank.value)
+                if curr_rank_idx == prev_rank_idx + 1:  # Consecutive ranks
+                    current_sequence.append(sorted_cards[i])
+                else:
+                    # Check if current sequence is long enough
+                    if len(current_sequence) >= min_length and len(current_sequence) > len(best_straight_flush):
+                        best_straight_flush = current_sequence
+                    # Start a new sequence
+                    current_sequence = [sorted_cards[i]]
+            
+            # Check the last sequence
+            if len(current_sequence) >= min_length and len(current_sequence) > len(best_straight_flush):
+                best_straight_flush = current_sequence
+        
+        # Handle Ace-low straights (e.g., A-2-3-4-5 or A-2-3-4-5-6)
+        for suit, suit_cards in suit_groups.items():
+            if len(suit_cards) < min_length:
+                continue
+            sorted_cards = sorted(suit_cards, key=lambda c: self.rank_order.index(c.rank.value))
+            ace_low_cards = []
+            ace = None
+            for card in sorted_cards:
+                if card.rank.value == 'A':
+                    ace = card
+                else:
+                    ace_low_cards.append(card)
+            if ace and len(ace_low_cards) >= min_length - 1:
+                # Check for A-2-3-4-5...
+                current_sequence = [ace]
+                for i in range(len(self.rank_order) - 1, -1, -1):  # Start from lowest rank (2)
+                    rank = self.rank_order[i]
+                    if len(current_sequence) == min_length:
+                        break
+                    for card in ace_low_cards:
+                        if card.rank.value == rank:
+                            current_sequence.append(card)
+                            break
+                if len(current_sequence) == min_length and len(current_sequence) > len(best_straight_flush):
+                    # Sort Ace-low sequence correctly (e.g., 5-4-3-2-A)
+                    current_sequence.sort(key=lambda c: self.rank_order.index(c.rank.value))
+                    current_sequence.insert(0, current_sequence.pop())  # Move Ace to end
+                    best_straight_flush = current_sequence
+        
+        return best_straight_flush    
+    
+    def _find_straight(self, cards: List[Card], min_length: int = 5) -> List[Card]:
+        """
+        Find the longest straight in the hand.
+        
+        Args:
+            cards: List of cards to analyze.
+            min_length: Minimum length of the straight to find (e.g., 5, 6, or 7).
+        
+        Returns:
+            List of cards forming the straight, sorted highest to lowest.
+            Returns empty list if no straight of at least min_length is found.
+        """
+        # Remove duplicates by keeping the highest suit for each rank
+        rank_to_card = {}
+        for card in cards:
+            rank = card.rank
+            if rank not in rank_to_card or SUIT_ORDER[card.suit] < SUIT_ORDER[rank_to_card[rank].suit]:
+                rank_to_card[rank] = card
+        
+        # Sort cards by rank (highest to lowest)
+        unique_cards = list(rank_to_card.values())
+        sorted_cards = sorted(unique_cards, key=lambda c: self.rank_order.index(c.rank.value))
+        
+        # Look for consecutive sequences
+        best_straight = []
+        current_sequence = [sorted_cards[0]]
+        for i in range(1, len(sorted_cards)):
+            prev_rank_idx = self.rank_order.index(current_sequence[-1].rank.value)
+            curr_rank_idx = self.rank_order.index(sorted_cards[i].rank.value)
+            if curr_rank_idx == prev_rank_idx + 1:  # Consecutive ranks
+                current_sequence.append(sorted_cards[i])
+            else:
+                # Check if current sequence is long enough
+                if len(current_sequence) >= min_length and len(current_sequence) > len(best_straight):
+                    best_straight = current_sequence
+                # Start a new sequence
+                current_sequence = [sorted_cards[i]]
+        
+        # Check the last sequence
+        if len(current_sequence) >= min_length and len(current_sequence) > len(best_straight):
+            best_straight = current_sequence
+        
+        # Handle Ace-low straights (e.g., A-2-3-4-5 or A-2-3-4-5-6)
+        ace_low_cards = []
+        ace = None
+        for card in sorted_cards:
+            if card.rank.value == 'A':
+                ace = card
+            else:
+                ace_low_cards.append(card)
+        if ace and len(ace_low_cards) >= min_length - 1:
+            # Check for A-2-3-4-5...
+            current_sequence = [ace]
+            for i in range(len(self.rank_order) - 1, -1, -1):  # Start from lowest rank (2)
+                rank = self.rank_order[i]
+                if len(current_sequence) == min_length:
+                    break
+                for card in ace_low_cards:
+                    if card.rank.value == rank:
+                        current_sequence.append(card)
+                        break
+            if len(current_sequence) == min_length and len(current_sequence) > len(best_straight):
+                # Sort Ace-low sequence correctly (e.g., 5-4-3-2-A)
+                current_sequence.sort(key=lambda c: self.rank_order.index(c.rank.value))
+                current_sequence.insert(0, current_sequence.pop())  # Move Ace to end
+                best_straight = current_sequence
+        
+        return best_straight    
+    
+    def _find_flush(self, cards: List[Card], min_length: int = 5) -> List[Card]:
+        """
+        Find the longest flush in the hand.
+        
+        Args:
+            cards: List of cards to analyze.
+            min_length: Minimum length of the flush to find (e.g., 5, 6, or 7).
+        
+        Returns:
+            List of cards forming the flush, sorted highest to lowest.
+            Returns empty list if no flush of at least min_length is found.
+        """
+        # Group cards by suit
+        suit_groups = {}
+        for card in cards:
+            suit = card.suit
+            if suit not in suit_groups:
+                suit_groups[suit] = []
+            suit_groups[suit].append(card)
+        
+        # Find the suit with the most cards
+        best_flush = []
+        for suit, suit_cards in suit_groups.items():
+            if len(suit_cards) >= min_length:
+                # Sort cards by rank (highest to lowest)
+                sorted_cards = sorted(suit_cards, key=lambda c: self.rank_order.index(c.rank.value))
+                # Take the top min_length cards (or all for Grand Flush)
+                flush_cards = sorted_cards[:min_length] if len(sorted_cards) > min_length else sorted_cards
+                if len(flush_cards) > len(best_flush):
+                    best_flush = flush_cards
+        
+        return best_flush    

@@ -7,7 +7,8 @@ from pathlib import Path
 from generic_poker.core.card import Card
 from generic_poker.core.hand import PlayerHand
 from generic_poker.evaluation.eval_types.base import BaseEvaluator, HandRanking
-
+from generic_poker.evaluation.eval_types.large import LargeHandEvaluator
+from generic_poker.evaluation.eval_types.standard import StandardHandEvaluator
 
 class EvaluationType(str, Enum):
     """Types of poker hand evaluation."""
@@ -51,6 +52,10 @@ class EvaluationType(str, Enum):
     FOUR_CARD_HIGH = 'four_card_high'
     FOUR_CARD_HIGH_AL = 'four_card_high_al'  # Unimplemented
     FOUR_CARD_HIGH_AL_RH = 'four_card_a5_low_high'
+    # alternate high hands
+    SOKO_HIGH = 'soko_high'
+    NE_SEVEN_CARD_HIGH = 'ne_seven_card_high'
+
 
 @dataclass
 class HandResult:
@@ -107,10 +112,12 @@ class HandEvaluator:
         """
         if eval_type not in self._evaluators:
             evaluator_class = self._get_evaluator_class(eval_type)
-            self._evaluators[eval_type] = evaluator_class(
-                self._rankings_dir / f'all_card_hands_ranked_{eval_type}.csv',
-                eval_type
-            )
+            if eval_type == EvaluationType.NE_SEVEN_CARD_HIGH:
+                db_file = self._rankings_dir / 'hand_rankings.db'
+                self._evaluators[eval_type] = evaluator_class(db_file, eval_type.value)
+            else:
+                rankings_file = self._rankings_dir / f'all_card_hands_ranked_{eval_type.value}.csv'
+                self._evaluators[eval_type] = evaluator_class(rankings_file, eval_type.value)
         return self._evaluators[eval_type]
         
     def evaluate_hand(
@@ -246,17 +253,9 @@ class HandEvaluator:
         
     def _get_evaluator_class(self, eval_type: EvaluationType) -> Type[BaseEvaluator]:
         """Get appropriate evaluator class for eval type."""
-        from generic_poker.evaluation.eval_types.standard import StandardHandEvaluator
-        
-        # Map exceptions to specific evaluator classes; all others default to StandardHandEvaluator
-        evaluator_map = {
-            # Add exceptions here as needed, e.g.:
-            # EvaluationType.HIGH_WILD: WildHandEvaluator,
-            # EvaluationType.BADUGI: BadugiEvaluator,
-        }
-        
-        # Return the mapped evaluator if it exists, otherwise default to StandardHandEvaluator
-        return evaluator_map.get(eval_type, StandardHandEvaluator)
+        if eval_type == EvaluationType.NE_SEVEN_CARD_HIGH:
+            return LargeHandEvaluator
+        return StandardHandEvaluator
         
 # Global instance
 evaluator = HandEvaluator()

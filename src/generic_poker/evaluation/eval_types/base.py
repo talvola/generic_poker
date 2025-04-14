@@ -29,7 +29,8 @@ class BaseEvaluator(ABC):
         self.required_size = HAND_SIZES[eval_type]
         self.rank_order = RANK_ORDERS[eval_type]
         self.rank_only = eval_type in RANK_ONLY_TYPES
-        self.rankings = self._rankings_cache.get_rankings(eval_type, rankings_file)
+        if rankings_file:
+            self.rankings = self._rankings_cache.get_rankings(eval_type, rankings_file)
         self.padding_required = eval_type in PADDED_TYPES
         self.hand_size = HAND_SIZES[eval_type]
         

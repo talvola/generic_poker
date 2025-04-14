@@ -35,6 +35,8 @@ RANK_ORDERS = {
     # High hand games use base ordering
     'high': BASE_RANKS,
     'high_wild_bug': BASE_RANKS_JOKER,
+    'soko_high': BASE_RANKS,
+    'ne_seven_card_high': BASE_RANKS,
     # 2-7 Lowball can use same ranks
     '27_low': BASE_RANKS,
     # Pip games can also use the same ranks
@@ -125,7 +127,9 @@ HAND_SIZES = {
     'low_pip_6_cards': 6,
     '58': 6,
     'zero_6': 6,
-    '21_6': 6
+    '21_6': 6,
+    'soko_high': 5,
+    'ne_seven_card_high': 7
 }
 
 # evaluation types which require padding to evaluate

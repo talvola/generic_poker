@@ -4,6 +4,7 @@ from generic_poker.core.card import Card, Rank, Suit, WildType
 from generic_poker.evaluation.evaluator import EvaluationType
 from generic_poker.evaluation.hand_description import HandDescriber
 
+
 def test_high_hand_description():
     """Test basic hand descriptions for high poker."""
     describer = HandDescriber(EvaluationType.HIGH)
