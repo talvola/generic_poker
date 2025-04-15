@@ -60,6 +60,27 @@ def create_predetermined_deck():
     
     return MockDeck(cards)
 
+def create_predetermined_deck_two_players():
+    """Create a deck with predetermined cards for testing."""
+    # Create cards in the desired deal order (first card will be dealt first)
+    # In this three-handed case, button is dealt first, then SB, then BB in order
+    cards = [
+        Card(Rank.ACE, Suit.SPADES), #
+        Card(Rank.KING, Suit.SPADES), #
+        Card(Rank.QUEEN, Suit.SPADES), #
+        Card(Rank.JACK, Suit.SPADES), #
+        Card(Rank.TEN, Suit.SPADES), #
+        Card(Rank.NINE, Suit.SPADES), #
+        Card(Rank.EIGHT, Suit.SPADES), #
+        Card(Rank.SEVEN, Suit.SPADES), #
+        Card(Rank.SIX, Suit.SPADES), #
+      
+        # Rest of the deck in some order (won't be used in 5-card poker)
+        # You can add more cards here if needed for other tests
+    ]
+    
+    return MockDeck(cards)
+
 def setup_test_game_with_mock_deck():
     """Create a test game with three players and a predetermined deck."""
     rules = {
@@ -206,6 +227,67 @@ def setup_test_game_with_mock_deck():
     
     # Set our mock deck
     game.table.deck = create_predetermined_deck()
+    
+    return game
+
+def setup_test_game_with_mock_deck_two_players():
+    """Create a test game with two players and a predetermined deck."""
+    hold_em_config = {
+        "game": "Hold'em",
+        "players": {"min": 2, "max": 9},
+        "deck": {"type": "standard", "cards": 52},
+        "bettingStructures": ["No Limit", "Limit", "Pot Limit"],
+        "forcedBets": {"style": "blinds"},
+        "bettingOrder": {"initial": "after_big_blind", "subsequent": "dealer"},
+        "gamePlay": [
+            {"name": "Post Blinds", "bet": {"type": "blinds"}},
+            {"name": "Deal Hole Cards", "deal": {"location": "player", "cards": [{"number": 2, "state": "face down"}]}},
+            {"name": "Pre-Flop Bet", "bet": {"type": "small"}},
+            {"name": "Deal Flop", "deal": {"location": "community", "cards": [{"number": 3, "state": "face up"}]}},
+            {"name": "Post-Flop Bet", "bet": {"type": "small"}},
+            {"name": "Deal Turn", "deal": {"location": "community", "cards": [{"number": 1, "state": "face up"}]}},
+            {"name": "Turn Bet", "bet": {"type": "big"}},
+            {"name": "Deal River", "deal": {"location": "community", "cards": [{"number": 1, "state": "face up"}]}},
+            {"name": "River Bet", "bet": {"type": "big"}},
+            {"name": "Showdown", "showdown": {"type": "final"}}
+        ],
+        "showdown": {
+            "order": "clockwise",
+            "startingFrom": "dealer",
+            "cardsRequired": "any combination of hole and community cards",
+            "bestHand": [{"evaluationType": "high", "anyCards": 5}]
+        }
+    }
+    
+    game = Game(
+        rules=GameRules.from_json(json.dumps(hold_em_config)),
+        structure=BettingStructure.NO_LIMIT,
+        small_blind=1,
+        big_blind=2,
+        min_buyin=100,
+        max_buyin=1000,
+        auto_progress=False        
+    )
+  
+    # Add players
+    game.add_player("p1", "Erik", 500)
+    game.add_player("p2", "Foo", 500)
+    
+    # Monkey patch the Table.clear_hands method to preserve our mock deck
+    original_clear_hands = game.table.clear_hands
+    
+    def patched_clear_hands():
+        """Clear hands but keep our mock deck."""
+        for player in game.table.players.values():
+            player.hand.clear()
+        game.table.community_cards.clear()
+        # Note: We don't reset the deck here
+    
+    # Replace the method
+    game.table.clear_hands = patched_clear_hands
+    
+    # Set our mock deck
+    game.table.deck = create_predetermined_deck_two_players()
     
     return game
 
@@ -452,3 +534,217 @@ def test_game_results_showdown():
     assert len(results.winning_hands) == 1
     assert results.winning_hands[0].player_id == 'SB'    
 
+def test_game_results_two_player_showdown():
+    """Test that the game results API provides correct information."""
+    game = setup_test_game_with_mock_deck_two_players()
+    
+    # Step 0: Post Blinds
+    game.start_hand()
+    assert game.current_step == 0  # Post Blinds
+    assert game.state == GameState.BETTING
+    assert game.table.players['p1'].stack == 499  # SB deducted
+    assert game.table.players['p2'].stack == 498  # BB deducted
+    assert game.betting.get_main_pot_amount() == 3  # SB + BB
+    assert game.betting.get_ante_total() == 0  # no antes used in this game
+
+    # Step 1: Deal Hole Cards (2 down)
+    game._next_step()  # Deal hole cards
+    assert game.current_step == 1
+    assert game.state == GameState.DEALING    
+    # Verify hole cards
+    assert str(game.table.players['p1'].hand.cards[0]) == "As"  # Alice
+    assert str(game.table.players['p1'].hand.cards[1]) == "Qs"  # Alice
+    assert str(game.table.players['p2'].hand.cards[0]) == "Ks"  # Bob
+    assert str(game.table.players['p2'].hand.cards[1]) == "Js"  # Bob
+
+    # pot unchanged
+    assert game.betting.get_main_pot_amount() == 3  # SB + BB
+    assert game.betting.get_ante_total() == 0  # no antes used in this game
+
+    # Step 2: Pre-Flop Bet
+    game._next_step()  # Move to pre-flop bet
+    assert game.current_step == 2
+    assert game.state == GameState.BETTING    
+    # check the current player - should be Button (BTN - Alice) for 3-handed games with blinds
+    assert game.current_player.id == 'p1'
+
+    # pot unchanged
+    assert game.betting.get_main_pot_amount() == 3  # SB + BB
+    assert game.betting.get_ante_total() == 0  # no antes used in this game    
+
+    # Check valid actions for button (Alice)
+    valid_actions = game.get_valid_actions("p1")
+    assert len(valid_actions) == 3  # Bring-in or complete
+    assert (PlayerAction.FOLD, None, None) in valid_actions
+    assert (PlayerAction.CALL, 2, 2) in valid_actions  # call the BB
+    assert (PlayerAction.RAISE, 4, 500) in valid_actions  # raise another small bet (big blind)
+
+    # p1 calls
+    results = game.player_action('p1', PlayerAction.CALL, 2)
+    print(f"p1 results = {results}")
+
+    # Check pot after Alice's action
+    assert game.betting.get_main_pot_amount() == 4  # SB + BB + BTN raise
+    assert game.betting.get_ante_total() == 0  # no antes used in this game
+
+    # Check valid actions for p2
+    valid_actions = game.get_valid_actions("p2")
+    assert len(valid_actions) == 3  # Bring-in or complete
+    assert (PlayerAction.FOLD, None, None) in valid_actions
+    assert (PlayerAction.CHECK, None, None) in valid_actions  # call the BB
+    assert (PlayerAction.RAISE, 4, 500) in valid_actions  # raise another small bet (big blind)
+
+    # p2 checks
+    assert game.current_player.id == 'p2'
+    results = game.player_action('p2', PlayerAction.CHECK)
+    print(f"p2 results = {results}")
+
+    # Check pot after Bob's action
+    assert game.betting.get_main_pot_amount() == 4  # adds $15 to call the raise
+    assert game.betting.get_ante_total() == 0  # no antes used in this game
+
+    # Check player stacks - each player put in $2
+
+    assert game.table.players['p1'].stack == 498
+    assert game.table.players['p2'].stack == 498
+
+    # Step 3: Deal Flop
+    game._next_step()
+    assert game.current_step == 3
+    assert game.state == GameState.DEALING 
+
+    # Check community cards
+    assert str(game.table.community_cards["default"][0]) == "Ts"  # Flop 1
+    assert str(game.table.community_cards["default"][1]) == "9s"  # Flop 2
+    assert str(game.table.community_cards["default"][2]) == "8s"  # Flop 3
+
+    # Check pot after flop
+    assert game.betting.get_main_pot_amount() == 4  # SB + BB + BTN raise
+
+    # Step 4: Post-Flop Bet
+    game._next_step()  # Move to post-flop bet
+    assert game.current_step == 4
+    assert game.state == GameState.BETTING
+    assert game.current_player.id == "p2"  # SB acts first in post-flop betting rounds
+
+    # Check valid actions for SB (Bob)
+    # SB acts first in post-flop betting round
+    # Check valid actions for SB (Bob)
+    valid_actions = game.get_valid_actions("p2")
+    assert len(valid_actions) == 3  # Check valid actions
+    assert (PlayerAction.FOLD, None, None) in valid_actions
+    assert (PlayerAction.CHECK, None, None) in valid_actions  # check
+    assert (PlayerAction.BET, 2, 498) in valid_actions  # bet small bet
+
+    # SB checks
+    results = game.player_action('p2', PlayerAction.CHECK)
+    print(f"p2 results = {results}")
+
+    # BB checks
+    results = game.player_action('p1', PlayerAction.CHECK)
+    print(f"p1 results = {results}")
+
+    # Check pot after post-flop betting
+    assert game.betting.get_main_pot_amount() == 4  # SB + BB + BTN raise
+
+    # Step 5: Deal Turn
+    game._next_step()  # Deal turn
+    assert game.current_step == 5
+    assert game.state == GameState.DEALING
+    
+    # Check community cards
+    assert str(game.table.community_cards["default"][3]) == "7s"  # Turn
+
+    # Check pot after turn
+    assert game.betting.get_main_pot_amount() == 4  # SB + BB + BTN raise
+    
+    # Step 6: Turn Bet
+    game._next_step()  # Move to turn bet
+    assert game.current_step == 6
+    assert game.state == GameState.BETTING
+
+    # Check valid actions for SB (Bob)
+    valid_actions = game.get_valid_actions("p2")
+    assert len(valid_actions) == 3  # Check valid actions
+    assert (PlayerAction.FOLD, None, None) in valid_actions
+    assert (PlayerAction.CHECK, None, None) in valid_actions  # check
+    assert (PlayerAction.BET, 2, 498) in valid_actions  # bet big bet
+
+    # SB checks
+    game.player_action('p2', PlayerAction.CHECK)
+    print(f"p2 results = {results}")
+
+    # BB checks
+    game.player_action('p1', PlayerAction.CHECK)
+    print(f"p1 results = {results}")
+
+    # Check pot after turn betting
+    assert game.betting.get_main_pot_amount() == 4  # SB + BB + BTN raise
+    
+    # Step 7: Deal River
+    game._next_step()  # Deal river
+    assert game.current_step == 7
+    assert game.state == GameState.DEALING
+
+    # Check community cards
+    assert str(game.table.community_cards["default"][4]) == "6s"  # River
+
+    # Check pot after river
+    assert game.betting.get_main_pot_amount() == 4  # SB + BB + BTN raise
+    
+    # Step 8: River Bet
+    game._next_step()  # Move to river bet
+    assert game.current_step == 8
+    assert game.state == GameState.BETTING
+
+    # Check valid actions for SB (Bob)
+    valid_actions = game.get_valid_actions("p2")
+    assert len(valid_actions) == 3  # Check valid actions
+    assert (PlayerAction.FOLD, None, None) in valid_actions
+    assert (PlayerAction.CHECK, None, None) in valid_actions  # check
+    assert (PlayerAction.BET, 2, 498) in valid_actions  # bet big bet
+
+    # SB checks
+    game.player_action('p2', PlayerAction.CHECK)
+    print(f"p2 results = {results}")
+
+    # BB checks
+    game.player_action('p1', PlayerAction.CHECK)
+    print(f"p1 results = {results}")
+
+    # Check pot after river betting
+    assert game.betting.get_main_pot_amount() == 4  # SB + BB + BTN raise
+    
+    # Step 9: Showdown
+    game._next_step()  # Move to showdown
+    assert game.current_step == 9
+    assert game.state == GameState.COMPLETE
+
+    # Get results
+    results = game.get_hand_results()
+
+    print("\nShowdown Results:")
+    print(results)
+
+    # Check overall results
+    expected_pot = 4  # SB + BB + BTN all put in $20
+    assert results.is_complete
+    assert results.total_pot == expected_pot
+    assert len(results.pots) == 1  # Just main pot
+    assert len(results.hands) == 2  # All players stayed in
+
+    # Check pot details
+    main_pot = results.pots[0]
+    assert main_pot.amount == expected_pot
+    assert main_pot.pot_type == "main"
+    assert not main_pot.split  # Only one winner
+    assert len(main_pot.winners) == 1
+    assert 'p2' in main_pot.winners
+
+    winning_hand = results.hands['p2']
+    assert "Straight Flush" in winning_hand[0].hand_name
+    assert "Jack-high Straight Flush" in winning_hand[0].hand_description
+
+    # Check winning hands list
+    assert len(results.winning_hands) == 1
+    assert results.winning_hands[0].player_id == 'p2'    

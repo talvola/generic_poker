@@ -232,8 +232,8 @@ class Game:
         # For Stud games:
         bring_in: Optional[int] = None,
         # Common parameters
-        min_buyin: int = 0,
-        max_buyin: int = 0,
+        min_buyin: int = 100,
+        max_buyin: int = 2000,
         auto_progress: bool = True
     ):
         """

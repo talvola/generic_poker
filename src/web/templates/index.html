@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generic Poker</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+</head>
+<body>
+    <div id="game">
+        <h1>Generic Poker</h1>
+        <div id="join-form">
+            <h2>Join Game</h2>
+            <input type="text" id="player-name" placeholder="Enter your name">
+            <button id="join-button">Join Table</button>
+        </div>
+        
+        <div id="game-container" style="display: none;">
+            <div id="game-info">
+                <h2 id="game-title">Hold'em Poker</h2>
+                <div id="game-state-info">
+                    <span id="game-step">Pre-Flop</span> - 
+                    <span id="game-state">Waiting</span>
+                </div>
+            </div>
+            
+            <div id="table">
+                <div id="community-cards">
+                    <h3>Community Cards</h3>
+                    <div id="community-cards-display">
+                        <div class="no-cards">No community cards yet</div>
+                    </div>
+                </div>
+                
+                <div id="pot-area">
+                    <div id="pot">
+                        <span>Pot</span>
+                        <span id="pot-amount">0</span>
+                    </div>
+                    <div id="current-bet">
+                        <span>Current Bet</span>
+                        <span id="current-bet-amount">0</span>
+                    </div>
+                </div>
+                
+                <div id="results-area" style="display: none;">
+                    <h3>Results</h3>
+                    <div id="results-content"></div>
+                </div>
+            </div>
+            
+            <h3>Players</h3>
+            <div id="players"></div>
+            
+            <div id="actions-container">
+                <h3>Your Actions</h3>
+                <div id="actions" style="display: none;"></div>
+            </div>
+            
+            <div id="log-container">
+                <h3>Game Log</h3>
+                <div id="log"></div>
+            </div>
+        </div>
+    </div>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
