@@ -2,13 +2,43 @@ from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit
 from generic_poker.game.game import Game
 from generic_poker.config.loader import GameRules, BettingStructure
-from generic_poker.game.game_state import GameState
+from generic_poker.game.game_state import GameState, PlayerAction
 from generic_poker.core.card import Card, Visibility
 
 import asyncio
 import json
 import os
+import logging 
+import sys
 from threading import Thread
+
+# Setup logging
+def setup_logging():
+    """Set up logging for the server."""
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ],
+        force=True  # Force reconfiguration of logging
+    )
+    
+    # You can also set specific loggers to different levels if needed
+    # For example, to reduce the verbosity of some modules:
+    # logging.getLogger('werkzeug').setLevel(logging.WARNING)
+    # logging.getLogger('engineio').setLevel(logging.WARNING)
+    # logging.getLogger('socketio').setLevel(logging.WARNING)
+    
+    # Or increase verbosity for your game module:
+    logging.getLogger('generic_poker').setLevel(logging.DEBUG)
+
+# Call the setup function before initializing the app
+setup_logging()
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 socketio = SocketIO(app, async_mode='threading')
@@ -60,6 +90,32 @@ def handle_ready(data):
         game._game_started = True
         Thread(target=run_game_loop).start()
 
+# Add this before the ready handler
+ready_for_next_hand = {}
+
+@socketio.on('ready_for_next_hand')
+def handle_ready_for_next_hand(data):
+    """Handle a player indicating they're ready for the next hand."""
+    sid = request.sid
+    player_id = next((pid for pid, s in player_sids.items() if s == sid), None)
+    
+    if not player_id:
+        return
+    
+    ready_for_next_hand[player_id] = True
+    print(f"Player {player_id} is ready for next hand")
+    
+    # Broadcast ready status to all players
+    ready_players = list(ready_for_next_hand.keys())
+    all_players = list(player_sids.keys())
+    all_ready = len(ready_players) == len(all_players)
+    
+    for pid, sid in player_sids.items():
+        socketio.emit('next_hand_status', {
+            'ready_players': ready_players,
+            'all_players': all_players,
+            'all_ready': all_ready
+        }, room=sid)
 
 @socketio.on('join')
 def handle_join(data):
@@ -96,15 +152,53 @@ def handle_action(data):
     player_id = next((pid for pid, s in player_sids.items() if s == sid), None)
     print(f"Received action from {player_id}: {data}")
     
-    if sid in action_futures:
-        future = action_futures[sid]
-        if not future.done():
-            print(f"Setting future result for {player_id}: {data}")
-            future.set_result(data)
-        else:
-            print(f"Future for {player_id} was already done")
+    if player_id and player_id == (game.current_player.id if game.current_player else None):
+        try:
+            action_str = data['action']
+            amount = data.get('amount', 0)
+            cards = data.get('cards', [])
+
+            # Convert string action to PlayerAction enum
+            try:
+                action = PlayerAction(action_str)
+                print(f"Converted action string '{action_str}' to enum: {action}")
+            except ValueError:
+                print(f"Invalid action string: {action_str}")
+                socketio.emit('error', {'message': f"Invalid action: {action_str}"}, room=sid)
+                return            
+            
+            print(f"Processing action directly for {player_id}: {action} {amount}")
+            result = game.player_action(player_id, action, amount, cards)
+            print(f"Action result: {result}")
+            
+            if not result.success:
+                socketio.emit('error', {'message': result.error}, room=sid)
+            else:
+                # Broadcast updated state to all players after successful action
+                for pid, s in player_sids.items():
+                    state = get_game_state_for_player(pid)
+                    socketio.emit('game_state', state, room=s)
+                
+                # Check if we need to advance to the next step
+                if result.advance_step:
+                    print(f"Advancing to next step after {player_id}'s action")
+                    game._next_step()
+
+                    # Reset last_player_id when moving to a new step
+                    if 'last_player_id' in globals():
+                        globals()['last_player_id'] = None                    
+                    
+                    # After advancing, broadcast the new state
+                    for pid, s in player_sids.items():
+                        state = get_game_state_for_player(pid)
+                        socketio.emit('game_state', state, room=s)
+        except Exception as e:
+            print(f"Exception in handle_action: {e}")
+            import traceback
+            traceback.print_exc()
+            socketio.emit('error', {'message': f"Error processing action: {str(e)}"}, room=sid)
     else:
-        print(f"No future found for {player_id} (sid: {sid})")
+        print(f"Not current player's turn or player not found: {player_id}")
 
 def run_game_loop():
     """Run the game loop in a separate thread."""
@@ -168,7 +262,7 @@ def get_game_state_for_player(player_id):
             player_data['is_all_in'] = current_bet.is_all_in
         
         # Show card info based on visibility
-        if p.id == player_id:
+        if p.id == player_id or game.state == GameState.SHOWDOWN or game.state == GameState.COMPLETE:
             # Player sees their own cards fully
             player_data['cards'] = {
                 'default': [str(c) for c in p.hand.cards]  # Use main cards list
@@ -229,167 +323,340 @@ async def game_loop():
             # Start a new hand
             game.start_hand()
             print(f"Starting new hand with state {game.state}")
-
-            # Log the current step after starting hand
-            print(f"Current step: {game.current_step} - {game.rules.gameplay[game.current_step].name}")           
-                           
-            # Broadcast state after blinds for all players
-            for pid, sid in player_sids.items():
-                state = get_game_state_for_player(pid)
-                socketio.emit('game_state', state, room=sid)
-                    
-            # Allow UI to update and players to see blinds posted
-            await asyncio.sleep(1)
             
-            # Auto-progress to dealing hole cards
-            print("Progressing to dealing hole cards...")
-            game._next_step()
-            print(f"Current step: {game.current_step} - {game.rules.gameplay[game.current_step].name}")
+            # Initial broadcast after hand starts
+            broadcast_game_state()
             
-            # Broadcast state after hole cards are dealt
-            for pid, sid in player_sids.items():
-                state = get_game_state_for_player(pid)
-                socketio.emit('game_state', state, room=sid)
+            # Process post blinds step
+            if game.current_step == 0 and game.rules.gameplay[0].name == "Post Blinds":
+                await asyncio.sleep(1)  # Brief pause to show blinds
                 
-            # Allow UI to update and players to see their cards
-            await asyncio.sleep(1)
-
-            # Auto-progress to first betting round
-            print("Progressing to first betting round...")
-            game._next_step()
-            print(f"Current step: {game.current_step} - {game.rules.gameplay[game.current_step].name}")
+                # Log before transition
+                print(f"Before advancing from Post Blinds: step={game.current_step}, state={game.state}")
+                
+                game._next_step()  # Advance to dealing cards
+                
+                # Log after transition
+                print(f"After advancing from Post Blinds: step={game.current_step}, state={game.state}")
+                
+                broadcast_game_state()
             
-            # Broadcast state after transitioning to betting
-            for pid, sid in player_sids.items():
-                state = get_game_state_for_player(pid)
-                socketio.emit('game_state', state, room=sid)            
+            # Process deal hole cards
+            if game.current_step == 1 and "Deal" in game.rules.gameplay[1].name:
+                await asyncio.sleep(1)  # Brief pause to show cards being dealt
+                
+                # Log before transition
+                print(f"Before advancing from Deal Hole Cards: step={game.current_step}, state={game.state}")
+                
+                game._next_step()  # Advance to first betting round
+                
+                # Log after transition
+                print(f"After advancing from Deal Hole Cards: step={game.current_step}, state={game.state}")
+                
+                broadcast_game_state()
+            
+            last_player_id = None
 
-            # Main loop for a single hand
+            # Now wait for game to complete
             while game.state != GameState.COMPLETE:
-                # Log current game state at start of each iteration
-                print(f"Game state: {game.state}, Step: {game.current_step} - {game.rules.gameplay[game.current_step].name}")           
+                # Print current game state at the start of each iteration
+                print(f"\n=== Current game state ===")
+                print(f"Step: {game.current_step} - {game.rules.gameplay[game.current_step].name}")
+                print(f"State: {game.state}")
+                print(f"Current player: {game.current_player.name if game.current_player else 'None'}")
 
-                # If a player needs to act
-                if game.current_player:
+                # Check game state and act accordingly
+                if game.state == GameState.DEALING:
+                    print(f"Auto-processing dealing step: {game.rules.gameplay[game.current_step].name}")
+                    await asyncio.sleep(1)
+
+                    # Log before transition
+                    print(f"Before advancing from dealing step: step={game.current_step}, state={game.state}")
+                    
+                    game._next_step()
+                    
+                    # Log after transition
+                    print(f"After advancing from dealing step: step={game.current_step}, state={game.state}")
+                    print(f"Current player after dealing: {game.current_player.name if game.current_player else 'None'}")
+                    
+                    # Reset last_player_id when transitioning to a new betting round
+                    if game.state == GameState.BETTING:
+                        print("Resetting last_player_id for new betting round")
+                        last_player_id = None
+
+                    broadcast_game_state()
+                                       
+                    # After dealing, log again to verify
+                    print(f"After dealing processing complete: step={game.current_step}, state={game.state}")
+                    continue
+                
+                # If no current player in betting, advance
+                elif game.state == GameState.BETTING and not game.current_player:
+                    print("No player to act in betting round, advancing...")
+                    
+                    # Log before transition
+                    print(f"Before advancing (no player): step={game.current_step}, state={game.state}")
+                    
+                    game._next_step()
+                    
+                    # Log after transition
+                    print(f"After advancing (no player): step={game.current_step}, state={game.state}")
+                    
+                    broadcast_game_state()
+                    continue
+
+                # Handle current player's turn
+                elif game.state == GameState.BETTING and game.current_player:
                     player_id = game.current_player.id
-                    if player_id in player_sids:  # Make sure player is still connected
-                        print(f"Current player: {game.current_player.name} ({player_id})")
+                    if player_id != last_player_id:
                         sid = player_sids[player_id]
                         valid_actions = game.get_valid_actions(player_id)
-
-                        print(f"Valid actions for {player_id}: {valid_actions}")
+                        
+                        print(f"Current player: {game.current_player.name} ({player_id})")
+                        print(f"Valid actions: {valid_actions}")
                         
                         # Format actions for client
                         actions = [
                             {'type': a.value, 'min': min_amt, 'max': max_amt} 
                             for a, min_amt, max_amt in valid_actions
                         ]
-
-                        print(f"Sending actions to client: {actions}")
+                        
+                        print(f"Sending your_turn event to {player_id} with actions: {actions}")
                         
                         # Notify player it's their turn
                         socketio.emit('your_turn', {'actions': actions}, room=sid)
+                        print(f"Emitted your_turn event to {player_id}, sid: {sid}")
                         
-                        # Wait for player's action
-                        try:
-                            print(f"Waiting for action from {player_id}")
-                            action_data = await wait_for_action(sid)
-                            print(f"After wait_for_action, received: {action_data}")
-                            if not action_data:
-                                print("Warning: action_data is empty or None")
-                                continue 
+                        # Update last player ID
+                        last_player_id = player_id
 
-                            # Process action
-                            action = action_data['action']
-                            amount = action_data.get('amount', 0)
-                            cards = action_data.get('cards', [])
-                            
-                            try:
-                                print(f"About to call player_action for {player_id}: {action} {amount}")
-                                result = game.player_action(player_id, action, amount, cards)
-                                print(f"Action result: {result}")
-                            except Exception as e:
-                                print(f"Exception in player_action: {e}")
-                                import traceback
-                                traceback.print_exc()
-                                socketio.emit('error', {'message': f"Error in game: {str(e)}"}, room=sid)
-                                continue
+                # Unknown state - log and advance
+                else:
+                    print(f"Unhandled game state: {game.state}, step: {game.current_step}")
 
-                            if not result.success:
-                                socketio.emit('error', {'message': result.error}, room=sid)
-                                continue  # Try again with the same player if action failed    
-
-                            # Broadcast updated state to all players after successful action
-                            for pid, sid in player_sids.items():
-                                state = get_game_state_for_player(pid)
-                                socketio.emit('game_state', state, room=sid)                                                    
-                                                      
-                            # Check if we need to advance to the next step
-                            if result.advance_step:
-                                print(f"Advancing to next step after {player_id}'s action")
-                                game._next_step()
-                                
-                                # After advancing, broadcast the new state
-                                for pid, sid in player_sids.items():
-                                    state = get_game_state_for_player(pid)
-                                    socketio.emit('game_state', state, room=sid)
-                                
-                                # If the game state is dealing, handle automatic deal steps
-                                if game.state == GameState.DEALING:
-                                    print(f"Auto-processing dealing step: {game.rules.gameplay[game.current_step].name}")
-                                    # Allow UI to update and players to see the new state
-                                    await asyncio.sleep(1)
-                                    
-                                    # Auto-advance dealing steps
-                                    if "Deal" in game.rules.gameplay[game.current_step].name:
-                                        game._next_step()
-                                        
-                                        # Broadcast state after the deal
-                                        for pid, sid in player_sids.items():
-                                            state = get_game_state_for_player(pid)
-                                            socketio.emit('game_state', state, room=sid)
-                                
-                                # If we're in a betting round, check if a player needs to act
-                                # If not, we might need to auto-advance again
-                                if game.state == GameState.BETTING and not game.current_player:
-                                    print("No player to act in betting round, advancing...")
-                                    game._next_step()
-                                    
-                                    # Broadcast state after auto-advancing
-                                    for pid, sid in player_sids.items():
-                                        state = get_game_state_for_player(pid)
-                                        socketio.emit('game_state', state, room=sid)
-                                else:
-                                    # Game progresses automatically
-                                    game._next_step()
-                                
-                                # Broadcast updated state to all players
-                                for pid, sid in player_sids.items():
-                                    state = get_game_state_for_player(pid)
-                                    socketio.emit('game_state', state, room=sid)
-
-                        except Exception as e:
-                            print(f"Error handling action: {e}")
-                            # Continue the game even if there's an error with one action
-                            socketio.emit('error', {'message': f"Error processing action: {str(e)}"}, room=sid)                                    
+                    # Special handling for showdown
+                    if game.state == GameState.SHOWDOWN:
+                        print("Processing showdown")
+                        
+                        # First make all cards visible
+                        for player in game.table.players.values():
+                            if player.is_active:
+                                for card in player.hand.cards:
+                                    card.visibility = Visibility.FACE_UP
+                        
+                        # Broadcast state with all cards visible
+                        broadcast_game_state()
+                        
+                        # Give the game engine time to evaluate hands
+                        # This is the key change - we need to wait longer
+                        await asyncio.sleep(6)  # Increase from 2 to 6 seconds based on your logs
+                        
+                        # Now check if the showdown is complete
+                        # Look for specific log messages or attributes that indicate completion
+                        logging.info("Checking if showdown evaluation is complete")
+                        
+                        # Try to advance after waiting
+                        print("Advancing from showdown to complete")
+                        game._next_step()
+                        broadcast_game_state()
+                        
+                        # Wait again to ensure results are available
+                        await asyncio.sleep(3)
+                    else:
+                        # For other unknown states, advance as before
+                        print(f"Before advancing (unhandled state): step={game.current_step}, state={game.state}")
+                        game._next_step()
+                        print(f"After advancing (unhandled state): step={game.current_step}, state={game.state}")
+                        broadcast_game_state()
+                    
+                    continue                 
                 
-                # Small delay to avoid hammering the CPU
-                await asyncio.sleep(0.1)
+                # Wait for player actions to be processed through socket events
+                await asyncio.sleep(1)
             
             # Handle hand completion
-            print("Hand complete, updating all players")
-            for pid, sid in player_sids.items():
-                socketio.emit('game_state', get_game_state_for_player(pid), room=sid)
-            
-            # Move button for next hand
-            game.table.move_button()
+            if game.state == GameState.COMPLETE:
+                print("Hand complete, checking for results")
+
+                # Don't immediately show results - wait until we have them
+                
+                # First, just update the game state without triggering results
+                for pid, sid in player_sids.items():
+                    state = get_game_state_for_player(pid)
+                    # Don't include detailed results yet
+                    state['showingResults'] = False
+                    socketio.emit('game_state', state, room=sid)                
+                
+                # Try multiple times to get results with delay between attempts
+                max_attempts = 5
+                for attempt in range(max_attempts):
+                    try:
+                        # Try to get results
+                        logging.info(f"Attempt {attempt+1}/{max_attempts} to get hand results")
+                        results = game.get_hand_results()
+                        logging.info("Successfully got hand results")
+
+                        # Convert GameResult to a JSON-serializable dict
+                        if hasattr(results, 'to_json'):
+                            # If it has a to_json method, use it
+                            results_json = results.to_json()
+                            # If it's a string, parse it into a dict
+                            if isinstance(results_json, str):
+                                results_dict = json.loads(results_json)
+                            else:
+                                # If it's already a dict, use it directly
+                                results_dict = results_json
+                            logging.info("Converted results using to_json method")
+                        else:
+                            # Otherwise create a dict manually
+                            results_dict = {
+                                "is_complete": results.is_complete,
+                                "total_pot": results.total_pot,
+                                "pots": [
+                                    {
+                                        "amount": pot.amount,
+                                        "winners": pot.winners,
+                                        "split": pot.split,
+                                        "pot_type": pot.pot_type,
+                                        "hand_type": pot.hand_type,
+                                        "side_pot_index": pot.side_pot_index,
+                                        "eligible_players": pot.eligible_players,
+                                        "amount_per_player": pot.amount_per_player
+                                    } for pot in results.pots
+                                ],
+                                "hands": {
+                                    player_id: [
+                                        {
+                                            "player_id": hand.player_id,
+                                            "cards": [str(c) for c in hand.cards],
+                                            "hand_name": hand.hand_name,
+                                            "hand_description": hand.hand_description,
+                                            "evaluation_type": hand.evaluation_type,
+                                            "hand_type": hand.hand_type,
+                                            "community_cards": hand.community_cards,
+                                            "used_hole_cards": [str(c) for c in hand.used_hole_cards] if hand.used_hole_cards else [],
+                                            "rank": hand.rank
+                                        } for hand in hands
+                                    ] for player_id, hands in results.hands.items()
+                                },
+                                "winning_hands": [
+                                    {
+                                        "player_id": hand.player_id,
+                                        "cards": [str(c) for c in hand.cards],
+                                        "hand_name": hand.hand_name,
+                                        "hand_description": hand.hand_description,
+                                        "evaluation_type": hand.evaluation_type,
+                                        "hand_type": hand.hand_type,
+                                        "community_cards": hand.community_cards,
+                                        "used_hole_cards": [str(c) for c in hand.used_hole_cards] if hand.used_hole_cards else [],
+                                        "rank": hand.rank
+                                    } for hand in results.winning_hands
+                                ]
+                            }
+                            logging.info("Manually created JSON-serializable dict from results")                        
+                        
+                        # Broadcast results to all players
+                        for pid, sid in player_sids.items():
+                            state = get_game_state_for_player(pid)
+                            socketio.emit('game_state', state, room=sid)
+                            socketio.emit('hand_complete', results_dict, room=sid)  # Use results_dict, not results
+                        
+                        # Successfully got results, break the retry loop
+                        break
+                    except Exception as e:
+                        logging.warning(f"Error getting hand results (attempt {attempt+1}): {e}")
+                        import traceback
+                        traceback.print_exc()                        
+                        if attempt < max_attempts - 1:
+                            # Not the last attempt, wait and try again
+                            await asyncio.sleep(2)                
+                        else:
+                            # Create a simplified result if we can't get detailed results
+                            # This might happen if all players folded except one
+                            winners = []
+                            # Try to determine the winner
+                            for player in game.table.players.values():
+                                if player.is_active:
+                                    winners.append(player.id)
+                                            
+                            # Create a simplified result if we can't get detailed results
+                            simplified_results = {
+                                "is_complete": True,
+                                "total_pot": game.betting.get_total_pot(),
+                                "pots": [
+                                    {
+                                        "amount": game.betting.get_total_pot(),
+                                        "winners": winners,
+                                        "pot_type": "main"
+                                    }
+                                ],
+                                "hands": {},
+                                "winning_hands": []
+                            }
+
+                            # Try to add player hands to the results
+                            for player_id, player in game.table.players.items():
+                                if player.is_active:
+                                    # Get player's cards
+                                    hole_cards = [str(c) for c in player.hand.cards]
+                                    
+                                    # Get community cards
+                                    community_cards = []
+                                    for cards in game.table.community_cards.values():
+                                        community_cards.extend([str(c) for c in cards])
+                                    
+                                    # Combine for a complete hand (up to 5 cards)
+                                    complete_hand = hole_cards + community_cards
+                                    
+                                    simplified_results["hands"][player_id] = [{
+                                        "player_id": player_id,
+                                        "cards": complete_hand[:5],  # Take just first 5 cards for simplicity
+                                        "hand_name": "Unknown",
+                                        "hand_description": "Unknown hand",
+                                        "evaluation_type": "high",
+                                        "hand_type": "Hand"
+                                    }]
+                                    
+                                    # If this player is a winner, add to winning_hands
+                                    if player_id in winners:
+                                        simplified_results["winning_hands"].append({
+                                            "player_id": player_id,
+                                            "cards": complete_hand[:5],
+                                            "hand_name": "Unknown",
+                                            "hand_description": "Unknown hand",
+                                            "evaluation_type": "high",
+                                            "hand_type": "Hand"
+                                        })
+
+                
+                # Reset ready for next hand flags
+                ready_for_next_hand.clear()
+                
+                # Wait for all players to be ready for the next hand
+                print("Waiting for players to be ready for next hand")
+                while len(ready_for_next_hand) < len(player_sids):
+                    # Wait for players to indicate readiness
+                    await asyncio.sleep(1)
+                
+                print("All players ready for next hand")
+                
+                # Move button for next hand
+                game.table.move_button()
             
             # Short delay between hands
-            await asyncio.sleep(3)
+            await asyncio.sleep(1)
             
         except Exception as e:
             print(f"Error in game loop: {e}")
+            import traceback
+            traceback.print_exc()
             await asyncio.sleep(5)  # Wait before retrying
+
+def broadcast_game_state():
+    """Broadcast the current game state to all players."""
+    for pid, sid in player_sids.items():
+        state = get_game_state_for_player(pid)
+        socketio.emit('game_state', state, room=sid)
 
 def start_game():
     """Initialize and start the game."""

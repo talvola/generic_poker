@@ -723,8 +723,10 @@ def test_game_results_two_player_showdown():
     # Get results
     results = game.get_hand_results()
 
-    print("\nShowdown Results:")
+    print('\nShowdown Results (Human):')
     print(results)
+    print('\nShowdown Results (JSON):')
+    print(results.to_json())
 
     # Check overall results
     expected_pot = 4  # SB + BB + BTN all put in $20

@@ -65,11 +65,20 @@ socket.on('connect', () => {
     addToLog('Connected to server');
 });
 
+// Keep track of current players for reference
+let currentPlayers = [];
+
+// Update currentPlayers when game state updates
 socket.on('game_state', (data) => {
+    if (data.players) {
+        currentPlayers = data.players;
+    }
+    // Existing updateGameState code...
     updateGameState(data);
 });
 
 socket.on('your_turn', (data) => {
+    console.log('Received your_turn event:', data);
     showActions(data.actions);
     playSound('your-turn');
     
@@ -168,6 +177,137 @@ socket.on('ready_status', (data) => {
     }
 });
 
+// Add to the script.js file
+socket.on('hand_complete', (results) => {
+    console.log('Hand complete results:', results);
+    showHandResults(results);
+});
+
+socket.on('next_hand_status', (data) => {
+    updateNextHandStatus(data);
+});
+
+function showHandResults(results) {
+    console.log('Showing hand results:', results);
+
+    // Remove any existing results modal
+    const existingModal = document.querySelector('.hand-results-modal');
+    if (existingModal) {
+        document.body.removeChild(existingModal);
+    }    
+
+    // Create a modal to display hand results
+    const modal = document.createElement('div');
+    modal.className = 'modal hand-results-modal';
+    
+    let winnerNames = results.pots.flatMap(pot => 
+        pot.winners.map(winnerId => {
+            const player = currentPlayers.find(p => p.id === winnerId);
+            return player ? player.name : winnerId;
+        })
+    );
+    
+    let handResultsHtml = '<div class="winning-hands">';
+    
+    // Show the winning hands
+    if (results.winning_hands && results.winning_hands.length > 0) {
+        results.winning_hands.forEach(hand => {
+            const playerName = currentPlayers.find(p => p.id === hand.player_id)?.name || hand.player_id;
+            
+            handResultsHtml += `
+                <div class="winner-hand">
+                    <h4>${playerName} wins with ${hand.hand_description}</h4>
+                    <div class="cards-display">
+                        ${hand.cards.map(card => formatCard(card)).join(' ')}
+                    </div>
+                </div>
+            `;
+        });
+    }
+    
+    // Show all players' hands
+    handResultsHtml += '<h4>All Hands</h4>';
+    Object.entries(results.hands).forEach(([playerId, hands]) => {
+        if (hands.length > 0) {
+            const playerName = currentPlayers.find(p => p.id === playerId)?.name || playerId;
+            const bestHand = hands[0]; // Assuming first hand is the best
+            
+            handResultsHtml += `
+                <div class="player-hand ${results.pots.some(pot => pot.winners.includes(playerId)) ? 'winner' : ''}">
+                    <h5>${playerName}: ${bestHand.hand_description}</h5>
+                    <div class="cards-display">
+                        ${bestHand.cards.map(card => formatCard(card)).join(' ')}
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    handResultsHtml += '</div>';
+    
+    // Show pot information
+    let potsHtml = '<div class="pots-info">';
+    results.pots.forEach((pot, index) => {
+        const potWinners = pot.winners.map(winnerId => {
+            const player = currentPlayers.find(p => p.id === winnerId);
+            return player ? player.name : winnerId;
+        }).join(', ');
+        
+        potsHtml += `
+            <div class="pot-result ${index === 0 ? 'main-pot' : 'side-pot'}">
+                <h5>${index === 0 ? 'Main Pot' : `Side Pot ${index}`}: $${pot.amount}</h5>
+                <div>Winner(s): ${potWinners}</div>
+                <div>Amount per winner: $${pot.amount_per_player}</div>
+            </div>
+        `;
+    });
+    potsHtml += '</div>';
+    
+    modal.innerHTML = `
+        <div class="modal-content hand-results">
+            <h3>Hand Results</h3>
+            ${handResultsHtml}
+            ${potsHtml}
+            <div class="modal-buttons">
+                <button id="ready-next-hand" class="btn-primary">Ready for Next Hand</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Add event listener to Ready button
+    document.getElementById('ready-next-hand').addEventListener('click', () => {
+        socket.emit('ready_for_next_hand', {});
+        document.getElementById('ready-next-hand').disabled = true;
+        document.getElementById('ready-next-hand').textContent = 'Waiting for others...';
+        addToLog('You are ready for the next hand');
+    });
+}
+
+function updateNextHandStatus(data) {
+    const readyBtn = document.getElementById('ready-next-hand');
+    if (!readyBtn) return;
+    
+    const readyCount = data.ready_players.length;
+    const totalCount = data.all_players.length;
+    
+    readyBtn.textContent = `Waiting: ${readyCount}/${totalCount} ready`;
+    
+    if (data.all_ready) {
+        // Close the modal when all players are ready
+        const modal = document.querySelector('.hand-results-modal');
+        if (modal) {
+            modal.classList.add('closing');
+            setTimeout(() => {
+                document.body.removeChild(modal);
+            }, 500);
+        }
+        
+        addToLog('All players ready! Starting next hand...');
+    }
+}
+
 function updateGameState(data) {
     // Update game info
     if (data.game_info) {
@@ -224,55 +364,8 @@ function updateGameState(data) {
         currentBetAmount.textContent = '0';
     }
     
-    // Update results if available
-    if (data.results) {
-        resultsArea.style.display = 'block';
-        
-        // Format winners list
-        const winners = data.results.winners || [];
-        let winnersText = winners.length > 0 
-            ? winners.join(', ') 
-            : 'Hand complete without showdown';
-        
-        // Find the winning player objects to show their hands
-        const winningPlayers = data.players.filter(p => winners.includes(p.id));
-        let winningHandsHtml = '';
-        
-        if (winningPlayers.length > 0) {
-            winningHandsHtml = '<div class="winning-hands"><h4>Winning Hand(s):</h4>';
-            winningPlayers.forEach(player => {
-                winningHandsHtml += `<div class="winner-info">
-                    <span class="winner-name">${player.name}</span>: `;
-                
-                // Display the player's cards
-                for (const [subset, cards] of Object.entries(player.cards)) {
-                    winningHandsHtml += `<span class="cards-display">
-                        ${cards.map(card => formatCard(card)).join(' ')}
-                    </span>`;
-                }
-                winningHandsHtml += '</div>';
-            });
-            winningHandsHtml += '</div>';
-        }
-        
-        resultsContent.innerHTML = `
-            <div class="result-header">Winner(s): ${winnersText}</div>
-            <div class="pot-result">Pot: $${data.results.total_pot}</div>
-            ${winningHandsHtml}
-            <button id="next-hand-btn" class="btn-primary">Next Hand</button>
-        `;
-        
-        // Add event listener to the Next Hand button
-        document.getElementById('next-hand-btn').addEventListener('click', () => {
-            resultsArea.style.display = 'none';
-            addToLog('Waiting for next hand...');
-        });
-        
-        addToLog(`Hand complete. Winners: ${winnersText}. Total pot: $${data.results.total_pot}`);
-    } else {
-        resultsArea.style.display = 'none';
-    }
-    
+    resultsArea.style.display = 'none';
+
     // Update players with animation
     updatePlayers(data.players);
     

@@ -715,3 +715,100 @@ input[type="number"]:focus {
         width: 95%;
     }
 }
+
+/* Hand Results Modal */
+.hand-results-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    animation: fadeIn 0.3s;
+}
+
+.hand-results {
+    background-color: white;
+    padding: 25px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    color: var(--dark-color);
+    text-align: left;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.winner-hand {
+    background-color: rgba(46, 204, 113, 0.2);
+    padding: 10px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    border-left: 4px solid var(--success-color);
+}
+
+.player-hand {
+    padding: 8px;
+    border-radius: 5px;
+    margin-bottom: 5px;
+    background-color: #f9f9f9;
+}
+
+.player-hand.winner {
+    background-color: rgba(46, 204, 113, 0.1);
+}
+
+.pots-info {
+    margin: 15px 0;
+}
+
+.pot-result {
+    padding: 8px;
+    border-radius: 5px;
+    margin-bottom: 5px;
+    background-color: #f9f9f9;
+}
+
+.main-pot {
+    border-left: 4px solid var(--primary-color);
+}
+
+.side-pot {
+    border-left: 4px solid var(--warning-color);
+}
+
+.modal.closing {
+    opacity: 0;
+    transition: opacity 0.5s;
+}
+
+/* Ready for Next Hand button */
+#ready-next-hand {
+    width: 100%;
+    margin-top: 20px;
+    padding: 12px 20px;
+    background-color: var(--success-color);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s, transform 0.1s;
+}
+
+#ready-next-hand:hover {
+    background-color: #27ae60;
+    transform: translateY(-2px);
+}
+
+#ready-next-hand:disabled {
+    background-color: var(--secondary-color);
+    cursor: not-allowed;
+    transform: none;
+}
