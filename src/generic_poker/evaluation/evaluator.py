@@ -1,8 +1,10 @@
 """Main poker hand evaluation interface."""
 from enum import Enum
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Type, Any, cast
+from typing import List, Dict, Optional, Type, Any, Tuple, cast
 from pathlib import Path
+import logging
+import csv
 
 from generic_poker.core.card import Card
 from generic_poker.core.hand import PlayerHand
@@ -30,6 +32,9 @@ class EvaluationType(str, Enum):
     GAME_21 = '21'
     GAME_21_6 = '21_6'
     LOW_PIP_6 = 'low_pip_6_cards'
+    FOOTBALL = 'football' 
+    SIX_CARD_FOOTBALL = 'six_card_football' 
+    SEVEN_CARD_FOOTBALL = 'seven_card_football' 
     # special partial hands for stud games
     # but could be used for other games as well
     ONE_CARD_LOW = 'one_card_low'
@@ -55,6 +60,16 @@ class EvaluationType(str, Enum):
     # alternate high hands
     SOKO_HIGH = 'soko_high'
     NE_SEVEN_CARD_HIGH = 'ne_seven_card_high'
+    # for high suit in hand
+    ONE_CARD_HIGH_SPADE = 'one_card_high_spade'
+    ONE_CARD_HIGH_HEART = 'one_card_high_heart'
+    ONE_CARD_HIGH_DIAMOND = 'one_card_high_diamond'
+    ONE_CARD_HIGH_CLUB = 'one_card_high_club'    
+    THREE_CARD_HIGH_SPADE = 'three_card_high_spade'
+    THREE_CARD_HIGH_HEART = 'three_card_high_heart'
+    THREE_CARD_HIGH_DIAMOND = 'three_card_high_diamond'
+    THREE_CARD_HIGH_CLUB = 'three_card_high_club'
+
 
 
 @dataclass
@@ -238,6 +253,152 @@ class HandEvaluator:
                     
             return 0  # Completely tied
         
+    def compare_hands_with_offset(
+        self,
+        hand1: List[Card],
+        hand2: List[Card],
+        eval_type1: EvaluationType,
+        eval_type2: EvaluationType,
+        qualifier1: Optional[List[int]] = None,
+        qualifier2: Optional[List[int]] = None
+    ) -> int:
+        """
+        Compare two hands using a comparison table for different evaluation types.
+
+        Args:
+            hand1: First hand (e.g., 5-card hand)
+            hand2: Second hand (e.g., 2-card hand)
+            eval_type1: Evaluation type for hand1 (e.g., 'high')
+            eval_type2: Evaluation type for hand2 (e.g., 'two_card_high')
+            qualifier1: Qualifier for hand1 (e.g., [rank, ordered_rank])
+            qualifier2: Qualifier for hand2
+
+        Returns:
+            1 if hand1 is better, -1 if hand2 is better, 0 if tie
+        """
+        logger = logging.getLogger(__name__)
+
+        # Evaluate both hands
+        result1 = self.evaluate_hand(hand1, eval_type1, qualifier=qualifier1)
+        result2 = self.evaluate_hand(hand2, eval_type2, qualifier=qualifier2)
+
+        # Handle qualification cases
+        if not result1 and not result2:
+            return 0  # Neither hand qualifies
+        if not result1:
+            return -1  # Only hand2 qualifies
+        if not result2:
+            return 1  # Only hand1 qualifies
+
+        # Determine smaller and larger hands based on evaluation types
+        # For simplicity, assume eval_type2 is smaller (e.g., 'two_card_high') and eval_type1 is larger (e.g., 'high')
+        # This can be enhanced with logic to dynamically determine hand sizes if needed
+        smaller_eval_type = eval_type2
+        larger_eval_type = eval_type1
+        smaller_result = result2
+        larger_result = result1
+
+        # Get the comparison table file path
+        comparison_file = self._get_comparison_file(smaller_eval_type, larger_eval_type)
+
+        if comparison_file.exists():
+            # Load the comparison table
+            comparison_table = self._load_comparison_table(comparison_file)
+
+            # Map the smaller hand's rank to the larger hand's system
+            equivalent_rank = self._get_equivalent_rank(
+                comparison_table,
+                smaller_result.rank,
+                smaller_result.ordered_rank
+            )
+
+            if equivalent_rank is not None:
+                # Unpack the tuple into mapped_rank and mapped_ordered_rank
+                mapped_rank, mapped_ordered_rank = equivalent_rank   
+
+                # Compare primary ranks (lower is better)
+                if larger_result.rank < mapped_rank:
+                    return 1  # 5-card hand (larger_result) is better
+                elif larger_result.rank > mapped_rank:
+                    return -1  # 2-card hand (mapped to equivalent_rank) is better
+                else:
+                    # Ranks are equal, compare ordered ranks
+                    # Use float('inf') if ordered_rank is None, assuming None is worst
+                    larger_ordered_rank = larger_result.ordered_rank if larger_result.ordered_rank is not None else float('inf')
+                    if larger_ordered_rank < mapped_ordered_rank:
+                        return 1  # 5-card hand is better
+                    elif larger_ordered_rank > mapped_ordered_rank:
+                        return -1  # 2-card hand is better
+                    else:
+                        return 0  # Hands are equal
+            else:
+                logger.warning(
+                    f"No equivalent rank found for {smaller_eval_type.value} "
+                    f"rank {smaller_result.rank}, ordered_rank {smaller_result.ordered_rank}"
+                )
+                return -1  # Default to smaller hand being better if no mapping
+        else:
+            logger.warning(f"Comparison table not found: {comparison_file}")
+            return 1  # Fallback: assume larger hand is better
+        
+    def _get_comparison_file(self, smaller_eval_type: EvaluationType, larger_eval_type: EvaluationType) -> Path:
+        """
+        Construct the path to the comparison table file.
+
+        Args:
+            smaller_eval_type: Evaluation type of the smaller hand
+            larger_eval_type: Evaluation type of the larger hand
+
+        Returns:
+            Path object pointing to the comparison CSV file
+        """
+        comparison_dir = Path(__file__).parents[3] / 'data' / 'hand_comparisons'
+        file_name = f"{smaller_eval_type.value}_{larger_eval_type.value}_comparison.csv"
+        return comparison_dir / file_name
+
+    def _load_comparison_table(self, file_path: Path) -> List[Dict[str, str]]:
+        """
+        Load the comparison table from a CSV file.
+
+        Args:
+            file_path: Path to the CSV file
+
+        Returns:
+            List of dictionaries containing the table rows
+        """
+        with open(file_path, 'r') as f:
+            reader = csv.DictReader(f)
+            return list(reader)        
+        
+    def _get_equivalent_rank(
+        self,
+        table: List[Dict[str, str]],
+        rank: int,
+        ordered_rank: Optional[int]
+    ) -> Optional[Tuple[int, float]]:
+        """
+        Map the smaller hand's rank and ordered rank to the larger hand's system.
+
+        Args:
+            table: Loaded comparison table
+            rank: Primary rank of the smaller hand
+            ordered_rank: Secondary ordered rank of the smaller hand
+
+        Returns:
+            Tuple of (equivalent rank, equivalent ordered rank) in the larger hand's system,
+            or None if not found
+        """
+        # Handle case where ordered_rank is None
+        ordered_rank = ordered_rank if ordered_rank is not None else 0
+        
+        for row in table:
+            if (int(row['two_card_rank']) == rank and
+                int(row['two_card_ordered_rank']) == ordered_rank):
+                mapped_rank = int(row['five_card_rank'])
+                mapped_ordered_rank = float(row['five_card_ordered_rank'])
+                return (mapped_rank, mapped_ordered_rank)
+        return None 
+            
     def _meets_qualifier(self, result: Optional[HandResult], qualifier: List[int]) -> bool:
         """Check if hand meets qualifier requirements."""
         if not result:

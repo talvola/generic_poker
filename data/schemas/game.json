@@ -164,7 +164,12 @@
         "community_subset": {
           "type": "string",
           "description": "Specific subset of community cards to use for this hand evaluation (e.g., 'Board 1')"
-        },        
+        }, 
+        "cardState": {
+          "type": "string",
+          "enum": ["face down", "face up"],
+          "description": "Specify the state of the cards to consider for this hand evaluation"
+       },               
         "holeCardsAllowed": {
           "type": "array",
           "items": {
@@ -535,29 +540,58 @@
       "additionalProperties": false
     },          
     "separate": {
-      "type": "object",
-      "properties": {
-        "cards": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "hole_subset": {
-                "type": "string",
-                "description": "Name of the subset"
-              },
-              "number": {
-                "type": "integer",
-                "description": "Number of cards in the subset"
-              }
+        "type": "object",
+        "properties": {
+            "cards": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "hole_subset": { "type": "string" },
+                        "number": { "type": "integer" }
+                    },
+                    "required": ["hole_subset", "number"]
+                }
             },
-            "required": ["hole_subset", "number"],
-            "additionalProperties": false
-          }
-        }
-      },
-      "required": ["cards"],
-      "additionalProperties": false
+            "visibility_requirements": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "hole_subset": { "type": "string" },
+                        "min_face_down": { "type": "integer", "minimum": 0 },
+                        "min_face_up": { "type": "integer", "minimum": 0 }
+                    },
+                    "required": ["hole_subset"]
+                },
+                "description": "Specifies minimum face-down or face-up cards per subset"
+            },
+            "hand_comparison": {
+              "type": "object",
+              "properties": {
+                  "subsets": {
+                      "type": "array",
+                      "items": {
+                          "type": "object",
+                          "properties": {
+                              "hole_subset": { "type": "string" },
+                              "evaluationType": { "type": "string" }
+                          },
+                          "required": ["hole_subset", "evaluationType"]
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                  },
+                  "comparison_rule": {
+                      "type": "string",
+                      "enum": ["greater_than", "less_than", "equal"]
+                  }
+              },
+              "required": ["subsets", "comparison_rule"]
+          }            
+        },
+        "required": ["cards"],
+        "additionalProperties": false
     },
     "showdown": {
       "type": "object",

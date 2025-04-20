@@ -1,5 +1,5 @@
 {
-    "game": "7-Card Stud",
+    "game": "Cowpie",
     "players": {
         "min": 2,
         "max": 7
@@ -131,10 +131,23 @@
                 "visibility_requirements": [
                     {"hole_subset": "Five Card Hand", "min_face_down": 1},
                     {"hole_subset": "Two Card Hand", "min_face_down": 1}
-                ]
+                ],
+                "hand_comparison": {
+                    "subsets": [
+                        {"hole_subset": "Five Card Hand", "evaluationType": "high"},
+                        {"hole_subset": "Two Card Hand", "evaluationType": "two_card_high"}
+                    ],
+                    "comparison_rule": "greater_than"
+                }                
             },
             "name": "Separate Cards"
-        },        
+        },   
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Final Bet"
+        },             
         {
             "showdown": {
                 "type": "final"

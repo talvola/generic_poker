@@ -28,6 +28,16 @@ class HandDescriber:
         EvaluationType.TWO_CARD_HIGH: 'all_card_hands_description_two_card_high.csv',       
         # Special hands
         EvaluationType.NE_SEVEN_CARD_HIGH: 'all_card_hands_description_ne_seven_card_high.csv',
+        # Wild card in hole
+        EvaluationType.ONE_CARD_HIGH_SPADE: 'all_card_hands_description_one_card_high_spade.csv',
+        EvaluationType.ONE_CARD_HIGH_HEART: 'all_card_hands_description_one_card_high_heart.csv',
+        EvaluationType.ONE_CARD_HIGH_DIAMOND: 'all_card_hands_description_one_card_high_diamond.csv',
+        EvaluationType.ONE_CARD_HIGH_CLUB: 'all_card_hands_description_one_card_high_club.csv',
+        EvaluationType.THREE_CARD_HIGH_SPADE: 'all_card_hands_description_three_card_high_spade.csv',
+        EvaluationType.THREE_CARD_HIGH_HEART: 'all_card_hands_description_three_card_high_heart.csv',
+        EvaluationType.THREE_CARD_HIGH_DIAMOND: 'all_card_hands_description_three_card_high_diamond.csv',
+        EvaluationType.THREE_CARD_HIGH_CLUB: 'all_card_hands_description_three_card_high_club.csv',
+
     }
 
     def __init__(self, eval_type: EvaluationType):
@@ -47,7 +57,8 @@ class HandDescriber:
         if self.eval_type in [
             EvaluationType.GAME_49, EvaluationType.GAME_58,
             EvaluationType.GAME_6, EvaluationType.GAME_ZERO,
-            EvaluationType.GAME_ZERO_6, EvaluationType.LOW_PIP_6
+            EvaluationType.GAME_ZERO_6, EvaluationType.LOW_PIP_6,
+            EvaluationType.FOOTBALL, EvaluationType.SIX_CARD_FOOTBALL, EvaluationType.SEVEN_CARD_FOOTBALL
         ]:
             descriptions.update({i: str(i) for i in self._generate_hand_names()})
             return descriptions  # Skip file loading if generated

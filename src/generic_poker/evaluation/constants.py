@@ -47,6 +47,9 @@ RANK_ORDERS = {
     '58': BASE_RANKS,
     'zero_6': BASE_RANKS,
     '21_6': BASE_RANKS,
+    'football': BASE_RANKS,
+    'six_card_football': BASE_RANKS,
+    'seven_card_football': BASE_RANKS,
     # Hi-Dugi can use standard ranks
     'hidugi': BASE_RANKS,
 
@@ -86,7 +89,17 @@ RANK_ORDERS = {
     'one_card_high_ah': BASE_RANKS,
     'two_card_27_low': BASE_RANKS,
     'three_card_27_low': BASE_RANKS,
-    'four_card_27_low': BASE_RANKS
+    'four_card_27_low': BASE_RANKS,
+
+    # wild hole card 
+    'one_card_high_spade': BASE_RANKS,
+    'one_card_high_heart': BASE_RANKS,
+    'one_card_high_diamond': BASE_RANKS,
+    'one_card_high_club': BASE_RANKS,
+    'three_card_high_spade': BASE_RANKS,
+    'three_card_high_heart': BASE_RANKS,
+    'three_card_high_diamond': BASE_RANKS,
+    'three_card_high_club': BASE_RANKS
 }
 
 # Mapping of evaluation types to required hand sizes
@@ -101,6 +114,9 @@ HAND_SIZES = {
     '6': 5,
     'zero': 5,
     '21': 5,
+    'football': 5,
+    'six_card_football': 6,
+    'seven_card_football': 7,
     'high_wild_bug': 5,
     'badugi': 4,
     'badugi_ah': 4,
@@ -129,7 +145,15 @@ HAND_SIZES = {
     'zero_6': 6,
     '21_6': 6,
     'soko_high': 5,
-    'ne_seven_card_high': 7
+    'ne_seven_card_high': 7,
+    'three_card_high_spade': 3,
+    'three_card_high_heart': 3,
+    'three_card_high_diamond': 3,
+    'three_card_high_club': 3,
+    'one_card_high_spade': 1,
+    'one_card_high_heart': 1,
+    'one_card_high_diamond': 1,
+    'one_card_high_club': 1 
 }
 
 # evaluation types which require padding to evaluate
@@ -142,6 +166,6 @@ EVAL_TYPES_BY_SIZE = {
 }
 
 # Which evaluation types only use rank (no suits)
-RANK_ONLY_TYPES = {'49', 'zero', '6', '21', 'low_pip_6_cards', '58', '21_6', 'zero_6'}
+RANK_ONLY_TYPES = {'49', 'zero', '6', '21', 'low_pip_6_cards', '58', '21_6', 'zero_6', 'football', 'six_card_football', 'seven_card_football'}
 
 

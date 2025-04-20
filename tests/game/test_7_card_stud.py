@@ -7,6 +7,8 @@ from generic_poker.game.betting import BettingStructure, PlayerBet
 from generic_poker.core.deck import Deck
 from generic_poker.evaluation.hand_description import HandDescriber, EvaluationType
 
+from tests.test_helpers import load_rules_from_file
+
 import json 
 import logging
 import sys
@@ -66,152 +68,10 @@ def create_predetermined_deck():
 
 def setup_test_game_with_mock_deck():
     """Create a test game with three players and a predetermined deck."""
-    rules = {
-        "game": "7-Card Stud",
-        "players": {
-            "min": 2,
-            "max": 7
-        },
-        "deck": {
-            "type": "standard",
-            "cards": 52
-        },
-        "bettingStructures": [
-            "Limit"
-        ],
-        "forcedBets": {
-            "style": "bring-in",
-            "rule": "low card"
-        },
-        "gamePlay": [
-            {
-                "bet": {
-                    "type": "antes"
-                },
-                "name": "Post Antes"
-            },
-            {
-                "deal": {
-                    "location": "player",
-                    "cards": [
-                        {
-                            "number": 2,
-                            "state": "face down"
-                        },
-                        {
-                            "number": 1,
-                            "state": "face up"
-                        }
-                    ]
-                },
-                "name": "Deal Hole Cards"
-            },
-            {
-                "bet": {
-                    "type": "bring-in"
-                },
-                "name": "Post Bring-In"
-            },
-            {
-                "bet": {
-                    "type": "small"
-                },
-                "name": "Third Street Bet"
-            },
-            {
-                "deal": {
-                    "location": "player",
-                    "cards": [
-                        {
-                            "number": 1,
-                            "state": "face up"
-                        }
-                    ]
-                },
-                "name": "Deal Fourth Street"
-            },
-            {
-                "bet": {
-                    "type": "small"
-                },
-                "name": "Fourth Street Bet"
-            },
-            {
-                "deal": {
-                    "location": "player",
-                    "cards": [
-                        {
-                            "number": 1,
-                            "state": "face up"
-                        }
-                    ]
-                },
-                "name": "Deal Fifth Street"
-            },
-            {
-                "bet": {
-                    "type": "big"
-                },
-                "name": "Fifth Street Bet"
-            },
-            {
-                "deal": {
-                    "location": "player",
-                    "cards": [
-                        {
-                            "number": 1,
-                            "state": "face up"
-                        }
-                    ]
-                },
-                "name": "Deal Sixth Street"
-            },
-            {
-                "bet": {
-                    "type": "big"
-                },
-                "name": "Sixth Street Bet"
-            },
-            {
-                "deal": {
-                    "location": "player",
-                    "cards": [
-                        {
-                            "number": 1,
-                            "state": "face down"
-                        }
-                    ]
-                },
-                "name": "Deal Seventh Street"
-            },
-            {
-                "bet": {
-                    "type": "big"
-                },
-                "name": "Seventh Street Bet"
-            },
-            {
-                "showdown": {
-                    "type": "final"
-                },
-                "name": "Showdown"
-            }
-        ],
-        "showdown": {
-            "order": "clockwise",
-            "startingFrom": "dealer",
-            "cardsRequired": "best five out of seven cards",
-            "bestHand": [
-                {
-                    "evaluationType": "high",
-                    "anyCards": 5
-                }
-            ]
-        }
-    }
-    
+    rules = load_rules_from_file('7_card_stud')
+
     game = Game(
-        rules=GameRules.from_json(json.dumps(rules)),
+        rules=rules,
         structure=BettingStructure.LIMIT,
         small_bet=10,
         big_bet=20,
@@ -622,3 +482,138 @@ def test_game_bringin():
 # more tests to follow to check the bring-in, the options for betting for that 
 # player and other players, and subsequent rounds of betting.
 
+def test_game_bringin_for_full():
+    """Test that the game results API provides correct information."""
+    game = setup_test_game_with_mock_deck()
+    
+    # Initial stacks (assume 500 each)
+    initial_stacks = {pid: player.stack for pid, player in game.table.players.items()}
+    assert all(stack == 500 for stack in initial_stacks.values())
+
+    # Step 0: Post Antes
+    game.start_hand()
+    assert game.current_step == 0  # Post Antes
+    assert game.state == GameState.BETTING
+    assert game.table.players['p1'].stack == 499  # Ante deducted
+    assert game.table.players['p2'].stack == 499
+    assert game.table.players['p3'].stack == 499
+    assert game.betting.get_main_pot_amount() == 3  # 3 players x $1
+    assert game.betting.get_ante_total() == 3  # 3 players x $1
+
+    # test current_bets in BettingManager
+    assert game.betting.current_bets == {'p1': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
+                                         'p2': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
+                                         'p3': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False)}
+    # also test total_bets and total_antes from Pot
+    assert game.betting.pot.total_bets == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 1}
+    assert game.betting.pot.total_antes == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 1}
+
+    # Step 1: Deal Hole Cards (2 down, 1 up)
+    game._next_step()
+    assert game.current_step == 1
+    assert game.state == GameState.DEALING
+
+    # pot unchanged
+    assert game.betting.get_main_pot_amount() == 3  # 3 players x $1
+    assert game.betting.get_ante_total() == 3  # 3 players x $1
+
+    # test current_bets in BettingManager
+    assert game.betting.current_bets == {'p1': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
+                                         'p2': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
+                                         'p3': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False)}
+    # also test total_bets and total_antes from Pot
+    assert game.betting.pot.total_bets == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 1}
+    assert game.betting.pot.total_antes == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 1}
+
+    # Step 2: Post Bring-In
+    game._next_step()
+    assert game.current_step == 2
+    assert game.state == GameState.BETTING
+    assert game.current_player.id == "p3"  # Charlie has 2♣, lowest card
+
+    # pot unchanged before actions
+    assert game.betting.get_main_pot_amount() == 3  # 3 players x $1
+    assert game.betting.get_ante_total() == 3  # 3 players x $1    
+
+    # Check valid actions for bring-in player (Charlie)
+    valid_actions = game.get_valid_actions("p3")
+    assert len(valid_actions) == 2  # Bring-in or complete
+    assert (PlayerAction.BRING_IN, 3, 3) in valid_actions  # Bring-in amount ($3)
+    assert (PlayerAction.BET, 10, 10) in valid_actions  # Complete to small bet ($10)
+    
+    # Charlie posts bring-in ($3)
+    result = game.player_action("p3", PlayerAction.BET, 10)
+    assert result.success
+    assert result.advance_step  # Done with bring-in step
+    # P1 and P2 unchanged
+    assert game.table.players['p1'].stack == 499  # Ante deducted
+    assert game.table.players['p2'].stack == 499
+    # P3 has ante and bring-in
+    assert game.table.players["p3"].stack == 489  # 499 - 10
+    assert game.betting.current_bet == 10
+    assert game.betting.get_main_pot_amount() == 13  # 3 + 10
+    assert game.betting.get_ante_total() == 3  # 3 players x $1
+
+    # test current_bets in BettingManager
+    assert game.betting.current_bets == {'p1': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
+                                         'p2': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
+                                         'p3': PlayerBet(amount=11, has_acted=False, posted_blind=True, is_all_in=False)}
+    # also test total_bets and total_antes from Pot
+    assert game.betting.pot.total_bets == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 11}
+    assert game.betting.pot.total_antes == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 1}    
+
+    # Step 3: Third Street Bet (others can act)
+    game._next_step()
+    assert game.current_step == 3
+    assert game.state == GameState.BETTING
+    assert game.betting.get_main_pot_amount() == 13  # 3 + 10
+    assert game.betting.get_ante_total() == 3  # 3 players x $1
+
+    assert game.current_player.id == "p1"  # Alice next after Charlie
+    valid_actions = game.get_valid_actions("p1")
+    assert (PlayerAction.FOLD, None, None) in valid_actions
+    assert (PlayerAction.CALL, 10, 10) in valid_actions  # Call $3
+    assert (PlayerAction.RAISE, 20, 20) in valid_actions  # Raise to $20 (small bet) 
+
+    # Alice (p1) will complete to $10
+    result = game.player_action("p1", PlayerAction.CALL, 10)
+    assert result.success
+    assert game.betting.current_bet == 10  # Passes
+    assert game.table.players["p1"].stack == 489
+    assert game.betting.get_main_pot_amount() == 23  # 3 ante + 10 bring-in + 10 complete
+    assert game.betting.get_ante_total() == 3  # 3 players x $1
+
+    assert game.current_player.id == "p2"  # Bob next after Alice
+    valid_actions = game.get_valid_actions("p2")
+    assert (PlayerAction.FOLD, None, None) in valid_actions
+    assert (PlayerAction.CALL, 10, 10) in valid_actions  # Call $10
+    assert (PlayerAction.RAISE, 20, 20) in valid_actions  # Raise to $20 
+
+    # Bob (p2) will raise to $20
+    result = game.player_action("p2", PlayerAction.RAISE, 20)
+    assert result.success
+    assert game.betting.current_bet == 20  # Passes
+    assert game.table.players["p2"].stack == 479
+    assert game.betting.get_main_pot_amount() == 43  # 3 ante + 10 bring-in + 10 complete + 20 raise
+    assert game.betting.get_ante_total() == 3  # 3 players x $1
+    
+    # Charlie (p3) calls $20 (needs 17 more: 20 - 3)
+    result = game.player_action("p3", PlayerAction.CALL, 20)
+    assert result.success
+    assert game.betting.current_bet == 20
+    assert game.table.players["p3"].stack == 479  # 496 - 17
+    assert game.betting.get_main_pot_amount() == 53  # 36 + 17
+
+    # Alice (p1) calls $20 (needs 10 more: 20 - 10 already in)
+    assert game.current_player.id == "p1"  # Back to Alice
+    valid_actions = game.get_valid_actions("p1")
+    assert (PlayerAction.FOLD, None, None) in valid_actions
+    assert (PlayerAction.CALL, 20, 20) in valid_actions
+    assert (PlayerAction.RAISE, 30, 30) in valid_actions  # Next raise is 20 + 10   
+
+    result = game.player_action("p1", PlayerAction.CALL, 20)
+    assert result.success
+    assert game.betting.current_bet == 20
+    assert game.table.players["p1"].stack == 479  # 489 - 10
+    assert game.betting.get_main_pot_amount() == 63  # 53 + 10
+    assert game.betting.get_ante_total() == 3    

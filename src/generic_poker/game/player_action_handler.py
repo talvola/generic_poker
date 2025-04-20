@@ -150,9 +150,15 @@ class PlayerActionHandler:
             logger.debug(f"Player {player.name} (ID: {player_id}) is first after bring-in: {is_first_after_bring_in}, current_total: {current_total}")
             logger.debug(f"  is_stud= {is_stud}, step_type: {step_type}, bring_in_idx: {bring_in_idx}, acted_count: {acted_count}, active: {active_players[(bring_in_idx + 1) % len(active_players)].id}")
             if is_first_after_bring_in:
-                action = PlayerAction.BET
-                min_amount = self.game.small_bet
-                max_amount = min_amount if self.game.betting_structure == BettingStructure.LIMIT else self.game.betting.get_max_bet(player_id, BetType.SMALL, player.stack)
+                # if the previous player completed instead of bet, then allow a raise here
+                if current_total == self.game.bring_in:
+                    action = PlayerAction.BET
+                    min_amount = self.game.small_bet
+                    max_amount = min_amount if self.game.betting_structure == BettingStructure.LIMIT else self.game.betting.get_max_bet(player_id, BetType.SMALL, player.stack)
+                else:
+                    action = PlayerAction.RAISE
+                    min_amount = self.game.betting.get_min_raise(player_id)
+                    max_amount = min_amount if self.game.betting_structure == BettingStructure.LIMIT else self.game.betting.get_max_bet(player_id, BetType.SMALL, player.stack)
             elif current_total == 0:
                 action = PlayerAction.BET
                 min_amount = bet_size
@@ -453,7 +459,7 @@ class PlayerActionHandler:
         step = self.game.rules.gameplay[self.game.current_step]
         bet_config = step.action_config[self.current_substep].get("bet", {}) if step.action_type == GameActionType.GROUPED else step.action_config
         is_bring_in_step = bet_config.get("type") == "bring-in"
-        bet_type = BetType.SMALL if bet_config.get("type") == "small" else BetType.BIG
+        bet_type = BetType.SMALL if bet_config.get("type") in ("small") or is_bring_in_step else BetType.BIG
         if action == PlayerAction.BRING_IN:
             bet_type = BetType.BRING_IN
 
@@ -503,6 +509,7 @@ class PlayerActionHandler:
                 result.advance_step = True
             return result
 
+        # this will also handle a complete action - which is a BET in a bring-in game phase
         elif action == PlayerAction.BET or action == PlayerAction.RAISE:
             valid_bet = next((a for a in valid_actions if a[0] == action), None)
             if not valid_bet or amount not in range(valid_bet[1], valid_bet[2] + 1):
@@ -514,11 +521,16 @@ class PlayerActionHandler:
             if additional_amount > player.stack:
                 logger.debug(f"{player.name} needs ${additional_amount} but has ${player.stack}")
                 return ActionResult(success=False, error="Not enough chips")
-            logger.info(f"{player.name} {action.value.lower()}s ${total_amount}")
-            self._place_bet(player_id, total_amount, additional_amount, bet_type)
-            result = self._advance_player_if_needed(manage_player, self.game.betting.round_complete())
             if is_bring_in_step:
+                logger.info(f"{player.name} brings in for ${amount}")
+                self._place_bet(player_id, total_amount, additional_amount, bet_type, is_forced=True)
+                self.game.bring_in_player_id = player_id  # Record bring-in player       
+                result = self._advance_player_if_needed(manage_player, False)
                 result.advance_step = True
+            else:
+                logger.info(f"{player.name} {action.value.lower()}s ${total_amount}")
+                self._place_bet(player_id, total_amount, additional_amount, bet_type)
+                result = self._advance_player_if_needed(manage_player, self.game.betting.round_complete())
             return result     
 
         logger.warning(f"Unsupported betting action by {player.name}: {action}")
@@ -620,19 +632,62 @@ class PlayerActionHandler:
     def _handle_separate_action(self, player: Player, cards: List[Card]) -> bool:
         """Handle separating cards into subsets."""
         config = self.game.current_separate_config["cards"]
+        visibility_reqs = self.game.current_separate_config.get("visibility_requirements", [])
         all_cards = player.hand.get_cards()
         expected_total = sum(cfg["number"] for cfg in config)
+
         if len(cards) != expected_total or not all(c in all_cards for c in cards):
+            logger.warning(f"Player {player.name} provided invalid cards for separation")
             return False
+    
         player.hand.clear_subsets()
         card_index = 0
         for cfg in config:
             subset = cfg["hole_subset"]
             num = cfg["number"]
             subset_cards = cards[card_index:card_index + num]
+
+            # Validate visibility requirements
+            req = next((r for r in visibility_reqs if r["hole_subset"] == subset), None)  
+            if req:
+                min_face_down = req.get("min_face_down", 0)
+                min_face_up = req.get("min_face_up", 0)
+                face_down_count = sum(1 for card in subset_cards if card.visibility == Visibility.FACE_DOWN)
+                face_up_count = sum(1 for card in subset_cards if card.visibility == Visibility.FACE_UP)
+                
+                if face_down_count < min_face_down or face_up_count < min_face_up:
+                    logger.warning(f"Player {player.name}'s subset '{subset}' does not meet visibility requirements: "
+                                f"needs at least {min_face_down} face-down and {min_face_up} face-up cards")
+                    return False             
+                         
             for card in subset_cards:
                 player.hand.add_to_subset(card, subset)
             card_index += num
+
+        # Validate hand comparison for each player
+        comparison_config = self.game.current_separate_config.get("hand_comparison", None)
+        if comparison_config:
+            from generic_poker.evaluation.evaluator import EvaluationType, evaluator
+
+            subsets = comparison_config["subsets"]
+            comparison_rule = comparison_config["comparison_rule"]
+            
+            hand1 = player.hand.get_subset(subsets[0]["hole_subset"])
+            hand2 = player.hand.get_subset(subsets[1]["hole_subset"])
+            eval_type1 =  EvaluationType(subsets[0]["evaluationType"])
+            eval_type2 = EvaluationType(subsets[1]["evaluationType"])
+            
+            from generic_poker.evaluation.evaluator import EvaluationType, evaluator
+
+            result = evaluator.compare_hands_with_offset(
+                hand1, hand2, eval_type1, eval_type2
+            )
+            
+            if comparison_rule == "greater_than" and result <= 0:
+                logger.warning(f"Player {player.name}'s {subsets[0]['hole_subset']} ({hand1}) is not better than their {subsets[1]['hole_subset']} ({hand2})")
+                player.hand.clear_subsets()
+                return False
+                                
         return True
 
     def _handle_expose_action(self, player: Player, cards: List[Card]) -> bool:

@@ -1,5 +1,8 @@
 {
-    "game": "7-Card Stud",
+    "game": "7-Card Stud Double Qualifier",
+    "references": [
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
+    ],    
     "players": {
         "min": 2,
         "max": 7
@@ -13,7 +16,7 @@
     ],
     "forcedBets": {
         "style": "bring-in",
-        "rule": "low card"
+        "rule": "high card"
     },
     "gamePlay": [
         {
@@ -48,6 +51,24 @@
             "bet": {
                 "type": "small"
             },
+            "name": "Initial Bet"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Third Street"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
             "name": "Third Street Bet"
         },
         {
@@ -64,7 +85,7 @@
         },
         {
             "bet": {
-                "type": "small"
+                "type": "big"
             },
             "name": "Fourth Street Bet"
         },
@@ -92,7 +113,7 @@
                 "cards": [
                     {
                         "number": 1,
-                        "state": "face up"
+                        "state": "face down"
                     }
                 ]
             },
@@ -105,37 +126,6 @@
             "name": "Sixth Street Bet"
         },
         {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face down"
-                    }
-                ]
-            },
-            "name": "Deal Seventh Street"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "Seventh Street Bet"
-        },
-        {
-            "separate": {
-                "cards": [
-                    {"hole_subset": "Five Card Hand", "number": 5},
-                    {"hole_subset": "Two Card Hand", "number": 2}
-                ],
-                "visibility_requirements": [
-                    {"hole_subset": "Five Card Hand", "min_face_down": 1},
-                    {"hole_subset": "Two Card Hand", "min_face_down": 1}
-                ]
-            },
-            "name": "Separate Cards"
-        },        
-        {
             "showdown": {
                 "type": "final"
             },
@@ -145,10 +135,34 @@
     "showdown": {
         "order": "clockwise",
         "startingFrom": "dealer",
-        "cardsRequired": "best five and two cards",
+        "cardsRequired": "all five cards",
         "bestHand": [
-            {"name": "Five Card Hand", "evaluationType": "high", "holeCards": 5, "hole_subset": "Five Card Hand"},
-            {"name": "Two Card Hand", "evaluationType": "two_card_high", "holeCards": 2, "hole_subset": "Two Card Hand"}
-        ]
+            {
+                "name": "High Hand",
+                "evaluationType": "high",
+                "holeCards": 5,
+                "communityCards": 0,
+                "qualifier": [
+                    8,
+                    558
+                ]
+            },
+            {
+                "name": "Low Hand",
+                "evaluationType": "a5_low",
+                "holeCards": 5,
+                "communityCards": 0,
+                "qualifier": [
+                    1,
+                    56
+                ]
+            }
+        ],
+        "globalDefaultAction": {
+            "condition": "no_qualifier_met",
+            "action": {
+                "type": "split_pot"
+            }
+        }
     }
 }

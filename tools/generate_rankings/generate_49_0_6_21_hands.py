@@ -61,21 +61,22 @@ class PokerHandEvaluator:
         return all_hands
     
     # get the sum of the pips based on rules (aces and face card handling)
-    def get_sum_pips(self, hand, aces, face_cards):
+    def get_sum_pips(self, hand, aces, face_cards, zero_value_cards):
         sum_pips = 0
         for card in hand:
             rank = card[:-1]
-            if rank == 'A':
-                sum_pips += aces
-            elif rank in ['K', 'Q', 'J']:
-                sum_pips += face_cards
-            elif rank == 'T':
-                sum_pips += 10                
-            else:
-                sum_pips += int(rank)
+            if rank not in zero_value_cards:            
+                if rank == 'A':
+                    sum_pips += aces
+                elif rank in ['K', 'Q', 'J']:
+                    sum_pips += face_cards
+                elif rank == 'T':
+                    sum_pips += 10                
+                else:
+                    sum_pips += int(rank)
         return sum_pips
 
-    def generate_hands(self, ranks, suits, face_cards_value, ascending_rank=True, hand_size=5, pad=None):
+    def generate_hands(self, ranks, suits, face_cards_value, zero_value_cards=[], ascending_rank=True, hand_size=5, pad=None):
         all_hands = []
 
         # Get all {hand_size}-card hands:
@@ -86,7 +87,7 @@ class PokerHandEvaluator:
         hands_by_sum_pips = []
 
         for hand in five_card_combos:
-            sum_pips = self.get_sum_pips(hand, aces=1, face_cards=face_cards_value)
+            sum_pips = self.get_sum_pips(hand, aces=1, face_cards=face_cards_value, zero_value_cards=zero_value_cards)
             hands_by_sum_pips.append((sum_pips, hand))
 
         # Sort hands_by_sum_pips by sum_pips in the specified order
@@ -134,6 +135,70 @@ class PokerHandEvaluator:
 
         return unique_hands
     
+    def generate_hands_football(self, ranks, suits, face_cards_value, zero_value_cards=[], ascending_rank=True, hand_size=5, pad=None):
+        all_hands = []
+
+        # Get all {hand_size}-card hands:
+
+        five_card_combos = hand_evaluator.generate_high_card_combos(hand_size)
+
+        # Initialize a list to store tuples of (sum_pips, hand)
+        hands_by_sum_pips = []
+
+        for hand in five_card_combos:
+            sum_pips = self.get_sum_pips(hand, aces=1, face_cards=face_cards_value, zero_value_cards=zero_value_cards)
+            hands_by_sum_pips.append((sum_pips, hand))
+
+        # Sort hands_by_sum_pips by sum_pips in the specified order
+        if ascending_rank:
+            hands_by_sum_pips.sort(key=lambda x: x[0])
+        else:
+            hands_by_sum_pips.sort(reverse=True, key=lambda x: x[0])
+
+        # if we are padding, then rank = pip count, otherwise we adjust to 1-based rank
+        if pad is not None:
+            first_count = 0
+        else:
+            if 1 <= hand_size <= 4:
+                first_count = hand_size - 1
+            elif hand_size == 5:
+                first_count = 5
+            elif hand_size == 6:
+                first_count = 7
+
+        # Create tuples of (hand, rank, ordered_rank)
+        seen_hands = set()
+        unique_hands = []
+
+        if hand_size == 5:
+            max_rank = 27
+        elif hand_size == 6:
+            max_rank = 30
+        elif hand_size == 7:
+            max_rank = 33
+
+        for index, (sum_pips, hand) in enumerate(hands_by_sum_pips):
+            if ascending_rank:
+                if face_cards_value == 0:
+                    rank = sum_pips + 1
+                else:
+                    rank = sum_pips - first_count  # Adjust rank to start from 1 for sum_pips = 6 for 5-card hand (AAAA2), 4 for 4-card hand (AAAA), etc.
+            else:
+                rank = max_rank - sum_pips + 1
+            ordered_rank = 1
+
+            canonical_hand = sorted([card[0] for card in hand], key=lambda rank: ranks.index(rank))  # Remove suits and sort
+
+            if pad:
+                canonical_hand = canonical_hand + ['X'] * pad
+
+            hand_tuple = (tuple(canonical_hand), rank, ordered_rank)
+            if hand_tuple not in seen_hands:
+                seen_hands.add(hand_tuple)
+                unique_hands.append(hand_tuple)
+
+        return unique_hands
+
     def rank_hands(self, evaluated_hands):
         # Sort hands by total (descending) and number of cards (descending)
         evaluated_hands.sort(key=lambda x: (x[1], x[2]), reverse=True)
@@ -237,7 +302,7 @@ class PokerHandEvaluator:
 # Create an instance of PokerHandEvaluator
 hand_evaluator = PokerHandEvaluator()
 
-# Dramaha variants
+ # Dramaha variants
 #
 # 21 - closest to 21 without going over
 # best hand is 5-card 21, then 4-card 21, 3-card 21, etc. then 5-card 20, 4-card 20, 3-card 20, etc.
@@ -261,7 +326,7 @@ with open('all_card_hands_description_21.csv', 'w') as file:
     for key, description in description_lookup.items():
         file.write(str(key[0]) + ',' + str(key[1]) + ',' + description + '\n')  
 
-""" """ # 6 cards
+ # 6 cards
 
 all_hands, debug_hands, description_lookup = hand_evaluator.generate_hands_21(ranks, hand_size=6)
 
@@ -386,9 +451,53 @@ with open('all_card_hands_ranked_zero_6.csv', 'w') as file:
     # Iterate over all hands and write them to the file
     ordered_ranks = {}
     for hand, rank, ordered_rank in all_hands:
+        file.write(','.join(hand) + ',' + str(rank) + ',' + str(ordered_rank) + '\n')         
+
+# Football - Hand with the most points using football scores (Aces = 1, two, three or six = their respective ranks, all others = 0)
+#  up to seven cards needed (for Oakland Raiders)
+#  best hand (5 cards) - 66663 (27 points)
+#  best hand (6 cards) - 666633 (30 points)
+#  best hand (7 cards) - 6666333 (33 points)
+
+all_hands = hand_evaluator.generate_hands_football(ranks, suits, face_cards_value=0, zero_value_cards=['K', 'Q', 'J', 'T', '9', '8', '7', '5', '4'], ascending_rank=False)
+
+# Open a file for writing
+with open('all_card_hands_ranked_football.csv', 'w') as file:
+    file.write('Hand,Rank,OrderedRank\n')
+
+    # Iterate over all hands and write them to the file
+    ordered_ranks = {}
+    for hand, rank, ordered_rank in all_hands:
         file.write(','.join(hand) + ',' + str(rank) + ',' + str(ordered_rank) + '\n')        
+
+# 6 card version of the above
+
+all_hands = hand_evaluator.generate_hands_football(ranks, suits, face_cards_value=0, zero_value_cards=['K', 'Q', 'J', 'T', '9', '8', '7', '5', '4'], ascending_rank=False, hand_size = 6)
+
+# Open a file for writing
+with open('all_card_hands_ranked_six_card_football.csv', 'w') as file:
+    file.write('Hand,Rank,OrderedRank\n')
+
+    # Iterate over all hands and write them to the file
+    ordered_ranks = {}
+    for hand, rank, ordered_rank in all_hands:
+        file.write(','.join(hand) + ',' + str(rank) + ',' + str(ordered_rank) + '\n')  
 
 print('Files generated successfully.')
 
+# 7 card version of the above
+
+all_hands = hand_evaluator.generate_hands_football(ranks, suits, face_cards_value=0, zero_value_cards=['K', 'Q', 'J', 'T', '9', '8', '7', '5', '4'], ascending_rank=False, hand_size = 7)
+
+# Open a file for writing
+with open('all_card_hands_ranked_seven_card_football.csv', 'w') as file:
+    file.write('Hand,Rank,OrderedRank\n')
+
+    # Iterate over all hands and write them to the file
+    ordered_ranks = {}
+    for hand, rank, ordered_rank in all_hands:
+        file.write(','.join(hand) + ',' + str(rank) + ',' + str(ordered_rank) + '\n')  
+
+print('Files generated successfully.')
 
 

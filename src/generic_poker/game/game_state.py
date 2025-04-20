@@ -17,6 +17,7 @@ class PlayerAction(Enum):
     BET = "bet"
     RAISE = "raise"
     BRING_IN = "bring_in" 
+    COMPLETE = "complete" # complete bring-in
     DISCARD = "discard" # simplified discard only
     DRAW = "draw" # really more general discard and then draw
     SEPARATE  = "separate"  # separate hand into subsets
