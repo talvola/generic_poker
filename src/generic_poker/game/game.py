@@ -81,13 +81,19 @@ class HandResult:
     hand_type: str = "Hand"  # from game config showdown
     community_cards: List[Card] = field(default_factory=list)  # Community cards if applicable
     used_hole_cards: List[Card] = field(default_factory=list)  # Cards used in the hand
-    rank: int = 0  # Internal rank value (lower is better for low games)
+    rank: int = 0  
+    ordered_rank: int = 0  
+    classifications: Dict[str, str] = field(default_factory=dict)  # New field for classifications
     
     def __str__(self) -> str:
         """String representation of the hand result."""
         cards_str = ", ".join(str(card) for card in self.cards)
-        return f"Player {self.player_id}: {self.hand_description} ({cards_str})"
-    
+        # Append classification if present
+        classification_str = ""
+        if "face_butt" in self.classifications:
+            classification_str = f" ({self.classifications['face_butt'].capitalize()})"        
+        return f"Player {self.player_id}: {self.hand_description}{classification_str} ({cards_str})"
+        
     def to_json(self) -> dict:
         """Convert to JSON-compatible dictionary."""
         return {
@@ -99,7 +105,9 @@ class HandResult:
             "hand_type": self.hand_type,
             "community_cards": [str(card) for card in self.community_cards],
             "used_hole_cards": [str(card) for card in self.used_hole_cards],  # Added for Omaha Hi/Hi
-            "rank": self.rank
+            "rank": self.rank,
+            "ordered_rank": self.ordered_rank,
+            "classifications": self.classifications  # Include classifications
         }
 
 @dataclass
@@ -1702,17 +1710,36 @@ class Game:
             if not best_hand:
                 logger.info(f"Player {player.name} has no valid hand for {hand_type}. Skipping...")
                 continue
+
+            # Determine classification (e.g., face/butt)
+            classifications = {}
+            if "classification" in hand_config:
+                classification_config = hand_config["classification"]
+                if classification_config["type"] == "face_butt":
+                    face_ranks = [Rank[r] for r in classification_config["faceRanks"]]
+                    all_cards = player.hand.get_cards()  # All 7 cards
+                    has_face = any(card.rank in face_ranks for card in all_cards)
+                    classifications[classification_config["fieldName"]] = "face" if has_face else "butt"
+
+            # Evaluate the hand to get rank
+            rank_result = evaluator.evaluate_hand(best_hand, eval_type)
+            if not rank_result:
+                logger.warning(f"Failed to evaluate hand for player {player.id}")
+                continue            
             
             # Create hand result with used_hole_cards
             results[player.id] = HandResult(
                 player_id=player.id,
                 cards=best_hand,
+                rank=rank_result.rank,
+                ordered_rank=rank_result.ordered_rank,                
                 hand_name=describer.describe_hand(best_hand),
                 hand_description=describer.describe_hand_detailed(best_hand),
                 hand_type=hand_type,
                 evaluation_type=eval_type.value,
                 community_cards=self.table.community_cards,
-                used_hole_cards=used_hole_cards
+                used_hole_cards=used_hole_cards,
+                classifications=classifications
             )
         
         return results
@@ -1788,7 +1815,7 @@ class Game:
             
             if qualified_players:
                 # Find best hand among eligible players
-                winners = self._find_winners(qualified_players, player_hands, eval_type)
+                winners = self._find_winners(qualified_players, hand_results, eval_type, self.rules.showdown)
                 if winners:
                     had_winners = True
                     # Calculate pot amount based on ORIGINAL side pot
@@ -1827,7 +1854,7 @@ class Game:
             qualified_players.append(player)
         
         if qualified_players:
-            winners = self._find_winners(qualified_players, player_hands, eval_type)
+            winners = self._find_winners(qualified_players, hand_results, eval_type, self.rules.showdown)
             if winners:
                 had_winners = True
                 # Calculate pot amount based on ORIGINAL main pot
@@ -2005,7 +2032,7 @@ class Game:
             
             if qualified_players:
                 # Find best hand among eligible players
-                winners = self._find_winners(qualified_players, player_hands, eval_type)
+                winners = self._find_winners(qualified_players, hand_results, eval_type, self.rules.showdown)
                 if winners:
                     had_winners = True
                     
@@ -2043,7 +2070,7 @@ class Game:
             qualified_players.append(player)
         
         if qualified_players:
-            winners = self._find_winners(qualified_players, player_hands, eval_type)
+            winners = self._find_winners(qualified_players, hand_results, eval_type, self.rules.showdown)
             if winners:
                 had_winners = True
                 
@@ -2126,6 +2153,21 @@ class Game:
             if not hole_cards:
                 logger.warning(f"No cards in hand for player {player.id}")
                 return [], []
+            
+        # Filter hole cards by cardState if specified
+        if "cardState" in showdown_rules:
+            card_state = showdown_rules["cardState"]
+            if card_state == "face down":
+                hole_cards = [card for card in hole_cards if card.visibility == Visibility.FACE_DOWN]
+            elif card_state == "face up":
+                hole_cards = [card for card in hole_cards if card.visibility == Visibility.FACE_UP]
+            else:
+                logger.warning(f"Invalid cardState '{card_state}' for player {player.id}")
+                return [], []            
+            logger.debug(f"Filtered hole cards to {card_state}: {len(hole_cards)} cards remaining")
+            if not hole_cards and "minimumCards" not in showdown_rules:
+                logger.warning(f"No {card_state} cards available for player {player.id}")
+                return [], []            
             
         if not hole_cards and "minimumCards" in showdown_rules:
             minimum_cards = showdown_rules["minimumCards"]
@@ -2397,32 +2439,62 @@ class Game:
     def _find_winners(
         self,
         players: List[Player],
-        player_hands: Dict[str, List[Card]],
-        eval_type: EvaluationType
+        player_hands: Dict[str, HandResult],
+        eval_type: EvaluationType,
+        showdown_rules: dict
     ) -> List[Player]:
         """Find best hand(s) among players."""
-        if not players:
+        if not players or not player_hands:
             return []
             
         from generic_poker.evaluation.evaluator import evaluator
+
+        # Get classification priority from showdown rules
+        classification_priority = showdown_rules.classification_priority
+        classification_field = "face_butt"  # Default field name from bestHand classification        
         
+        # Helper to get classification rank
+        def get_classification_rank(hand_result: HandResult) -> int:
+            if not classification_priority:
+                return 0
+            logger.debug(f"Hand Result: {hand_result}")
+            classification = hand_result.classifications.get(classification_field, "butt")
+            try:
+                return classification_priority.index(classification)
+            except ValueError:
+                return len(classification_priority)  # Unknown classification is worst
+                
         # Get first player as initial best
         best_players = [players[0]]
-        best_hand = player_hands[players[0].id]
+        best_hand_result = player_hands[players[0].id]
+        best_classification_rank = get_classification_rank(best_hand_result)
         
         # Compare against other players
         for player in players[1:]:
             if player.id not in player_hands:
                 continue
                 
-            current_hand = player_hands[player.id]
-            comparison = evaluator.compare_hands(current_hand, best_hand, eval_type)
-            
-            if comparison > 0:  # Current hand better
-                best_hand = current_hand
+            current_hand_result = player_hands[player.id]
+            current_classification_rank = get_classification_rank(current_hand_result)
+           
+            # Compare by classification first
+            if current_classification_rank < best_classification_rank:
+                # Current hand has a better classification (e.g., "face" vs "butt")
                 best_players = [player]
-            elif comparison == 0:  # Tie
-                best_players.append(player)
+                best_hand_result = current_hand_result
+                best_classification_rank = current_classification_rank
+            elif current_classification_rank == best_classification_rank:
+                # Same classification, compare by rank
+                comparison = evaluator.compare_hands(
+                    current_hand_result.cards,
+                    best_hand_result.cards,
+                    eval_type
+                )
+                if comparison > 0:  # Current hand better
+                    best_players = [player]
+                    best_hand_result = current_hand_result
+                elif comparison == 0:  # Tie
+                    best_players.append(player)
                 
         return best_players        
 

@@ -1,6 +1,6 @@
 """Main poker hand evaluation interface."""
 from enum import Enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Type, Any, Tuple, cast
 from pathlib import Path
 import logging
@@ -89,6 +89,7 @@ class HandResult:
     description: Optional[str] = None
     cards_used: Optional[List[Card]] = None
     sources: Optional[List[str]] = None
+    classifications: Dict[str, str] = field(default_factory=dict)  # New field for classifications
 
     @classmethod
     def from_ranking(cls, ranking: HandRanking) -> 'HandResult':

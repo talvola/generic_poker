@@ -121,20 +121,7 @@
                 "type": "big"
             },
             "name": "Seventh Street Bet"
-        },
-        {
-            "separate": {
-                "cards": [
-                    {"hole_subset": "Five Card Hand", "number": 5},
-                    {"hole_subset": "Two Card Hand", "number": 2}
-                ],
-                "visibility_requirements": [
-                    {"hole_subset": "Five Card Hand", "min_face_down": 1},
-                    {"hole_subset": "Two Card Hand", "min_face_down": 1}
-                ]
-            },
-            "name": "Separate Cards"
-        },        
+        },  
         {
             "showdown": {
                 "type": "final"
@@ -145,10 +132,13 @@
     "showdown": {
         "order": "clockwise",
         "startingFrom": "dealer",
-        "cardsRequired": "best five and two cards",
+        "cardsRequired": "all five cards",
         "bestHand": [
-            {"name": "Five Card Hand", "evaluationType": "high", "holeCards": 5, "hole_subset": "Five Card Hand"},
-            {"name": "Two Card Hand", "evaluationType": "two_card_high", "holeCards": 2, "hole_subset": "Two Card Hand"}
+            {
+                "evaluationType": "high",
+                "holeCards": 5,
+                "communityCards": 0
+            }
         ]
     }
 }

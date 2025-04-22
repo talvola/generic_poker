@@ -75,6 +75,7 @@ class ShowdownConfig:
     best_hand: List[Dict[str, Any]]
     globalDefaultAction: Dict[str, Any] = field(default_factory=dict)  # Renamed from default_action
     defaultActions: List[Dict[str, Any]] = field(default_factory=list)  # Added
+    classification_priority: List[Dict[str, Any]] = field(default_factory=list)  # Added
 
 @dataclass
 class GameRules:
@@ -234,7 +235,8 @@ class GameRules:
             cards_required=showdown_data['cardsRequired'],
             best_hand=showdown_data['bestHand'],
             globalDefaultAction=showdown_data.get('globalDefaultAction', {}),  # Maps JSON key to new field name
-            defaultActions=showdown_data.get('defaultActions', [])       # Loads new field
+            defaultActions=showdown_data.get('defaultActions', []),       # Loads new field
+            classification_priority=showdown_data.get('classification_priority', [])       # Loads new field
         )
 
         rules = cls(

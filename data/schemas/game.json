@@ -196,6 +196,27 @@
           },
           "description": "List of allowed combinations of community card subsets. Each inner array represents a valid combination of subsets whose cards are combined for hand evaluation."
         },
+        "classification": {
+          "type": "object",
+          "properties": {
+              "type": {
+                  "type": "string",
+                  "enum": ["face_butt"],
+                  "description": "Type of classification rule"
+              },
+              "faceRanks": {
+                  "type": "array",
+                  "items": { "type": "string", "enum": ["JACK", "QUEEN", "KING"] },
+                  "description": "Ranks that qualify a hand as 'face'"
+              },
+              "fieldName": {
+                  "type": "string",
+                  "description": "Field to store classification result (e.g., 'face_butt')"
+              }
+            },
+            "required": ["type", "faceRanks", "fieldName"],
+            "additionalProperties": false
+        },     
         "wildCards": {
           "type": "array",
           "description": "List of wild card rules that apply to this hand evaluation",
@@ -734,6 +755,11 @@
             "$ref": "#/definitions/bestHandItem"
           }
         },
+        "classification_priority": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["face", "butt"] },
+          "description": "Order of precedence for classified hands (e.g., ['face', 'butt'])"
+        },        
         "globalDefaultAction": {
           "type": "object",
           "properties": {
