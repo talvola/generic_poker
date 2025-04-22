@@ -1,11 +1,11 @@
 {
-    "game": "Razz",
+    "game": "Q",
     "references": [
         "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
-    ],         
+    ],     
     "players": {
         "min": 2,
-        "max": 7
+        "max": 8
     },
     "deck": {
         "type": "standard",
@@ -39,7 +39,7 @@
                     }
                 ]
             },
-            "name": "Deal Hole Cards"
+            "name": "Deal Third Street"
         },
         {
             "bet": {
@@ -51,29 +51,11 @@
             "bet": {
                 "type": "small"
             },
-            "name": "Initial Bet"
-        },
-        {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal Third Street"
-        },
-        {
-            "bet": {
-                "type": "small"
-            },
             "name": "Third Street Bet"
         },
         {
             "deal": {
-                "location": "player",
+                "location": "individual",
                 "cards": [
                     {
                         "number": 1,
@@ -85,13 +67,13 @@
         },
         {
             "bet": {
-                "type": "big"
+                "type": "small"
             },
             "name": "Fourth Street Bet"
         },
         {
             "deal": {
-                "location": "player",
+                "location": "individual",
                 "cards": [
                     {
                         "number": 1,
@@ -106,14 +88,14 @@
                 "type": "big"
             },
             "name": "Fifth Street Bet"
-        },
+        },        
         {
             "deal": {
-                "location": "player",
+                "location": "individual",
                 "cards": [
                     {
                         "number": 1,
-                        "state": "face down"
+                        "state": "face up"
                     }
                 ]
             },
@@ -126,6 +108,24 @@
             "name": "Sixth Street Bet"
         },
         {
+            "deal": {
+                "location": "individual",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Seventh Street"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Seventh Street Bet"
+        },        
+        {
             "showdown": {
                 "type": "final"
             },
@@ -135,9 +135,15 @@
     "showdown": {
         "order": "clockwise",
         "startingFrom": "dealer",
-        "cardsRequired": "all five cards",
+        "cardsRequired": "best High hand / Lowest 5 unique ranks A-8",
         "bestHand": [
             {
+                "name": "High Hand",
+                "evaluationType": "high",
+                "anyCards": 5
+            },
+            {
+                "name": "Low Hand",
                 "evaluationType": "a5_low",
                 "anyCards": 5
             }

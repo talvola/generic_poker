@@ -1,5 +1,8 @@
 {
     "game": "2\u20137 Razz",
+    "references": [
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
+    ],         
     "players": {
         "min": 2,
         "max": 7

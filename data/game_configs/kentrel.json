@@ -1,8 +1,8 @@
 {
-    "game": "Razz",
+    "game": "Kentrel",
     "references": [
         "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
-    ],         
+    ],    
     "players": {
         "min": 2,
         "max": 7
@@ -16,7 +16,7 @@
     ],
     "forcedBets": {
         "style": "bring-in",
-        "rule": "high card"
+        "rule": "low card"
     },
     "gamePlay": [
         {
@@ -30,40 +30,40 @@
                 "location": "player",
                 "cards": [
                     {
-                        "number": 2,
+                        "number": 4,
                         "state": "face down"
-                    },
-                    {
-                        "number": 1,
-                        "state": "face up"
                     }
                 ]
             },
             "name": "Deal Hole Cards"
         },
         {
+            "discard": {
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Discard One Card"
+        },      
+        {
+            "expose": {
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Expose One Card"
+        },          
+        {
             "bet": {
                 "type": "bring-in"
             },
             "name": "Post Bring-In"
-        },
-        {
-            "bet": {
-                "type": "small"
-            },
-            "name": "Initial Bet"
-        },
-        {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal Third Street"
         },
         {
             "bet": {
@@ -85,7 +85,7 @@
         },
         {
             "bet": {
-                "type": "big"
+                "type": "small"
             },
             "name": "Fourth Street Bet"
         },
@@ -113,7 +113,7 @@
                 "cards": [
                     {
                         "number": 1,
-                        "state": "face down"
+                        "state": "face up"
                     }
                 ]
             },
@@ -124,6 +124,24 @@
                 "type": "big"
             },
             "name": "Sixth Street Bet"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Seventh Street"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Seventh Street Bet"
         },
         {
             "showdown": {
@@ -138,8 +156,20 @@
         "cardsRequired": "all five cards",
         "bestHand": [
             {
+                "name": "High Hand",
+                "evaluationType": "high",
+                "holeCards": 5,
+                "communityCards": 0
+            },
+            {
+                "name": "Low Hand",
                 "evaluationType": "a5_low",
-                "anyCards": 5
+                "holeCards": 5,
+                "communityCards": 0,
+                "qualifier": [
+                    1,
+                    56
+                ]
             }
         ]
     }
