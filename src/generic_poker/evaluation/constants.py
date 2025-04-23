@@ -96,6 +96,10 @@ RANK_ORDERS = {
     'one_card_high_heart': BASE_RANKS,
     'one_card_high_diamond': BASE_RANKS,
     'one_card_high_club': BASE_RANKS,
+    'one_card_low_spade': BASE_RANKS,
+    'one_card_low_heart': BASE_RANKS,
+    'one_card_low_diamond': BASE_RANKS,
+    'one_card_low_club': BASE_RANKS,    
     'three_card_high_spade': BASE_RANKS,
     'three_card_high_heart': BASE_RANKS,
     'three_card_high_diamond': BASE_RANKS,
@@ -153,7 +157,11 @@ HAND_SIZES = {
     'one_card_high_spade': 1,
     'one_card_high_heart': 1,
     'one_card_high_diamond': 1,
-    'one_card_high_club': 1 
+    'one_card_high_club': 1,
+    'one_card_low_spade': 1,
+    'one_card_low_heart': 1,
+    'one_card_low_diamond': 1,
+    'one_card_low_club': 1 
 }
 
 # evaluation types which require padding to evaluate

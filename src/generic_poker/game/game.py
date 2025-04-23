@@ -719,6 +719,13 @@ class Game:
         
     def _next_step(self) -> None:
         """Move to next step in gameplay sequence."""
+
+        # Clean up temporary attributes
+        for attr in ["current_discard_config", "current_draw_config", "current_separate_config", 
+                        "current_expose_config", "current_pass_config"]:
+            if hasattr(self, attr):
+                delattr(self, attr)        
+                
         self.current_step += 1
         self.process_current_step()
         
