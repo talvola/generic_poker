@@ -79,7 +79,7 @@ RANK_ORDERS = {
     'four_card_high_al': LOW_A5_RANKS,
     # special evaluation types for Razz High
     'two_card_a5_low_high': LOW_A5_RANKS,
-    'four_card_a5_low_high': LOW_A5_RANKS,
+    'three_card_a5_low_high': LOW_A5_RANKS,
     'four_card_a5_low_high': LOW_A5_RANKS,
 
     'one_card_high': BASE_RANKS,
@@ -130,7 +130,7 @@ HAND_SIZES = {
     'three_card_a5_low': 3,
     'three_card_high_al': 3,
     'three_card_27_low': 3,
-    'four_card_a5_low_high': 3,
+    'three_card_a5_low_high': 3,
     'two_card_high': 2,
     'two_card_a5_low': 2,
     'two_card_high_al': 2,

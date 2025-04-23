@@ -208,7 +208,7 @@ class HandDescriber:
             elif hand_result.rank == 1:  # Five of a Kind
                 return self._describe_five_of_kind(high_cards)            
 
-        elif self.eval_type in EvaluationType.LOW_A5:
+        elif self.eval_type in (EvaluationType.LOW_A5,EvaluationType.LOW_A5_HIGH):
             if hand_result.rank == 6:
                 return self._describe_four_of_kind(cards_used)
             elif hand_result.rank == 5:

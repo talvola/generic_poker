@@ -34,7 +34,7 @@
         },
         "rule": {
           "type": "string",
-          "enum": ["low card", "high card"],
+          "enum": ["low card", "high card", "low card al", "high card ah"],
           "description": "Rule for determining the bring-in player in 'bring-in' style (e.g., 'low card', 'high card'); ignored for other styles"
         },
         "bringInEval": {
