@@ -16,6 +16,7 @@ BASE_RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2']
 
 # A-5 Low rank ordering (A is low, high cards left)
 LOW_A5_RANKS = ['K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2', 'A']
+LOW_A6_RANKS = ['K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2', 'A']
 
 # Badugi 
 BADUGI_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K']
@@ -61,6 +62,7 @@ RANK_ORDERS = {
     # A-5 Lowball games always have Ace low
     'a5_low': LOW_A5_RANKS,
     'a5_low_high': LOW_A5_RANKS,
+    'a6_low': LOW_A6_RANKS,
 
     # Badugi
     'badugi': BADUGI_RANKS,
@@ -110,6 +112,7 @@ RANK_ORDERS = {
 HAND_SIZES = {
     'high': 5,
     'a5_low': 5,
+    'a6_low': 5,
     '27_low': 5,
     'a5_low_high': 5,
     '36card_ffh_high': 5,

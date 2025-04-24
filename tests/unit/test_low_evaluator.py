@@ -88,3 +88,44 @@ def test_a5_low_invalid_hands():
     assert result.rank == 1  # Still high card
     assert result.ordered_rank is not None
     assert result.ordered_rank > 1  # Worse than wheel
+
+def test_a6_low_hand_comparison():
+    """Test comparing A-65 Low hands."""
+    evaluator = HandEvaluator()
+    
+    # 8 vs 7-low
+    eight = create_cards(['8s', '5h', '4d', '3c', '2h'])
+    nine = create_cards(['9s', '7h', '6d', '4c', '3h'])
+    
+    comparison = evaluator.compare_hands(eight, nine, EvaluationType.LOW_A6)
+    assert comparison == 1
+    
+    # seven vs eight and nine
+    seven = create_cards(['7s', '6h', '5d', '4c', '2h'])
+    
+    comparison = evaluator.compare_hands(seven, eight, EvaluationType.LOW_A6)
+    assert comparison == 1    
+
+    comparison = evaluator.compare_hands(seven, nine, EvaluationType.LOW_A6)
+    assert comparison == 1 
+
+    # seven straight
+    seven_straight = create_cards(['7s', '6h', '5d', '4c', '3h'])
+
+    # seven straight should be worse than 8-low
+    comparison = evaluator.compare_hands(seven_straight, eight, EvaluationType.LOW_A6)
+    assert comparison == -1     
+
+    # pair of aces vs pair of twos
+    pair_aces = create_cards(['As', 'Ah', '9s', '5h', '3h'])
+    pair_twos = create_cards(['2s', '2h', '5d', '4c', '3c'])
+
+    comparison = evaluator.compare_hands(pair_aces, pair_twos, EvaluationType.LOW_A6)
+    assert comparison == 1
+
+    # test kickers in pair
+    pair_threes_642 = create_cards(['3s', '3h', '6s', '4h', '2h'])
+    pair_threes_65a = create_cards(['3d', '3c', '6d', '5c', 'Ac'])
+
+    comparison = evaluator.compare_hands(pair_threes_642, pair_threes_65a, EvaluationType.LOW_A6)
+    assert comparison == 1    

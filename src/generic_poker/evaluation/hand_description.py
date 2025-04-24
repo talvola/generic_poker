@@ -13,6 +13,7 @@ class HandDescriber:
         EvaluationType.HIGH: 'all_card_hands_description_high.csv',
         EvaluationType.LOW_A5: 'all_card_hands_description_a5_low.csv',
         EvaluationType.LOW_A5_HIGH: 'all_card_hands_description_a5_low.csv',
+        EvaluationType.LOW_A6: 'all_card_hands_description_a6_low.csv',
         EvaluationType.LOW_27: 'all_card_hands_description_27_low.csv',
         EvaluationType.HIGH_36CARD: 'all_card_hands_description_36card_ffh_high.csv',
         # Badugi and variants
@@ -226,7 +227,7 @@ class HandDescriber:
             elif hand_result.rank == 1:
                 return self._describe_high_card(cards_used)
             
-        elif self.eval_type in EvaluationType.LOW_27:
+        elif self.eval_type in (EvaluationType.LOW_27,EvaluationType.LOW_A6):
             if hand_result.rank == 1:  # High Card
                 return self._describe_high_card(cards_used)            
             elif hand_result.rank == 2:  # Pair

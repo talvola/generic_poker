@@ -17,6 +17,7 @@ class EvaluationType(str, Enum):
     HIGH = 'high'                # Traditional high-hand poker
     HIGH_WILD = 'high_wild_bug'  # High-hand with wild cards
     LOW_A5 = 'a5_low'           # A-5 lowball
+    LOW_A6 = 'a6_low'           # A-6 lowball
     LOW_27 = '27_low'           # 2-7 lowball
     LOW_A5_HIGH = 'a5_low_high' # A-5 lowball, but highest unpaired hand
     BADUGI = 'badugi'           # Badugi
