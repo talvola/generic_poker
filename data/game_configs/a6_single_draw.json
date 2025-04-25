@@ -1,7 +1,7 @@
 {
     "game": "A-6 Single Draw",
     "references": [
-       "https://en.wikipedia.org/wiki/Razz_(poker)"
+       "https://en.wikipedia.org/wiki/Lowball_(poker)"
     ],        
     "players": {
         "min": 2,
