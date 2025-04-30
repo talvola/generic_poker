@@ -564,7 +564,7 @@
         "type": "object",
         "properties": {
             "cards": {
-                "type": "array",
+               "type": "array",
                 "items": {
                     "type": "object",
                     "properties": {
@@ -614,6 +614,38 @@
         "required": ["cards"],
         "additionalProperties": false
     },
+    "declare": {
+      "type": "object",
+      "properties": {
+          "type": {
+              "type": "string",
+              "const": "declare",
+              "description": "Action type for player declarations"
+          },
+          "options": {
+              "type": "array",
+              "items": {
+                  "type": "string",
+                  "enum": ["high", "low", "high_low"],
+                  "description": "Allowed declaration types"
+              },
+              "minItems": 1,
+              "description": "Possible declarations (e.g., high, low, high/low)"
+          },
+          "per_pot": {
+              "type": "boolean",
+              "default": false,
+              "description": "If true, players declare separately for each pot (main and side)"
+          },
+          "simultaneous": {
+              "type": "boolean",
+              "default": true,
+              "description": "If true, declarations are collected simultaneously and revealed at round end"
+          }
+      },
+      "required": ["type", "options"],
+      "additionalProperties": false
+    }, 
     "showdown": {
       "type": "object",
       "properties": {
@@ -711,6 +743,7 @@
                 "remove": { "$ref": "#/definitions/remove" },
                 "expose": { "$ref": "#/definitions/expose" },
                 "pass": { "$ref": "#/definitions/pass" },
+                "declare": { "$ref": "#/definitions/declare" },
                 "separate": { "$ref": "#/definitions/separate" },
                 "showdown": { "$ref": "#/definitions/showdown" }
               },
@@ -724,6 +757,7 @@
           "remove": { "$ref": "#/definitions/remove" },
           "expose": { "$ref": "#/definitions/expose" },
           "pass": { "$ref": "#/definitions/pass" },
+          "declare": { "$ref": "#/definitions/declare" },
           "separate": { "$ref": "#/definitions/separate" },
           "showdown": { "$ref": "#/definitions/showdown" }
         },
@@ -759,7 +793,13 @@
           "type": "array",
           "items": { "type": "string", "enum": ["face", "butt"] },
           "description": "Order of precedence for classified hands (e.g., ['face', 'butt'])"
-        },        
+        },
+        "declaration_mode": {
+          "type": "string",
+          "enum": ["cards_speak", "declare"],
+          "default": "cards_speak",
+          "description": "Whether showdown uses declarations or cards speak"
+        },                
         "globalDefaultAction": {
           "type": "object",
           "properties": {

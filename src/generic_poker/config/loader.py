@@ -8,6 +8,8 @@ from pathlib import Path
 from generic_poker.core.card import Card, Rank, Suit, Visibility
 from generic_poker.core.deck import DeckType
 
+import logging 
+logger = logging.getLogger(__name__)
 
 class BettingStructure(Enum):
     """Supported betting structures."""
@@ -26,6 +28,7 @@ class GameActionType(Enum):
     SEPARATE = auto()
     DISCARD = auto()
     REMOVE = auto()
+    DECLARE = auto()
     SHOWDOWN = auto()
     GROUPED = auto()  # New type for grouped actions
 
@@ -72,6 +75,7 @@ class ShowdownConfig:
     order: str
     starting_from: str
     cards_required: str
+    declaration_mode: str
     best_hand: List[Dict[str, Any]]
     globalDefaultAction: Dict[str, Any] = field(default_factory=dict)  # Renamed from default_action
     defaultActions: List[Dict[str, Any]] = field(default_factory=list)  # Added
@@ -234,6 +238,7 @@ class GameRules:
             starting_from=showdown_data['startingFrom'],
             cards_required=showdown_data['cardsRequired'],
             best_hand=showdown_data['bestHand'],
+            declaration_mode=showdown_data.get('declaration_mode', 'cards_speak'), 
             globalDefaultAction=showdown_data.get('globalDefaultAction', {}),  # Maps JSON key to new field name
             defaultActions=showdown_data.get('defaultActions', []),       # Loads new field
             classification_priority=showdown_data.get('classification_priority', [])       # Loads new field

@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Tuple, Dict
+from typing import List, Optional, Tuple, Dict, Set
 
 from generic_poker.game.game_state import GameState, PlayerAction
 from generic_poker.core.card import Card, Visibility
@@ -21,6 +21,7 @@ class PlayerActionHandler:
         self.player_completed_subactions: Dict[str, Set[int]] = {}  # {player_id: set of completed subaction indices}
         self.pending_exposures: Dict[str, List[Card]] = {}
         self.pending_passes: Dict[str, Tuple[Card, str]] = {}
+        self.pending_declarations: Dict[str, List[Dict]] = {}  # player_id -> [{"pot_index": int, "declaration": str}, ...]
 
     def setup_grouped_step(self, subactions: List[Dict]) -> None:
         """Initialize tracking for a grouped step."""
@@ -75,6 +76,8 @@ class PlayerActionHandler:
             elif subaction_key == "pass" and self.game.state == GameState.DRAWING:
                 num_to_pass = subaction["pass"]["cards"][0]["number"]
                 return [(PlayerAction.PASS, num_to_pass, num_to_pass)]
+            elif subaction_key == "declare" and self.game.state == GameState.DECLARING:
+                return [(PlayerAction.DECLARE, None, None)]            
             return []
 
         # Non-grouped actions
@@ -98,6 +101,8 @@ class PlayerActionHandler:
             elif hasattr(self.game, "current_pass_config"):
                 num_to_pass = self.game.current_pass_config["cards"][0]["number"]
                 return [(PlayerAction.PASS, num_to_pass, num_to_pass)]
+            elif hasattr(self.game, "current_declare_config"):
+                return [(PlayerAction.DECLARE, None, None)]            
 
         if self.game.state == GameState.BETTING:
             return self._get_betting_actions(player_id, config)
@@ -176,7 +181,7 @@ class PlayerActionHandler:
 
         return valid_actions
 
-    def handle_action(self, player_id: str, action: PlayerAction, amount: int = 0, cards: Optional[List[Card]] = None) -> ActionResult:
+    def handle_action(self, player_id: str, action: PlayerAction, amount: int = 0, cards: Optional[List[Card]] = None, declaration_data: Optional[List[Dict]] = None) -> ActionResult:
         """
         Handle a player action.
 
@@ -262,6 +267,21 @@ class PlayerActionHandler:
                 self._apply_all_passes()
                 return ActionResult(success=True, advance_step=True)
             return ActionResult(success=True)
+        
+        if action == PlayerAction.DECLARE:
+            if self.game.state != GameState.DRAWING or not hasattr(self.game, "current_declare_config"):
+                return ActionResult(success=False, error="Cannot declare in current state")
+            if not declaration_data:
+                return ActionResult(success=False, error="No declaration data specified")
+            if not self._validate_declare_action(player, declaration_data):
+                return ActionResult(success=False, error="Invalid declaration")
+            self.pending_declarations[player_id] = declaration_data
+            logger.info(f"{player.name} declares: {declaration_data}")
+            self.game.current_player = self.game.next_player(round_start=False)
+            if self._check_declare_round_complete():
+                self._apply_all_declarations()
+                return ActionResult(success=True, advance_step=True)
+            return ActionResult(success=True)        
 
         # Betting actions
         if self.game.state != GameState.BETTING:
@@ -397,6 +417,24 @@ class PlayerActionHandler:
             recipient_id = active_players_list[recipient_idx].id
             self.pending_passes[player_id] = (cards[0], recipient_id)
             logger.info(f"{player.name} passes {len(cards)} cards to {recipient_id}: {cards}")
+            self.player_completed_subactions[player_id].add(self.current_substep)
+            if self.current_substep == len(subactions) - 1:
+                self.grouped_step_completed.add(player_id)
+                self.current_substep = 0
+                self.game.current_player = self.game.next_player(round_start=False)
+            else:
+                self.current_substep += 1
+            self._update_state_for_next_subaction(subactions)
+
+        elif subaction_key == "declare" and action == PlayerAction.DECLARE:
+            if self.game.state != GameState.DECLARING:
+                return ActionResult(success=False, error="Cannot declare in current state")
+            if not declaration_data:
+                return ActionResult(success=False, error="No declaration data specified")
+            if not self._validate_declare_action(player, declaration_data):
+                return ActionResult(success=False, error="Invalid declaration")
+            self.pending_declarations[player_id] = declaration_data
+            logger.info(f"{player.name} declares: {declaration_data}")
             self.player_completed_subactions[player_id].add(self.current_substep)
             if self.current_substep == len(subactions) - 1:
                 self.grouped_step_completed.add(player_id)
@@ -561,6 +599,9 @@ class PlayerActionHandler:
         elif "pass" in next_key:
             self.game.state = GameState.DRAWING
             self.setup_pass_round(next_subaction["pass"])  # Changed to self
+        elif "declare" in next_key:
+            self.game.state = GameState.DECLARING
+            self.setup_declare_round(next_subaction["declare"])            
 
     def _handle_discard_action(self, player: Player, cards: List[Card]) -> bool:
         """Handle discard or draw action."""
@@ -772,6 +813,65 @@ class PlayerActionHandler:
                 self.game.table.players[player_id].hand.add_cards(cards)
         self.pending_passes.clear()
 
+    def _validate_declare_action(self, player: Player, declaration_data: List[Dict]) -> bool:
+        """Validate declaration action."""
+        config = self.game.current_declare_config
+        allowed_options = config.get("options", [])
+        per_pot = config.get("per_pot", False)
+
+        if not declaration_data:
+            logger.warning(f"Player {player.name} provided empty declaration data")
+            return False
+
+        if per_pot:
+            eligible_pots = self._get_eligible_pots(player)
+            if len(declaration_data) != len(eligible_pots):
+                logger.warning(f"Player {player.name} provided {len(declaration_data)} declarations, "
+                               f"expected {len(eligible_pots)} for eligible pots")
+                return False
+            for decl in declaration_data:
+                pot_index = decl.get("pot_index")
+                declaration = decl.get("declaration")
+                if pot_index not in eligible_pots:
+                    logger.warning(f"Player {player.name} declared for invalid pot index {pot_index}")
+                    return False
+                if declaration not in allowed_options:
+                    logger.warning(f"Player {player.name} provided invalid declaration '{declaration}'")
+                    return False
+        else:
+            if len(declaration_data) != 1:
+                logger.warning(f"Player {player.name} provided {len(declaration_data)} declarations, "
+                               f"expected 1 when per_pot is false")
+                return False
+            declaration = declaration_data[0].get("declaration")
+            if declaration not in allowed_options:
+                logger.warning(f"Player {player.name} provided invalid declaration '{declaration}'")
+                return False
+
+        return True       
+
+    def _check_declare_round_complete(self) -> bool:
+        """Check if the declare round is complete."""
+        active_players = [p for p in self.game.table.players.values() if p.is_active]
+        return all(p.id in self.pending_declarations for p in active_players)
+
+    def _apply_all_declarations(self) -> None:
+        """Apply all pending declarations to game state."""
+        declarations = {}
+        for player_id, decl_list in self.pending_declarations.items():
+            declarations[player_id] = {decl["pot_index"]: decl["declaration"] for decl in decl_list}
+        self.game.declarations = declarations
+        logger.info(f"Applied declarations: {declarations}")
+        self.pending_declarations.clear()
+
+    def _get_eligible_pots(self, player: Player) -> List[int]:
+        """Get the pot indices (main and side) the player is eligible for."""
+        eligible_pots = [-1]  # Main pot
+        for i in range(self.game.betting.get_side_pot_count()):
+            if player.id in self.game.betting.get_side_pot_eligible_players(i):
+                eligible_pots.append(i)
+        return eligible_pots     
+
     def format_actions_for_display(self, player_id: str) -> List[str]:
         """Format valid actions for display."""
         valid_actions = self.get_valid_actions(player_id)
@@ -833,6 +933,10 @@ class PlayerActionHandler:
     def setup_pass_round(self, config: Dict) -> None:
         """Set up a pass round."""
         self.game.current_pass_config = config
+
+    def setup_declare_round(self, config: Dict) -> None:
+        """Set up a pass round."""
+        self.game.current_declare_config = config        
 
     def setup_grouped_step(self, step_config: List[Dict]) -> None:
         """Set up a grouped step."""

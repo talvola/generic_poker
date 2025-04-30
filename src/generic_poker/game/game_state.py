@@ -23,3 +23,5 @@ class PlayerAction(Enum):
     SEPARATE  = "separate"  # separate hand into subsets
     EXPOSE  = "expose"  # expose down cards (make face up)
     PASS = "pass"  # New player action
+    DECLARE = "declare"  # New action
+

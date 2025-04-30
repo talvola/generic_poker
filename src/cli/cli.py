@@ -1,4 +1,4 @@
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Dict
 from generic_poker.game.game import Game, PlayerAction, GameActionType
 from generic_poker.game.game_state import GameState
 from generic_poker.core.card import Card, Visibility
@@ -295,6 +295,71 @@ def get_separate_action(game: Game, player: Player) -> Tuple[PlayerAction, int, 
 
     return PlayerAction.SEPARATE, 0, selected_cards
 
+def get_declare_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Optional[List[Dict]]]:
+    """
+    Prompt the player to declare their intention (high, low, or high/low) for each eligible pot.
+
+    Args:
+        game: The current Game instance.
+        player: The Player instance making the action.
+
+    Returns:
+        Tuple containing:
+        - PlayerAction.DECLARE: The action type.
+        - int: Amount (set to 0, as it's not used for declare).
+        - Optional[List[Dict]]: List of declarations, each with {"pot_index": int, "declaration": str}.
+    """
+    step = game.rules.gameplay[game.current_step]
+    if step.action_type == GameActionType.GROUPED:
+        declare_config = step.action_config[game.action_handler.current_substep]["declare"]
+    else:
+        declare_config = step.action_config
+
+    allowed_options = declare_config.get("options", ["high", "low", "high_low"])
+    per_pot = declare_config.get("per_pot", False)
+
+    valid_actions = game.get_valid_actions(player.id)
+    declare_action = next((a for a in valid_actions if a[0] == PlayerAction.DECLARE), None)
+    if not declare_action:
+        print(f"\n{player.name}'s Turn | Declaring not allowed")
+        return PlayerAction.DECLARE, 0, []
+
+    print(f"\n{player.name}'s Turn | Stack: ${player.stack}")
+    print("Available declarations:", ", ".join(opt.replace("_", "/") for opt in allowed_options))
+
+    declarations = []
+    if per_pot:
+        # Get eligible pots (main pot: -1, side pots: 0, 1, ...)
+        eligible_pots = [-1]  # Main pot
+        for i in range(game.betting.get_side_pot_count()):
+            if player.id in game.betting.get_side_pot_eligible_players(i):
+                eligible_pots.append(i)
+
+        print("You must declare for each eligible pot:")
+        for pot_index in eligible_pots:
+            pot_name = "Main Pot" if pot_index == -1 else f"Side Pot {pot_index + 1}"
+            print(f"{pot_name}:")
+            prompt = f"Choose declaration ({', '.join(opt.replace('_', '/') for opt in allowed_options)}): "
+            while True:
+                choice = input(prompt).strip().lower().replace("/", "_")
+                if choice not in allowed_options:
+                    print(f"Invalid declaration. Choose from: {', '.join(opt.replace('_', '/') for opt in allowed_options)}")
+                    continue
+                declarations.append({"pot_index": pot_index, "declaration": choice})
+                break
+    else:
+        # Single declaration for all pots
+        prompt = f"Choose declaration ({', '.join(opt.replace('_', '/') for opt in allowed_options)}): "
+        while True:
+            choice = input(prompt).strip().lower().replace("/", "_")
+            if choice not in allowed_options:
+                print(f"Invalid declaration. Choose from: {', '.join(opt.replace('_', '/') for opt in allowed_options)}")
+                continue
+            declarations.append({"pot_index": -1, "declaration": choice})
+            break
+
+    return PlayerAction.DECLARE, 0, declarations
+
 def get_draw_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Optional[List[Card]]]:
     """Prompt the player to select cards from a subset to discard and draw replacements."""
     step = game.rules.gameplay[game.current_step]
@@ -389,6 +454,9 @@ def run_game(game: Game) -> None:
                     elif action_type == GameActionType.EXPOSE and game.current_player:
                         action, amount, cards = get_expose_action(game, game.current_player)
                         result = game.player_action(game.current_player.id, action, amount, cards)    
+                    elif action_type == GameActionType.DECLARE and game.current_player:
+                        action, amount, declaration_data = get_declare_action(game, game.current_player)
+                        result = game.player_action(game.current_player.id, action, amount, declaration_data=declaration_data)
                     elif action_type == GameActionType.SEPARATE:
                         action, amount, cards = get_separate_action(game, game.current_player)
                         result = game.player_action(game.current_player.id, action, amount, cards)     

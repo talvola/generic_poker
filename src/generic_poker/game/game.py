@@ -23,52 +23,9 @@ from generic_poker.evaluation.cardrule import CardRule
 from generic_poker.game.action_result import ActionResult
 from generic_poker.game.player_action_handler import PlayerActionHandler
 
+from generic_poker.evaluation.evaluator import evaluator
+
 logger = logging.getLogger(__name__)
-
-@dataclass
-class PotResult:
-    """Information about a pot and its winner(s)."""
-    amount: int  # Amount in the pot
-    winners: List[str]  # List of player IDs who won this pot
-    split: bool = False  # Whether the pot was split (multiple winners)
-    pot_type: str = "main"  # "main" or "side"
-    hand_type: str = "Hand"  # from game config showdown
-    side_pot_index: Optional[int] = None  # Index of side pot if applicable
-    eligible_players: Set[str] = None  # Players who could win this pot
-    
-    def __post_init__(self):
-        if self.eligible_players is None:
-            self.eligible_players = set()
-        self.split = len(self.winners) > 1
-        
-    @property
-    def amount_per_player(self) -> int:
-        """Amount each winner receives from the pot."""
-        if not self.winners:
-            return 0
-        return self.amount // len(self.winners)
-    
-    def __str__(self) -> str:
-        """String representation of the pot result."""
-        pot_name = "Main pot" if self.pot_type == "main" else f"Side pot {self.side_pot_index + 1}"
-        winners_str = ", ".join(self.winners)
-        if self.split:
-            return f"{pot_name}: ${self.amount} - Split between {winners_str} (${self.amount_per_player} each)"
-        else:
-            return f"{pot_name}: ${self.amount} - Won by {winners_str}"  
-
-    def to_json(self) -> dict:
-        """Convert to JSON-compatible dictionary."""
-        return {
-            "amount": self.amount,
-            "winners": self.winners,
-            "split": self.split,
-            "pot_type": self.pot_type,
-            "hand_type": self.hand_type,
-            "side_pot_index": self.side_pot_index,
-            "eligible_players": list(self.eligible_players),
-            "amount_per_player": self.amount_per_player
-        }
     
 @dataclass
 class HandResult:
@@ -108,6 +65,69 @@ class HandResult:
             "rank": self.rank,
             "ordered_rank": self.ordered_rank,
             "classifications": self.classifications  # Include classifications
+        }
+    
+@dataclass
+class PotResult:
+    """Information about a pot and its winner(s)."""
+    amount: int  # Amount in the pot
+    winners: List[str]  # List of player IDs who won this pot
+    pot_type: str = "main"  # "main" or "side"
+    hand_type: str = "Hand"  # from game config showdown
+    side_pot_index: Optional[int] = None  # Index of side pot if applicable
+    eligible_players: Set[str] = None  # Players who could win this pot
+    reason: Optional[str] = None  # Reason for pot award (e.g., "Best high hand")
+    best_hands: List[HandResult] = field(default_factory=list)  # Best hands for this pot's hand_type
+    declarations: Dict[str, str] = field(default_factory=dict)  # Player ID -> declaration (e.g., "high")
+    split: bool = False  # Whether the pot was split (multiple winners)
+
+    def __post_init__(self):
+        # Ensure eligible_players is a set
+        if self.eligible_players is None:
+            self.eligible_players = set()
+        # Ensure winners is a list
+        if self.winners is None:
+            self.winners = []
+        # Set split based on number of winners
+        self.split = len(self.winners) > 1
+        # Ensure best_hands is a list
+        if self.best_hands is None:
+            self.best_hands = []
+        # Ensure declarations is a dict
+        if self.declarations is None:
+            self.declarations = {}
+        
+    @property
+    def amount_per_player(self) -> int:
+        """Amount each winner receives from the pot."""
+        if not self.winners:
+            return 0
+        return self.amount // len(self.winners)
+    
+    def __str__(self) -> str:
+        """String representation of the pot result."""
+        pot_name = "Main pot" if self.pot_type == "main" else f"Side pot {self.side_pot_index + 1}"
+        winners_str = ", ".join(self.winners)
+        reason_str = f" ({self.reason})" if self.reason else ""
+        if self.split:
+            return f"{pot_name}: ${self.amount} - Split between {winners_str} (${self.amount_per_player} each){reason_str}"
+        else:
+            return f"{pot_name}: ${self.amount} - Won by {winners_str}{reason_str}"
+
+    def to_json(self) -> dict:
+        """Convert to JSON-compatible dictionary."""
+        return {
+            "amount": self.amount,
+            "winners": self.winners,
+            "split": self.split,
+            "pot_type": self.pot_type,
+            "hand_type": self.hand_type,
+            "side_pot_index": self.side_pot_index,
+            "eligible_players": list(self.eligible_players),
+            "amount_per_player": self.amount_per_player,
+            "reason": self.reason,
+            "best_hands": [hand.to_json() for hand in self.best_hands],
+            "declarations": self.declarations
         }
 
 @dataclass
@@ -309,6 +329,8 @@ class Game:
         self.last_hand_result = None  # Store the last hand result here
 
         self.bring_in_player_id = None
+
+        self.declarations: Dict[str, Dict[int, str]] = {}
     
 
     def get_game_description(self) -> str:
@@ -437,14 +459,14 @@ class Game:
         return False
         
          
-    def player_action(self, player_id: str, action: PlayerAction, amount: int = 0, cards: Optional[List[Card]] = None) -> ActionResult:
+    def player_action(self, player_id: str, action: PlayerAction, amount: int = 0, cards: Optional[List[Card]] = None, declaration_data: Optional[List[Dict]] = None) -> ActionResult:
         """Delegate to PlayerActionHandler and handle step advancement."""
-        result = self.action_handler.handle_action(player_id, action, amount, cards)
+        result = self.action_handler.handle_action(player_id, action, amount, cards, declaration_data)
         if result.advance_step and self.auto_progress:
             self._next_step()
             # Clean up temporary attributes
             for attr in ["current_discard_config", "current_draw_config", "current_separate_config", 
-                         "current_expose_config", "current_pass_config"]:
+                         "current_expose_config", "current_pass_config", "current_declare_config"]:
                 if hasattr(self, attr):
                     delattr(self, attr)
         return result
@@ -496,6 +518,10 @@ class Game:
                 elif "pass" in first_subaction:
                     self.state = GameState.DRAWING
                     self.action_handler.setup_pass_round(first_subaction["pass"])                    
+                    self.current_player = self.next_player(round_start=True)
+                elif "declare" in first_subaction:
+                    self.state = GameState.DRAWING
+                    self.action_handler.setup_declare_round(first_subaction["declare"])
                     self.current_player = self.next_player(round_start=True)
 
             elif step.action_type == GameActionType.BET:
@@ -568,6 +594,12 @@ class Game:
                 self.action_handler.setup_pass_round(step.action_config)
                 self.current_player = self.next_player(round_start=True)
                 self.action_handler.first_player_in_round = self.current_player.id
+
+            elif step.action_type == GameActionType.DECLARE:
+                self.state = GameState.DRAWING
+                self.action_handler.setup_declare_round(step.action_config)
+                self.current_player = self.next_player(round_start=True)
+                self.action_handler.first_player_in_round = self.current_player.id                
 
             elif step.action_type == GameActionType.SHOWDOWN:
                 logger.info("Moving to showdown")
@@ -722,330 +754,13 @@ class Game:
 
         # Clean up temporary attributes
         for attr in ["current_discard_config", "current_draw_config", "current_separate_config", 
-                        "current_expose_config", "current_pass_config"]:
+                        "current_expose_config", "current_pass_config", "current_declare_config"]:
             if hasattr(self, attr):
                 delattr(self, attr)        
                 
         self.current_step += 1
         self.process_current_step()
         
-    # def next_player(self, round_start: bool = False) -> Optional[Player]:
-    #     """
-    #     Determine the next player to act based on betting_order.
-
-    #     Args:
-    #         round_start: True if this is the start of a betting round
-
-    #     Returns:
-    #         Next player to act or None if no active players
-    #     """
-    #     active_players = [p for p in self.table.players.values() if p.is_active]
-    #     if not active_players:
-    #         return None
-        
-    #     # Check if this is a stud game with bring-in
-    #     is_stud_game = self.rules.forced_bets.style == "bring-in"
-
-    #     if is_stud_game:
-    #         step = self.rules.gameplay[self.current_step]
-    #         bring_in_rule = CardRule(self.rules.forced_bets.rule)
-
-    #         # Find the "Initial Bet" step dynamically
-    #         # Debug the gameplay steps
-    #         logger.debug(f"Gameplay steps: {[s.__dict__ for s in self.rules.gameplay]}")
-    #         bring_in_step_idx = next((i for i, s in enumerate(self.rules.gameplay) if s.action_config.get("type") == "bring-in"), -1)
-    #         initial_bet_step_idx = bring_in_step_idx + 1 if bring_in_step_idx != -1 else -1
-    #         logger.debug(f"  current step: {self.current_step}, bring_in_step_idx: {bring_in_step_idx}, initial_bet_step_idx: {initial_bet_step_idx}")
-
-    #         num_visible = sum(1 for c in active_players[0].hand.get_cards() if c.visibility == Visibility.FACE_UP)      
-
-    #         if round_start and step.action_config.get("type") == "bring-in":
-    #             bring_in_player = BringInDeterminator.determine_first_to_act(active_players, num_visible, bring_in_rule, self.rules)
-    #             logger.debug(f"Stud first-to-act in bring-in round: {bring_in_player.name}")
-    #             return bring_in_player
-    #         elif round_start and self.current_step == initial_bet_step_idx:  # "Initial Bet" (first small bet round)
-    #             # Start with player after last bring-in
-    #             logger.debug(f"  self.betting.current_bets = {self.betting.current_bets}")
-    #             # find the player with posted_blind = True
-    #             current_idx = next((i for i, p in enumerate(active_players) if self.betting.current_bets.get(p.id, PlayerBet()).posted_blind), -1)
-    #             #last_bring_in = next((p for p in active_players if self.betting.current_bets.get(p.id, PlayerBet()).amount > 0), active_players[0])
-    #             #current_idx = active_players.index(last_bring_in)
-    #             next_idx = (current_idx + 1) % len(active_players)
-    #             logger.debug(f"Stud first-to-act in round {self.betting.betting_round + 1}: {active_players[next_idx].name}")
-    #             return active_players[next_idx]
-    #         elif round_start:
-    #             # For non-betting rounds (e.g., expose) or betting rounds with visible cards
-    #             if num_visible == 0:  # No cards visible yet (e.g., expose step)
-    #                 logger.debug(f"No visible cards; starting with first active player: {active_players[0].name}")
-    #                 return active_players[0]           
-    #             # Later betting rounds (e.g., Fourth Street Bet)                    
-    #             first_player = BringInDeterminator.determine_first_to_act(active_players, num_visible, bring_in_rule, self.rules)
-    #             if first_player is None:
-    #                 logger.warning("No first player determined; defaulting to first active player")
-    #                 return active_players[0]               
-    #             logger.debug(f"Stud first-to-act in round {self.betting.betting_round + 1}: {first_player.name}")
-    #             return first_player          
-    #         elif self.current_player:
-    #             current_idx = active_players.index(self.current_player)
-    #             next_idx = (current_idx + 1) % len(active_players)
-    #             logger.debug(f"Stud next player: {active_players[next_idx].name}")
-    #             return active_players[next_idx]
-    #         return active_players[0]       
-            
-    #     # Blinds-based games (e.g., Hold'em)
-    #     players = self.table.get_position_order()  # BTN -> SB -> BB order
-    #     active_players = [p for p in players if p.is_active]
-    #     if not active_players:
-    #         return None            
-        
-    #     # Determine if this is the first voluntary betting round
-    #     is_first_betting_round = False
-    #     first_bet_step = None
-    #     for i, step in enumerate(self.rules.gameplay):
-    #         if step.action_type == GameActionType.BET and step.action_config.get("type") == "small":
-    #             first_bet_step = i
-    #             break
-    #         elif step.action_type == GameActionType.GROUPED:
-    #             for j, subaction in enumerate(step.action_config):
-    #                 if "bet" in subaction and subaction["bet"].get("type") == "small":
-    #                     first_bet_step = i
-    #                     break
-    #             if first_bet_step is not None:
-    #                 break
-
-    #     # If this is the first betting step encountered, it’s the first round
-    #     is_first_betting_round = (first_bet_step == self.current_step)
-
-    #     logger.debug(f"First betting round: {is_first_betting_round} and round_start: {round_start}")
-    #     if round_start:
-    #         if is_first_betting_round:
-    #             # First betting round (e.g., pre-flop in Hold'em): Start with BTN in 3-player
-    #             if len(active_players) <= 3:
-    #                 for player in players:
-    #                     if player.position and player.position.has_position(Position.BUTTON) and player.is_active:
-    #                         logger.debug(f"Pre-flop first action to BTN: {player.name}")
-    #                         return player
-    #                 logger.debug(f"BTN not active, starting with: {active_players[0].name}")
-    #                 return active_players[0]                        
-    #             else:
-    #                 bb_idx = next((i for i, p in enumerate(players) if p.has_position(Position.BIG_BLIND) and p.is_active), -1)
-    #                 next_idx = (bb_idx + 1) % len(players)
-    #                 while not players[next_idx].is_active:
-    #                     next_idx = (next_idx + 1) % len(players)                   
-    #                 logger.debug(f"Pre-flop first action to UTG: {players[next_idx].name}")
-    #                 return players[next_idx]
-    #         else:
-    #             # Subsequent rounds: Start with SB
-    #             for player in players:
-    #                 if player.position and player.position.has_position(Position.SMALL_BLIND) and player.is_active:
-    #                     logger.debug(f"Subsequent round action to SB: {player.name}")
-    #                     return player
-    #             logger.debug(f"SB not active, starting with: {active_players[0].name}")
-    #             return active_players[0]
-                    
-    #     # Subsequent actions in the round
-    #     if self.current_player:
-    #         try:
-    #             current_idx = next(i for i, p in enumerate(players) if p.id == self.current_player.id)
-    #             next_idx = (current_idx + 1) % len(players)
-    #             # Skip inactive players
-    #             while not players[next_idx].is_active:
-    #                 next_idx = (next_idx + 1) % len(players)
-    #                 if next_idx == current_idx:  # Full circle, no active players left
-    #                     return None                
-    #             logger.debug(f"Next player: {players[next_idx].name}")
-    #             return players[next_idx]
-    #         except StopIteration:
-    #             # Current player no longer active (e.g., folded); start with first active
-    #             logger.debug(f"Current player not found, starting with: {active_players[0].name}")
-    #             return active_players[0]
-
-    #     # Default: First active player
-    #     logger.debug(f"Defaulting to first active player: {active_players[0].name}")
-    #     return active_players[0]
-    
-    # def next_player(self, round_start: bool = False) -> Optional[Player]:
-    #     """
-    #     Determine the next player to act based on betting_order.
-
-    #     Args:
-    #         round_start: True if this is the start of a betting round
-
-    #     Returns:
-    #         Next player to act or None if no active players
-    #     """
-
-    #     active_players = [p for p in self.table.players.values() if p.is_active]
-    #     if not active_players:
-    #         return None
-
-    #     # Get current step configuration
-    #     current_step_config = self.rules.gameplay[self.current_step] if self.current_step < len(self.rules.gameplay) else None
-    #     is_bet_step = current_step_config and current_step_config.action_type == GameActionType.BET
-
-    #     # Determine if this is the initial forced betting round
-    #     is_initial_round = False
-    #     if is_bet_step:
-    #         bet_type = current_step_config.action_config.get("type")
-    #         is_initial_round = bet_type in ["blinds", "bring-in"]
-
-    #     # Identify forced bettors from current_bets
-    #     current_bets = self.betting.current_bets  # {player_id: PlayerBet}
-    #     forced_bettors = [pid for pid, bet in current_bets.items() if bet.posted_blind]
-
-    #     # Determine if this is the first voluntary betting round after forced bets
-    #     is_first_voluntary_betting = (
-    #         is_bet_step and
-    #         not is_initial_round and
-    #         forced_bettors and
-    #         self.betting.betting_round == 0
-    #     )
-
-    #     # Select betting order type
-    #     order_type = self.rules.betting_order.initial if is_initial_round else self.rules.betting_order.subsequent
-    #     logger.debug(f"Betting order type: {order_type}")
-
-    #     if round_start:
-    #         if is_initial_round:
-    #             # Handle forced bet posting (e.g., blinds or bring-in)
-    #             if order_type == "after_big_blind":
-    #                 next_player = self.table.get_player_after_big_blind()
-    #             elif order_type == "bring_in":
-    #                 next_player = self.table.get_bring_in_player(self.bring_in or self.small_bet)
-    #             elif order_type == "dealer":
-    #                 next_player = self.table.get_next_active_player(self.table.button_pos)
-    #             else:
-    #                 logger.warning(f"Unknown betting order '{order_type}', defaulting to dealer")
-    #                 next_player = self.table.get_next_active_player(self.table.button_pos)
-    #         elif is_first_voluntary_betting:
-    #             # Start with the player after the last forced bettor (e.g., after BB)
-    #             last_forced_bettor_id = forced_bettors[-1]  # BB is typically last
-    #             players = self.table.get_position_order()
-    #             try:
-    #                 forced_bettor_idx = next(i for i, p in enumerate(players) if p.id == last_forced_bettor_id)
-    #                 next_idx = (forced_bettor_idx + 1) % len(players)
-    #                 while not players[next_idx].is_active:
-    #                     next_idx = (next_idx + 1) % len(players)
-    #                     if next_idx == forced_bettor_idx:  # Full circle
-    #                         return None
-    #                 next_player = players[next_idx]
-    #                 logger.debug(f"First voluntary betting round: Starting with {next_player.name}")
-    #             except StopIteration:
-    #                 next_player = active_players[0]  # Fallback
-    #         else:
-    #             # Subsequent voluntary rounds (e.g., flop, turn)
-    #             if order_type == "dealer":
-    #                 next_player = self.table.get_next_active_player(self.table.button_pos)
-    #             elif order_type == "high_hand":
-    #                 next_player = self.table.get_player_with_best_hand()
-    #             else:
-    #                 logger.warning(f"Unknown betting order '{order_type}', defaulting to dealer")
-    #                 next_player = self.table.get_next_active_player(self.table.button_pos)
-
-    #         if next_player:
-    #             logger.debug(f"Round start ({order_type or 'first voluntary'}): First player is {next_player.name}")
-    #             return next_player
-    #         return active_players[0]  # Fallback
-
-    #     # Mid-round: Move to next active player
-    #     if self.current_player:
-    #         players = self.table.get_position_order()
-    #         try:
-    #             current_idx = next(i for i, p in enumerate(players) if p.id == self.current_player.id)
-    #             next_idx = (current_idx + 1) % len(players)
-    #             while not players[next_idx].is_active:
-    #                 next_idx = (next_idx + 1) % len(players)
-    #                 if next_idx == current_idx:  # Full circle
-    #                     return None
-    #             logger.debug(f"Next player: {players[next_idx].name}")
-    #             return players[next_idx]
-    #         except StopIteration:
-    #             return active_players[0]  # Fallback
-    #     return active_players[0]  # Default fallback
-    
-    # def next_player(self, round_start: bool = False) -> Optional[Player]:
-    #     logger.debug(f"Determining next player (round_start={round_start}, current_step={self.current_step})")
-        
-    #     active_players = [p for p in self.table.players.values() if p.is_active]
-    #     if not active_players:
-    #         return None
-        
-    #     # Determine if this is a voluntary betting round
-    #     is_voluntary_bet = False
-    #     current_step_config = self.rules.gameplay[self.current_step] if self.current_step < len(self.rules.gameplay) else None
-    #     if current_step_config:
-    #         if current_step_config.action_type == GameActionType.BET:
-    #             bet_type = current_step_config.action_config.get("type")
-    #             is_voluntary_bet = bet_type not in ["antes", "blinds", "bring-in"]
-    #         elif current_step_config.action_type == GameActionType.GROUPED:
-    #             substep = self.action_handler.current_substep
-    #             if substep < len(current_step_config.action_config):
-    #                 subaction = current_step_config.action_config[substep]
-    #                 if "bet" in subaction:
-    #                     bet_type = subaction["bet"].get("type")
-    #                     is_voluntary_bet = bet_type not in ["antes", "blinds", "bring-in"]
-        
-    #     # Identify forced bettors
-    #     current_bets = self.betting.current_bets  # {player_id: PlayerBet}
-    #     forced_bettors = [pid for pid, bet in current_bets.items() if bet.posted_blind]
-        
-    #     if round_start:
-    #         if self.betting.betting_round == 0 and is_voluntary_bet and forced_bettors:
-    #             # First voluntary betting round after forced bets
-    #             last_forced_bettor_id = forced_bettors[-1]  # Last player to post a blind (BB)
-    #             players = self.table.get_position_order()
-    #             try:
-    #                 forced_bettor_idx = next(i for i, p in enumerate(players) if p.id == last_forced_bettor_id)
-    #                 next_idx = (forced_bettor_idx + 1) % len(players)
-    #                 while not players[next_idx].is_active:
-    #                     next_idx = (next_idx + 1) % len(players)
-    #                     if next_idx == forced_bettor_idx:  # Full circle
-    #                         return None
-    #                 next_player = players[next_idx]
-    #                 logger.debug(f"First voluntary betting round: Starting with {next_player.name}")
-    #                 return next_player
-    #             except StopIteration:
-    #                 return active_players[0]  # Fallback
-    #         else:
-    #             # Use betting order type
-    #             order_type = self.rules.betting_order.initial if self.betting.betting_round == 0 else self.rules.betting_order.subsequent
-    #             logger.debug(f"Betting order type: {order_type} with self.betting.betting_round = {self.betting.betting_round} initial: {self.rules.betting_order.initial} subsequent: {self.rules.betting_order.subsequent}")
-    #             if order_type == "after_big_blind":
-    #                 next_player = self.table.get_player_after_big_blind()
-    #                 logger.debug(f"  after_big_blind: Starting with {next_player.name}")
-    #             elif order_type == "bring_in":
-    #                 next_player = self.table.get_bring_in_player(self.bring_in or self.small_bet)
-    #                 logger.debug(f"  bring_in: Starting with {next_player.name}")
-    #             elif order_type == "high_hand":
-    #                 next_player = self.table.get_player_with_best_hand()
-    #                 logger.debug(f"  high_hand: Starting with {next_player.name}")
-    #             elif order_type == "dealer":
-    #                 next_player = self.table.get_next_active_player(self.table.button_pos)
-    #                 logger.debug(f"  dealer: Starting with {next_player.name}")
-    #             else:
-    #                 logger.warning(f"Unknown betting order '{order_type}', defaulting to dealer")
-    #                 next_player = self.table.get_next_active_player(self.table.button_pos)
-    #                 logger.debug(f"  unknown: Starting with {next_player.name}")
-    #             if next_player:
-    #                 return next_player
-    #             return active_players[0]  # Fallback
-        
-    #     # Mid-round: Move to next active player
-    #     if self.current_player:
-    #         players = self.table.get_position_order()
-    #         try:
-    #             current_idx = next(i for i, p in enumerate(players) if p.id == self.current_player.id)
-    #             next_idx = (current_idx + 1) % len(players)
-    #             while not players[next_idx].is_active:
-    #                 next_idx = (next_idx + 1) % len(players)
-    #                 if next_idx == current_idx:  # Full circle
-    #                     return None
-    #             logger.debug(f"Next player: {players[next_idx].name}")
-    #             return players[next_idx]
-    #         except StopIteration:
-    #             return active_players[0]  # Fallback
-    #     return active_players[0]  # Default fallback    
-
     def next_player(self, round_start: bool = False) -> Optional[Player]:
         logger.debug(f"Determining next player (round_start={round_start}, current_step={self.current_step})")
         
@@ -1167,13 +882,309 @@ class Game:
             is_complete=True
         )
 
+    def _handle_showdown_with_declare(self) -> None:
+        """
+        Handle showdown with declarations for Hi-Lo games.
+        
+        For declaration_mode='declare', uses Variation #2 from Conjelco:
+        - Players declare 'high', 'low', or 'high_low' per pot.
+        - High portion: Best high hand among 'high' or 'high_low' declarers.
+        - Low portion: Best low hand among 'low' or 'high_low' declarers.
+        - 'High_low' declarers must win both outright to scoop, but can win a tied portion.
+        - Unwon portions go to the other portion's winners; if none eligible, split among all.
+
+        Currently, assumption is no qualifier when using declare
+        """
+
+        active_players = [p for p in self.table.players.values() if p.is_active]
+        if not active_players:
+            self.state = GameState.COMPLETE
+            return
+            
+        # Get showdown rules
+        showdown_rules = self.rules.showdown
+        best_hand_configs = showdown_rules.best_hand
+
+        # Validate Hi-Lo with declarations
+        if len(best_hand_configs) != 2 or showdown_rules.declaration_mode != "declare":
+            logger.error("Declarations only supported for Hi-Lo games with two configurations and declaration_mode='declare'")
+            return  # Could fall back to existing logic if needed        
+        
+        # Assume two configurations: high and low
+        high_config = best_hand_configs[0]  # e.g., "High Hand"
+        low_config = best_hand_configs[1]   # e.g., "Low Hand"
+        high_eval_type = EvaluationType(high_config.get('evaluationType', 'high'))
+        low_eval_type = EvaluationType(low_config.get('evaluationType', 'low'))
+
+        # Evaluate all hands
+        high_results = self._evaluate_hands_for_config(active_players, high_config, high_eval_type)
+        low_results = self._evaluate_hands_for_config(active_players, low_config, low_eval_type)
+
+        # Store hand results
+        hand_results = {
+            p.id: {
+                high_config.get('name', 'High'): high_results.get(p.id),
+                low_config.get('name', 'Low'): low_results.get(p.id)
+            } for p in active_players
+        }
+        pot_results = []
+        winning_hands = []
+
+        # Pot info
+        main_pot_eligible = set(p.id for p in active_players)
+        side_pots_eligible = [set(self.betting.get_side_pot_eligible_players(i)) 
+                              for i in range(self.betting.get_side_pot_count())]
+        
+        # Process each pot
+        for pot_index in [-1] + list(range(self.betting.get_side_pot_count())):
+            if pot_index == -1:
+                eligible_ids = main_pot_eligible
+                pot_amount = self.betting.get_main_pot_amount()
+            else:
+                eligible_ids = side_pots_eligible[pot_index]
+                pot_amount = self.betting.get_side_pot_amount(pot_index)        
+
+            if not eligible_ids or pot_amount <= 0:
+                continue
+
+            # Get declarations
+            declarations = {pid: self.declarations.get(pid, {}).get(pot_index) 
+                            for pid in eligible_ids}
+            logger.debug(f"Pot {pot_index}: Declarations {declarations}")      
+
+            # Check if all players declared high_low
+            all_high_low = all(decl == "high_low" for decl in declarations.values())            
+            
+            # Eligible players per portion
+            high_eligible = [pid for pid in eligible_ids 
+                            if declarations.get(pid) in ["high", "high_low"]]
+            low_eligible = [pid for pid in eligible_ids 
+                            if declarations.get(pid) in ["low", "high_low"]]        
+
+            # Best high hands
+            H = []
+            best_high_hands = []
+            if high_eligible and high_results:
+                high_hands = {pid: high_results[pid] for pid in high_eligible 
+                            if pid in high_results and high_results[pid]}
+                if high_hands:
+                    # Find best high hand(s) using compare_hands
+                    best_pids = []
+                    best_hand = None
+                    for pid, result in high_hands.items():
+                        hand = result.cards
+                        if not best_hand:
+                            best_pids = [pid]
+                            best_hand = hand
+                            best_high_hands = [result]
+                        else:
+                            comparison = evaluator.compare_hands(hand, best_hand, high_eval_type)
+                            if comparison > 0:  # Current hand is better
+                                best_pids = [pid]
+                                best_hand = hand
+                                best_high_hands = [result]
+                            elif comparison == 0:  # Tie
+                                best_pids.append(pid)
+                                best_high_hands.append(result)
+                    H = best_pids
+            logger.debug(f"Pot {pot_index}: Best high hands {H}")
+
+            # Best low hands
+            L = []
+            best_low_hands = []
+            if low_eligible and low_results:
+                low_hands = {pid: low_results[pid] for pid in low_eligible 
+                            if pid in low_results and low_results[pid]}
+                if low_hands:
+                    # Find best low hand(s) using compare_hands
+                    best_pids = []
+                    best_hand = None
+                    for pid, result in low_hands.items():
+                        hand = result.cards
+                        if not best_hand:
+                            best_pids = [pid]
+                            best_hand = hand
+                            best_low_hands = [result]
+                        else:
+                            comparison = evaluator.compare_hands(hand, best_hand, low_eval_type)
+                            if comparison > 0:  # Current hand is better
+                                best_pids = [pid]
+                                best_hand = hand
+                                best_low_hands = [result]
+                            elif comparison == 0:  # Tie
+                                best_pids.append(pid)
+                                best_low_hands.append(result)
+                    L = best_pids
+            logger.debug(f"Pot {pot_index}: Best low hands {L}")
+
+            # Determine high_low eligibility
+            high_low_eligible = {}
+            for pid in eligible_ids:
+                if declarations.get(pid) == "high_low":
+                    # Must win or tie both high and low
+                    in_high = pid in H
+                    in_low = pid in L
+                    high_low_eligible[pid] = in_high and in_low
+                else:
+                    high_low_eligible[pid] = True  # Non-high_low players are eligible
+            logger.debug(f"Pot {pot_index}: High_low eligibility {high_low_eligible}")            
+
+            # use https://www.conjelco.com/faq/high-low-declare.html Variation #2 for this
+            # High winners per Variation #2
+            high_winners = []
+            high_reason = "Best high hand"
+            for pid in H:
+                decl = declarations.get(pid)
+                if high_low_eligible[pid]:
+                    if decl == "high":
+                        high_winners.append(pid)
+                    elif decl == "high_low":
+                        high_winners.append(pid)
+            # If no winners yet, check high declarers
+            if not high_winners:
+                high_only = [pid for pid in high_eligible if declarations.get(pid) == "high" and high_low_eligible[pid]]
+                if high_only and high_hands:
+                    best_high_only_pids = []
+                    best_hand = None
+                    for pid in high_only:
+                        if pid in high_hands:
+                            hand = high_hands[pid].cards
+                            if not best_hand:
+                                best_high_only_pids = [pid]
+                                best_hand = hand
+                            else:
+                                comparison = evaluator.compare_hands(hand, best_hand, high_eval_type)
+                                if comparison > 0:
+                                    best_high_only_pids = [pid]
+                                    best_hand = hand
+                                elif comparison == 0:
+                                    best_high_only_pids.append(pid)
+                    high_winners = best_high_only_pids
+                    high_reason = "Best high hand among high declarers"
+            logger.debug(f"Pot {pot_index}: High winners {high_winners}")
+
+            # Low winners per Variation #2
+            low_winners = []
+            low_reason = "Best low hand"
+            for pid in L:
+                decl = declarations.get(pid)
+                if high_low_eligible[pid]:
+                    if decl == "low":
+                        low_winners.append(pid)
+                    elif decl == "high_low":
+                        low_winners.append(pid)
+            # If no winners yet, check low declarers
+            if not low_winners:
+                low_only = [pid for pid in low_eligible if declarations.get(pid) == "low" and high_low_eligible[pid]]
+                if low_only and low_hands:
+                    best_low_only_pids = []
+                    best_hand = None
+                    for pid in low_only:
+                        if pid in low_hands:
+                            hand = low_hands[pid].cards
+                            if not best_hand:
+                                best_low_only_pids = [pid]
+                                best_hand = hand
+                            else:
+                                comparison = evaluator.compare_hands(hand, best_hand, low_eval_type)
+                                if comparison > 0:
+                                    best_low_only_pids = [pid]
+                                    best_hand = hand
+                                elif comparison == 0:
+                                    best_low_only_pids.append(pid)
+                    low_winners = best_low_only_pids
+                    low_reason = "Best low hand among low declarers"
+            logger.debug(f"Pot {pot_index}: Low winners {low_winners}")
+
+            # Handle no winners
+            if not high_winners and low_winners:
+                high_winners = low_winners.copy()
+                high_reason = "Reallocated to low winners (no qualifying high hand)"
+            if not low_winners and high_winners:
+                low_winners = high_winners.copy()
+                low_reason = "Reallocated to high winners (no qualifying low hand)"
+            if not high_winners and not low_winners:
+                # Exception: if all high_low and none qualify, split among all
+                if all_high_low and not any(high_low_eligible.values()):
+                    high_winners = list(eligible_ids)
+                    low_winners = list(eligible_ids)
+                    high_reason = "Split among all players (no high_low players qualified)"
+                    low_reason = "Split among all players (no high_low players qualified)"
+                else:
+                    high_winners = list(eligible_ids)
+                    low_winners = list(eligible_ids)
+                    high_reason = "Split among all players (no qualifying hands)"
+                    low_reason = "Split among all players (no qualifying hands)"
+            logger.debug(f"Pot {pot_index}: Final high winners {high_winners}, low winners {low_winners}")
+
+            # Award high portion (50%)
+            high_amount = int(pot_amount * 0.5)
+            if high_winners:
+                winners = [self.table.players[pid] for pid in high_winners]
+                self.betting.award_pots(winners, pot_index if pot_index >= 0 else None, high_amount)
+                pot_result = PotResult(
+                    amount=high_amount,
+                    winners=high_winners,
+                    pot_type="side" if pot_index >= 0 else "main",
+                    hand_type=high_config.get('name', 'High'),
+                    side_pot_index=pot_index if pot_index >= 0 else None,
+                    eligible_players=eligible_ids,
+                    reason=high_reason,
+                    best_hands=best_high_hands,
+                    declarations=declarations                    
+                )
+                pot_results.append(pot_result)
+                logger.debug(f"Pot {pot_index}: Created high pot result: {pot_result}")
+                for pid in high_winners:
+                    if pid in high_results and high_results[pid]:
+                        hand = high_results[pid]
+                        hand.hand_type = high_config.get('name', 'High')
+                        winning_hands.append(hand)  
+
+            # Award low portion (50%)
+            low_amount = int(pot_amount * 0.5)
+            if low_winners:
+                winners = [self.table.players[pid] for pid in low_winners]
+                self.betting.award_pots(winners, pot_index if pot_index >= 0 else None, low_amount)
+                pot_result = PotResult(
+                    amount=low_amount,
+                    winners=low_winners,
+                    pot_type="side" if pot_index >= 0 else "main",
+                    hand_type=low_config.get('name', 'Low'),
+                    side_pot_index=pot_index if pot_index >= 0 else None,
+                    eligible_players=eligible_ids,
+                    reason=low_reason,
+                    best_hands=best_low_hands,
+                    declarations=declarations
+                )
+                pot_results.append(pot_result)
+                logger.debug(f"Pot {pot_index}: Created low pot result: {pot_result}")
+                for pid in low_winners:
+                    if pid in low_results and low_results[pid]:
+                        hand = low_results[pid]
+                        hand.hand_type = low_config.get('name', 'Low')
+                        winning_hands.append(hand)
+
+        # Store results
+        self.last_hand_result = GameResult(
+            pots=pot_results,
+            hands={pid: list(results.values()) for pid, results in hand_results.items()},
+            winning_hands=winning_hands,
+            is_complete=True
+        )
+        logger.debug(f"Final pot results: {[(p.hand_type, p.winners, p.amount) for p in pot_results]}")
+        self.state = GameState.COMPLETE
+
     def _handle_showdown(self) -> None:
         """
-        Handle showdown and determine winners.
+        Handle showdown and determine winners, supporting declarations for Hi-Lo games.
         
-        Evaluates all active players' hands and awards pots.
-        Handles multiple hand configurations for split pot games.
-        Supports per-configuration alternate rules and global default actions.
+        For declaration_mode='declare', uses Variation #2 from Conjelco:
+        - Players declare 'high', 'low', or 'high_low' per pot.
+        - High portion: Best high hand among 'high' or 'high_low' declarers.
+        - Low portion: Best low hand among 'low' or 'high_low' declarers (meeting qualifier).
+        - 'High_low' declarers must win both outright to scoop, but can win a tied portion.
+        - Unwon portions go to the other portion's winners; if none eligible, split among all.
         """
         active_players = [p for p in self.table.players.values() if p.is_active]
         if not active_players:
@@ -1183,6 +1194,12 @@ class Game:
         # Get showdown rules
         showdown_rules = self.rules.showdown
         best_hand_configs = showdown_rules.best_hand
+
+        # for now - completely separate code - we'll merge things together later
+        if showdown_rules.declaration_mode == "declare":
+            self._handle_showdown_with_declare()
+            return
+            
         default_actions = showdown_rules.defaultActions  # Per-configuration alternate rules
         global_default_action = showdown_rules.globalDefaultAction  # Global fallback
                 
@@ -1774,7 +1791,6 @@ class Game:
         Returns:
             Tuple of (pot results, had_winners)
         """
-        from generic_poker.evaluation.evaluator import evaluator
         
         pot_results = []
         player_hands = {
@@ -2136,9 +2152,6 @@ class Game:
                 - best_hand: List of cards representing the player's best hand
                 - used_hole_cards: List of hole cards used in the best hand
         """
-        from generic_poker.evaluation.evaluator import evaluator
-        import itertools
-
         logger.info(f"_find_best_hand_for_player({player.id},{community_cards},{showdown_rules},{eval_type}'")
 
         
@@ -2454,8 +2467,6 @@ class Game:
         if not players or not player_hands:
             return []
             
-        from generic_poker.evaluation.evaluator import evaluator
-
         # Get classification priority from showdown rules
         classification_priority = showdown_rules.classification_priority
         classification_field = "face_butt"  # Default field name from bestHand classification        

@@ -1,0 +1,77 @@
+{
+    "game": "Straight Poker Declare",
+    "players": {
+        "min": 2,
+        "max": 9
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Initial Bet"
+        },
+        {
+            "declare": {
+                "type": "declare",
+                "options": ["high", "low", "high_low"],
+                "per_pot": true,
+                "simultaneous": true
+            },
+            "name": "Declare High/Low"
+        },          
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "all cards",
+        "declaration_mode": "declare",
+        "bestHand": [
+            {
+                "name": "High Hand",
+                "evaluationType": "high",
+                "holeCards": 5,
+                "communityCards": 0
+            },
+            {
+                "name": "Low Hand",
+                "evaluationType": "a5_low",
+                "holeCards": 5,
+                "communityCards": 0
+            }
+        ]
+    }
+}
