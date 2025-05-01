@@ -507,7 +507,7 @@ class PlayerActionHandler:
             bet.has_acted = True
             active_players = [p for p in self.game.table.get_position_order() if p.is_active]
             if len(active_players) == 1:
-                self.game._handle_fold_win(active_players)
+                self.game._handle_fold_win()
                 return ActionResult(success=True, advance_step=True)
             logger.info(f"{player.name} folds")
             return self._advance_player_if_needed(manage_player, False)

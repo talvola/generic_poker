@@ -2,7 +2,7 @@
     "game": "Straight Poker Declare 9-Card",
     "players": {
         "min": 2,
-        "max": 7
+        "max": 5
     },
     "deck": {
         "type": "standard",
