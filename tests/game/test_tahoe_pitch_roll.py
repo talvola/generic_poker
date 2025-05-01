@@ -216,6 +216,25 @@ def test_game_bringin():
     assert len(valid_actions) == 1
     assert any(action[0] == PlayerAction.EXPOSE and action[1] == 1 and action[2] == 1 for action in valid_actions)
 
+    # each player exposes one card
+    exposing_player = game.current_player.id
+    cards_to_expose = game.table.players[exposing_player].hand.cards[:1]  # expose the first card
+    result = game.player_action(exposing_player, PlayerAction.EXPOSE, cards=cards_to_expose)
+    assert result.success
+    assert not result.advance_step  # still more players to act in this step
+
+    exposing_player = game.current_player.id
+    cards_to_expose = game.table.players[exposing_player].hand.cards[:1]  # expose the first card
+    result = game.player_action(exposing_player, PlayerAction.EXPOSE, cards=cards_to_expose)
+    assert result.success
+    assert not result.advance_step  # still more players to act in this step
+
+    exposing_player = game.current_player.id
+    cards_to_expose = game.table.players[exposing_player].hand.cards[:1]  # expose the first card
+    result = game.player_action(exposing_player, PlayerAction.EXPOSE, cards=cards_to_expose)
+    assert result.success
+    assert result.advance_step  # still more players to act in this step    
+
     # Step 4: Post Bring-In
     game._next_step()
     assert game.current_step == 4
@@ -313,13 +332,13 @@ def test_game_bringin():
     game._next_step()
     assert game.current_step == 6
     assert game.state == GameState.DEALING
-    # Check cards: Alice: Ah,Kh,Qh,10s; Bob: Qd,Kc,Kd,Qc; Charlie: Js,Jd,2c,Qs
-    assert len(game.table.players["p1"].hand.cards) == 4
-    assert len(game.table.players["p2"].hand.cards) == 4
-    assert len(game.table.players["p3"].hand.cards) == 4
-    assert str(game.table.players["p1"].hand.cards[3]) == "Ts"  # Alice’s fourth card
-    assert str(game.table.players["p2"].hand.cards[3]) == "Qc"   # Bob’s fourth card
-    assert str(game.table.players["p3"].hand.cards[3]) == "Qs"   # Charlie’s fourth card
+    # Check cards
+    assert len(game.table.players["p1"].hand.cards) == 5
+    assert len(game.table.players["p2"].hand.cards) == 5
+    assert len(game.table.players["p3"].hand.cards) == 5
+    assert str(game.table.players["p1"].hand.cards[3]) == "Jh"  # Alice’s fourth card
+    assert str(game.table.players["p2"].hand.cards[3]) == "Td"   # Bob’s fourth card
+    assert str(game.table.players["p3"].hand.cards[3]) == "Th"   # Charlie’s fourth card
     assert game.table.players["p1"].hand.cards[3].visibility == Visibility.FACE_UP
     assert game.table.players["p2"].hand.cards[3].visibility == Visibility.FACE_UP
     assert game.table.players["p3"].hand.cards[3].visibility == Visibility.FACE_UP
@@ -333,75 +352,74 @@ def test_game_bringin():
     assert game.betting.get_main_pot_amount() == 63 # from before
     assert game.betting.get_ante_total() == 0  # antes have been cleared in this round  
 
-    # Upcards: Alice: Qh,10s; Bob: Kd,Qc; Charlie: 2c,Qs
-    # Bob has highest (Kd,Qc), starts betting
-    assert game.current_player.id == "p2"  # Bob (Kd,Qc)
-    valid_actions = game.get_valid_actions("p2")
+    # Alice (Kh,Jh,9s)
+    assert game.current_player.id == "p1"  
+    valid_actions = game.get_valid_actions("p1")
     assert (PlayerAction.FOLD, None, None) in valid_actions
     assert (PlayerAction.CHECK, None, None) in valid_actions  # No bring-in
     assert (PlayerAction.BET, 10, 10) in valid_actions  # Small bet
 
-    # Bob bets $10
-    result = game.player_action("p2", PlayerAction.BET, 10)
+    # Alice bets $10
+    result = game.player_action("p1", PlayerAction.BET, 10)
     assert result.success
     assert game.betting.current_bet == 10
-    assert game.table.players["p2"].stack == 469  # 479 - 10
+    assert game.table.players["p1"].stack == 469  # 479 - 10
     assert game.betting.get_main_pot_amount() == 73  # 63 + 10
 
+    # Bob calls $10
+    assert game.current_player.id == "p2"  # Charlie next
+    valid_actions = game.get_valid_actions("p2")
+    assert (PlayerAction.FOLD, None, None) in valid_actions
+    assert (PlayerAction.CALL, 10, 10) in valid_actions
+    result = game.player_action("p2", PlayerAction.CALL, 10)
+    assert result.success
+    assert game.table.players["p2"].stack == 469  # 479 - 10
+    assert game.betting.get_main_pot_amount() == 83  # 73 + 10    
+
     # Charlie calls $10
-    assert game.current_player.id == "p3"  # Charlie next
+    assert game.current_player.id == "p3"  # Alice next
     valid_actions = game.get_valid_actions("p3")
     assert (PlayerAction.FOLD, None, None) in valid_actions
     assert (PlayerAction.CALL, 10, 10) in valid_actions
     result = game.player_action("p3", PlayerAction.CALL, 10)
     assert result.success
     assert game.table.players["p3"].stack == 469  # 479 - 10
-    assert game.betting.get_main_pot_amount() == 83  # 73 + 10    
-
-    # Alice calls $10
-    assert game.current_player.id == "p1"  # Alice next
-    valid_actions = game.get_valid_actions("p1")
-    assert (PlayerAction.FOLD, None, None) in valid_actions
-    assert (PlayerAction.CALL, 10, 10) in valid_actions
-    result = game.player_action("p1", PlayerAction.CALL, 10)
-    assert result.success
-    assert game.table.players["p1"].stack == 469  # 479 - 10
     assert game.betting.get_main_pot_amount() == 93  # 83 + 10    
    
     # Step 8: Deal Sixth Street
     game._next_step()
     assert game.current_step == 8
     assert game.state == GameState.DEALING
-    assert len(game.table.players["p1"].hand.cards) == 5  # Alice: Ah,Kh,Qh,Ts,Jh
-    assert len(game.table.players["p2"].hand.cards) == 5  # Bob: Qd,Kc,Kd,Qc,Td
-    assert len(game.table.players["p3"].hand.cards) == 5  # Charlie: Js,Jd,2c,Qs,Th
-    assert str(game.table.players["p1"].hand.cards[4]) == "Jh"
-    assert str(game.table.players["p2"].hand.cards[4]) == "Td"
-    assert str(game.table.players["p3"].hand.cards[4]) == "Th"
+    assert len(game.table.players["p1"].hand.cards) == 6  # Alice: Ah,Kh,Qh,Ts,Jh
+    assert len(game.table.players["p2"].hand.cards) == 6  # Bob: Qd,Kc,Kd,Qc,Td
+    assert len(game.table.players["p3"].hand.cards) == 6  # Charlie: Js,Jd,2c,Qs,Th
+    assert str(game.table.players["p1"].hand.cards[4]) == "9s"
+    assert str(game.table.players["p2"].hand.cards[4]) == "7s"
+    assert str(game.table.players["p3"].hand.cards[4]) == "6s"
     assert game.table.players["p1"].hand.cards[4].visibility == Visibility.FACE_UP    
 
     # Step 9: Sixth Street Bet
     game._next_step()
     assert game.current_step == 9
     assert game.state == GameState.BETTING
-    assert game.current_player.id == "p2"  # Bob (Kd,Qc,Td)
-    valid_actions = game.get_valid_actions("p2")
+    assert game.current_player.id == "p1"  # 
+    valid_actions = game.get_valid_actions("p1")
     assert (PlayerAction.FOLD, None, None) in valid_actions
     assert (PlayerAction.CHECK, None, None) in valid_actions
     assert (PlayerAction.BET, 20, 20) in valid_actions  # Big bet
+    result = game.player_action("p1", PlayerAction.CHECK, None)
+    assert result.success
+    
+    assert game.current_player.id == "p2"  # Charlie next
+    valid_actions = game.get_valid_actions("p2")
+    assert (PlayerAction.CHECK, None, None) in valid_actions
     result = game.player_action("p2", PlayerAction.CHECK, None)
     assert result.success
     
-    assert game.current_player.id == "p3"  # Charlie next
+    assert game.current_player.id == "p3"  # Alice next
     valid_actions = game.get_valid_actions("p3")
     assert (PlayerAction.CHECK, None, None) in valid_actions
     result = game.player_action("p3", PlayerAction.CHECK, None)
-    assert result.success
-    
-    assert game.current_player.id == "p1"  # Alice next
-    valid_actions = game.get_valid_actions("p1")
-    assert (PlayerAction.CHECK, None, None) in valid_actions
-    result = game.player_action("p1", PlayerAction.CHECK, None)
     assert result.success   
 
     # Step 10: Deal Seventh Street
@@ -411,24 +429,24 @@ def test_game_bringin():
     assert len(game.table.players["p1"].hand.cards) == 6  # Alice: Ah,Kh   Qh,Ts,Jh,9s
     assert len(game.table.players["p2"].hand.cards) == 6  # Bob: Qd,Kc     Kd,Qc,Td,7s
     assert len(game.table.players["p3"].hand.cards) == 6  # Charlie: Js,Jd 2c,Qs,Th,6s    
-    assert str(game.table.players["p1"].hand.cards[5]) == "9s"
-    assert str(game.table.players["p2"].hand.cards[5]) == "7s"
-    assert str(game.table.players["p3"].hand.cards[5]) == "6s"
+    assert str(game.table.players["p1"].hand.cards[5]) == "9d"
+    assert str(game.table.players["p2"].hand.cards[5]) == "7h"
+    assert str(game.table.players["p3"].hand.cards[5]) == "6c"
     
     # Step 11: Seventh Street Bet
     game._next_step()
-    assert game.current_step == 9
+    assert game.current_step == 11
     assert game.state == GameState.BETTING
+    assert game.current_player.id == "p1"
+    result = game.player_action("p1", PlayerAction.CHECK, None)
+    assert result.success
+    
     assert game.current_player.id == "p2"
     result = game.player_action("p2", PlayerAction.CHECK, None)
     assert result.success
     
     assert game.current_player.id == "p3"
     result = game.player_action("p3", PlayerAction.CHECK, None)
-    assert result.success
-    
-    assert game.current_player.id == "p1"
-    result = game.player_action("p1", PlayerAction.CHECK, None)
     assert result.success
     
     # Step 12: Showdown
