@@ -40,6 +40,7 @@ RANK_ORDERS = {
     'ne_seven_card_high': BASE_RANKS,
     # 2-7 Lowball can use same ranks
     '27_low': BASE_RANKS,
+    '27_low_wild': BASE_RANKS,
     # Pip games can also use the same ranks
     '49': BASE_RANKS,
     '6': BASE_RANKS,
@@ -62,6 +63,7 @@ RANK_ORDERS = {
     # A-5 Lowball games always have Ace low
     'a5_low': LOW_A5_RANKS,
     'a5_low_high': LOW_A5_RANKS,
+    'a5_low_wild': LOW_A5_RANKS,
     'a6_low': LOW_A6_RANKS,
 
     # Badugi
@@ -112,8 +114,10 @@ RANK_ORDERS = {
 HAND_SIZES = {
     'high': 5,
     'a5_low': 5,
+    'a5_low_wild': 5,
     'a6_low': 5,
     '27_low': 5,
+    '27_low_wild': 5,
     'a5_low_high': 5,
     '36card_ffh_high': 5,
     '20card_high': 5,

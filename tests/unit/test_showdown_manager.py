@@ -8,6 +8,8 @@ from generic_poker.evaluation.evaluator import EvaluationType, evaluator
 from generic_poker.game.table import Player, Table, PlayerHand
 from generic_poker.game.showdown_manager import ShowdownManager  # Adjust import as needed
 from generic_poker.config.loader import GameRules
+from generic_poker.game.betting import BettingManager
+from generic_poker.game.game_result import HandResult
 
 @pytest.fixture
 def mock_player():
@@ -345,3 +347,302 @@ class TestShowdownManager:
         # Should return all available cards with padding
         assert len(best_hand) == len(all_cards)  # All hole cards
         assert all(card in all_cards for card in best_hand)
+
+    def test_action_razzdugi_classification(self):
+        """Test that Action Razzdugi correctly applies face/butt classification."""
+        # Create a mock ShowdownManager
+        table = Mock(spec=Table)
+        betting = Mock(spec=BettingManager)
+        rules = Mock(spec=GameRules)
+        
+        # Set up showdown rules
+        rules.showdown = Mock()
+        rules.showdown.best_hand = [
+            {
+                "name": "Razz",
+                "evaluationType": "a5_low",
+                "anyCards": 5,
+                "classification": {
+                    "type": "face_butt",
+                    "faceRanks": ["JACK", "QUEEN", "KING"],
+                    "fieldName": "face_butt"
+                }
+            },
+            {
+                "name": "Badugi",
+                "evaluationType": "badugi",
+                "anyCards": 4
+            }
+        ]
+        rules.showdown.classification_priority = ["face", "butt"]
+        
+        # Properly set up the table mock with community_cards attribute
+        table.community_cards = {}
+
+        # Create ShowdownManager
+        showdown_manager = ShowdownManager(table, betting, rules)
+        
+        # Create two players
+        p1 = Mock(spec=Player)
+        p1.id = "p1"
+        p1.hand = PlayerHand()
+        p1.is_active = True
+        
+        p2 = Mock(spec=Player)
+        p2.id = "p2"
+        p2.hand = PlayerHand()
+        p2.is_active = True
+        
+        # Player 1: Butt Razz hand (A-5 with no face cards)
+        p1.hand.add_card(Card(Rank.ACE, Suit.SPADES))
+        p1.hand.add_card(Card(Rank.TWO, Suit.DIAMONDS))
+        p1.hand.add_card(Card(Rank.THREE, Suit.HEARTS))
+        p1.hand.add_card(Card(Rank.FOUR, Suit.CLUBS))
+        p1.hand.add_card(Card(Rank.FIVE, Suit.SPADES))
+        p1.hand.add_card(Card(Rank.EIGHT, Suit.DIAMONDS))
+        p1.hand.add_card(Card(Rank.NINE, Suit.HEARTS))
+        
+        # Player 2: Face Razz hand (3-8 with a Jack)
+        p2.hand.add_card(Card(Rank.THREE, Suit.CLUBS))
+        p2.hand.add_card(Card(Rank.FOUR, Suit.DIAMONDS))
+        p2.hand.add_card(Card(Rank.FIVE, Suit.HEARTS))
+        p2.hand.add_card(Card(Rank.SIX, Suit.CLUBS))
+        p2.hand.add_card(Card(Rank.EIGHT, Suit.SPADES))
+        p2.hand.add_card(Card(Rank.JACK, Suit.DIAMONDS))  # Face card
+        p2.hand.add_card(Card(Rank.TEN, Suit.HEARTS))
+        
+        # Add players to table
+        table.players = {"p1": p1, "p2": p2}
+        table.get_side_pot_eligible_players = Mock(return_value=set(["p1", "p2"]))
+        
+        # Mock betting
+        betting.get_main_pot_amount.return_value = 100
+        betting.get_side_pot_count.return_value = 0
+        betting.get_total_pot.return_value = 100
+        
+        # Create proper HandResult objects for mock returns
+        p1_razz_result = HandResult(
+            player_id="p1",
+            cards=p1.hand.cards[:5],  # Use first 5 cards (A-5)
+            hand_name="A-5",
+            hand_description="A-5 Low",
+            evaluation_type="a5_low",
+            rank=1,
+            ordered_rank=1,
+            classifications={"face_butt": "butt"}  # No face cards
+        )
+        
+        p2_razz_result = HandResult(
+            player_id="p2",
+            cards=p2.hand.cards[:5],  # Use first 5 cards (3-8)
+            hand_name="3-8",
+            hand_description="3-8 Low",
+            evaluation_type="a5_low",
+            rank=2,  # Worse rank numerically
+            ordered_rank=2,
+            classifications={"face_butt": "face"}  # Has face card
+        )
+        
+        p1_badugi_result = HandResult(
+            player_id="p1",
+            cards=p1.hand.cards[:4],  # First 4 cards for badugi
+            hand_name="A-4 Badugi",
+            hand_description="A-4 Badugi",
+            evaluation_type="badugi",
+            rank=2,  # Worse badugi
+            ordered_rank=2
+        )
+        
+        p2_badugi_result = HandResult(
+            player_id="p2",
+            cards=p2.hand.cards[:4],  # First 4 cards for badugi
+            hand_name="3-8 Badugi",
+            hand_description="3-8 Badugi",
+            evaluation_type="badugi",
+            rank=1,  # Better badugi
+            ordered_rank=1
+        )        
+        
+        # Handle Badugi evaluation differently
+        def mock_compare_hands(hand1, hand2, eval_type):
+            if eval_type == EvaluationType.BADUGI:
+                # Give better Badugi to Player 2 (Face)
+                if any(card in p1.hand.cards for card in hand1):
+                    return -1  # p2 wins
+                else:
+                    return 1   # p1 wins
+            else:
+                # In Razz, Player 1 (Butt) has better low
+                if any(card in p1.hand.cards for card in hand1):
+                    return 1  # p1 wins
+                else:
+                    return -1  # p2 wins
+                    
+        # Patch evaluator to always use our mock implementation
+        with patch('generic_poker.evaluation.evaluator.evaluator.compare_hands', side_effect=mock_compare_hands):
+            with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+                # Make evaluate_hand return proper HandResult objects
+                def mock_eval_hand(cards, eval_type):
+                    if eval_type == EvaluationType.LOW_A5:
+                        if any(card in p1.hand.cards for card in cards):
+                            return p1_razz_result
+                        else:
+                            return p2_razz_result
+                    else:  # Badugi
+                        if any(card in p1.hand.cards for card in cards):
+                            return p1_badugi_result
+                        else:
+                            return p2_badugi_result
+                
+                mock_eval.side_effect = mock_eval_hand
+                
+                # Run the showdown
+                result = showdown_manager.handle_showdown()
+        
+        # Verify results
+        assert len(result.pots) == 2  # Two pot results (Razz and Badugi)
+        
+        # In Razz, despite p1 having better cards, p2 should win due to face classification
+        razz_pot = next(pot for pot in result.pots if pot.hand_type == "Razz")
+        assert "p2" in razz_pot.winners, "Player 2 (Face) should win Razz portion despite worse low cards"
+        
+        # In Badugi, p2 should win due to our mock evaluation
+        badugi_pot = next(pot for pot in result.pots if pot.hand_type == "Badugi")
+        assert "p2" in badugi_pot.winners, "Player 2 should win Badugi portion"        
+
+    def test_action_razzdugi_odd_chips(self):
+        """Test that Action Razzdugi handles odd chips correctly in split pots."""
+        # Create a mock ShowdownManager
+        table = Mock(spec=Table)
+        betting = Mock(spec=BettingManager)
+        rules = Mock(spec=GameRules)
+        
+        # Set up showdown rules
+        rules.showdown = Mock()
+        rules.showdown.best_hand = [
+            {
+                "name": "Razz",
+                "evaluationType": "a5_low",
+                "anyCards": 5,
+                "classification": {
+                    "type": "face_butt",
+                    "faceRanks": ["JACK", "QUEEN", "KING"],
+                    "fieldName": "face_butt"
+                }
+            },
+            {
+                "name": "Badugi",
+                "evaluationType": "badugi",
+                "anyCards": 4
+            }
+        ]
+        rules.showdown.classification_priority = ["face", "butt"]
+        
+        # Properly set up the table mock with community_cards attribute
+        table.community_cards = {}
+
+        # Create ShowdownManager
+        showdown_manager = ShowdownManager(table, betting, rules)
+        
+        # Create players (simplified version)
+        p1 = Mock(spec=Player)
+        p1.id = "p1"
+        p1.hand = PlayerHand()
+        p1.is_active = True
+        
+        p2 = Mock(spec=Player)
+        p2.id = "p2"
+        p2.hand = PlayerHand()
+        p2.is_active = True
+        
+        # Add basic cards (simplified)
+        p1.hand.add_card(Card(Rank.ACE, Suit.SPADES))
+        p2.hand.add_card(Card(Rank.KING, Suit.SPADES))  # Face card for p2
+        
+        # Add players to table
+        table.players = {"p1": p1, "p2": p2}
+        table.get_side_pot_eligible_players = Mock(return_value=set(["p1", "p2"]))
+        
+        # Set pot amount to an odd number
+        betting.get_main_pot_amount.return_value = 101
+        betting.get_side_pot_count.return_value = 0
+        betting.get_total_pot.return_value = 101
+        
+        # Create proper HandResult objects
+        p1_razz = HandResult(
+            player_id="p1",
+            cards=[Card(Rank.ACE, Suit.SPADES)],
+            hand_name="Low",
+            hand_description="Ace Low",
+            evaluation_type="a5_low",
+            rank=1,
+            ordered_rank=1,
+            classifications={"face_butt": "butt"}
+        )
+        
+        p2_razz = HandResult(
+            player_id="p2",
+            cards=[Card(Rank.KING, Suit.SPADES)],
+            hand_name="High",
+            hand_description="King High",
+            evaluation_type="a5_low",
+            rank=2,
+            ordered_rank=2,
+            classifications={"face_butt": "face"}
+        )
+        
+        p1_badugi = HandResult(
+            player_id="p1",
+            cards=[Card(Rank.ACE, Suit.SPADES)],
+            hand_name="One Card",
+            hand_description="One Card Badugi",
+            evaluation_type="badugi",
+            rank=1,
+            ordered_rank=1
+        )
+        
+        p2_badugi = HandResult(
+            player_id="p2",
+            cards=[Card(Rank.KING, Suit.SPADES)],
+            hand_name="One Card",
+            hand_description="One Card Badugi",
+            evaluation_type="badugi",
+            rank=2,
+            ordered_rank=2
+        )
+        
+        # Use mocks for all evaluator functions
+        with patch('generic_poker.evaluation.evaluator.evaluator.compare_hands') as mock_compare:
+            with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+                # Set up the mocks to make player 2 win Razz due to face classification
+                # and player 1 win Badugi
+                mock_compare.return_value = 0  # Make hands equal in raw comparison
+                
+                def mock_eval_hand(cards, eval_type):
+                    if eval_type == EvaluationType.LOW_A5:
+                        if any(card in p1.hand.cards for card in cards):
+                            return p1_razz
+                        else:
+                            return p2_razz
+                    else:  # Badugi
+                        if any(card in p1.hand.cards for card in cards):
+                            return p1_badugi
+                        else:
+                            return p2_badugi
+                
+                mock_eval.side_effect = mock_eval_hand
+                
+                # Run the showdown
+                result = showdown_manager.handle_showdown()
+        
+        # Check that odd chip was awarded correctly
+        razz_pot = next(pot for pot in result.pots if pot.hand_type == "Razz")
+        badugi_pot = next(pot for pot in result.pots if pot.hand_type == "Badugi")
+        
+        # Total should add up to original pot
+        total_awarded = razz_pot.amount + badugi_pot.amount
+        assert total_awarded == 101, "Total awarded should equal original pot"
+        
+        # High hand (Razz in this case) should get the odd chip
+        assert razz_pot.amount == 51, "Razz portion should get the odd chip"
+        assert badugi_pot.amount == 50, "Badugi portion should get regular half"    

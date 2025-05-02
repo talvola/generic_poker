@@ -213,7 +213,7 @@ class HandDescriber:
             elif hand_result.rank == 1:  # Five of a Kind
                 return self._describe_five_of_kind(high_cards)            
 
-        elif self.eval_type in (EvaluationType.LOW_A5,EvaluationType.LOW_A5_HIGH):
+        elif self.eval_type in (EvaluationType.LOW_A5,EvaluationType.LOW_A5_HIGH,EvaluationType.LOW_A5_WILD):
             if hand_result.rank == 6:
                 return self._describe_four_of_kind(cards_used)
             elif hand_result.rank == 5:
@@ -227,7 +227,7 @@ class HandDescriber:
             elif hand_result.rank == 1:
                 return self._describe_high_card(cards_used)
             
-        elif self.eval_type in (EvaluationType.LOW_27,EvaluationType.LOW_A6):
+        elif self.eval_type in (EvaluationType.LOW_27,EvaluationType.LOW_A6,EvaluationType.LOW_27_WILD):
             if hand_result.rank == 1:  # High Card
                 return self._describe_high_card(cards_used)            
             elif hand_result.rank == 2:  # Pair

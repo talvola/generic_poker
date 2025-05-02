@@ -1,0 +1,116 @@
+{
+    "game": "Badacey",
+    "players": {
+        "min": 2,
+        "max": 8
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Pre-Draw Bet"
+        },
+        {
+            "draw": {
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "First Draw"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Post-Draw Bet #1"
+        },
+        {
+            "draw": {
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Second Draw"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Post-Draw Bet #2"
+        },
+        {
+            "draw": {
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Third Draw"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Post-Draw Bet #3"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "all cards",
+        "bestHand": [
+            {
+                "name": "Badugi",
+                "evaluationType": "badugi",
+                "anyCards": 4
+            },
+            {
+                "name": "A-5 Lowball",
+                "evaluationType": "a5_low",
+                "anyCards": 5
+            }
+        ]
+    }
+}
