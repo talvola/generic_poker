@@ -609,6 +609,7 @@ class PlayerActionHandler:
         is_draw = hasattr(self.game, "current_draw_config")
         if not (is_discard or is_draw):
             return False
+        
         config = self.game.current_discard_config if is_discard else self.game.current_draw_config
         card_config = config["cards"][0]
         max_discard = card_config.get("number", 0)
@@ -630,6 +631,7 @@ class PlayerActionHandler:
             else:
                 return False
 
+        # Handle special discard rules like "matching ranks"
         if is_discard and card_config.get("rule") == "matching ranks":
             discard_subset = card_config.get("discardSubset", "default")
             discard_cards = self.game.table.community_cards.get(discard_subset, []) if card_config.get("discardLocation") == "community" else []
@@ -645,21 +647,40 @@ class PlayerActionHandler:
                     self.game.table.discard_pile[discard_subset].append(card)
                 card.visibility = Visibility.FACE_UP if face_up else Visibility.FACE_DOWN
         else:
+            # Standard discard
             for card in cards:
                 player.hand.remove_card(card)
                 if face_up:
                     card.visibility = Visibility.FACE_UP
                 self.game.table.discard_pile.add_card(card)
 
-        if is_draw and len(cards) > 0:
-            draw_amount = len(cards)
+        # Draw logic - handle the case where draw is relative to discard
+        if is_draw:
+            draw_amount = len(cards)  # Default is to draw same as discard
+
+            # Check if draw_amount is relative to discard and adjust accordingly
+            draw_amount_config = card_config.get("draw_amount", None)
+            if draw_amount_config and draw_amount_config.get("relative_to") == "discard":
+                relative_amount = draw_amount_config.get("amount", 0)
+                draw_amount = draw_amount + relative_amount
+                logger.info(f"Draw amount is relative to discard: {len(cards)} discarded + {relative_amount} = {draw_amount} to draw")
+
+            # Ensure we don't try to draw more cards than available in the deck
             if len(self.game.table.deck.cards) < draw_amount:
                 draw_amount = len(self.game.table.deck.cards)
-            new_cards = self.game.table.deck.deal_cards(draw_amount)
-            player.hand.add_cards(new_cards)
-            if subset and subset != "default":  # Assign new cards to the specified subset
-                for card in new_cards:
-                    player.hand.add_to_subset(card, subset)
+                logger.warning(f"Not enough cards in deck, drawing only {draw_amount} cards")
+
+            # Draw the cards
+            if draw_amount > 0:                
+                new_cards = self.game.table.deck.deal_cards(draw_amount)
+                player.hand.add_cards(new_cards)
+
+                # Assign new cards to the specified subset if needed
+                if subset and subset != "default":
+                    for card in new_cards:
+                        player.hand.add_to_subset(card, subset)                
+
+                logger.info(f"Player {player.name} drew {draw_amount} cards after discarding {len(cards)}")
 
         return True
 

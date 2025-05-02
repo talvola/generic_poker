@@ -1,0 +1,80 @@
+{
+    "game": "Four-Before",
+    "players": {
+        "min": 2,
+        "max": 8
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 4,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Initial Bet"
+        },
+        {
+            "draw": {
+                "cards": [
+                    {
+                        "number": 4,
+                        "state": "face down",
+                        "draw_amount": {
+                            "relative_to": "discard",
+                            "amount": 1
+                        }
+                    }
+                ]
+            },
+            "name": "Draw Cards"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Final Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "all cards",
+        "bestHand": [
+            {
+                "evaluationType": "high",
+                "anyCards": 5
+            }
+        ]
+    }
+}
