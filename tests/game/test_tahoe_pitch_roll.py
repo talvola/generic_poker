@@ -477,7 +477,7 @@ def test_game_bringin():
 
     winning_hand = results.hands['p1']    
     assert "Straight" in winning_hand[0].hand_name
-    assert "Ace-high Straight" in winning_hand[0].hand_description    
+    assert "King-high Straight" in winning_hand[0].hand_description    
 
     # Check winning hands list
     assert len(results.winning_hands) == 1

@@ -222,16 +222,13 @@ class ShowdownManager:
         # If some portions were not awarded, redistribute to the winners of other portions
         if awarded_portions > 0 and awarded_portions < len(best_hand_configs):
             logging.debug("Some portions not awarded - redistribute to the winners of other portions")
-            remaining_percentage = 1.0 - (awarded_portions * pot_percentage)
-            
-            if remaining_percentage > 0 and awarded_pot_results:
-                # Award remaining pot proportionally to existing winners
-                self._redistribute_unawarded_pot(
-                    original_main_pot, 
-                    original_side_pots,
-                    remaining_percentage, 
-                    awarded_pot_results
-                )
+
+            # Instead of calculating by percentage, calculate exact remaining amounts
+            self._redistribute_exact_pot(
+                original_main_pot, 
+                original_side_pots, 
+                awarded_pot_results
+            )
 
         # Handle default action if no winners in any division
         if not had_any_winners and global_default_action and global_default_action.get('condition') == 'no_qualifier_met':
@@ -445,6 +442,14 @@ class ShowdownManager:
             if not eligible_ids or pot_amount <= 0:
                 continue
 
+            # Calculate pot division with odd chip handling
+            high_amount = pot_amount // 2
+            low_amount = pot_amount // 2
+            
+            # Give odd chip to high portion per the rules
+            if pot_amount % 2 == 1:
+                high_amount += 1            
+
             # Get declarations
             declarations = {pid: self.declarations.get(pid, {}).get(pot_index) 
                             for pid in eligible_ids}
@@ -615,7 +620,6 @@ class ShowdownManager:
             logger.debug(f"Pot {pot_index}: Final high winners {high_winners}, low winners {low_winners}")
 
             # Award high portion (50%)
-            high_amount = int(pot_amount * 0.5)
             if high_winners:
                 winners = [self.table.players[pid] for pid in high_winners]
                 self.betting.award_pots(winners, pot_index if pot_index >= 0 else None, high_amount)
@@ -639,7 +643,6 @@ class ShowdownManager:
                         winning_hands.append(hand)  
 
             # Award low portion (50%)
-            low_amount = int(pot_amount * 0.5)
             if low_winners:
                 winners = [self.table.players[pid] for pid in low_winners]
                 self.betting.award_pots(winners, pot_index if pot_index >= 0 else None, low_amount)
@@ -837,6 +840,12 @@ class ShowdownManager:
                     # Calculate pot amount based on ORIGINAL side pot
                     pot_amount = int(original_side_pots[i] * pot_percentage)
                     
+                    # For high-low games, handle odd chips
+                    if len(best_hand_configs) == 2:
+                        # If this is a high-hand config and there's an odd chip, it gets it
+                        if eval_type in [EvaluationType.HIGH, EvaluationType.HIGH_WILD] and original_side_pots[i] % 2 == 1:
+                            pot_amount += 1
+
                     # Award the pot portion
                     self.betting.award_pots(winners, i, pot_amount)
                     
@@ -875,6 +884,13 @@ class ShowdownManager:
                 had_winners = True
                 # Calculate pot amount based on ORIGINAL main pot
                 pot_amount = int(original_main_pot * pot_percentage)
+
+                # For high-low games, handle odd chips
+                if len(self.rules.showdown.best_hand) == 2:
+                    # If this is a high-hand config and there's an odd chip, it gets it
+                    if eval_type in [EvaluationType.HIGH, EvaluationType.HIGH_WILD] and original_main_pot % 2 == 1:
+                        pot_amount += 1
+
                 logger.info(f"       Awarding ${pot_amount} ({original_main_pot} * {pot_percentage}) to {winners}.")  
                 
                 # Award the pot portion
@@ -1472,23 +1488,28 @@ class ShowdownManager:
         
         # Redistribute main pot
         if main_pots:
-            additional_main = int(original_main_pot * remaining_percentage)
-            for pot in main_pots:
-                # Find players who won this pot
-                winners = [self.table.players[pid] for pid in pot.winners]
-                
-                # Award additional amount
-                self.betting.award_pots(winners, None, additional_main)
-                
-                # Update pot amount in result
-                pot.amount += additional_main
-                
-                logger.info(f"Redistributed ${additional_main} to {[p.name for p in winners]} (no qualifying low hand)")
+            # Calculate the exact remaining amount instead of using percentage
+            total_awarded = sum(pot.amount for pot in main_pots)            
+            additional_main = original_main_pot - total_awarded
+
+            if additional_main > 0:
+                for pot in main_pots:
+                    # Find players who won this pot
+                    winners = [self.table.players[pid] for pid in pot.winners]
+                    
+                    # Award additional amount
+                    self.betting.award_pots(winners, None, additional_main)
+                    
+                    # Update pot amount in result
+                    pot.amount += additional_main
+                    
+                    logger.info(f"Redistributed ${additional_main} to {[p.name for p in winners]} (no qualifying low hand)")
         
         # Redistribute side pots
         for idx, pots in side_pots.items():
             if idx < len(original_side_pots):
-                additional_side = int(original_side_pots[idx] * remaining_percentage)
+                total_awarded = sum(pot.amount for pot in pots)
+                additional_side = original_side_pots[idx] - total_awarded
                 
                 for pot in pots:
                     # Find players who won this pot
@@ -1501,6 +1522,66 @@ class ShowdownManager:
                     pot.amount += additional_side
                     
                     logger.info(f"Redistributed ${additional_side} to {[p.name for p in winners]} for side pot {idx} (no qualifying low hand)")
+
+    def _redistribute_exact_pot(
+        self,
+        original_main_pot: int,
+        original_side_pots: List[int],
+        awarded_pot_results: List[PotResult]
+    ) -> None:
+        """
+        Redistribute unawarded pot portions to existing winners, using exact amounts.
+        
+        Args:
+            original_main_pot: Original main pot amount
+            original_side_pots: Original side pot amounts
+            awarded_pot_results: Pot results that have been awarded so far
+        """
+        # Group awarded pots by type
+        main_pots = [p for p in awarded_pot_results if p.pot_type == "main" and p.winners]
+        side_pots = {}
+        for pot in [p for p in awarded_pot_results if p.pot_type == "side" and p.winners]:
+            if pot.side_pot_index not in side_pots:
+                side_pots[pot.side_pot_index] = []
+            side_pots[pot.side_pot_index].append(pot)
+        
+        # Redistribute main pot
+        if main_pots:
+            # Calculate the exact remaining amount
+            total_awarded = sum(pot.amount for pot in main_pots)
+            additional_main = original_main_pot - total_awarded
+            
+            if additional_main > 0:
+                for pot in main_pots:
+                    # Find players who won this pot
+                    winners = [self.table.players[pid] for pid in pot.winners]
+                    
+                    # Award additional amount
+                    self.betting.award_pots(winners, None, additional_main)
+                    
+                    # Update pot amount in result
+                    pot.amount += additional_main
+                    
+                    logger.info(f"Redistributed ${additional_main} to {[p.name for p in winners]} (no qualifying low hand)")
+        
+        # Redistribute side pots
+        for idx, pots in side_pots.items():
+            if idx < len(original_side_pots):
+                total_awarded = sum(pot.amount for pot in pots)
+                additional_side = original_side_pots[idx] - total_awarded
+                
+                if additional_side > 0:
+                    for pot in pots:
+                        # Find players who won this pot
+                        winners = [self.table.players[pid] for pid in pot.winners]
+                        
+                        # Award additional amount
+                        self.betting.award_pots(winners, idx, additional_side)
+                        
+                        # Update pot amount in result
+                        pot.amount += additional_side
+                        
+                        logger.info(f"Redistributed ${additional_side} to {[p.name for p in winners]} for side pot {idx} (no qualifying low hand)")
 
     def _handle_split_among_active(self, players: List[Player], main_pot: int, side_pots: List[int]) -> None:
         """
