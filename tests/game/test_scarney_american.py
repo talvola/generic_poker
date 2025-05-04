@@ -32,7 +32,7 @@ def create_predetermined_deck():
         Card(Rank.SIX, Suit.CLUBS), Card(Rank.KING, Suit.DIAMONDS), Card(Rank.FOUR, Suit.CLUBS),
         Card(Rank.SEVEN, Suit.HEARTS), Card(Rank.QUEEN, Suit.SPADES), Card(Rank.JACK, Suit.HEARTS),
         Card(Rank.EIGHT, Suit.SPADES), Card(Rank.TEN, Suit.HEARTS), Card(Rank.ACE, Suit.CLUBS),
-        Card(Rank.NINE, Suit.DIAMONDS), Card(Rank.TWO, Suit.DIAMONDS), Card(Rank.FOUR, Suit.HEARTS),
+        Card(Rank.NINE, Suit.HEARTS), Card(Rank.TWO, Suit.DIAMONDS), Card(Rank.FOUR, Suit.HEARTS),
         # flop
         Card(Rank.SEVEN, Suit.DIAMONDS), Card(Rank.SIX, Suit.SPADES), Card(Rank.THREE, Suit.SPADES),
         # discard flop
@@ -329,8 +329,8 @@ def test_scarney_minimal_flow():
     # Check winning hand
     winning_player = main_pot.winners[0]
     winning_hand = results.hands[winning_player]
-    assert winning_hand[0].hand_name == 'No Cards' 
-    assert winning_hand[0].hand_description == 'No Cards'      
+    assert winning_hand[1].hand_name == 'No Cards' 
+    assert winning_hand[1].hand_description == 'No Cards'      
 
     # Check winning hands list
     assert len(results.winning_hands) == 2  # TODO: Adjust if multiple winners

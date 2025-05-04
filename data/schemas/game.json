@@ -296,7 +296,11 @@
               "communityCards": {
                 "type": "integer",
                 "description": "Number of community cards to use in this combination"
-              }
+              },
+              "community_subset": {
+                "type": "string",
+                "description": "Specific subset of community cards to use for this combination"
+              }              
             },
             "required": ["holeCards", "communityCards"],
             "additionalProperties": false
@@ -351,8 +355,19 @@
                 "description": "Subset of community cards (e.g., 'Board', 'Discard')"
               },
               "subset": {
-                "type": "string",
-                "description": "Subset of cards (e.g., 'Board', 'Discard')"
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "description": "Subset of cards (e.g., 'Board', 'Discard')"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Multiple subsets to assign the card to"
+                  }
+                ]
               }
             },
             "required": ["number", "state"]

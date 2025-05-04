@@ -11,6 +11,25 @@ from generic_poker.config.loader import GameRules
 from generic_poker.game.betting import BettingManager
 from generic_poker.game.game_result import HandResult
 
+import logging
+import sys
+
+@pytest.fixture(autouse=True)
+def setup_logging():
+    """Set up logging for all tests."""
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ],
+        force=True  # Force reconfiguration of logging
+    )
+
 @pytest.fixture
 def mock_player():
     """Create a mock player for testing."""
@@ -538,6 +557,9 @@ class TestShowdownManager:
         ]
         rules.showdown.classification_priority = ["face", "butt"]
         
+        rules.showdown.best_hand[0]["name"] = "Razz"  # Ensure the name matches exactly
+        rules.showdown.best_hand[1]["name"] = "Badugi"  # Ensure the name matches exactly
+
         # Properly set up the table mock with community_cards attribute
         table.community_cards = {}
 
@@ -547,17 +569,27 @@ class TestShowdownManager:
         # Create players (simplified version)
         p1 = Mock(spec=Player)
         p1.id = "p1"
+        p1.name = "Player1"        
         p1.hand = PlayerHand()
         p1.is_active = True
         
         p2 = Mock(spec=Player)
         p2.id = "p2"
+        p2.name = "Player2"       
         p2.hand = PlayerHand()
         p2.is_active = True
         
         # Add basic cards (simplified)
         p1.hand.add_card(Card(Rank.ACE, Suit.SPADES))
-        p2.hand.add_card(Card(Rank.KING, Suit.SPADES))  # Face card for p2
+        p1.hand.add_card(Card(Rank.TWO, Suit.CLUBS))
+        p1.hand.add_card(Card(Rank.THREE, Suit.DIAMONDS))
+        p1.hand.add_card(Card(Rank.FOUR, Suit.HEARTS))
+        p1.hand.add_card(Card(Rank.FIVE, Suit.SPADES))
+        p2.hand.add_card(Card(Rank.THREE, Suit.CLUBS))
+        p2.hand.add_card(Card(Rank.FOUR, Suit.DIAMONDS))
+        p2.hand.add_card(Card(Rank.FIVE, Suit.HEARTS))
+        p2.hand.add_card(Card(Rank.SIX, Suit.CLUBS))
+        p2.hand.add_card(Card(Rank.JACK, Suit.SPADES))
         
         # Add players to table
         table.players = {"p1": p1, "p2": p2}
@@ -568,12 +600,44 @@ class TestShowdownManager:
         betting.get_side_pot_count.return_value = 0
         betting.get_total_pot.return_value = 101
         
-        # Create proper HandResult objects
+        # Create proper hand results with the CORRECT NUMBER OF CARDS
+        # 5 cards for Razz
+        p1_razz_cards = [
+            Card(Rank.ACE, Suit.SPADES),
+            Card(Rank.TWO, Suit.CLUBS),
+            Card(Rank.THREE, Suit.DIAMONDS),
+            Card(Rank.FOUR, Suit.HEARTS),
+            Card(Rank.FIVE, Suit.SPADES)
+        ]
+        
+        p2_razz_cards = [
+            Card(Rank.THREE, Suit.CLUBS),
+            Card(Rank.FOUR, Suit.DIAMONDS),
+            Card(Rank.FIVE, Suit.HEARTS),
+            Card(Rank.SIX, Suit.CLUBS),
+            Card(Rank.JACK, Suit.SPADES)  # Face card for classification
+        ]
+        
+        # 4 cards for Badugi
+        p1_badugi_cards = [
+            Card(Rank.ACE, Suit.SPADES),
+            Card(Rank.TWO, Suit.CLUBS),
+            Card(Rank.THREE, Suit.DIAMONDS),
+            Card(Rank.FOUR, Suit.HEARTS)
+        ]
+        
+        p2_badugi_cards = [
+            Card(Rank.THREE, Suit.CLUBS),
+            Card(Rank.FOUR, Suit.DIAMONDS),
+            Card(Rank.FIVE, Suit.HEARTS),
+            Card(Rank.SIX, Suit.CLUBS)
+        ]
+    
         p1_razz = HandResult(
             player_id="p1",
-            cards=[Card(Rank.ACE, Suit.SPADES)],
-            hand_name="Low",
-            hand_description="Ace Low",
+            cards=p1_razz_cards,
+            hand_name="A-5 Low",
+            hand_description="A-5 Low",
             evaluation_type="a5_low",
             rank=1,
             ordered_rank=1,
@@ -582,9 +646,9 @@ class TestShowdownManager:
         
         p2_razz = HandResult(
             player_id="p2",
-            cards=[Card(Rank.KING, Suit.SPADES)],
-            hand_name="High",
-            hand_description="King High",
+            cards=p2_razz_cards,
+            hand_name="3-J Low",
+            hand_description="3-J Low",
             evaluation_type="a5_low",
             rank=2,
             ordered_rank=2,
@@ -593,9 +657,9 @@ class TestShowdownManager:
         
         p1_badugi = HandResult(
             player_id="p1",
-            cards=[Card(Rank.ACE, Suit.SPADES)],
-            hand_name="One Card",
-            hand_description="One Card Badugi",
+            cards=p1_badugi_cards,
+            hand_name="A-4 Badugi",
+            hand_description="A-4 Badugi",
             evaluation_type="badugi",
             rank=1,
             ordered_rank=1
@@ -603,9 +667,9 @@ class TestShowdownManager:
         
         p2_badugi = HandResult(
             player_id="p2",
-            cards=[Card(Rank.KING, Suit.SPADES)],
-            hand_name="One Card",
-            hand_description="One Card Badugi",
+            cards=p2_badugi_cards,
+            hand_name="3-6 Badugi",
+            hand_description="3-6 Badugi",
             evaluation_type="badugi",
             rank=2,
             ordered_rank=2
@@ -638,6 +702,10 @@ class TestShowdownManager:
         # Check that odd chip was awarded correctly
         razz_pot = next(pot for pot in result.pots if pot.hand_type == "Razz")
         badugi_pot = next(pot for pot in result.pots if pot.hand_type == "Badugi")
+
+        # Check that we found both pots
+        assert razz_pot is not None, f"Razz pot not found. Available pots: {result.pots}"
+        assert badugi_pot is not None, f"Badugi pot not found. Available pots: {result.pots}"
         
         # Total should add up to original pot
         total_awarded = razz_pot.amount + badugi_pot.amount

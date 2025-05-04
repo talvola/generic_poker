@@ -616,6 +616,8 @@ class PlayerActionHandler:
         min_discard = card_config.get("min_number", 0 if is_draw else max_discard)
         subset = card_config.get("hole_subset", "default")  # Get the subset for drawing
 
+        logger.debug(f"Handling discard action for player {player.name} with cards: {cards}, card_config: {card_config}")
+
         if card_config.get("rule", "none") != "matching ranks":
             if len(cards) < min_discard or len(cards) > max_discard or any(card not in player.hand.cards for card in cards):
                 return False
@@ -636,7 +638,14 @@ class PlayerActionHandler:
             discard_subset = card_config.get("discardSubset", "default")
             discard_cards = self.game.table.community_cards.get(discard_subset, []) if card_config.get("discardLocation") == "community" else []
             discard_ranks = {card.rank for card in discard_cards}
+
+            logger.debug(f"Player {player.name} has cards: {player.hand.get_cards()}")
+            logger.debug(f"Discarding matching ranks: {discard_ranks}")
+
             cards_to_discard = [card for card in player.hand.get_cards() if card.rank in discard_ranks]
+
+            logger.debug(f"cards to discard: {cards_to_discard}")
+
             if not cards_to_discard:
                 return True
             for card in cards_to_discard:

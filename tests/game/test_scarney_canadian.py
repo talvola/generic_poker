@@ -328,8 +328,8 @@ def test_scarney_minimal_flow():
     # Check winning hand
     winning_player = main_pot.winners[0]
     winning_hand = results.hands[winning_player]
-    assert winning_hand[0].hand_name == 'No Cards' 
-    assert winning_hand[0].hand_description == 'No Cards'      
+    assert winning_hand[1].hand_name == 'No Cards' 
+    assert winning_hand[1].hand_description == 'No Cards'      
 
     # Check winning hands list
     assert len(results.winning_hands) == 2  # TODO: Adjust if multiple winners
