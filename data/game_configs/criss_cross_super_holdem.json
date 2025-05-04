@@ -1,0 +1,167 @@
+{
+    "game": "Criss-Cross Super Hold'em",
+    "references": [
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
+    ],            
+    "players": {
+        "min": 2,
+        "max": 9
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Pre-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Top", "Vertical1"]
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Top", "Vertical2"]
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Top", "Vertical3"]
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Bottom", "Vertical1"]
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Bottom", "Vertical2"]
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Bottom", "Vertical3"]
+                    }
+                ]
+            },
+            "name": "Deal Flops"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Post-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Top", "Vertical4"]
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Bottom", "Vertical4"]
+                    }
+                ]
+            },
+            "name": "Deal Turns"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Turn Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Top", "Vertical5"]
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Bottom", "Vertical5"]
+                    }
+                ]
+            },
+            "name": "Deal Rivers"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "River Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "best 5-card hand from combinations",
+        "bestHand": [
+            {
+                "name": "Winning Hand",
+                "evaluationType": "high",
+                "combinations": [
+                    {"holeCards": 0, "communityCards": 5, "community_subset": "Top"},
+                    {"holeCards": 1, "communityCards": 4, "community_subset": "Top"},
+                    {"holeCards": 2, "communityCards": 3, "community_subset": "Top"},
+                    {"holeCards": 0, "communityCards": 5, "community_subset": "Bottom"},
+                    {"holeCards": 1, "communityCards": 4, "community_subset": "Bottom"},
+                    {"holeCards": 2, "communityCards": 3, "community_subset": "Bottom"},
+                    {"holeCards": 3, "communityCards": 2, "community_subset": "Vertical1"},
+                    {"holeCards": 3, "communityCards": 2, "community_subset": "Vertical2"},
+                    {"holeCards": 3, "communityCards": 2, "community_subset": "Vertical3"},
+                    {"holeCards": 3, "communityCards": 2, "community_subset": "Vertical4"},
+                    {"holeCards": 3, "communityCards": 2, "community_subset": "Vertical5"}
+                ]
+            }
+        ]
+    }
+}

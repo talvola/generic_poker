@@ -1,0 +1,111 @@
+{
+    "game": "Hi-dugi",
+    "players": {
+        "min": 2,
+        "max": 6
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 4,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "First Bet"
+        },
+        {
+            "draw": {
+                "cards": [
+                    {
+                        "number": 4,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "First Draw"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Second Bet"
+        },
+        {
+            "draw": {
+                "cards": [
+                    {
+                        "number": 4,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Second Draw"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Third Bet"
+        },
+        {
+            "draw": {
+                "cards": [
+                    {
+                        "number": 4,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Third Draw"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Final Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "all cards",
+        "bestHand": [
+            {
+                "name": "Hi-Dugi",
+                "evaluationType": "hidugi",
+                "anyCards": 4
+            }
+        ]
+    }
+}

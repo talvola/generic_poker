@@ -279,21 +279,33 @@ class Table:
                     if subset and subset != "default":  # Only assign to subset if specified and not "default"
                         player.hand.add_to_subset(card, subset)     
                     
-    def deal_community_cards(self, num_cards: int, subset: str = "default", face_up: bool = True) -> None:
+    def deal_community_cards(self, num_cards: int, subsets=None, subset="default", face_up: bool = True) -> None:
         """
-        Deal community cards to a specific subset.
+        Deal community cards to specific subsets.
 
         Args:
             num_cards: Number of community cards to deal
-            subset: Name of the subset to deal to (default: "default")
+            subsets: List of subset names to assign cards to (new parameter)
+            subset: Name of subset to assign cards to (backward compatibility)
             face_up: Whether to deal the cards face up (default: True)
         """
-        if subset not in self.community_cards:
-            self.community_cards[subset] = []
+        # Handle both new and old parameter formats
+        if subsets is None:
+            subsets = [subset]
+        
+        # Deal cards
         cards = self.deck.deal_cards(num_cards, face_up=face_up)
-        if cards:
-            logger.info(f"  Dealt {len(cards)} community {'card' if len(cards) == 1 else 'cards'} to subset '{subset}': {cards}")
-        self.community_cards[subset].extend(cards)
+        if not cards:
+            return
+            
+        # Add each card to each subset
+        for card in cards:
+            for subset_name in subsets:
+                if subset_name not in self.community_cards:
+                    self.community_cards[subset_name] = []
+                self.community_cards[subset_name].append(card)
+                
+        logger.info(f"  Dealt {len(cards)} community {'card' if len(cards) == 1 else 'cards'} to subsets {subsets}: {cards}")
         
     def expose_community_cards(self, subset: str = "default", indices: Optional[List[int]] = None) -> None:
         """

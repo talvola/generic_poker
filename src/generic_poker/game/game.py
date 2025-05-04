@@ -412,7 +412,7 @@ class Game:
         for card_config in config["cards"]:
             num_cards = card_config["number"]
             state = card_config["state"]
-            subset = card_config.get("subset", "default")  # Default to "default" if not specified
+            subsets = card_config.get("subset", "default")  # Now can be string or list
             hole_subset = card_config.get("hole_subset", "default")  # Default to "default" if not specified
             face_up = state == "face up"
             
@@ -420,8 +420,12 @@ class Game:
                 logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to each player ({state})")
                 self.table.deal_hole_cards(num_cards, subset=hole_subset, face_up=face_up)
             else:  # community
-                logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to community subset '{subset}' ({state})")
-                self.table.deal_community_cards(num_cards, subset=subset, face_up=face_up)               
+                # Convert single string subset to list for consistency
+                if isinstance(subsets, str):
+                    subsets = [subsets]
+
+                logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to community subsets {subsets} ({state})")
+                self.table.deal_community_cards(num_cards, subsets=subsets, face_up=face_up)        
                 
     def _handle_remove(self, config: Dict[str, Any]) -> None:
         """Handle a remove action by removing board subsets based on river card ranks."""
