@@ -196,6 +196,33 @@
           },
           "description": "List of allowed combinations of community card subsets. Each inner array represents a valid combination of subsets whose cards are combined for hand evaluation."
         },
+        "communityCardSelectCombinations": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": [
+                {
+                  "type": "string",
+                  "description": "Name of a community card subset"
+                },
+                {
+                  "type": "integer",
+                  "description": "Minimum number of cards to select from this subset"
+                },
+                {
+                  "type": "integer",
+                  "description": "Maximum number of cards to select from this subset (optional)"
+                }
+              ],
+              "minItems": 2,
+              "description": "Specification for selecting cards from a subset: [subset_name, min_count, max_count]"
+            },
+            "description": "A group of subset selections that together form a valid combination"
+          },
+          "description": "List of combinations where each combination specifies how many cards to select from each subset"
+        },        
         "classification": {
           "type": "object",
           "properties": {
