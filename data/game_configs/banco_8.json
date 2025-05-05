@@ -1,0 +1,197 @@
+{
+    "game": "Banco 8",
+    "references": [
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"        
+    ],
+    "players": {
+        "min": 2,
+        "max": 9
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "Pot Limit",
+        "No Limit"
+    ],
+    "forcedBets": {
+        "style": "blinds"
+    },
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 4,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Pre-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Flop 1.1"
+                    },
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Flop 2.2"
+                    },
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Flop 3.3"
+                    }
+                ]
+            },
+            "name": "Deal Flop"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Post-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Turn 1.2"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Turn 2.3"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Turn 3.1"
+                    }
+                ]
+            },
+            "name": "Deal Turn"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Turn Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "River 1.3"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "River 2.1"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "River 3.2"
+                    }
+                ]
+            },
+            "name": "Deal River"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "River Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "two hole cards, three community cards",
+        "bestHand": [
+            {
+                "name": "High Hand",
+                "evaluationType": "high",
+                "holeCards": 2,
+                "communityCards": 3,
+                "communityCardCombinations": [
+                    ["Flop 1.1", "Turn 1.2", "River 1.3"],
+                    ["River 2.1", "Flop 2.2", "Turn 2.3"],
+                    ["Turn 3.1", "River 3.2", "Flop 3.3"],
+                    
+                    ["Flop 1.1", "River 2.1", "Turn 3.1"],
+                    ["Turn 1.2", "Flop 2.2", "River 3.2"],
+                    ["River 1.3", "Turn 2.3", "Flop 3.3"],
+                    
+                    ["River 1.3", "Flop 2.2", "Turn 3.1"]
+                ],
+                "communityCardSelectCombinations": [
+                    [
+                        ["Flop 1.1", 1, 1],
+                        ["Flop 2.2", 1, 1],
+                        ["Flop 3.3", 1, 1]
+                    ]
+                ]
+            },
+            {
+                "name": "Low Hand",
+                "evaluationType": "a5_low",
+                "holeCards": 2,
+                "communityCards": 3,
+                "qualifier": [1, 56],
+                "communityCardCombinations": [
+                    ["Flop 1.1", "Turn 1.2", "River 1.3"],
+                    ["River 2.1", "Flop 2.2", "Turn 2.3"],
+                    ["Turn 3.1", "River 3.2", "Flop 3.3"],
+                    
+                    ["Flop 1.1", "River 2.1", "Turn 3.1"],
+                    ["Turn 1.2", "Flop 2.2", "River 3.2"],
+                    ["River 1.3", "Turn 2.3", "Flop 3.3"],
+                    
+                    ["River 1.3", "Flop 2.2", "Turn 3.1"]
+                ],
+                "communityCardSelectCombinations": [
+                    [
+                        ["Flop 1.1", 1, 1],
+                        ["Flop 2.2", 1, 1],
+                        ["Flop 3.3", 1, 1]
+                    ]
+                ]
+            }
+        ]
+    }
+}

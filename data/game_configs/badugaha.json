@@ -1,41 +1,32 @@
 {
-    "game": "Action Razzdugi",
-    "references": [
-        "https://www.barge.org/rulebook/action-razzdugi.html"
-    ],        
+    "game": "Badugaha",
     "players": {
         "min": 2,
-        "max": 7
+        "max": 8
     },
     "deck": {
         "type": "standard",
         "cards": 52
     },
     "bettingStructures": [
-        "Limit"
+        "Limit",
+        "No Limit",
+        "Pot Limit"
     ],
-    "forcedBets": {
-        "style": "bring-in",
-        "rule": "high card"
-    },
     "gamePlay": [
         {
             "bet": {
-                "type": "antes"
+                "type": "blinds"
             },
-            "name": "Post Antes"
+            "name": "Post Blinds"
         },
         {
             "deal": {
                 "location": "player",
                 "cards": [
                     {
-                        "number": 2,
+                        "number": 4,
                         "state": "face down"
-                    },
-                    {
-                        "number": 1,
-                        "state": "face up"
                     }
                 ]
             },
@@ -43,19 +34,31 @@
         },
         {
             "bet": {
-                "type": "bring-in"
+                "type": "small"
             },
-            "name": "Post Bring-In"
+            "name": "Pre-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Flop"
         },
         {
             "bet": {
                 "type": "small"
             },
-            "name": "Initial Bet"
+            "name": "Post-Flop Bet"
         },
         {
             "deal": {
-                "location": "player",
+                "location": "community",
                 "cards": [
                     {
                         "number": 1,
@@ -63,35 +66,28 @@
                     }
                 ]
             },
-            "name": "Deal Third Street"
+            "name": "Deal Turn"
         },
         {
-            "bet": {
-                "type": "small"
-            },
-            "name": "Third Street Bet"
-        },
-        {
-            "deal": {
-                "location": "player",
+            "draw": {
                 "cards": [
                     {
-                        "number": 1,
-                        "state": "face up"
+                        "number": 2,
+                        "state": "face down"
                     }
                 ]
             },
-            "name": "Deal Fourth Street"
+            "name": "First Draw"
         },
         {
             "bet": {
                 "type": "big"
             },
-            "name": "Fourth Street Bet"
+            "name": "Turn Bet"
         },
         {
             "deal": {
-                "location": "player",
+                "location": "community",
                 "cards": [
                     {
                         "number": 1,
@@ -99,17 +95,10 @@
                     }
                 ]
             },
-            "name": "Deal Fifth Street"
+            "name": "Deal River"
         },
         {
-            "bet": {
-                "type": "big"
-            },
-            "name": "Fifth Street Bet"
-        },
-        {
-            "deal": {
-                "location": "player",
+            "draw": {
                 "cards": [
                     {
                         "number": 1,
@@ -117,13 +106,13 @@
                     }
                 ]
             },
-            "name": "Deal Sixth Street"
+            "name": "Second Draw"
         },
         {
             "bet": {
                 "type": "big"
             },
-            "name": "Sixth Street Bet"
+            "name": "River Bet"
         },
         {
             "showdown": {
@@ -136,22 +125,17 @@
         "order": "clockwise",
         "startingFrom": "dealer",
         "cardsRequired": "all cards",
-        "classification_priority": ["face", "butt"],
         "bestHand": [
             {
-                "name": "Razz",
-                "evaluationType": "a5_low",
-                "anyCards": 5,
-                "classification": {
-                    "type": "face_butt",
-                    "faceRanks": ["JACK", "QUEEN", "KING"],
-                    "fieldName": "face_butt"
-                }
+                "name": "Omaha",
+                "evaluationType": "high",
+                "holeCards": 2,
+                "communityCards": 3
             },
             {
                 "name": "Badugi",
                 "evaluationType": "badugi",
-                "anyCards": 4
+                "holeCards": 4
             }
         ]
     }

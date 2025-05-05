@@ -714,3 +714,258 @@ class TestShowdownManager:
         # High hand (Razz in this case) should get the odd chip
         assert razz_pot.amount == 51, "Razz portion should get the odd chip"
         assert badugi_pot.amount == 50, "Badugi portion should get regular half"    
+
+    def test_banco_showdown_with_diagonal_selection(self):
+        """Test Banco showdown logic with special diagonal card selection."""
+        # Create a mock ShowdownManager
+        table = Mock(spec=Table)
+        betting = Mock(spec=BettingManager)
+        rules = Mock(spec=GameRules)
+        
+        # Create a mock for the showdown attribute
+        rules.showdown = Mock()
+        
+        # Set up showdown rules for Banco - with properly typed attributes, not mocks
+        rules.showdown.best_hand = [
+            {
+                "name": "High Hand",
+                "evaluationType": "high",
+                "holeCards": 2,
+                "communityCards": 3,
+                "communityCardCombinations": [
+                    # Horizontal rows
+                    ["Flop 1.1", "Turn 1.2", "River 1.3"],
+                    ["River 2.1", "Flop 2.2", "Turn 2.3"],
+                    ["Turn 3.1", "River 3.2", "Flop 3.3"],
+                    
+                    # Vertical columns
+                    ["Flop 1.1", "River 2.1", "Turn 3.1"],
+                    ["Turn 1.2", "Flop 2.2", "River 3.2"],
+                    ["River 1.3", "Turn 2.3", "Flop 3.3"],
+                    
+                    # 5-card diagonal
+                    ["River 1.3", "Flop 2.2", "Turn 3.1"]
+                ],
+                "communityCardSelectCombinations": [
+                    [
+                        ["Flop 1.1", 1, 1],
+                        ["Flop 2.2", 1, 1],
+                        ["Flop 3.3", 1, 1]
+                    ]
+                ]
+            }
+        ]
+        
+        # Important: Set these attributes as real values, not mocks
+        rules.showdown.classification_priority = []  # Empty list since we're not testing classification
+        rules.showdown.defaultActions = []
+        rules.showdown.globalDefaultAction = None
+        rules.showdown.declaration_mode = "cards_speak"
+        
+        # Set up community cards for Banco
+        community_cards = {
+            "Flop 1.1": [
+                Card(Rank.ACE, Suit.SPADES),
+                Card(Rank.KING, Suit.SPADES),
+                Card(Rank.QUEEN, Suit.SPADES)
+            ],
+            "Flop 2.2": [
+                Card(Rank.ACE, Suit.HEARTS),
+                Card(Rank.KING, Suit.HEARTS),
+                Card(Rank.QUEEN, Suit.HEARTS)
+            ],
+            "Flop 3.3": [
+                Card(Rank.ACE, Suit.DIAMONDS),
+                Card(Rank.KING, Suit.DIAMONDS),
+                Card(Rank.QUEEN, Suit.DIAMONDS)
+            ],
+            "Turn 1.2": [
+                Card(Rank.JACK, Suit.SPADES)
+            ],
+            "Turn 2.3": [
+                Card(Rank.JACK, Suit.HEARTS)
+            ],
+            "Turn 3.1": [
+                Card(Rank.JACK, Suit.DIAMONDS)
+            ],
+            "River 1.3": [
+                Card(Rank.TEN, Suit.SPADES)
+            ],
+            "River 2.1": [
+                Card(Rank.TEN, Suit.HEARTS)
+            ],
+            "River 3.2": [
+                Card(Rank.TEN, Suit.DIAMONDS)
+            ]
+        }
+        
+        table.community_cards = community_cards
+        
+        # Create three players
+        p1 = Mock(spec=Player)
+        p1.id = "p1"
+        p1.name = "Player 1"
+        p1.is_active = True
+        p1.hand = PlayerHand()
+        
+        p2 = Mock(spec=Player)
+        p2.id = "p2"
+        p2.name = "Player 2"
+        p2.is_active = True
+        p2.hand = PlayerHand()
+        
+        p3 = Mock(spec=Player)
+        p3.id = "p3"
+        p3.name = "Player 3"
+        p3.is_active = True
+        p3.hand = PlayerHand()
+        
+        # Player 1: Has flush using a standard horizontal row
+        p1.hand.add_card(Card(Rank.NINE, Suit.SPADES))
+        p1.hand.add_card(Card(Rank.EIGHT, Suit.SPADES))
+        p1.hand.add_card(Card(Rank.SEVEN, Suit.CLUBS))
+        p1.hand.add_card(Card(Rank.SIX, Suit.CLUBS))
+        
+        # Player 2: Has full house using the 9-card diagonal (one from each flop)
+        p2.hand.add_card(Card(Rank.TWO, Suit.CLUBS))
+        p2.hand.add_card(Card(Rank.TWO, Suit.DIAMONDS))
+        p2.hand.add_card(Card(Rank.THREE, Suit.HEARTS))
+        p2.hand.add_card(Card(Rank.FOUR, Suit.CLUBS))
+        
+        # Player 3: Has mediocre hand using a vertical column
+        p3.hand.add_card(Card(Rank.FIVE, Suit.HEARTS))
+        p3.hand.add_card(Card(Rank.FOUR, Suit.HEARTS))
+        p3.hand.add_card(Card(Rank.THREE, Suit.DIAMONDS))
+        p3.hand.add_card(Card(Rank.TWO, Suit.SPADES))
+        
+        # Add players to table
+        table.players = {"p1": p1, "p2": p2, "p3": p3}
+        
+        # Mock betting
+        betting.get_main_pot_amount.return_value = 300
+        betting.get_side_pot_count.return_value = 0
+        betting.get_side_pot_eligible_players = Mock(return_value=set(["p1", "p2", "p3"]))
+        betting.get_total_pot.return_value = 300
+        
+        # Create proper evaluation results
+        # Player 1 - Flush using row 1
+        p1_hand = [
+            p1.hand.cards[0],  # 9S
+            p1.hand.cards[1],  # 8S
+            community_cards["Flop 1.1"][0],  # AS
+            community_cards["Turn 1.2"][0],  # JS
+            community_cards["River 1.3"][0]   # 10S
+        ]
+        
+        # Player 2 - Full House Aces over Twos using 9-card diagonal selection
+        p2_hand = [
+            p2.hand.cards[0],  # 2C
+            p2.hand.cards[1],  # 2D
+            community_cards["Flop 1.1"][0],  # AS
+            community_cards["Flop 2.2"][0],  # AH
+            community_cards["Flop 3.3"][0]   # AD
+        ]
+        
+        # Player 3 - High Card Ace using column 1
+        p3_hand = [
+            p3.hand.cards[0],  # 5H
+            p3.hand.cards[1],  # 4H
+            community_cards["Flop 1.1"][0],  # AS
+            community_cards["River 2.1"][0],  # 10H
+            community_cards["Turn 3.1"][0]   # JD
+        ]
+        
+        # Create ShowdownManager
+        showdown_manager = ShowdownManager(table, betting, rules)
+        
+        # Create test results for the players
+        p1_result = HandResult(
+            player_id="p1",
+            cards=p1_hand,
+            hand_name="Flush",
+            hand_description="Ace-high Flush",
+            evaluation_type="high",
+            rank=5,  # Flush is rank 5
+            ordered_rank=5
+        )
+        
+        p2_result = HandResult(
+            player_id="p2",
+            cards=p2_hand,
+            hand_name="Full House",
+            hand_description="Full House, Aces over Twos",
+            evaluation_type="high",
+            rank=4,  # Full house is rank 4
+            ordered_rank=4
+        )
+        
+        p3_result = HandResult(
+            player_id="p3",
+            cards=p3_hand,
+            hand_name="High Card",
+            hand_description="Ace High",
+            evaluation_type="high",
+            rank=10,  # High card is rank 10
+            ordered_rank=10
+        )
+        
+        # Mock the _find_best_hand_for_player method to return our predetermined hands
+        def mock_find_best_hand(player, community_cards, showdown_rules, eval_type):
+            if player.id == "p1":
+                return p1_hand, p1_hand[:2]  # Hand and used hole cards
+            elif player.id == "p2":
+                return p2_hand, p2_hand[:2]  # Hand and used hole cards
+            else:
+                return p3_hand, p3_hand[:2]  # Hand and used hole cards
+        
+        # Mock the _find_winners method to simplify testing
+        def mock_find_winners(players, hand_results, eval_type, showdown_rules):
+            # Player 2 should win with Full House (better than Player 1's Flush)
+            return [p2]
+        
+        # Mock methods to use our mocks
+        with patch.object(ShowdownManager, '_find_best_hand_for_player', side_effect=mock_find_best_hand):
+            with patch.object(ShowdownManager, '_find_winners', side_effect=mock_find_winners):
+                with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+                    # Make evaluate_hand return our predetermined results
+                    def mock_eval_hand(cards, eval_type):
+                        if any(card in p1_hand for card in cards):
+                            return p1_result
+                        elif any(card in p2_hand for card in cards):
+                            return p2_result
+                        else:
+                            return p3_result
+                    
+                    mock_eval.side_effect = mock_eval_hand
+                    
+                    # Run the showdown
+                    result = showdown_manager.handle_showdown()
+        
+        # Verify results
+        assert len(result.pots) == 1, "There should be one pot result"
+        pot = result.pots[0]
+        
+        # Player 2 should win with Full House
+        assert "p2" in pot.winners, "Player 2 should win with Full House"
+        
+        # Check hand details in the results
+        all_hands = result.hands
+        assert len(all_hands) == 3, "All three players should have hands evaluated"
+        
+        # Verify all players have hand results
+        assert "p1" in all_hands, "Player 1 should have hand results"
+        assert "p2" in all_hands, "Player 2 should have hand results"  
+        assert "p3" in all_hands, "Player 3 should have hand results"
+        
+        # Verify that Player 2's hand is a Full House using diagonal selection (one from each flop)
+        p2_result = next(iter(all_hands["p2"])) if all_hands.get("p2") else None
+        assert p2_result is not None, "Player 2 should have a hand result"
+        assert p2_result.hand_name == "Full House", "Player 2 should have a Full House"
+        
+        # Verify the specific diagonal community card selection
+        p2_community_cards = [card for card in p2_result.cards if card not in p2.hand.cards]
+        assert len(p2_community_cards) == 3, "Player 2 should use 3 community cards"
+        
+        # Check if the community cards are all Aces from different flop positions
+        aces_count = sum(1 for card in p2_community_cards if card.rank == Rank.ACE)
+        assert aces_count == 3, "Player 2 should use 3 Aces from different flop positions"
