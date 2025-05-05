@@ -1,0 +1,206 @@
+{
+    "game": "Bidirectional Chowaha",
+    "references": [
+      "https://www.barge.org/rulebook/bidirectional-chowaha.html"
+    ],
+    "players": {
+      "min": 2,
+      "max": 9
+    },
+    "deck": {
+      "type": "standard",
+      "cards": 52
+    },
+    "bettingStructures": [
+      "Limit",
+      "No Limit",
+      "Pot Limit"
+    ],
+    "gamePlay": [
+      {
+        "bet": {
+          "type": "blinds"
+        },
+        "name": "Post Blinds"
+      },
+      {
+        "deal": {
+          "location": "player",
+          "cards": [
+            {
+              "number": 4,
+              "state": "face down"
+            }
+          ]
+        },
+        "name": "Deal Hole Cards"
+      },
+      {
+        "bet": {
+          "type": "small"
+        },
+        "name": "Pre-Flop Bet"
+      },
+      {
+        "deal": {
+          "location": "community",
+          "cards": [
+            {
+              "number": 1,
+              "state": "face up",
+              "subset": ["Row1", "Col1"]
+            },
+            {
+              "number": 1,
+              "state": "face up",
+              "subset": ["Row1", "Col2"]
+            },
+            {
+              "number": 1,
+              "state": "face up",
+              "subset": ["Row1", "Col3"]
+            },
+            {
+              "number": 1,
+              "state": "face up",
+              "subset": ["Row2", "Col1"]
+            },
+            {
+              "number": 1,
+              "state": "face up",
+              "subset": ["Row2", "Col2"]
+            },
+            {
+              "number": 1,
+              "state": "face up",
+              "subset": ["Row2", "Col3"]
+            },
+            {
+              "number": 1,
+              "state": "face up",
+              "subset": ["Row3", "Col1"]
+            },
+            {
+              "number": 1,
+              "state": "face up",
+              "subset": ["Row3", "Col2"]
+            },
+            {
+              "number": 1,
+              "state": "face up",
+              "subset": ["Row3", "Col3"]
+            }
+          ]
+        },
+        "name": "Deal Flops"
+      },
+      {
+        "bet": {
+          "type": "small"
+        },
+        "name": "Post-Flop Bet"
+      },
+      {
+        "roll_die": {
+          "subset": "Die"
+        },
+        "name": "Roll Die for Board Direction"
+      },
+      {
+        "deal": {
+          "location": "community",
+          "cards": [
+            {
+              "number": 1,
+              "state": "face up",
+              "subset": "Turn1"
+            },
+            {
+              "number": 1,
+              "state": "face up",
+              "subset": "Turn2"
+            }
+          ]
+        },
+        "name": "Deal Turn Cards"
+      },
+      {
+        "bet": {
+          "type": "big"
+        },
+        "name": "Turn Bet"
+      },
+      {
+        "deal": {
+          "location": "community",
+          "cards": [
+            {
+              "number": 1,
+              "state": "face up",
+              "subset": "River"
+            }
+          ]
+        },
+        "name": "Deal River Card"
+      },
+      {
+        "bet": {
+          "type": "big"
+        },
+        "name": "River Bet"
+      },
+      {
+        "showdown": {
+          "type": "final"
+        },
+        "name": "Showdown"
+      }
+    ],
+    "showdown": {
+      "order": "clockwise",
+      "startingFrom": "dealer",
+      "cardsRequired": "two hole cards, three community cards",
+      "conditionalBestHands": [
+        {
+          "condition": {
+            "type": "community_card_value",
+            "subset": "Die",
+            "values": [1, 2, 3]
+          },
+          "bestHand": [
+            {
+              "name": "High Hand",
+              "evaluationType": "high",
+              "holeCards": 2,
+              "communityCardCombinations": [
+                ["Row1", "Turn1", "River"],
+                ["Row2", "Turn1", "River"],
+                ["Row2", "Turn2", "River"],
+                ["Row3", "Turn2", "River"]
+              ]
+            }
+          ]
+        },
+        {
+          "condition": {
+            "type": "community_card_value",
+            "subset": "Die",
+            "values": [4, 5, 6]
+          },
+          "bestHand": [
+            {
+              "name": "High Hand",
+              "evaluationType": "high",
+              "holeCards": 2,
+              "communityCardCombinations": [
+                ["Col1", "Turn1", "River"],
+                ["Col2", "Turn1", "River"],
+                ["Col2", "Turn2", "River"],
+                ["Col3", "Turn2", "River"]
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }

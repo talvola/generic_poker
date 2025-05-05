@@ -11,6 +11,7 @@ class DeckType(str, Enum):
     STANDARD = "standard"    # Full 52-card deck
     SHORT_TA = "short_ta"    # T-A only (20 cards)
     SHORT_6A = "short_6a"    # 6-A (36 cards)
+    DIE = "die"              # 6-sided die (1-6)
 
 class Deck(CardContainer):
     """
@@ -34,12 +35,29 @@ class Deck(CardContainer):
     def _initialize_deck(self, include_jokers: int, deck_type: DeckType) -> None:
         """Create a fresh deck of cards based on the deck type."""
 
+        if deck_type == DeckType.DIE:
+            # Create a 6-card "deck" representing a die
+            for i in range(1, 7):
+                # Use number ranks 1-6 for the die faces
+                # We need to ensure Rank can handle numeric strings as values
+                rank_value = str(i)
+                if rank_value not in [r.value for r in Rank]:
+                    # If we don't have numeric ranks, use existing ones like 'A','2','3'...
+                    # and map them to die values 1-6
+                    rank_mapping = ['A', '2', '3', '4', '5', '6']
+                    rank = Rank(rank_mapping[i-1])
+                else:
+                    rank = Rank(rank_value)
+                # Use a neutral suit like CLUBS
+                self.cards.append(Card(rank=rank, suit=Suit.CLUBS))
+            return
+    
         if deck_type == DeckType.SHORT_TA:
             ranks = [Rank.TEN, Rank.JACK, Rank.QUEEN, Rank.KING, Rank.ACE]
         elif deck_type == DeckType.SHORT_6A:
-            ranks = [r for r in Rank if r not in {Rank.TWO, Rank.THREE, Rank.FOUR, Rank.FIVE, Rank.JOKER}]
+            ranks = [r for r in Rank if r not in {Rank.TWO, Rank.THREE, Rank.FOUR, Rank.FIVE, Rank.JOKER, Rank.ONE}]
         else:  # STANDARD
-            ranks = [r for r in Rank if r != Rank.JOKER]
+            ranks = [r for r in Rank if r not in {Rank.JOKER, Rank.ONE}]
 
         # Add standard cards
         for suit in [s for s in Suit if s != Suit.JOKER]:

@@ -404,6 +404,17 @@
       "required": ["location", "cards"],
       "additionalProperties": false
     },
+    "roll_die": {
+      "type": "object",
+      "properties": {
+        "subset": {
+          "type": "string",
+          "description": "The community card subset where the die result will be stored"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Configuration for rolling a die and storing the result as a card"
+    },    
     "discard": {
       "type": "object",
       "properties": {
@@ -787,7 +798,8 @@
                 "pass": { "$ref": "#/definitions/pass" },
                 "declare": { "$ref": "#/definitions/declare" },
                 "separate": { "$ref": "#/definitions/separate" },
-                "showdown": { "$ref": "#/definitions/showdown" }
+                "showdown": { "$ref": "#/definitions/showdown" },
+                "roll_die": { "$ref": "#/definitions/roll_die" } 
               },
               "additionalProperties": false
             }
@@ -801,7 +813,8 @@
           "pass": { "$ref": "#/definitions/pass" },
           "declare": { "$ref": "#/definitions/declare" },
           "separate": { "$ref": "#/definitions/separate" },
-          "showdown": { "$ref": "#/definitions/showdown" }
+          "showdown": { "$ref": "#/definitions/showdown" },
+          "roll_die": { "$ref": "#/definitions/roll_die" } 
         },
         "oneOf": [
           { "required": ["name", "groupedActions"] },
@@ -831,6 +844,62 @@
             "$ref": "#/definitions/bestHandItem"
           }
         },
+        "conditionalBestHands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "condition": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["community_card_value", "community_card_suit", "board_composition"],
+                    "description": "Type of condition to check"
+                  },
+                  "subset": {
+                    "type": "string",
+                    "description": "Community card subset to check (e.g., 'Die', 'Board')"
+                  },
+                  "values": {
+                    "type": "array",
+                    "items": {
+                      "type": ["integer", "string"]
+                    },
+                    "description": "Card values that must match for the condition to be true"
+                  },
+                  "suits": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": ["c", "d", "h", "s", "j"]
+                    },
+                    "description": "Card suits that must match for the condition to be true"
+                  }
+                },
+                "required": ["type"],
+                "additionalProperties": false
+              },
+              "bestHand": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/bestHandItem"
+                },
+                "description": "Best hand configuration to use when condition is true"
+              }
+            },
+            "required": ["condition", "bestHand"],
+            "additionalProperties": false
+          },
+          "description": "Conditional best hand configurations based on game state"
+        },
+        "defaultBestHand": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/bestHandItem"
+          },
+          "description": "Default best hand configuration when no condition matches"
+        },        
         "classification_priority": {
           "type": "array",
           "items": { "type": "string", "enum": ["face", "butt"] },
@@ -885,7 +954,11 @@
           "description": "List of per-configuration default actions applied when specific qualifiers are not met"
         }      
       },
-      "required": ["order", "startingFrom", "cardsRequired", "bestHand"],
+      "required": ["order", "startingFrom", "cardsRequired"],
+      "anyOf": [
+        { "required": ["bestHand"] },
+        { "required": ["conditionalBestHands"] }
+      ],     
       "additionalProperties": false
     }
   },

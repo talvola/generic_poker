@@ -393,6 +393,9 @@ class TestShowdownManager:
                 "anyCards": 4
             }
         ]
+        rules.showdown.conditionalBestHands = []  # Empty list (no conditional rules)
+        rules.showdown.defaultBestHand = []       # Empty list (no default rules)
+
         rules.showdown.classification_priority = ["face", "butt"]
         
         # Properly set up the table mock with community_cards attribute
@@ -555,6 +558,9 @@ class TestShowdownManager:
                 "anyCards": 4
             }
         ]
+        rules.showdown.conditionalBestHands = []  # Empty list (no conditional rules)
+        rules.showdown.defaultBestHand = []       # Empty list (no default rules)
+        
         rules.showdown.classification_priority = ["face", "butt"]
         
         rules.showdown.best_hand[0]["name"] = "Razz"  # Ensure the name matches exactly
@@ -759,6 +765,8 @@ class TestShowdownManager:
         # Important: Set these attributes as real values, not mocks
         rules.showdown.classification_priority = []  # Empty list since we're not testing classification
         rules.showdown.defaultActions = []
+        rules.showdown.conditionalBestHands = []  # Empty list means no conditional rules
+        rules.showdown.defaultBestHand = []       # Empty list (no default rules)        
         rules.showdown.globalDefaultAction = None
         rules.showdown.declaration_mode = "cards_speak"
         

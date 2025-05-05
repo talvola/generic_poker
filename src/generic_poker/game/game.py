@@ -215,7 +215,7 @@ class Game:
         """Wrapper for PlayerActionHandler."""
         return self.action_handler.get_valid_actions(player_id)
                 
-    def start_hand(self) -> None:
+    def start_hand(self, shuffle_deck: bool = False) -> None:
         """
         Start a new hand.
         
@@ -229,6 +229,7 @@ class Game:
             
         # Reset state
         self.table.clear_hands()
+        self.table.deck.shuffle() if shuffle_deck else None
         self.betting.new_hand()
 
         self.current_step = 0
@@ -356,6 +357,13 @@ class Game:
                 if self.auto_progress:  
                     self._next_step()
 
+            # In Game.process_current_step() method
+            elif step.action_type == GameActionType.ROLL_DIE:
+                self.state = GameState.DEALING
+                self._handle_roll_die(step.action_config)
+                if self.auto_progress:  
+                    self._next_step()                    
+
             elif step.action_type == GameActionType.REMOVE:
                 logger.debug(f"Handling deal action: {step.action_config}")
                 self.state = GameState.DEALING
@@ -425,7 +433,29 @@ class Game:
                     subsets = [subsets]
 
                 logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to community subsets {subsets} ({state})")
-                self.table.deal_community_cards(num_cards, subsets=subsets, face_up=face_up)        
+                self.table.deal_community_cards(num_cards, subsets=subsets, face_up=face_up)  
+
+    def _handle_roll_die(self, config: Dict[str, Any]) -> None:
+        """Handle a die roll action."""
+        # Create a special "die" deck
+        die_deck = Deck(include_jokers=0, deck_type="die")
+        die_deck.shuffle()
+        
+        # "Deal" a single die face
+        die_card = die_deck.deal_card(face_up=True)
+        if die_card:
+            # Store the result in a special community subset
+            die_subset = config.get("subset", "Die")
+            if die_subset not in self.table.community_cards:
+                self.table.community_cards[die_subset] = []
+            self.table.community_cards[die_subset].append(die_card)
+            
+            # Store the game mode based on the die value
+            die_value = int(die_card.rank.value)
+            # Store the mode generically - could be used by games other than Binglaha
+            self.die_determined_game_mode = "high_low" if die_value <= 3 else "high_only"
+            
+            logger.info(f"Rolled die: {die_value} - Game mode set to: {self.die_determined_game_mode}")              
                 
     def _handle_remove(self, config: Dict[str, Any]) -> None:
         """Handle a remove action by removing board subsets based on river card ranks."""

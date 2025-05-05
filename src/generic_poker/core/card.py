@@ -32,6 +32,7 @@ class Rank(Enum):
     KING = 'K'
     ACE = 'A'
     JOKER = 'R'  # For jokers
+    ONE = '1'  # For games with 1-6 die instead of using Ace
     
     def __str__(self) -> str:
         return self.value
@@ -66,7 +67,8 @@ RANK_NAMES: Dict[str, str] = {
     '4': 'Four',
     '3': 'Three',
     '2': 'Two',
-    'R': 'Joker'
+    'R': 'Joker',
+    '1': 'One'
 }
 
 class Visibility(Enum):

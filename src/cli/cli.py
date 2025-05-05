@@ -417,7 +417,7 @@ def run_game(game: Game) -> None:
     print(f"Starting {game.rules.game} Game")
 
     initial_stacks = {pid: p.stack for pid, p in game.table.players.items()}
-    game.start_hand()
+    game.start_hand(shuffle_deck=True)
 
     while True:
         
@@ -429,6 +429,9 @@ def run_game(game: Game) -> None:
             if step.action_type == GameActionType.DEAL:
                 input("\nPress Enter to proceed...")
                 game._next_step()
+            elif step.action_type == GameActionType.ROLL_DIE:
+                input("\nPress Enter to proceed...")
+                game._next_step()                
             elif step.action_type == GameActionType.REMOVE:
                 input("\nPress Enter to remove board cards...")
                 game._next_step()                
@@ -506,7 +509,7 @@ def run_game(game: Game) -> None:
         
         # Start new hand with the updated button position
         initial_stacks = {pid: p.stack for pid, p in game.table.players.items()}
-        game.start_hand()
+        game.start_hand(shuffle_deck=True)
     
     display_game_state(game)
     print("\nResults:")

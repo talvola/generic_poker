@@ -43,12 +43,32 @@ class ShowdownManager:
         
         # Get showdown rules
         showdown_rules = self.rules.showdown
-        
+
         # Check if using declarations mode
         if showdown_rules.declaration_mode == "declare":
-            return self._handle_showdown_with_declare()
+            return self._handle_showdown_with_declare()     
         
-        best_hand_configs = showdown_rules.best_hand
+        # Determine which best hand configuration to use
+        best_hand_configs = None
+
+        # Check for conditional best hands
+        conditionalBestHands = getattr(showdown_rules, 'conditionalBestHands', None)
+        if conditionalBestHands and isinstance(conditionalBestHands, list):
+            for condition_rule in conditionalBestHands:
+                if self._check_best_hand_condition(condition_rule['condition']):
+                    best_hand_configs = condition_rule['bestHand']
+                    logger.info(f"Using conditional best hand configuration based on matching condition")
+                    break
+        
+        # If no conditional rule matched, use default or standard best hands
+        if best_hand_configs is None:
+            if hasattr(showdown_rules, 'defaultBestHand') and showdown_rules.defaultBestHand:
+                best_hand_configs = showdown_rules.defaultBestHand
+                logger.info("No condition matched; using default best hand configuration")
+            else:
+                best_hand_configs = showdown_rules.best_hand
+                logger.info("Using standard best hand configuration")
+               
         default_actions = showdown_rules.defaultActions
         global_default_action = showdown_rules.globalDefaultAction
                 
@@ -342,6 +362,61 @@ class ShowdownManager:
             )
         
         return game_result
+
+    def _check_best_hand_condition(self, condition: Dict[str, Any]) -> bool:
+        """
+        Check if a condition for conditional best hands matches.
+        
+        Args:
+            condition: Condition specification from rules
+            
+        Returns:
+            True if condition matches, False otherwise
+        """
+        condition_type = condition.get('type')
+        
+        if condition_type == "community_card_value":
+            subset = condition.get('subset')
+            values = condition.get('values', [])
+            
+            # Check if the specified subset exists
+            if subset not in self.table.community_cards or not self.table.community_cards[subset]:
+                logger.debug(f"Condition check failed: subset '{subset}' not found or empty")
+                return False
+            
+            # Get the first card in the subset (for die rolls, it's a single card)
+            card = self.table.community_cards[subset][0]
+            
+            # Get the card value and check if it's in the specified values
+            try:
+                # Try to get numeric value first
+                card_value = int(card.rank.value)
+            except ValueError:
+                # If not numeric, use the rank value directly
+                card_value = card.rank.value
+                
+            logger.debug(f"Checking if card value {card_value} is in condition values {values}")
+            return card_value in values
+        
+        elif condition_type == "community_card_suit":
+            # Example of another condition type that could be added
+            subset = condition.get('subset')
+            suits = condition.get('suits', [])
+            
+            if subset not in self.table.community_cards or not self.table.community_cards[subset]:
+                return False
+                
+            card = self.table.community_cards[subset][0]
+            return card.suit.value in suits
+        
+        elif condition_type == "board_composition":
+            # Example for checking board composition (e.g., flush possible)
+            # Implementation would depend on what specific conditions we want to check
+            pass
+            
+        # Default: condition not recognized or not implemented
+        logger.warning(f"Unknown condition type: {condition_type}")
+        return False
 
     def handle_fold_win(self, active_players: List[Player]) -> GameResult:
         """Handle the case when all but one player folds."""
@@ -1208,6 +1283,80 @@ class ShowdownManager:
             logger.warning(f"No valid hand combinations found")
             return [], []
         
+    def _find_hand_with_select_combinations(
+        self,
+        hole_cards: List[Card],
+        community_cards: Dict[str, List[Card]],
+        showdown_rules: dict,
+        eval_type: EvaluationType
+    ) -> Tuple[List[Card], List[Card]]:
+        """Find best hand using communityCardSelectCombinations configuration."""
+        select_combinations = showdown_rules.get("communityCardSelectCombinations", [])
+        required_hole = showdown_rules.get("holeCards", 2)
+        best_hand = None
+        best_used_hole_cards = []
+        
+        # Process each select combination (a group of subset selections)
+        for combination in select_combinations:
+            # Build a list of card options for each subset in this combination
+            subset_options = []
+            
+            # For each subset specification in this combination
+            for subset_spec in combination:
+                # Parse the specification
+                if isinstance(subset_spec, list):
+                    subset_name = subset_spec[0]
+                    min_count = subset_spec[1]
+                    max_count = subset_spec[2] if len(subset_spec) > 2 else min_count
+                else:
+                    # For backward compatibility, support string-only specs
+                    subset_name = subset_spec
+                    min_count = 1
+                    max_count = 1
+                
+                # Get cards for this subset
+                subset_cards = community_cards.get(subset_name, [])
+                if not subset_cards:
+                    logger.warning(f"Subset '{subset_name}' not found or empty")
+                    continue
+                
+                # Generate all valid selections from this subset
+                subset_selections = []
+                for count in range(min_count, max_count + 1):
+                    if count == 0:
+                        subset_selections.append([])  # Empty selection is valid if min_count is 0
+                    else:
+                        subset_selections.extend(list(itertools.combinations(subset_cards, count)))
+                
+                # If no valid selections, this combination is invalid
+                if not subset_selections:
+                    break
+                    
+                subset_options.append(subset_selections)
+            
+            # If we have options for all subsets, generate all combinations
+            if len(subset_options) == len(combination):
+                # Generate all ways to combine one selection from each subset
+                for combo_selections in itertools.product(*subset_options):
+                    # Flatten the selections into a single list of cards
+                    community_selection = [card for selection in combo_selections for card in selection]
+                    
+                    # Check if we have the right number of community cards in total
+                    required_community = showdown_rules.get("communityCards", 5 - required_hole)
+                    if len(community_selection) != required_community:
+                        continue
+                    
+                    # Try all valid hole card combinations
+                    for hole_combo in itertools.combinations(hole_cards, required_hole):
+                        hand = list(hole_combo) + community_selection
+                        
+                        # Check if this hand is better than our current best
+                        if best_hand is None or evaluator.compare_hands(hand, best_hand, eval_type) > 0:
+                            best_hand = hand
+                            best_used_hole_cards = list(hole_combo)
+        
+        return best_hand if best_hand else [], best_used_hole_cards        
+        
     def _find_hand_with_any_cards(
         self,
         hole_cards: List[Card],
@@ -1469,6 +1618,10 @@ class ShowdownManager:
             return self._find_hand_with_combinations(
                 hole_cards, community_cards, showdown_rules, eval_type)          
         
+        if "communityCardSelectCombinations" in showdown_rules:
+            return self._find_hand_with_select_combinations(
+                hole_cards, community_cards, showdown_rules, eval_type)
+            
         if "anyCards" in showdown_rules:
             return self._find_hand_with_any_cards(
                 hole_cards, comm_cards, player, showdown_rules, eval_type)

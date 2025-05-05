@@ -31,6 +31,8 @@ class GameActionType(Enum):
     DECLARE = auto()
     SHOWDOWN = auto()
     GROUPED = auto()  # New type for grouped actions
+    ROLL_DIE = auto()
+
 
 @dataclass
 class DealAction:
@@ -77,9 +79,11 @@ class ShowdownConfig:
     cards_required: str
     declaration_mode: str
     best_hand: List[Dict[str, Any]]
-    globalDefaultAction: Dict[str, Any] = field(default_factory=dict)  # Renamed from default_action
-    defaultActions: List[Dict[str, Any]] = field(default_factory=list)  # Added
-    classification_priority: List[Dict[str, Any]] = field(default_factory=list)  # Added
+    conditionalBestHands: List[Dict[str, Any]] = field(default_factory=list)  # Added for conditional hands
+    defaultBestHand: List[Dict[str, Any]] = field(default_factory=list)  # Added for fallback
+    globalDefaultAction: Dict[str, Any] = field(default_factory=dict)
+    defaultActions: List[Dict[str, Any]] = field(default_factory=list)
+    classification_priority: List[Dict[str, Any]] = field(default_factory=list)
 
 @dataclass
 class GameRules:
@@ -237,11 +241,13 @@ class GameRules:
             order=showdown_data['order'],
             starting_from=showdown_data['startingFrom'],
             cards_required=showdown_data['cardsRequired'],
-            best_hand=showdown_data['bestHand'],
-            declaration_mode=showdown_data.get('declaration_mode', 'cards_speak'), 
-            globalDefaultAction=showdown_data.get('globalDefaultAction', {}),  # Maps JSON key to new field name
-            defaultActions=showdown_data.get('defaultActions', []),       # Loads new field
-            classification_priority=showdown_data.get('classification_priority', [])       # Loads new field
+            best_hand=showdown_data.get('bestHand', []),
+            conditionalBestHands=showdown_data.get('conditionalBestHands', []),  # Add this line
+            defaultBestHand=showdown_data.get('defaultBestHand', []),  # Add this line
+            declaration_mode=showdown_data.get('declaration_mode', 'cards_speak'),
+            globalDefaultAction=showdown_data.get('globalDefaultAction', {}),
+            defaultActions=showdown_data.get('defaultActions', []),
+            classification_priority=showdown_data.get('classification_priority', [])
         )
 
         rules = cls(
