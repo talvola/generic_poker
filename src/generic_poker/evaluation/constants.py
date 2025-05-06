@@ -25,11 +25,15 @@ BADUGI_RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K']
 RANKS_36_CARD = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6']
 RANKS_20_CARD = ['A', 'K', 'Q', 'J', 'T']
 
+RANKS_27_JA = ['A', 'K', 'Q', 'J', '7', '6', '5', '4', '3', '2']
+RANKS_27_JA_JOKER = ['R', 'A', 'K', 'Q', 'J', '7', '6', '5', '4', '3', '2']
+
 # Special for 6-card low pip count games
 BASE_RANKS_PADDED = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2', 'X']
 
 # Put Joker at the beginning
 BASE_RANKS_JOKER = ['R', 'A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2']
+LOW_A5_RANKS_JOKER = ['R', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2', 'A']
 
 # Map evaluation types to rank orderings
 RANK_ORDERS = {
@@ -40,7 +44,7 @@ RANK_ORDERS = {
     'ne_seven_card_high': BASE_RANKS,
     # 2-7 Lowball can use same ranks
     '27_low': BASE_RANKS,
-    '27_low_wild': BASE_RANKS,
+    '27_low_wild': BASE_RANKS_JOKER,
     # Pip games can also use the same ranks
     '49': BASE_RANKS,
     '6': BASE_RANKS,
@@ -59,11 +63,14 @@ RANK_ORDERS = {
     '36card_ffh_high': RANKS_36_CARD,
     # 20-card deck
     '20card_high': RANKS_20_CARD,
+    # 40-card deck 
+    '27_ja_ffh_high': RANKS_27_JA,
+    '27_ja_ffh_high_wild_bug': RANKS_27_JA_JOKER,
     
     # A-5 Lowball games always have Ace low
     'a5_low': LOW_A5_RANKS,
     'a5_low_high': LOW_A5_RANKS,
-    'a5_low_wild': LOW_A5_RANKS,
+    'a5_low_wild': LOW_A5_RANKS_JOKER,
     'a6_low': LOW_A6_RANKS,
 
     # Badugi
@@ -95,6 +102,16 @@ RANK_ORDERS = {
     'three_card_27_low': BASE_RANKS,
     'four_card_27_low': BASE_RANKS,
 
+    # 40-card (no 8-T) card Stud evaluations
+    'two_card_27_ja_ffh_high': RANKS_27_JA,
+    'three_card_27_ja_ffh_high': RANKS_27_JA,
+    'four_card_27_ja_ffh_high': RANKS_27_JA,
+    'two_card_27_ja_ffh_high_wild_bug': RANKS_27_JA_JOKER,
+    'three_card_27_ja_ffh_high_wild_bug': RANKS_27_JA_JOKER,
+    'four_card_27_ja_ffh_high_wild_bug': RANKS_27_JA_JOKER,
+
+    'one_card_high_ah_wild_bug': BASE_RANKS_JOKER,
+
     # wild hole card 
     'one_card_high_spade': BASE_RANKS,
     'one_card_high_heart': BASE_RANKS,
@@ -121,6 +138,8 @@ HAND_SIZES = {
     'a5_low_high': 5,
     '36card_ffh_high': 5,
     '20card_high': 5,
+    '27_ja_ffh_high': 5,
+    '27_ja_ffh_high_wild_bug': 5,
     '49': 5,
     '6': 5,
     'zero': 5,
@@ -151,6 +170,13 @@ HAND_SIZES = {
     'one_card_low': 1,
     'one_card_high_ah': 1,
     'one_card_low_al': 1,
+    'two_card_27_ja_ffh_high': 2,
+    'three_card_27_ja_ffh_high': 3,
+    'four_card_27_ja_ffh_high': 4,
+    'two_card_27_ja_ffh_high_wild_bug': 2,
+    'three_card_27_ja_ffh_high_wild_bug': 3,
+    'four_card_27_ja_ffh_high_wild_bug': 4,    
+    'one_card_high_ah_wild_bug': 1,
     'low_pip_6_cards': 6,
     '58': 6,
     'zero_6': 6,

@@ -55,6 +55,8 @@ class PlayerActionHandler:
             subaction = config[self.current_substep]
             subaction_key = list(subaction.keys())[0]
 
+            logger.debug(f"Getting valid actions for player {player_id} in grouped step {step.name}, subaction: {subaction_key} with state {self.game.state}")
+
             if subaction_key == "bet" and self.game.state == GameState.BETTING:
                 return self._get_betting_actions(player_id, subaction["bet"])
             elif subaction_key == "discard" and self.game.state == GameState.DRAWING:
@@ -71,13 +73,20 @@ class PlayerActionHandler:
                 total_cards = sum(cfg["number"] for cfg in subaction["separate"]["cards"])
                 return [(PlayerAction.SEPARATE, total_cards, total_cards)]
             elif subaction_key == "expose" and self.game.state == GameState.DRAWING:
-                total_cards = sum(cfg["number"] for cfg in subaction["expose"]["cards"])
-                return [(PlayerAction.EXPOSE, total_cards, total_cards)]
+                card_config = subaction["expose"]["cards"][0]
+                max_expose = card_config.get("number", 0)
+                min_expose = card_config.get("min_number", max_expose)
+                return [(PlayerAction.EXPOSE, min_expose, max_expose)]            
             elif subaction_key == "pass" and self.game.state == GameState.DRAWING:
                 num_to_pass = subaction["pass"]["cards"][0]["number"]
                 return [(PlayerAction.PASS, num_to_pass, num_to_pass)]
-            elif subaction_key == "declare" and self.game.state == GameState.DECLARING:
-                return [(PlayerAction.DECLARE, None, None)]            
+            elif subaction_key == "declare" and self.game.state == GameState.DRAWING:
+                return [(PlayerAction.DECLARE, None, None)]    
+            # we could have a grouped deal action depending on the game
+            # this isn't really the player dealing - it's more of accepting a deal
+            elif subaction_key == "deal" and self.game.state == GameState.DEALING:
+                logger.debug(f"Not a true player action - grouped deal action for player {player_id} in grouped step {step.name}")
+                return [(PlayerAction.DEAL, None, None)]                             
             return []
 
         # Non-grouped actions
@@ -96,8 +105,10 @@ class PlayerActionHandler:
                 total_cards = sum(cfg["number"] for cfg in self.game.current_separate_config["cards"])
                 return [(PlayerAction.SEPARATE, total_cards, total_cards)]
             elif hasattr(self.game, "current_expose_config"):
-                total_cards = sum(cfg["number"] for cfg in self.game.current_expose_config["cards"])
-                return [(PlayerAction.EXPOSE, total_cards, total_cards)]
+                card_config = self.game.current_expose_config["cards"][0]
+                max_expose = card_config.get("number", 0)
+                min_expose = card_config.get("min_number", max_expose)
+                return [(PlayerAction.EXPOSE, min_expose, max_expose)]
             elif hasattr(self.game, "current_pass_config"):
                 num_to_pass = self.game.current_pass_config["cards"][0]["number"]
                 return [(PlayerAction.PASS, num_to_pass, num_to_pass)]
@@ -239,16 +250,46 @@ class PlayerActionHandler:
             if self.game.state != GameState.DRAWING or not hasattr(self.game, "current_expose_config"):
                 return ActionResult(success=False, error="Cannot expose in current state")
             if not cards:
-                return ActionResult(success=False, error="No cards specified")
+                cards = []
             if not self._validate_expose_action(player, cards):
                 return ActionResult(success=False, error="Invalid exposure")
-            self.pending_exposures[player_id] = cards
-            logger.info(f"{player.name} exposes {len(cards)} cards: {cards}")
-            self.game.current_player = self.game.next_player(round_start=False)
-            if self._check_expose_round_complete():
-                self._apply_all_exposures()
-                return ActionResult(success=True, advance_step=True)
-            return ActionResult(success=True)
+            
+            # Check if this is an immediate expose action
+            is_immediate = False
+            config = self.game.current_expose_config["cards"][0]
+            if config.get("immediate", False):
+                is_immediate = True
+
+            if is_immediate:
+                # Apply exposure immediately
+                for card in cards:
+                    if card in player.hand.get_cards() and card.visibility == Visibility.FACE_DOWN:
+                        card.visibility = Visibility.FACE_UP
+                        logger.info(f"Player {player.name} immediately exposed {card}")
+                
+                # When grouped with other actions, move to next substep
+                if hasattr(self, "current_substep") and self.current_substep is not None:
+                    step = self.game.rules.gameplay[self.game.current_step]
+                    if step.action_type == GameActionType.GROUPED:
+                        self.player_completed_subactions[player_id].add(self.current_substep)
+                        # Check if we've completed all substeps
+                        if self.current_substep == len(step.action_config) - 1:
+                            self.grouped_step_completed.add(player_id)
+                            self.current_substep = 0
+                            self.game.current_player = self.game.next_player(round_start=False)
+                        else:
+                            # Move to next substep (likely dealing the next card)
+                            self.current_substep += 1
+                            self._update_state_for_next_subaction(step.action_config)
+                        return ActionResult(success=True)
+            else:                
+                self.pending_exposures[player_id] = cards
+                logger.info(f"{player.name} exposes {len(cards)} cards: {cards}")
+                self.game.current_player = self.game.next_player(round_start=False)
+                if self._check_expose_round_complete():
+                    self._apply_all_exposures()
+                    return ActionResult(success=True, advance_step=True)
+                return ActionResult(success=True)
 
         if action == PlayerAction.PASS:
             if self.game.state != GameState.DRAWING or not hasattr(self.game, "current_pass_config"):
@@ -296,6 +337,8 @@ class PlayerActionHandler:
         current_subaction = subactions[self.current_substep]
         subaction_key = list(current_subaction.keys())[0]
         active_players = set(p.id for p in self.game.table.get_active_players())
+
+        logger.debug(f"Handling grouped action {action} for player {player.name} (ID: {player_id}), subaction: {subaction_key}, current_substep: {self.current_substep}")
 
         if "bet" in subaction_key and action in [PlayerAction.CHECK, PlayerAction.CALL, PlayerAction.BET, PlayerAction.RAISE, PlayerAction.FOLD, PlayerAction.BRING_IN]:
             if self.game.state != GameState.BETTING:
@@ -387,15 +430,33 @@ class PlayerActionHandler:
             self._update_state_for_next_subaction(subactions)
 
         elif "expose" in subaction_key and action == PlayerAction.EXPOSE:
+            expose_config = current_subaction["expose"]
+
             if self.game.state != GameState.DRAWING:
                 return ActionResult(success=False, error="Cannot expose in current state")
             if not cards:
-                return ActionResult(success=False, error="No cards specified")
+                cards = []
             if not self._validate_expose_action(player, cards):
-                return ActionResult(success=False, error="Invalid exposure")
-            self.pending_exposures[player_id] = cards
-            logger.info(f"{player.name} exposes {len(cards)} cards: {cards}")
+                return ActionResult(success=False, error="Invalid exposure")       
+
+            # Check if this is an immediate expose
+            is_immediate = expose_config["cards"][0].get("immediate", False)
+            logger.debug(f"Player {player.name} is exposing cards: {cards}, immediate: {is_immediate}")
+            
+            if is_immediate:
+                # Apply exposure immediately
+                for card in cards:
+                    if card in player.hand.get_cards() and card.visibility == Visibility.FACE_DOWN:
+                        card.visibility = Visibility.FACE_UP
+                        logger.info(f"Player {player.name} immediately exposed {card}")
+            else:
+                # Use pending exposures
+                self.pending_exposures[player_id] = cards
+                logger.info(f"{player.name} will expose {len(cards)} cards: {cards}")            
+
             self.player_completed_subactions[player_id].add(self.current_substep)
+
+            # Check if all substeps are complete for this player
             if self.current_substep == len(subactions) - 1:
                 self.grouped_step_completed.add(player_id)
                 self.current_substep = 0
@@ -435,6 +496,20 @@ class PlayerActionHandler:
                 return ActionResult(success=False, error="Invalid declaration")
             self.pending_declarations[player_id] = declaration_data
             logger.info(f"{player.name} declares: {declaration_data}")
+            self.player_completed_subactions[player_id].add(self.current_substep)
+            if self.current_substep == len(subactions) - 1:
+                self.grouped_step_completed.add(player_id)
+                self.current_substep = 0
+                self.game.current_player = self.game.next_player(round_start=False)
+            else:
+                self.current_substep += 1
+            self._update_state_for_next_subaction(subactions)
+
+        elif subaction_key == "deal" and action == PlayerAction.DEAL:
+            if self.game.state != GameState.DEALING:
+                return ActionResult(success=False, error="Cannot deal in current state")
+            logger.info(f"{player.name} accepts the deal: config: {current_subaction}")
+            self.game._handle_deal(current_subaction['deal'], player_id=player_id)
             self.player_completed_subactions[player_id].add(self.current_substep)
             if self.current_substep == len(subactions) - 1:
                 self.grouped_step_completed.add(player_id)
@@ -601,7 +676,10 @@ class PlayerActionHandler:
             self.setup_pass_round(next_subaction["pass"])  # Changed to self
         elif "declare" in next_key:
             self.game.state = GameState.DECLARING
-            self.setup_declare_round(next_subaction["declare"])            
+            self.setup_declare_round(next_subaction["declare"])     
+        elif "deal" in next_key:
+            self.game.state = GameState.DEALING
+            logging.info(f"Next step is a deal - not a player action - no setup needed for {self.game.current_player.name}")
 
     def _handle_discard_action(self, player: Player, cards: List[Card]) -> bool:
         """Handle discard or draw action."""
@@ -798,9 +876,23 @@ class PlayerActionHandler:
         """Validate exposure action."""
         config = self.game.current_expose_config["cards"][0]
         num_to_expose = config["number"]
+        min_to_expose = config.get("min_number", num_to_expose)  # Default to num_to_expose if not specified
         required_state = config.get("state", "face down")
-        if len(cards) != num_to_expose or any(card not in player.hand.get_cards() or (required_state == "face down" and card.visibility != Visibility.FACE_DOWN) for card in cards):
+        
+        # Check if the number of cards is within the allowed range
+        if len(cards) < min_to_expose or len(cards) > num_to_expose:
+            logger.warning(f"Player {player.name} attempted to expose {len(cards)} cards, but must expose between {min_to_expose} and {num_to_expose}")
             return False
+            
+        # Validate that all cards are in the player's hand and have the required state
+        for card in cards:
+            if card not in player.hand.get_cards():
+                logger.warning(f"Player {player.name} tried to expose a card not in their hand: {card}")
+                return False
+            if required_state == "face down" and card.visibility != Visibility.FACE_DOWN:
+                logger.warning(f"Player {player.name} tried to expose a card that is not face down: {card}")
+                return False
+                
         return True
 
     def _check_expose_round_complete(self) -> bool:

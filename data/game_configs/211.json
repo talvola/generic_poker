@@ -1,5 +1,9 @@
 {
     "game": "2-11 Poker",
+    "references": [
+        "https://211poker.com/",
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
+    ],        
     "players": {
         "min": 2,
         "max": 9

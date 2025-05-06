@@ -27,6 +27,8 @@ class EvaluationType(str, Enum):
     HIDUGI = 'hidugi'           # Hi-Dugi
     HIGH_36CARD = '36card_ffh_high'  # 36-card deck high hands
     HIGH_20CARD = '20card_high'      # 20-card deck high hands
+    HIGH_27_JA = '27_ja_ffh_high'  # 40-card deck (no 8-T) high hands
+    HIGH_27_JA_WILD = '27_ja_ffh_high_wild_bug'  # 40-card deck (no 8-T) high hands with wild and/or bug cards
     GAME_49 = '49'              # Pip count games
     GAME_58 = '58'
     GAME_6 = '6'
@@ -44,6 +46,7 @@ class EvaluationType(str, Enum):
     ONE_CARD_LOW_AL = 'one_card_low_al'
     ONE_CARD_HIGH = 'one_card_high'
     ONE_CARD_HIGH_AH = 'one_card_high_ah'
+    ONE_CARD_HIGH_AH_WILD = 'one_card_high_ah_wild_bug'
     # 2-4 card Stud evaluations
     TWO_CARD_LOW = 'two_card_a5_low'
     TWO_CARD_LOW_AH = 'two_card_27_low'
@@ -60,6 +63,13 @@ class EvaluationType(str, Enum):
     FOUR_CARD_HIGH = 'four_card_high'
     FOUR_CARD_HIGH_AL = 'four_card_high_al'  # Unimplemented
     FOUR_CARD_HIGH_AL_RH = 'four_card_a5_low_high'
+    # 40-card (no 8-T) card Stud evaluations
+    TWO_CARD_HIGH_27_JA = 'two_card_27_ja_ffh_high'
+    THREE_CARD_HIGH_27_JA = 'three_card_27_ja_ffh_high'
+    FOUR_CARD_HIGH_27_JA = 'four_card_27_ja_ffh_high'
+    TWO_CARD_HIGH_27_JA_WILD = 'two_card_27_ja_ffh_high_wild_bug'
+    THREE_CARD_HIGH_27_JA_WILD = 'three_card_27_ja_ffh_high_wild_bug'
+    FOUR_CARD_HIGH_27_JA_WILD = 'four_card_27_ja_ffh_high_wild_bug'  
     # alternate high hands
     SOKO_HIGH = 'soko_high'
     NE_SEVEN_CARD_HIGH = 'ne_seven_card_high'

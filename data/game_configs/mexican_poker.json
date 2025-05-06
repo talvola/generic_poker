@@ -1,0 +1,237 @@
+{
+    "game": "Mexican Poker",
+    "references": [
+        "https://www.barge.org/rulebook/mexican-poker.html"
+    ],          
+    "players": {
+        "min": 2,
+        "max": 8
+    },
+    "deck": {
+        "type": "short_27_ja",
+        "cards": 40,
+        "jokers": 1        
+    },
+    "bettingStructures": [
+        "Limit"
+    ],
+    "forcedBets": {
+        "style": "bring-in",
+        "rule": "high card ah wild"
+    },
+    "bettingOrder": {
+        "initial": "bring_in",
+        "subsequent": "high_hand"
+    },
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "antes"
+            },
+            "name": "Post Antes"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face down"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ],
+                "wildCards": [
+                    {
+                        "type": "joker",
+                        "role": "conditional",
+                        "condition": {
+                            "visibility": "face up", 
+                            "true_role": "bug",
+                            "false_role": "wild"
+                        }
+                    }
+                ]
+            },
+            "name": "Deal Initial Cards"
+        },
+        {
+            "bet": {
+                "type": "bring-in"
+            },
+            "name": "Post Bring-In"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "First Betting Round"
+        },
+        {
+            "groupedActions": [
+                {
+                    "expose": {
+                        "cards": [
+                            {
+                                "number": 1,
+                                "min_number": 0,
+                                "state": "face down",
+                                "immediate": true
+                            }
+                        ]
+                    }
+                },
+                {
+                    "deal": {
+                        "location": "player",
+                        "cards": [
+                            {
+                                "number": 1
+                            }
+                        ],
+                        "conditional_state": {
+                            "type": "all_exposed",
+                            "true_state": "face down",
+                            "false_state": "face up"
+                        },
+                        "wildCards": [
+                            {
+                                "type": "joker",
+                                "role": "conditional",
+                                "condition": {
+                                    "visibility": "face up", 
+                                    "true_role": "bug",
+                                    "false_role": "wild"
+                                }
+                            }
+                        ]
+                    }
+                }
+            ],
+            "name": "Expose and Deal Third Card"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Second Betting Round"
+        },
+        {
+            "groupedActions": [
+                {
+                    "expose": {
+                        "cards": [
+                            {
+                                "number": 1,
+                                "min_number": 0,
+                                "state": "face down",
+                                "immediate": true
+                            }
+                        ]
+                    }
+                },
+                {
+                    "deal": {
+                        "location": "player",
+                        "cards": [
+                            {
+                                "number": 1
+                            }
+                        ],
+                        "conditional_state": {
+                            "type": "all_exposed",
+                            "true_state": "face down",
+                            "false_state": "face up"
+                        },
+                        "wildCards": [
+                            {
+                                "type": "joker",
+                                "role": "conditional",
+                                "condition": {
+                                    "visibility": "face up", 
+                                    "true_role": "bug",
+                                    "false_role": "wild"
+                                }
+                            }
+                        ]
+                    }
+                }
+            ],
+            "name": "Expose and Deal Fourth Card"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Third Betting Round"
+        },
+        {
+            "groupedActions": [
+                {
+                    "expose": {
+                        "cards": [
+                            {
+                                "number": 1,
+                                "min_number": 0,
+                                "state": "face down",
+                                "immediate": true
+                            }
+                        ]
+                    }
+                },
+                {
+                    "deal": {
+                        "location": "player",
+                        "cards": [
+                            {
+                                "number": 1
+                            }
+                        ],
+                        "conditional_state": {
+                            "type": "all_exposed",
+                            "true_state": "face down",
+                            "false_state": "face up"
+                        },
+                        "wildCards": [
+                            {
+                                "type": "joker",
+                                "role": "conditional",
+                                "condition": {
+                                    "visibility": "face up", 
+                                    "true_role": "bug",
+                                    "false_role": "wild"
+                                }
+                            }
+                        ]
+                    }
+                }
+            ],
+            "name": "Expose and Deal Fifth Card"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Final Betting Round"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "all five cards",
+        "bestHand": [
+            {
+                "evaluationType": "27_ja_ffh_high_wild_bug",
+                "anyCards": 5
+            }
+        ]
+    }
+}

@@ -285,6 +285,7 @@ class GameRules:
             raise ValueError(f"Invalid deck type: {self.deck_type}")
         deck_sizes = {
             DeckType.STANDARD: 52,
+            DeckType.SHORT_27_JA: 40,
             DeckType.SHORT_6A: 36,
             DeckType.SHORT_TA: 20
         }

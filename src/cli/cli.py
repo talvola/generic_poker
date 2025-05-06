@@ -465,7 +465,10 @@ def run_game(game: Game) -> None:
                         result = game.player_action(game.current_player.id, action, amount, cards)     
                     elif action_type == GameActionType.DRAW:
                         action, amount, cards = get_draw_action(game, game.current_player)
-                        result = game.player_action(game.current_player.id, action, amount, cards)                                                                                 
+                        result = game.player_action(game.current_player.id, action, amount, cards)        
+                    elif action_type == GameActionType.DEAL:
+                        # assume no player input needed - just send the player action
+                        result = game.player_action(game.current_player.id, PlayerAction.DEAL)                                                                                                      
                     else:
                         print(f"Unhandled game state: {game.state}")
                         input("\nPress Enter to proceed...")

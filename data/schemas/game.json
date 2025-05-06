@@ -34,7 +34,7 @@
         },
         "rule": {
           "type": "string",
-          "enum": ["low card", "high card", "low card al", "high card ah"],
+          "enum": ["low card", "high card", "low card al", "high card ah", "high card ah wild"],
           "description": "Rule for determining the bring-in player in 'bring-in' style (e.g., 'low card', 'high card'); ignored for other styles"
         },
         "bringInEval": {
@@ -284,9 +284,27 @@
               },
               "role": {
                 "type": "string",
-                "enum": ["wild", "bug"],
-                "description": "Wildness behavior: 'wild' (any card) or 'bug' (Ace or straight/flush)"
-              }
+                "enum": ["wild", "bug", "conditional"],
+                "description": "Wildness behavior: 'wild' (any card) or 'bug' (Ace or straight/flush) or 'conditional' (based on condition)"
+              },
+              "condition": {
+                "type": "object",
+                "properties": {
+                  "visibility": { 
+                    "type": "string", 
+                    "enum": ["face up", "face down"] 
+                  },
+                  "true_role": { 
+                    "type": "string", 
+                    "enum": ["wild", "bug"] 
+                  },
+                  "false_role": { 
+                    "type": "string", 
+                    "enum": ["wild", "bug"] 
+                  }
+                },
+                "required": ["visibility", "true_role", "false_role"]
+              }              
             },
             "required": ["type", "role"],
             "additionalProperties": false
@@ -365,6 +383,84 @@
           "type": "string",
           "description": "Location of the deal (player or community)"
         },
+        "conditional_state": {
+          "type": "object",
+          "properties": {
+            "type": { 
+              "type": "string", 
+              "enum": ["all_exposed", "any_exposed", "none_exposed"] 
+            },
+            "true_state": { "type": "string" },
+            "false_state": { "type": "string" }
+          },
+          "required": ["type", "true_state", "false_state"]
+        },   
+        "wildCards": {
+          "type": "array",
+          "description": "List of wild card rules that apply to cards being dealt",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["joker", "rank", "lowest_community", "lowest_hole"],
+                "description": "Specifies the wild card rule type"
+              },
+              "count": {
+                "type": "integer",
+                "description": "Number of wild cards (optional, e.g., number of Jokers)"
+              },
+              "rank": {
+                "type": "string",
+                "description": "Rank that is wild (only for type 'rank')"
+              },
+              "subset": {
+                "type": "string",
+                "description": "Subset of cards to evaluate (e.g., 'default', 'Board')"
+              },
+              "visibility": {
+                "type": "string",
+                "enum": ["face down", "face up"],
+                "description": "Visibility condition for lowest_hole (e.g., 'face down')"
+              },
+              "match": {
+                "type": "string",
+                "enum": ["rank"],
+                "description": "Match condition that defines wild cards (e.g., 'rank')"
+              },
+              "scope": {
+                "type": "string",
+                "enum": ["player", "global"],
+                "description": "Scope of wildness (default is global)"
+              },
+              "role": {
+                "type": "string",
+                "enum": ["wild", "bug", "conditional"],
+                "description": "Wildness behavior: 'wild' (any card) or 'bug' (Ace or straight/flush) or 'conditional' (based on condition)"
+              },
+              "condition": {
+                "type": "object",
+                "properties": {
+                  "visibility": { 
+                    "type": "string", 
+                    "enum": ["face up", "face down"] 
+                  },
+                  "true_role": { 
+                    "type": "string", 
+                    "enum": ["wild", "bug"] 
+                  },
+                  "false_role": { 
+                    "type": "string", 
+                    "enum": ["wild", "bug"] 
+                  }
+                },
+                "required": ["visibility", "true_role", "false_role"]
+              }              
+            },
+            "required": ["type", "role"],
+            "additionalProperties": false
+          }
+        },               
         "cards": {
           "type": "array",
           "items": {
@@ -397,7 +493,7 @@
                 ]
               }
             },
-            "required": ["number", "state"]
+            "required": ["number"]
           }
         }
       },
@@ -569,10 +665,16 @@
                 "type": "integer",
                 "description": "Number of cards to expose"
               },
+              "min_number": { "type": "integer" },
               "state": {
                 "type": "string",
                 "description": "State of the cards (face up or face down)"
-              }
+              },
+              "immediate": {
+                "type": "boolean",
+                "description": "If true, cards are exposed immediately rather than at end of round",
+                "default": false
+              }                
             },
             "required": ["number", "state"],
             "additionalProperties": false
@@ -603,7 +705,7 @@
                 "type": "string",
                 "enum": ["face up", "face down"],
                 "description": "State of the cards being passed"
-              }
+              }            
             },
             "required": ["number", "direction", "state"],
             "additionalProperties": false
@@ -744,12 +846,12 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["standard", "short_6a", "short_ta"],
+          "enum": ["standard", "short_6a", "short_ta", "short_27_ja"],
           "description": "Type of deck: standard, short_6a (2-5 removed), short_ta (2-9 removed)"
         },
         "cards": {
           "type": "integer",
-          "enum": [20, 36, 52],
+          "enum": [20, 36, 40, 52],
           "description": "Number of cards in the deck"
         },
         "jokers": {

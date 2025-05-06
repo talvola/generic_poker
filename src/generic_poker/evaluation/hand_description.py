@@ -247,6 +247,48 @@ class HandDescriber:
             elif hand_result.rank == 9:  # Straight Flush
                 return self._describe_straight_flush(cards_used)
             
+        elif self.eval_type in (EvaluationType.HIGH_27_JA,EvaluationType.HIGH_36CARD):
+            if hand_result.rank == 10:  # High Card
+                return self._describe_high_card(cards_used)            
+            elif hand_result.rank == 9:  # Pair
+                return self._describe_pair(cards_used)
+            elif hand_result.rank == 8:  # Two Pair
+                return self._describe_two_pair(cards_used)
+            elif hand_result.rank == 7:  # Three of a Kind
+                return self._describe_three_of_kind(cards_used)
+            elif hand_result.rank == 6:  # Straight
+                return self._describe_straight(cards_used)
+            elif hand_result.rank == 5:  # Full House
+                return self._describe_full_house(cards_used)
+            elif hand_result.rank == 4:  # Flush
+                return self._describe_flush(cards_used)
+            elif hand_result.rank == 3:  # Four of a Kind
+                return self._describe_four_of_kind(cards_used)
+            elif hand_result.rank == 2:  # Straight Flush
+                return self._describe_straight_flush(cards_used)
+            
+        elif self.eval_type in EvaluationType.HIGH_27_JA_WILD:
+            if hand_result.rank == 11:  # High Card
+                return self._describe_high_card(cards_used)            
+            elif hand_result.rank == 10:  # Pair
+                return self._describe_pair(cards_used)
+            elif hand_result.rank == 9:  # Two Pair
+                return self._describe_two_pair(cards_used)
+            elif hand_result.rank == 8:  # Three of a Kind
+                return self._describe_three_of_kind(cards_used)
+            elif hand_result.rank == 7:  # Straight
+                return self._describe_straight(cards_used)
+            elif hand_result.rank == 6:  # Full House
+                return self._describe_full_house(cards_used)
+            elif hand_result.rank == 5:  # Flush
+                return self._describe_flush(cards_used)
+            elif hand_result.rank == 4:  # Four of a Kind
+                return self._describe_four_of_kind(cards_used)
+            elif hand_result.rank == 3:  # Straight Flush
+                return self._describe_straight_flush(cards_used) 
+            elif hand_result.rank == 1:  # Five of a Kind
+                return self._describe_five_of_kind(high_cards)                          
+                        
         elif self.eval_type in EvaluationType.TWO_CARD_HIGH:
             if hand_result.rank == 2:  # High Card
                 return self._describe_high_card(cards_used)            

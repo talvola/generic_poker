@@ -25,7 +25,8 @@ class BringInDeterminator:
         CardRule.LOW_CARD: EvaluationType.ONE_CARD_LOW,
         CardRule.LOW_CARD_AL: EvaluationType.ONE_CARD_LOW_AL,
         CardRule.HIGH_CARD: EvaluationType.ONE_CARD_HIGH,
-        CardRule.HIGH_CARD_AH: EvaluationType.ONE_CARD_HIGH_AH
+        CardRule.HIGH_CARD_AH: EvaluationType.ONE_CARD_HIGH_AH,
+        CardRule.HIGH_CARD_AH_WILD: EvaluationType.ONE_CARD_HIGH_AH_WILD
     }    
     
     
@@ -120,19 +121,19 @@ class BringInDeterminator:
                 logger.warning(f"Invalid card_rule '{card_rule}' for one card, defaulting to 'high'")
                 return EvaluationType.ONE_CARD_HIGH
         else:
-            # For single-hand games, use the first bestHand
-            if len(best_hands) == 1:
+            # # For single-hand games, use the first bestHand
+            # if len(best_hands) == 1:
+            #     base_eval = best_hands[0]["evaluationType"]
+            #     logger.debug(f"Single hand game, using base_eval: {base_eval}")
+            # else:
+            # Multi-hand game: use bringInEval if specified, else default to first
+            forced_bets = rules.forced_bets
+            try:
+                base_eval = forced_bets.bringInEval if forced_bets.bringInEval else best_hands[0]["evaluationType"]
+                logger.debug(f"Using bringInEval: {base_eval}")
+            except (AttributeError, ValueError):
+                logger.debug("bringInEval not specified or invalid, defaulting to first bestHand evaluation type")
                 base_eval = best_hands[0]["evaluationType"]
-                logger.debug(f"Single hand game, using base_eval: {base_eval}")
-            else:
-                # Multi-hand game: use bringInEval if specified, else default to first
-                forced_bets = rules.forced_bets
-                try:
-                    base_eval = forced_bets.bringInEval if forced_bets.bringInEval else best_hands[0]["evaluationType"]
-                    logger.debug(f"Using bringInEval: {base_eval}")
-                except (AttributeError, ValueError):
-                    logger.debug("bringInEval not specified or invalid, defaulting to first bestHand evaluation type")
-                    base_eval = best_hands[0]["evaluationType"]
 
             if num_cards >= 5:
                 return EvaluationType(base_eval)

@@ -11,6 +11,7 @@ class DeckType(str, Enum):
     STANDARD = "standard"    # Full 52-card deck
     SHORT_TA = "short_ta"    # T-A only (20 cards)
     SHORT_6A = "short_6a"    # 6-A (36 cards)
+    SHORT_27_JA = "short_27_ja" # 2-7,J-A (40 cards) - used in Mexican Poker
     DIE = "die"              # 6-sided die (1-6)
 
 class Deck(CardContainer):
@@ -56,6 +57,8 @@ class Deck(CardContainer):
             ranks = [Rank.TEN, Rank.JACK, Rank.QUEEN, Rank.KING, Rank.ACE]
         elif deck_type == DeckType.SHORT_6A:
             ranks = [r for r in Rank if r not in {Rank.TWO, Rank.THREE, Rank.FOUR, Rank.FIVE, Rank.JOKER, Rank.ONE}]
+        elif deck_type == DeckType.SHORT_27_JA:
+            ranks = [r for r in Rank if r not in {Rank.EIGHT, Rank.NINE, Rank.TEN, Rank.ONE}]
         else:  # STANDARD
             ranks = [r for r in Rank if r not in {Rank.JOKER, Rank.ONE}]
 

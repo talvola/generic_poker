@@ -200,10 +200,14 @@ class Table:
         from generic_poker.evaluation.evaluator import evaluator
         best_player = active_players[0]
         best_hand = [c for c in best_player.hand.get_cards() if c.visibility == Visibility.FACE_UP][:num_visible]
+
+        logger.debug(f"   Initial best hand: {best_hand}")
         for player in active_players[1:]:
             visible_cards = [c for c in player.hand.get_cards() if c.visibility == Visibility.FACE_UP][:num_visible]
+            logger.debug(f"      comparing to: {visible_cards}")
             if evaluator.compare_hands(visible_cards, best_hand, eval_type) > 0:
                 best_hand = visible_cards
+                logger.debug(f"      updating best hand to: {best_hand}")
                 best_player = player
         
         logger.debug(f"Best hand player: {best_player.name} with cards {best_hand}")
@@ -259,7 +263,7 @@ class Table:
     def get_active_players(self) -> List[Player]:
         return [p for p in self.players.values() if p.is_active]
 
-    def deal_hole_cards(self, num_cards: int, face_up: bool = False, subset: str = "default") -> None:
+    def deal_hole_cards(self, num_cards: int, face_up: bool = False, subset: str = "default") -> Dict[str, List[Card]]:
         """
         Deal hole cards to all active players and assign them to a specified subset.
 
@@ -267,8 +271,12 @@ class Table:
             num_cards: Number of cards to deal to each player
             face_up: Whether to deal the cards face up (default: False)
             subset: Name of the subset to assign the cards to (default: "default")
+            
+        Returns:
+            Dictionary mapping player IDs to lists of cards dealt to that player
         """
         active_players = [p for p in self.players.values() if p.is_active]
+        cards_dealt = {player.id: [] for player in active_players}
         
         for _ in range(num_cards):
             for player in active_players:
@@ -276,36 +284,64 @@ class Table:
                 if card:
                     logger.info(f"  Dealt {card} to player {player.name} in subset '{subset}'")
                     player.hand.add_card(card)  # Add to the hand's card list
+                    cards_dealt[player.id].append(card)  # Track the card dealt
                     if subset and subset != "default":  # Only assign to subset if specified and not "default"
-                        player.hand.add_to_subset(card, subset)     
-                    
-    def deal_community_cards(self, num_cards: int, subsets=None, subset="default", face_up: bool = True) -> None:
-        """
-        Deal community cards to specific subsets.
-
-        Args:
-            num_cards: Number of community cards to deal
-            subsets: List of subset names to assign cards to (new parameter)
-            subset: Name of subset to assign cards to (backward compatibility)
-            face_up: Whether to deal the cards face up (default: True)
-        """
-        # Handle both new and old parameter formats
-        if subsets is None:
-            subsets = [subset]
+                        player.hand.add_to_subset(card, subset)
         
-        # Deal cards
-        cards = self.deck.deal_cards(num_cards, face_up=face_up)
-        if not cards:
-            return
+        return cards_dealt  
+                    
+    def deal_card_to_player(self, player_id: str, face_up: bool = False, subset: str = "default") -> Optional[Card]:
+        """
+        Deal a single card to a specific player.
+        
+        Args:
+            player_id: ID of the player to deal to
+            face_up: Whether to deal the card face up
+            subset: Name of the subset to assign the card to
             
-        # Add each card to each subset
-        for card in cards:
-            for subset_name in subsets:
-                if subset_name not in self.community_cards:
-                    self.community_cards[subset_name] = []
-                self.community_cards[subset_name].append(card)
-                
-        logger.info(f"  Dealt {len(cards)} community {'card' if len(cards) == 1 else 'cards'} to subsets {subsets}: {cards}")
+        Returns:
+            The card that was dealt, or None if no cards left or player not found
+        """
+        player = self.players.get(player_id)
+        if not player:
+            logger.warning(f"Player {player_id} not found")
+            return None
+            
+        card = self.deck.deal_card(face_up=face_up)
+        if card:
+            player.hand.add_card(card)
+            if subset and subset != "default":
+                player.hand.add_to_subset(card, subset)
+            logger.debug(f"Dealt {card} to {player.name} ({'face up' if face_up else 'face down'})")
+            return card
+        else:
+            logger.warning("No cards left in deck")
+            return None
+
+    def deal_community_cards(self, num_cards: int, subsets: List[str] = ["default"], face_up: bool = True) -> List[Card]:
+        """
+        Deal cards to community card areas.
+        
+        Args:
+            num_cards: Number of cards to deal
+            subsets: List of subsets to assign the cards to
+            face_up: Whether to deal the cards face up
+            
+        Returns:
+            List of cards that were dealt
+        """
+        cards_dealt = []
+        for _ in range(num_cards):
+            card = self.deck.deal_card(face_up=face_up)
+            if card:
+                cards_dealt.append(card)
+                # Add to all specified subsets
+                for subset in subsets:
+                    if subset not in self.community_cards:
+                        self.community_cards[subset] = []
+                    self.community_cards[subset].append(card)
+                    logger.debug(f"Dealt {card} to community subset '{subset}'")
+        return cards_dealt
         
     def expose_community_cards(self, subset: str = "default", indices: Optional[List[int]] = None) -> None:
         """
