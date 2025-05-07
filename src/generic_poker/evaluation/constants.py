@@ -42,6 +42,7 @@ RANK_ORDERS = {
     'high_wild_bug': BASE_RANKS_JOKER,
     'soko_high': BASE_RANKS,
     'ne_seven_card_high': BASE_RANKS,
+    'quick_quads': BASE_RANKS,
     # 2-7 Lowball can use same ranks
     '27_low': BASE_RANKS,
     '27_low_wild': BASE_RANKS_JOKER,
@@ -140,6 +141,7 @@ HAND_SIZES = {
     '20card_high': 5,
     '27_ja_ffh_high': 5,
     '27_ja_ffh_high_wild_bug': 5,
+    'quick_quads': 5,
     '49': 5,
     '6': 5,
     'zero': 5,

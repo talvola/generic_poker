@@ -319,5 +319,5 @@ class GameRules:
         # Verify we don't deal more cards than in deck
         if total_dealt + community_dealt > self.deck_size:
             raise ValueError(
-                f"Game requires {total_dealt} cards but deck only has {self.deck_size}"
+                f"Game requires {total_dealt + community_dealt} cards but deck only has {self.deck_size}"
             )

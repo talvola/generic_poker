@@ -16,6 +16,7 @@ class HandDescriber:
         EvaluationType.LOW_A6: 'all_card_hands_description_a6_low.csv',
         EvaluationType.LOW_27: 'all_card_hands_description_27_low.csv',
         EvaluationType.HIGH_36CARD: 'all_card_hands_description_36card_ffh_high.csv',
+        EvaluationType.QUICK_QUADS: 'all_card_hands_description_high.csv',
         # Badugi and variants
         EvaluationType.BADUGI: 'all_card_hands_description_badugi.csv',
         EvaluationType.BADUGI_AH: 'all_card_hands_description_badugi.csv',
@@ -336,7 +337,27 @@ class HandDescriber:
             elif hand_result.rank == 19:  # One Pair
                 return self._describe_pair(cards_used)
             elif hand_result.rank == 20:  # High Card
+                return self._describe_high_card(cards_used)          
+
+        elif self.eval_type in EvaluationType.QUICK_QUADS:
+            if hand_result.rank == 10:  # High Card
                 return self._describe_high_card(cards_used)            
+            elif hand_result.rank == 9:  # Pair
+                return self._describe_pair(cards_used)
+            elif hand_result.rank == 8:  # Two Pair
+                return self._describe_two_pair(cards_used)
+            elif hand_result.rank == 7:  # Three of a Kind
+                return self._describe_three_of_kind(cards_used)
+            elif hand_result.rank == 6:  # Straight
+                return self._describe_straight(cards_used)
+            elif hand_result.rank == 5:  # Flush
+                return self._describe_flush(cards_used)
+            elif hand_result.rank == 4:  # Full House
+                return self._describe_full_house(cards_used)
+            elif hand_result.rank == 3:  # Four of a Kind
+                return self._describe_four_of_kind_quick_quads(cards_used)
+            elif hand_result.rank == 2:  # Straight Flush
+                return self._describe_straight_flush(cards_used)                  
                 
         # Default to basic description if no detailed version available
         return basic_desc
@@ -595,6 +616,21 @@ class HandDescriber:
         if len(pairs) >= 3:
             return f"Three Pair, {pairs[0].plural_name}, {pairs[1].plural_name}, and {pairs[2].plural_name}"
         return "Three Pair"    
+    
+    def _describe_four_of_kind_quick_quads(self, cards: List[Card]) -> str:
+        """Generate detailed description for Four of a Kind."""
+        ranks = [card.rank for card in cards]
+        rank_counts = {}
+        for rank in ranks:
+            rank_counts[rank] = rank_counts.get(rank, 0) + 1
+            
+        for rank, count in rank_counts.items():
+            if count == 4:
+                return f"Four {rank.plural_name}"
+            if count == 3:
+                return f"Quick Quads {rank.plural_name}"
+            
+        return "Four of a Kind"    
     
     def _find_straight_flush(self, cards: List[Card], min_length: int = 5) -> List[Card]:
         """

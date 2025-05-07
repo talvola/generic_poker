@@ -1,0 +1,171 @@
+{
+    "game": "Murder",
+    "references": [
+        "https://www.barge.org/rulebook/murder.html"
+    ],
+    "players": {
+        "min": 2,
+        "max": 8
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit"
+    ],
+    "forcedBets": {
+        "style": "blinds"
+    },
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 4,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Pre-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 2,
+                        "state": "face up",
+                        "subset": "Board 1"
+                    },
+                    {
+                        "number": 2,
+                        "state": "face up",
+                        "subset": "Board 2"
+                    },
+                    {
+                        "number": 2,
+                        "state": "face up",
+                        "subset": "Board 3"
+                    }
+                ]
+            },
+            "name": "Deal Flop"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Post-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 1"
+                    },
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Board 2"
+                    },
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Board 3"
+                    }
+                ]
+            },
+            "name": "Deal Turn"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Turn Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 1"
+                    },
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Board 2"
+                    },
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Board 3"
+                    }
+                ]
+            },
+            "name": "Deal River"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "River Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "two hole cards, three community cards from different rows",
+        "bestHand": [
+            {
+                "name": "High Hand",
+                "evaluationType": "high",
+                "holeCards": 2,
+                "communityCardSelectCombinations": [
+                    [
+                        ["Board 1", 1, 1],
+                        ["Board 2", 1, 1],
+                        ["Board 3", 1, 1]
+                    ]
+                ]
+            },
+            {
+                "name": "Low Hand",
+                "evaluationType": "a5_low",
+                "holeCards": 2,
+                "communityCardSelectCombinations": [
+                    [
+                        ["Board 1", 1, 1],
+                        ["Board 2", 1, 1],
+                        ["Board 3", 1, 1]
+                    ]
+                ],
+                "qualifier": [1, 56]
+            }
+        ]
+    }
+}

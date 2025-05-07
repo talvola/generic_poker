@@ -29,6 +29,7 @@ class EvaluationType(str, Enum):
     HIGH_20CARD = '20card_high'      # 20-card deck high hands
     HIGH_27_JA = '27_ja_ffh_high'  # 40-card deck (no 8-T) high hands
     HIGH_27_JA_WILD = '27_ja_ffh_high_wild_bug'  # 40-card deck (no 8-T) high hands with wild and/or bug cards
+    QUICK_QUADS = 'quick_quads'                # Quick quads high-hand poker
     GAME_49 = '49'              # Pip count games
     GAME_58 = '58'
     GAME_6 = '6'
