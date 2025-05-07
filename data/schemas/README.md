@@ -12,10 +12,9 @@ This document describes the JSON schema for configuring poker games. The schema 
 | **deck** | Deck | Object | Specifies the type and number of cards in the deck. | Yes |
 | **bettingStructures** | Betting Structures | Array of Strings | List of allowed betting structures | Yes |
 | **forcedBets** | Forced Bets | Object | Defines the forced betting rules | No |
+| **bettingOrder** | Betting Order | Object | Controls who bets first in different betting rounds | No |
 | **gamePlay** | Game Play | Array of Objects | Describes the sequence of actions in the game | Yes |
 | **showdown** | Showdown | Object | Defines the showdown rules and hand evaluation | Yes |
-
-The **references** field is an optional array of URLs that point to external resources describing the rules or variations of the game. This can be useful for providing additional context or for tracing the origin of the game configuration.
 
 ### Players Object
 
@@ -30,6 +29,7 @@ The **references** field is an optional array of URLs that point to external res
 | ----- | ---- | ---- | ---------- | -------- |
 | **type** | Deck Type | String | Type of deck. | Yes |
 | **cards** | Number of Cards | Integer | Number of cards in the deck. Allowed values: 52 (standard deck), 36 (deck with cards 2-5 removed) | Yes |
+| **jokers** | Number of Jokers | Integer | Number of joker cards to include | No |
 
 ### Deck Types
 
@@ -38,17 +38,36 @@ The following deck types are supported:
 - **standard**: A standard 52-card deck containing all cards from 2 through Ace in four suits.
 - **short_6a**: A 36-card deck with cards 2 through 5 removed, containing cards from 6 through Ace in four suits.
 - **short_ta**: A 20-card deck containing only 10, Jack, Queen, King, and Ace in four suits.
+- **short_27_ja**: A 40-card deck with cards 8 through 10 removed, containing cards from 2-7 and Jack through Ace in four suits.
 
 The `cards` field in the deck object should match the number of cards in the chosen deck type.
+
+### Betting Order Object
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **initial** | Initial Order | String | Determines the starting player for the first betting round | Yes |
+| **subsequent** | Subsequent Order | String | Determines the starting player for subsequent betting rounds | Yes |
+
+**initial** options:
+
+- `after_big_blind`: The player left of the big blind starts (common in community card games)
+- `bring_in`: The bring-in player starts (common in stud games)
+- `dealer`: The player left of the dealer button starts
+
+**subsequent** options:
+
+- `high_hand`: The player with the highest visible hand starts (common in stud games)
+- `dealer`: The player left of the dealer button starts (common in community card games)
 
 ### Forced Bets Object
 
 | Field | Name | Type | Definition | Required |
 | ----- | ---- | ---- | ---------- | -------- |
-| **style** | Bet Style | String | Style of forced bets (e.g., "bring-in", "blinds", "antes"). | Yes |
-| **rule** | Bet Rule | String | Rule for hand evaluation for bring-in bets.   Currently supported values are 'high card', 'low card', 'high card ah' and 'low card al'. | Yes |
-| **variation** | Bet Variation | String | Optional variation on the standard bring-in rules to support unusual hand evaluation.   "a5 low high" is the only currently supported variation.  | No |
-| **bringInEval** | Bring-in Evaluation | String | Evaluation type from bestHand to use for bring-in with multiple cards | No |
+| **style** | Bet Style | String | Style of forced bets (e.g., "bring-in", "blinds", "antes_only") | Yes |
+| **rule** | Bet Rule | String | Rule for hand evaluation for bring-in bets | Yes |
+| **variation** | Bet Variation | String | Optional variation on the standard bring-in rules | No |
+| **bringInEval** | Bring-in Evaluation | String | Evaluation type to use for bring-in with multiple cards | No |
 
 ### Game Play Array
 
@@ -65,14 +84,61 @@ The Game Play array contains objects that describe each step of the game. Each o
 | **separate** | Separate | Object | Describes a separating action | No |
 | **discard** | Discard | Object | Describes a discarding action | No |
 | **remove** | Remove | Object | Describes a removing action | No |
+| **roll_die** | Roll Die | Object | Describes a die rolling action | No |
+| **declare** | Declare | Object | Describes a declaration action | No |
 | **showdown** | Showdown | Object | Indicates a showdown step | No |
+| **groupedActions** | Grouped Actions | Array | Sequence of actions performed by each player in turn | No |
+
+### Grouped Actions Array
+
+The `groupedActions` array allows multiple actions to be executed by each player in sequence before moving to the next player.
+
+Example:
+
+```json
+"groupedActions": [
+  { "bet": { "type": "small" } },
+  { "discard": { "cards": [{ "min_number": 0, "number": 4, "state": "face down" }] } }
+],
+"name": "Bet and Discard"
+```
+
+#### Bet Object 
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **type** | Bet Type | String | Type of bet (e.g., "small", "big", "blinds", "antes", "bring-in") | Yes |
+| **zeroCardsBetting** | Zero Cards Betting | String | Betting restriction for players with 0 cards | No |
+
+The `zeroCardsBetting` property can have the following values:
+
+- `call_only`: Player can only call, not raise (used in games like Scarney)
+- `normal`: Normal betting rules apply
 
 #### Deal Object
 
 | Field | Name | Type | Definition | Required |
 | ----- | ---- | ---- | ---------- | -------- |
 | **location** | Deal Location | String | Location of the deal (player or community) | Yes |
+| **conditional_state** | Conditional State | Object | Determines card state based on a condition | No |
+| **wildCards** | Wild Cards | Array | Wild card rules for this deal | No |
 | **cards** | Cards | Array of Objects | Describes the cards being dealt | Yes |
+
+Conditional State Object
+
+Allows cards to be dealt with different visibility based on conditions:
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **type** | Condition Type | String | Type of condition to check | Yes |
+| **true_state** | True State | String | Card state if condition is true | Yes |
+| **false_state** | False State | String | Card state if condition is false | Yes |
+
+The `type` can be:
+
+- `all_exposed`: True if all player's cards are face up
+- `any_exposed`: True if any of player's cards are face up
+- `none_exposed`: True if none of player's cards are face up
 
 Each object in the cards array has the following properties:
 
@@ -81,7 +147,22 @@ Each object in the cards array has the following properties:
 | **number** | Number of Cards | Integer | Number of cards to deal | Yes |
 | **state** | Card State | String | State of the cards (face up or face down) | Yes |
 | **community_subset** | Community Subset | String | Subset of cards if applicable | No |
-| **subset** | Card Subset | String | Subset of cards if applicable | No |
+| **subset** | Card Subset | String or Array of Strings | Subset(s) of cards if applicable | No |
+
+#### Roll Die Object
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **subset** | Die Result Subset | String | Community subset to store die result | Yes |
+
+Example: 
+
+```json
+"roll_die": {
+  "subset": "Die"
+},
+"name": "Roll Die"
+```
 
 #### Draw Object
 
@@ -96,28 +177,24 @@ Each object in the cards array has the following properties:
 | **number** | Number of Cards | Integer | Number of cards to draw | Yes |
 | **min_number** | Minimum Number | Integer | Minimum number of cards that must be drawn | No |
 | **state** | Card State | String | State of the cards (face up or face down) | Yes |
-| **subset** | Card Subset | String | Subset of cards if applicable | No |
-| **draw_amount** | Draw Amount | Object | Specifies how many cards are drawn when different from the discard amount | No |
-
-if a single **number** is given, then any amount of cards from 0 up to that number may be discarded and drawn.   The **min_number** is used if the minimum amount is not zero.    
+| **hole_subset** | Hole Subset | String | Subset of player's hand to draw to | No |
+| **draw_amount** | Draw Amount | Object | Specifies draw amount relative to discard | No |
 
 ##### Draw Amount Object
 
 | Field | Name | Type | Definition | Required |
 | ----- | ---- | ---- | ---------- | -------- |
-| **relative_to** | Relative To | String | Specifies that the draw amount is relative to the discard amount (only allowed value is "discard") | Yes |
-| **amount** | Amount | Integer | The difference between the draw amount and the discard amount | Yes |
+| **relative_to** | Relative To | String | Reference for relative draw amount (only "discard" supported) | Yes |
+| **amount** | Amount | Integer | Difference between draw and discard amounts | Yes |
 
-The only supported **relative_to** value is "discard".   For example,
+Example that draws one less card than discarded:
 
 ```json
 "draw_amount": {
-    "relative_to": "discard",
-    "amount": -1
+  "relative_to": "discard",
+  "amount": -1
 }
 ```
-
-Indicates that the draw amount is one less than the discard amount.   Discarding 4 cards will result in drawing 3 cards.    
 
 #### Discard Object
 
@@ -132,12 +209,12 @@ Each object in the cards array has the following properties:
 | **rule** | Discard Rule | String | Rule for discarding cards | No |
 | **hole_subset** | Subset of Cards | String | Subset of cards for discarding | No |
 | **number** | Number of Cards | Integer | Number of cards to discard | No |
-| **state** | Card State | String | State of the discarded cards (face up or face down) | No |
-| **discardLocation** | Discard Location | String |  | No |
-| **discardSubset** | Discard Subset | String | ) | No |
-| **entire_subset** | Entire Subset | String |  | No |
-
-If **state** of 'face up' is used, the cards will appear to all players.  
+| **min_number** | Minimum Number | Integer | Minimum number of cards to discard | No |
+| **state** | Card State | String | State of the discarded cards | No |
+| **discardLocation** | Discard Location | String | Where discarded cards go ("community" or "discard_pile") | No |
+| **discardSubset** | Discard Subset | String | Subset name in the discard location | No |
+| **entire_subset** | Entire Subset | String | If true, discard must be an entire named subset | No |
+| **oncePerStep** | Once Per Step | String | If true, discard happens only once per grouped step | No |
 
 #### Expose Object
 
@@ -150,7 +227,9 @@ Each object in the cards array has the following properties:
 | Field | Name | Type | Definition | Required |
 | ----- | ---- | ---- | ---------- | -------- |
 | **number** | Number of Cards | Integer | Number of cards to expose | Yes |
+| **min_number** | Minimum Number | Integer | Minimum number of cards to expose | No |
 | **state** | Card State | String | State of the cards (face up or face down) | Yes |
+| **immediate** | Immediate | Boolean | If true, expose immediately rather than at round end | No |
 
 #### Pass Object
 
@@ -164,53 +243,54 @@ Each object in the cards array has the following properties:
 | ----- | ---- | ---- | ---------- | -------- |
 | **number** | Number of Cards | Integer | Number of cards to pass | Yes |
 | **direction** | Pass Direction | String | Direction to pass the cards (left, right, or across) | Yes |
-| **state** | Card State | String | State of the cards being passed (face up or face down) | Yes |
-
-This step allows players to pass cards to other players in a specified direction.
-
-Example:
-```json
-"pass": {
-    "cards": [
-        {
-            "number": 1,
-            "direction": "left",
-            "state": "face down"
-        }
-    ]
-}
+| **state** | Card State | String | State of the cards being passed | Yes |
 
 #### Separate Object
 
 | Field | Name | Type | Definition | Required |
 | ----- | ---- | ---- | ---------- | -------- |
 | **cards** | Cards | Array of Objects | Describes the cards to separate | Yes |
+| **visibility_requirements** | Visibility Requirements | Array of Objects | Requirements for face-up/face-down cards | No |
+| **hand_comparison** | Hand Comparison | Object | Rules for comparing separated hands | No |
 
 Each object in the cards array has the following properties:
 
 | Field | Name | Type | Definition | Required |
 | ----- | ---- | ---- | ---------- | -------- |
-| **subset** | Subset Name | String | Name of the subset | Yes |
+| **hole_subset** | Subset Name | String | Name of the subset | Yes |
 | **number** | Number of Cards | Integer | Number of cards in the subset | Yes |
 
-This step subdivides a player's hand into one or more subsets.
+Visibility Requirements Object
 
-```json
-"separate": {
-    "cards": [
-        {
-            "subset": "Hold'em",
-            "number": 2
-        },
-        {
-            "subset": "Super Hold'em",
-            "number": 3
-        }
-    ]
-},
-```
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **hole_subset** | Subset Name | String | Name of the subset | Yes |
+| **min_face_down** | Min Face Down | Integer | Minimum number of face-down cards required | No |
+| **min_face_up** | Min Face Up | Integer | Minimum number of face-up cards required | No |
 
-requires the player to pick 2 cards to put into a subset called "Hold'em" and 3 cards to put into a subset called "Super Hold'em".
+Hand Comparison Object
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **subsets** | Subsets | Array of Objects | Subsets to compare | Yes |
+| **comparison_rule** | Comparison Rule | String | Rule for comparison ("greater_than", "less_than", "equal") | Yes |
+
+#### Declare Object
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **type** | Type | String | Always "declare" | Yes |
+| **options** | Options | Array of Strings | Possible declarations (e.g., ["high", "low", "high_low"]) | Yes |
+| **per_pot** | Per Pot | Boolean | If true, declare for each pot separately | No |
+| **simultaneous** | Simultaneous | Boolean | f true, all players declare at the same time | No |
+
+#### Remove  Object
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **type** | Type | String | Type of removal (e.g., "subset") | Yes |
+| **criteria** | Criteria | String | Criteria for determining which subsets to remove | Yes |
+| **subsets** | Subsets | Array of Strings | List of community card subsets to evaluate for removal | Yes |
 
 #### Showdown Object
 
@@ -227,8 +307,31 @@ The following is the Showdown object for the game definition:
 | **order** | Showdown Order | String | Order of showdown (currently unused) | Yes |
 | **startingFrom** | Starting Player | String | Player starting the showdown (currently unused) | Yes |
 | **cardsRequired** | Cards Required | String | Description of cards required for showdown | Yes |
-| **bestHand** | Best Hand | Array of Objects | Defines the hand evaluation rules | Yes |
-| **defaultAction** | Default Action | Object | Defines the default action for showdown if no hand meets hand evaluation rules | No |
+| **bestHand** | Best Hand | Array of Objects | Defines the hand evaluation rules | Yes* |
+| **conditionalBestHands** | Conditional Best Hands | Array of Objects | Defines conditional hand evaluation rules | No* |
+| **defaultBestHand** | Default Best Hand | Array of Objects | Default hand evaluation when no conditions match | No |
+| **classification_priority** | Classification Priority | Array of Strings | Order of precedence for classified hands | No |
+| **declaration_mode** | Declaration Mode | String | Mode for determining winners ("cards_speak" or "declare") | No |
+| **defaultActions** | Default Actions | Default Actions | Per-configuration default actions | No |
+| **globalDefaultAction** | Global Default Action | Object | Default action when no hand configurations have winners | No |
+
+*Either bestHand or conditionalBestHands must be provided.
+
+#### Conditional Best Hands Object
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **condition** | Condition | Object | Condition to check | Yes |
+| **bestHand** | Best Hand | Array of Objects | Hand evaluation to use when condition is true | Yes |
+
+Condition Object
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **type** | Type | String | Type of condition ("community_card_value", "community_card_suit", "board_composition") | Yes |
+| **subset** | Subset | String | Community card subset to check | Yes |
+| **values** | Values | Array | Card values that match condition | No |
+| **suits** | Suits | Array | Card suits that match condition | No |
 
 #### Best Hand Object
 
@@ -236,22 +339,103 @@ The following is the Showdown object for the game definition:
 | ----- | ---- | ---- | ---------- | -------- |
 | **name** | Hand Name | String | Name of the hand type | No |
 | **evaluationType** | Evaluation Type | String | Type of hand evaluation | Yes |
-| **holeCards** | Hole Cards | Integer or Array of Integers | Number of hole cards required or list of indices | No |
-| **communityCards** | Community Cards | Integer or Array of Integers | Number of community cards required or list of indices | No |
+| **holeCards** | Hole Cards | Integer, Array, or String | Number of hole cards required, list of indices, "remaining", or "all" | No |
+| **communityCards** | Community Cards | Integer or Array | Number of community cards required or list of indices | No |
 | **anyCards** | Any Cards | Integer | Number of any cards required | No |
+| **hole_subset** | Hole Subset | String | Subset of hole cards to use | No |
+| **community_subset** | Community Subset | String | Subset of community cards to use | No |
+| **cardState** | Card State | String | State of cards to consider ("face up" or "face down") | No |
 | **holeCardsAllowed** | Allowed Hole Cards | Array of Objects | Allowed combinations of hole card subsets | No |
-| **communityCardsAllowed** | Allowed Community Cards | Array of Objects | Allowed combinations of community card subsets | No |
-| **communitySubsetsAllowed** | Allowed Community Subsets | Array of Strings | List of allowed community subsets (deprecated?) | No |
-| **hole_subset** | Subset | String | Subset of hole cards used in evaluation | No |
-| **community_subset** | Subset | String | Subset of community cards used in evaluation | No |
+| **communityCardCombinations** | Allowed Community Cards | Array of Arrays | Allowed combinations of community card subsets | No |
+| **communitySubsetsAllowed** | Allowed Community Subsets | Array | List of allowed community subsets (deprecated?) | No |
 | **wildCards** | Wild Card | Array of Objects | List of wild card rules for the hand evaluation | No |
 | **qualifier** | Qualifier | Array of Integers | Qualifier for the hand | No |
-| **padding** | Padding | Boolean | If true, pads out the hole cards to the specified length if there are fewer cards | No |
+| **padding** | Padding | Boolean | If true, pads out hole cards to the specified length | No |
 | **minimumCards** | Minimum Cards | Integer | The minimum number of cards required for the hand to qualify | No |
-| **zeroCardsPipValue** | Pip Value for Zero Cards | Integer | Value assigned when no cards are held (for pip-based games) | No |
+| **zeroCardsPipValue** | Zero Cards Pip Value | Integer | Value when no cards are held for pip-based games | No |
 | **combinations** | Combinations | Array of Objects | Specific allowed hole/community combinations | No |
+| **usesUnusedFrom** | Uses Unused From | String | Name of hand configuration from which to use unused cards | No |
+| **classification** | Combinations | Object | Hand classification rules | No |
 
-Evaluation Types currently supported are:
+Classification Object
+
+Used to classify hands (e.g., face/butt in Action Razz):
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **type** | Classification Type | String | Type of classification (e.g., "face_butt") | Yes |
+| **faceRanks** | Face Ranks | Array of Strings | Ranks that qualify as "face" | Yes |
+| **fieldName** | Field Name | String | Type of classification (e.g., "face_butt") | Yes |
+
+Hole Cards Allowed Object
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **hole_subsets** | Allowed Subsets | Array of Strings | List of allowed subsets for this combination | Yes |
+
+Wild Cards Object
+
+Each object in the `wildCards` array includes:
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **type** | Wild Type | String | One of "joker", "rank", "lowest_community", "lowest_hole" | Yes |
+| **count** | Count | String | Number of wild cards (e.g., for Jokers) | Yes |
+| **rank** | Rank | String | Required for "rank" type | No |
+| **subset** | Subset | String | For "lowest_*" types | No |
+| **visibility** | Visibility | String | For "lowest_hole" (e.g., "face down" | No |
+| **match** | Match | String | Match condition (e.g., "rank") | No |
+| **scope** | Scope | String | "player" or "global" (default) | No |
+| **role** | Role | String | "wild", "bug", or "conditional" | Yes |
+| **condition** | Condition | Object | For "conditional" role | No |
+
+Community Card Select Combinations
+
+Example for selecting specific numbers of cards from multiple community subsets:
+
+```json
+"communityCardSelectCombinations": [
+  [
+    ["Flop 1.1", 1, 1],
+    ["Flop 2.2", 1, 1],
+    ["Flop 3.3", 1, 1]
+  ]
+]
+```
+
+Each inner array contains: [subset_name, min_count, max_count]
+
+#### Default Action Object
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **condition** | Condition | String | Condition for applying the default action | Yes |
+| **appliesTo** | Applies To | Array of Strings | Hand evaluation rules for the default action | No |
+| **action** | Action | String | Action to take when the condition is met | Yes |
+
+#### Action Object
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **type** | Type | String | Type of action ("split_pot", "best_hand", "evaluate_special") | Yes |
+| **bestHand** | Best Hand | Array of Objects | Hand evaluation rules for "best_hand" action | No |
+| **evaluation** | Evaluation | Object | Evaluation rules for "evaluate_special" action | No |
+
+Evaluation Object
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **criterion** | Criterion | String | Criterion for evaluating cards (e.g., "highest_rank") | Yes |
+| **suit** | Suit | String | Suit to evaluate or "river_card_suit" | No |
+| **from** | From | String | Source of cards to evaluate (e.g., "hole_cards") | Yes |
+| **subsets** | Subsets | Array of Strings | Subsets of cards to consider | No |
+
+
+### Evaluation Types
+
+The schema supports various evaluation types:
+
+#### Standard Types
 
 * **high** - traditional high-hand in Poker
 * **a5_low** - A-5 lowball - Ace is low, flushes/straights do not count against player
@@ -259,48 +443,27 @@ Evaluation Types currently supported are:
 * **badugi** - Badugi
 * **badugi_ah** - Badugi, except Ace is high
 * **higudi** - Hi-Dugi
+
+#### Pip-Based Types
+
 * **49** - Highest number of pips - face cards are 0, all other cards are their rank
 * **zero** - Lowest number of pips - face cards are 0, all other cards are their rank
 * **6** - Lowest number of pips - face cards are 10, all other cards are their rank (so best hand is AAAA2) 
 * **low_pip_6** - Lowest number of pips - face cards are 10, all other cards are their rank.   Hand sizes from 1 to 6 are allowed.
 * **21** - Closest to 21 using as many cards as possible.  5-card 21 is the best hand, following by 4-card 21, 3-card 21, 5-card 20, etc.
+
+#### Special Types
+
 * **a5_low_high** - A-5 lowball, but highest unpaired hand is best (KQJT9).  If all players have pairs, highest pair is best, etc.
 * **high_wild** - traditional high-hand, but for use when wild cards are in play.   Five of a kind is highest hand, otherwise joker can subsitute for any card not in player's hand (so no double ace flushes, etc.)
+* **one_card_high_spade** - Highest spade in the hole
+* **two_card_high** - Highest hand using exactly two cards
 
-For 36-card decks (2's, 3's, 4's, 5's are removed)
+#### Deck-Specific Types
 
 * **36card_ffh_high** - High hands using a 36-card deck, with flushes ranked higher than full houses
-
-For 20-card decks (only T, J, Q, K, A are present))
-
 * **20card_high** - High hands using a 20-card deck (A, K, Q, J, 10 of each suit)
-
-For holeCards and communityCards, either a single value can be given, or an array of possible choices.  For example:
-
-```
-holeCards: [2.3],
-communityCards: [3,2]
-```
-
-indicates that either 2 hole cards and 3 community cards can be used, or 3 hole cards and 2 community cards.   The arrays, if used, should always be the same length.
-
-The **qualifier** is specified as an array of integers, but really is a pair of number representing the rank and ordered rank within that rank for a given hand.
-
-For example,
-
-```json
-{
-    "name": "Low Hand",
-    "evaluationType": "a5_low",
-    "holeCards": 3,
-    "communityCards": 2,
-    "qualifier": [1,56]
-}
-```            
-
-Indicates we are using the A-5 Lowball evaluation rules (from a5_low), and there is a qualifier of rank 1,56, which indicates an 8-high.   So, this represents the fairly standard 8 or better qualifier that many hi/lo games have.
-
-Here are some common qualifiers and the pairs of numbers for them.   Other values can be obtained by looking at the hand evaluation files (such as all_card_hands_ranked_a5_low.csv)
+* **27_ja_ffh_high_wild_bug** - High hands using a 40-card deck (8, 9, 10 of each suit removed)
 
 ## Common Qualifiers
 
@@ -328,71 +491,3 @@ Here are some common qualifiers and the pairs of numbers for them.   Other value
 - Three of a kind or better - 7,858
 - Flush or better - 5,1277
 
-#### Card Subset Allowed Object
-
-This object is used in the `holeCardsAllowed` and `communityCardsAllowed` fields of the Best Hand Object.
-
-| Field | Name | Type | Definition | Required |
-| ----- | ---- | ---- | ---------- | -------- |
-| **hole_subsets** | Allowed Subsets | Array of Strings | List of allowed subsets for this combination | Yes |
-
-For example,
-
-```json               
-"holeCardsAllowed": [
-    {
-        "hole_subsets": ["Point","Hole Card 1"]
-    },
-    {
-        "hole_subsets": ["Point","Hole Card 2"]
-    }
-]
-```
-
-This indicates that there are 2 choices of hole cards to use - the Point subset with the Hole Card 1 subset, or the Point subset with the Hole Card 2 subset 
-
-**communityCardsAllowed** supports a **flat array of strings** (simplified version).
-
-#### Wild Cards Object
-
-Each object in the `wildCards` array includes:
-
-| Field | Name | Type | Definition | Required |
-| ----- | ---- | ---- | ---------- | -------- |
-| **type** | Wild Type | String | One of `joker`, `rank`, `lowest_community`, `lowest_hole` | No |
-| **count** | Count | Integer | Optional – used for validation (e.g., number of Jokers) | No |
-| **rank** | Rank | String | Required for `rank` type | No |
-| **subset** | Subset | String | For `lowest_*` types | No |
-| **visibility** | Visibility | String | e.g., `"face down"` (for `lowest_hole`) | No |
-| **match** | Match | String | e.g., `"rank"` | No |
-| **scope** | Scope | String | `"player"` or `"global"` (default) | No |
-| **role** | Role | String | `"wild"` or `"bug"` (required) | No |
-
-This describes what rules define wild cards in the game.   Currently, only one set of values is supported:
-
-```json
-    "wildCard": {
-        "communityCards": "low",
-        "otherCards": "same_rank"
-    }
-```
-which indicates that the low community card is wild, along with any other cards of the same rank.   In the future, more sets of rules will be implemented.
-
-#### Default Action Object
-
-This object is used in the `defaultAction` field of the Showdown Object.
-
-| Field | Name | Type | Definition | Required |
-| ----- | ---- | ---- | ---------- | -------- |
-| **condition** | Condition | String | Condition for applying the default action | Yes |
-| **action** | Action | String | Action to take when the condition is met | Yes |
-| **bestHand** | Best Hand | Array of Best Hand Objects | Hand evaluation rules for the default action | No |
-
-This indicates how hand evaulation should work no winner is met from rules in **bestHand**.    'no_qualifier_met' is the only supported value for **condition** - indicating that no hands met qualifiers.
-
-For 'action' - there are two supported values:
-
-* **best_hand** - use the rules in the bestHand object located in the defaultAction object to determine the winner
-* **split_pot** - split the pot among all active players
-
-This README provides an overview of the main components of the Poker Game Configuration Schema. For more detailed information, please refer to the full JSON schema file.
