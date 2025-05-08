@@ -295,6 +295,19 @@ class GameRules:
         # Validate gameplay sequence
         self._validate_gameplay_sequence()
 
+        # Validate conditional dealing
+        for step in self.gameplay:
+            if step.action_type == GameActionType.DEAL:
+                config = step.action_config
+                if "conditional_state" in config:
+                    cond_state = config["conditional_state"]
+                    if cond_state.get("type") == "flop_color_check":
+                        if "color_check" not in cond_state:
+                            raise ValueError("Missing 'color_check' in conditional_state")
+                        color_check = cond_state["color_check"]
+                        if "color" not in color_check or "min_count" not in color_check:
+                            raise ValueError("color_check must specify 'color' and 'min_count'")        
+
     def _validate_gameplay_sequence(self) -> None:
         """
         Validate that the gameplay sequence is valid.

@@ -1,42 +1,35 @@
 {
-    "game": "2\u20137 Razz",
+    "game": "Triple Draw Dramaha",
     "references": [
-        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
-        "https://www.barge.org/rulebook/deuce-to-seven-razz.html"
-    ],         
+        "https://www.barge.org/rulebook/triple-draw-dramaha.html#triple-draw-dramaha"
+    ],            
     "players": {
         "min": 2,
-        "max": 7
+        "max": 6
     },
     "deck": {
         "type": "standard",
         "cards": 52
     },
     "bettingStructures": [
-        "Limit"
+        "Limit",
+        "No Limit",
+        "Pot Limit"
     ],
-    "forcedBets": {
-        "style": "bring-in",
-        "rule": "high card"
-    },
     "gamePlay": [
         {
             "bet": {
-                "type": "antes"
+                "type": "blinds"
             },
-            "name": "Post Antes"
+            "name": "Post Blinds"
         },
         {
             "deal": {
                 "location": "player",
                 "cards": [
                     {
-                        "number": 2,
+                        "number": 5,
                         "state": "face down"
-                    },
-                    {
-                        "number": 1,
-                        "state": "face up"
                     }
                 ]
             },
@@ -44,87 +37,96 @@
         },
         {
             "bet": {
-                "type": "bring-in"
-            },
-            "name": "Post Bring-In"
-        },
-        {
-            "bet": {
                 "type": "small"
             },
-            "name": "Initial Bet"
+            "name": "Pre-Flop Bet"
         },
         {
             "deal": {
-                "location": "player",
+                "location": "community",
                 "cards": [
                     {
-                        "number": 1,
+                        "number": 3,
                         "state": "face up"
                     }
                 ]
             },
-            "name": "Deal Third Street"
+            "name": "Deal Flop"
         },
         {
-            "bet": {
-                "type": "small"
-            },
-            "name": "Third Street Bet"
-        },
-        {
-            "deal": {
-                "location": "player",
+            "draw": {
                 "cards": [
                     {
-                        "number": 1,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal Fourth Street"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "Fourth Street Bet"
-        },
-        {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal Fifth Street"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "Fifth Street Bet"
-        },
-        {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 1,
+                        "number": 5,
                         "state": "face down"
                     }
                 ]
             },
-            "name": "Deal Sixth Street"
+            "name": "First Draw"
         },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Post-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Turn"
+        },
+        {
+            "draw": {
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Second Draw"
+        },        
         {
             "bet": {
                 "type": "big"
             },
-            "name": "Sixth Street Bet"
+            "name": "Turn Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal River"
+        },
+        {
+            "draw": {
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Third Draw"
+        },        
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "River Bet"
         },
         {
             "showdown": {
@@ -136,12 +138,18 @@
     "showdown": {
         "order": "clockwise",
         "startingFrom": "dealer",
-        "cardsRequired": "all five cards",
+        "cardsRequired": "two hole cards, three community cards",
         "bestHand": [
             {
-                "evaluationType": "27_low",
-                "holeCards": 5,
-                "communityCards": 0
+                "name": "5-Card Draw",
+                "evaluationType": "high",
+                "holeCards": 5
+            },
+            {
+                "name": "Omaha",
+                "evaluationType": "high",
+                "holeCards": 2,
+                "communityCards": 3
             }
         ]
     }

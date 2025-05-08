@@ -1,5 +1,9 @@
 {
     "game": "Dramaha 49",
+    "references": [
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
+        "https://www.barge.org/rulebook/dramaha-49.html"
+    ],
     "players": {
         "min": 2,
         "max": 6

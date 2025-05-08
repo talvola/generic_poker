@@ -162,9 +162,21 @@
           "description": "Specific subset of hole cards to use for this hand evaluation (e.g., 'Hold'em')"
         },
         "community_subset": {
-          "type": "string",
-          "description": "Specific subset of community cards to use for this hand evaluation (e.g., 'Board 1')"
-        }, 
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Specific subset of community cards to use for this hand evaluation (e.g., 'Board 1')"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "List of community card subsets to use for this hand evaluation (e.g., ['Flop', 'Turn', 'River'])"
+            }
+          ],
+          "description": "Single subset or list of subsets of community cards to use for hand evaluation"
+        },
         "cardState": {
           "type": "string",
           "enum": ["face down", "face up"],
@@ -388,12 +400,71 @@
           "properties": {
             "type": { 
               "type": "string", 
-              "enum": ["all_exposed", "any_exposed", "none_exposed"] 
+              "enum": ["all_exposed", "any_exposed", "none_exposed", "board_composition"],
+              "description": "Type of condition to check"
             },
-            "true_state": { "type": "string" },
-            "false_state": { "type": "string" }
+            "true_state": { 
+              "type": "string",
+              "description": "Card state to use if condition is true" 
+            },
+            "false_state": { 
+              "type": "string",
+              "description": "Card state to use if condition is false (default 'none' means don't deal)" 
+            },
+            "subset": {
+              "type": "string",
+              "description": "Community card subset to check for board composition condition"
+            },
+            "check": {
+              "type": "string",
+              "enum": ["color", "suit", "rank"],
+              "description": "Type of card property to check in board composition"
+            },
+            "color": {
+              "type": "string",
+              "enum": ["red", "black"],
+              "description": "Card color to check for in board composition"
+            },
+            "min_count": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Minimum number of matching cards required for the condition to be true"
+            }
           },
-          "required": ["type", "true_state", "false_state"]
+          "required": ["type", "true_state", "false_state"],
+          "allOf": [
+            {
+              "if": {
+                "properties": { "type": { "enum": ["board_composition"] } }
+              },
+              "then": {
+                "required": ["subset"]
+              }
+            },
+            {
+              "if": {
+                "properties": { 
+                  "type": { "enum": ["board_composition"] },
+                  "check": { "enum": ["color"] }
+                }
+              },
+              "then": {
+                "required": ["check", "color", "min_count"]
+              }
+            },
+            {
+              "if": {
+                "properties": { 
+                  "type": { "enum": ["board_composition"] },
+                  "check": { "enum": ["suit"] }
+                }
+              },
+              "then": {
+                "required": ["check", "suits", "min_count"]
+              }
+            }
+          ],
+          "additionalProperties": false
         },   
         "wildCards": {
           "type": "array",
@@ -977,7 +1048,22 @@
                       "enum": ["c", "d", "h", "s", "j"]
                     },
                     "description": "Card suits that must match for the condition to be true"
-                  }
+                  },
+                  "check": {
+                    "type": "string",
+                    "enum": ["color", "suit", "rank"],
+                    "description": "Type of card property to check in board composition"
+                  },
+                  "color": {
+                    "type": "string",
+                    "enum": ["red", "black"],
+                    "description": "Card color to check for in board composition"
+                  },
+                  "min_count": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Minimum number of matching cards required for the condition to be true"
+                  }                  
                 },
                 "required": ["type"],
                 "additionalProperties": false

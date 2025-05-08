@@ -1,7 +1,8 @@
 {
     "game": "Omaha 8",
     "references": [
-        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
+        "https://www.barge.org/rulebook/omaha-high-low-eight-or-better.html"
     ],            
     "players": {
         "min": 2,

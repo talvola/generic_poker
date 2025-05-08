@@ -1,42 +1,35 @@
 {
-    "game": "2\u20137 Razz",
+    "game": "Short Deck Omaha",
     "references": [
-        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
-        "https://www.barge.org/rulebook/deuce-to-seven-razz.html"
-    ],         
+        "https://www.barge.org/rulebook/short-deck-omaha.html"
+    ],
     "players": {
         "min": 2,
         "max": 7
     },
     "deck": {
-        "type": "standard",
-        "cards": 52
+        "type": "short_6a",
+        "cards": 36
     },
     "bettingStructures": [
-        "Limit"
+        "Limit",
+        "No Limit",
+        "Pot Limit"
     ],
-    "forcedBets": {
-        "style": "bring-in",
-        "rule": "high card"
-    },
     "gamePlay": [
         {
             "bet": {
-                "type": "antes"
+                "type": "blinds"
             },
-            "name": "Post Antes"
+            "name": "Post Blinds"
         },
         {
             "deal": {
                 "location": "player",
                 "cards": [
                     {
-                        "number": 2,
+                        "number": 4,
                         "state": "face down"
-                    },
-                    {
-                        "number": 1,
-                        "state": "face up"
                     }
                 ]
             },
@@ -44,19 +37,31 @@
         },
         {
             "bet": {
-                "type": "bring-in"
+                "type": "small"
             },
-            "name": "Post Bring-In"
+            "name": "Pre-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Flop"
         },
         {
             "bet": {
                 "type": "small"
             },
-            "name": "Initial Bet"
+            "name": "Post-Flop Bet"
         },
         {
             "deal": {
-                "location": "player",
+                "location": "community",
                 "cards": [
                     {
                         "number": 1,
@@ -64,17 +69,17 @@
                     }
                 ]
             },
-            "name": "Deal Third Street"
+            "name": "Deal Turn"
         },
         {
             "bet": {
-                "type": "small"
+                "type": "big"
             },
-            "name": "Third Street Bet"
+            "name": "Turn Bet"
         },
         {
             "deal": {
-                "location": "player",
+                "location": "community",
                 "cards": [
                     {
                         "number": 1,
@@ -82,49 +87,13 @@
                     }
                 ]
             },
-            "name": "Deal Fourth Street"
+            "name": "Deal River"
         },
         {
             "bet": {
                 "type": "big"
             },
-            "name": "Fourth Street Bet"
-        },
-        {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal Fifth Street"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "Fifth Street Bet"
-        },
-        {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face down"
-                    }
-                ]
-            },
-            "name": "Deal Sixth Street"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "Sixth Street Bet"
+            "name": "River Bet"
         },
         {
             "showdown": {
@@ -136,12 +105,12 @@
     "showdown": {
         "order": "clockwise",
         "startingFrom": "dealer",
-        "cardsRequired": "all five cards",
+        "cardsRequired": "two hole cards, three community cards",
         "bestHand": [
             {
-                "evaluationType": "27_low",
-                "holeCards": 5,
-                "communityCards": 0
+                "evaluationType": "36card_ffh_high",
+                "holeCards": 2,
+                "communityCards": 3
             }
         ]
     }

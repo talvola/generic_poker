@@ -343,7 +343,7 @@ Condition Object
 | **communityCards** | Community Cards | Integer or Array | Number of community cards required or list of indices | No |
 | **anyCards** | Any Cards | Integer | Number of any cards required | No |
 | **hole_subset** | Hole Subset | String | Subset of hole cards to use | No |
-| **community_subset** | Community Subset | String | Subset of community cards to use | No |
+| **community_subset** | Community Subset | String or Array of Strings | Subset(s) of community cards to use | No |
 | **cardState** | Card State | String | State of cards to consider ("face up" or "face down") | No |
 | **holeCardsAllowed** | Allowed Hole Cards | Array of Objects | Allowed combinations of hole card subsets | No |
 | **communityCardCombinations** | Allowed Community Cards | Array of Arrays | Allowed combinations of community card subsets | No |

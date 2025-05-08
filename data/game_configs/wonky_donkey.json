@@ -1,0 +1,187 @@
+{
+  "game": "Wonky Donkey",
+  "references": [
+    "https://www.barge.org/rulebook/wonky-donkey.html"
+  ],
+  "players": {
+    "min": 2,
+    "max": 9
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 2,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Initial Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Pre-Flop Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 3,
+            "state": "face up",
+            "subset": "Flop"
+          }
+        ]
+      },
+      "name": "Deal Flop"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "conditional_state": {
+          "type": "board_composition",
+          "subset": "Flop",
+          "check": "color",
+          "color": "black",
+          "min_count": 2,
+          "true_state": "face down",
+          "false_state": "none"
+        },
+        "cards": [
+          {
+            "number": 2,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Additional Cards If Black Flop"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Post-Flop Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up",
+            "subset": "Turn"
+          }
+        ]
+      },
+      "name": "Deal Turn"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Turn Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up",
+            "subset": "River"
+          }
+        ]
+      },
+      "name": "Deal River"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "River Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "based on flop colors",
+    "conditionalBestHands": [
+      {
+        "condition": {
+          "type": "board_composition",
+          "subset": "Flop",
+          "check": "color",
+          "color": "red",
+          "min_count": 2
+        },
+        "bestHand": [
+          {
+            "name": "High Hand",
+            "evaluationType": "high",
+            "anyCards": 5,
+            "community_subset": ["Flop", "Turn", "River"]
+          }
+        ]
+      },
+      {
+        "condition": {
+          "type": "board_composition",
+          "subset": "Flop",
+          "check": "color",
+          "color": "black",
+          "min_count": 2
+        },
+        "bestHand": [
+          {
+            "name": "High Hand",
+            "evaluationType": "high",
+            "holeCards": 2,
+            "communityCards": 3
+          },
+          {
+            "name": "Low Hand",
+            "evaluationType": "a5_low",
+            "holeCards": 2,
+            "communityCards": 3,
+            "community_subset": ["Flop", "Turn", "River"],
+            "qualifier": [1, 56]
+          }
+        ]
+      }
+    ],
+    "defaultBestHand": [
+      {
+        "name": "High Hand",
+        "evaluationType": "high",
+        "anyCards": 5,
+        "community_subset": ["Flop", "Turn", "River"]
+    }
+    ],
+    "declaration_mode": "cards_speak"
+  }
+}

@@ -1,7 +1,8 @@
 {
     "game": "London Lowball",
     "references": [
-        "https://en.wikipedia.org/wiki/Razz_(poker)"
+        "https://en.wikipedia.org/wiki/Razz_(poker)",
+        "https://www.barge.org/rulebook/london-lowball.html"
     ],         
     "players": {
         "min": 2,

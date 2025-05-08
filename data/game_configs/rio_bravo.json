@@ -1,5 +1,9 @@
 {
     "game": "Rio Bravo",
+    "references": [
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
+        "https://www.barge.org/rulebook/rio-bravo.html"
+    ],
     "players": {
         "min": 2,
         "max": 9

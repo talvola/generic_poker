@@ -426,6 +426,55 @@ class Game:
         conditional_state = config.get("conditional_state", None)
         wild_card_rules = config.get("wildCards", None)
      
+        # Handle conditional dealing based on conditions
+        if conditional_state:
+            condition_type = conditional_state.get("type")
+            true_state = conditional_state.get("true_state")
+            false_state = conditional_state.get("false_state", "none")
+            
+            # Skip dealing if condition is not met
+            should_deal = False
+            
+            if condition_type == "all_exposed" or condition_type == "any_exposed" or condition_type == "none_exposed":
+                # Original conditional states logic (unchanged)
+                # This would be for games where dealing depends on exposed cards
+                pass
+                
+            elif condition_type == "board_composition":
+                # New conditional type for board composition checks
+                subset = conditional_state.get("subset", "default")
+                check_type = conditional_state.get("check")
+                
+                if check_type == "color":
+                    check_color = conditional_state.get("color", "black")
+                    min_count = conditional_state.get("min_count", 2)
+                    
+                    # Get cards from the specified subset
+                    subset_cards = self.table.community_cards.get(subset, [])
+                    
+                    # Count cards of the specified color
+                    color_count = sum(1 for card in subset_cards if card.color == check_color)
+                    
+                    # Determine if condition is met
+                    should_deal = color_count >= min_count
+                    logger.info(f"Condition check for {check_color} cards in {subset}: " +
+                            f"found {color_count}, need {min_count}, condition {'met' if should_deal else 'not met'}")
+                
+            # If condition not met, update card state or skip dealing
+            if not should_deal:
+                logger.info(f"Conditional dealing - condition not met, using '{false_state}' state")
+                if false_state == "none":
+                    return  # Skip dealing entirely
+                
+                # Otherwise, use the false_state for the cards
+                for card_config in config["cards"]:
+                    card_config["state"] = false_state
+            else:
+                logger.info(f"Conditional dealing - condition met, using '{true_state}' state")
+                # Condition met, use true_state
+                for card_config in config["cards"]:
+                    card_config["state"] = true_state
+             
         for card_config in config["cards"]:
             num_cards = card_config["number"]
 

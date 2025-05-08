@@ -410,9 +410,24 @@ class ShowdownManager:
             return card.suit.value in suits
         
         elif condition_type == "board_composition":
-            # Example for checking board composition (e.g., flush possible)
-            # Implementation would depend on what specific conditions we want to check
-            pass
+            subset = condition.get('subset', 'default')
+            check_type = condition.get('check')
+            
+            # Check if the specified subset exists
+            if subset not in self.table.community_cards or not self.table.community_cards[subset]:
+                logger.debug(f"Condition check failed: subset '{subset}' not found or empty")
+                return False
+            
+            # Handle color checks for board composition
+            if check_type == "color":
+                color = condition.get('color')
+                min_count = condition.get('min_count', 1)
+                
+                cards = self.table.community_cards[subset]
+                color_count = sum(1 for card in cards if card.color == color)
+                
+                logger.debug(f"Board composition check: {color_count} {color} cards in {subset} (need {min_count})")
+                return color_count >= min_count
             
         # Default: condition not recognized or not implemented
         logger.warning(f"Unknown condition type: {condition_type}")
@@ -1643,15 +1658,42 @@ class ShowdownManager:
         return hole_cards, hole_cards    
     
     def _get_community_cards(self, community_cards: Dict[str, List[Card]], showdown_rules: dict) -> List[Card]:
-        """Get community cards based on subset."""
+        """
+        Get community cards based on subset(s).
+        
+        Args:
+            community_cards: Dictionary of community card subsets
+            showdown_rules: Showdown rules configuration
+            
+        Returns:
+            Combined list of community cards from specified subset(s)
+        """
         community_subset = showdown_rules.get("community_subset", "default")
-        comm_cards = community_cards.get(community_subset, []) if community_cards else []
+        result_cards = []
         
-        if not comm_cards and community_subset != "default":
-            logger.warning(f"Community subset '{community_subset}' not found")
+        # Handle both string and list formats for community_subset
+        if isinstance(community_subset, str):
+            subsets = [community_subset]
+        else:
+            subsets = community_subset
         
-        return comm_cards    
-
+        # Collect cards from all specified subsets
+        for subset in subsets:
+            subset_cards = community_cards.get(subset, []) if community_cards else []
+            result_cards.extend(subset_cards)
+            
+            if not subset_cards and subset != "default":
+                logger.warning(f"Community subset '{subset}' not found")
+        
+        if not result_cards:
+            # If no subsets were found but we need to use all available cards
+            # (like in Hold'em), collect all cards from all subsets
+            if not showdown_rules.get("community_subset"):
+                logger.debug("No community subset specified; collecting cards from all subsets")
+                for cards in community_cards.values():
+                    result_cards.extend(cards)
+        
+        return result_cards
 
     def apply_wild_cards(self, player: Player, comm_cards: List[Card], wild_rules: List[dict]) -> None:
         """Apply wild card rules to the player's hand and community cards."""

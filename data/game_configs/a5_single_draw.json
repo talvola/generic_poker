@@ -1,7 +1,8 @@
 {
     "game": "A\u20135 Single Draw",
     "references": [
-        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
+        "https://www.barge.org/rulebook/california-lowball.html"
     ],        
     "players": {
         "min": 2,

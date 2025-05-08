@@ -1,7 +1,8 @@
 {
     "game": "5-Card Omaha 8",
     "references": [
-        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
+        "https://www.barge.org/rulebook/five-card-omaha.html"
     ],        
     "players": {
         "min": 2,

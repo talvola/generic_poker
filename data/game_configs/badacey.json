@@ -1,5 +1,9 @@
 {
     "game": "Badacey",
+    "references": [
+        "https://www.barge.org/rulebook/badacey.html",
+        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
+    ],
     "players": {
         "min": 2,
         "max": 8

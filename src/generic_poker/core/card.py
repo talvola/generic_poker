@@ -122,6 +122,15 @@ class Card:
             else Visibility.FACE_UP
         )
     
+    @property
+    def color(self) -> str:
+        """Get the color of the card (red or black)."""
+        if self.suit in [Suit.HEARTS, Suit.DIAMONDS]:
+            return "red"
+        elif self.suit in [Suit.CLUBS, Suit.SPADES]:
+            return "black"
+        return "unknown"  # For jokers or other special cards
+
     def make_wild(self, wild_type: WildType) -> None:
         """Make this card wild, but prevent Jokers from changing their wild type unless specified."""
         if self.rank == Rank.JOKER and self.suit == Suit.JOKER and self.wild_type == WildType.NATURAL:
