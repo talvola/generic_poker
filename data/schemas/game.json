@@ -872,6 +872,38 @@
       "required": ["type", "options"],
       "additionalProperties": false
     }, 
+    "choose": {
+      "type": "object",
+      "properties": {
+        "possible_values": {
+          "type": "array",
+          "items": { 
+            "type": "string" 
+          },
+          "description": "List of possible values that can be chosen"
+        },
+        "value": {
+          "type": "string",
+          "description": "Name of variable to store the chosen value"
+        },
+        "default": {
+          "type": "string",
+          "description": "Default value if no choice is made"
+        },
+        "chooser": {
+          "type": "string",
+          "enum": ["utg", "button", "dealer", "sb", "bb"],
+          "description": "Position that gets to make the choice (utg = under the gun)"
+        },
+        "time_limit": {
+          "type": "integer",
+          "description": "Time limit in seconds for making the choice"
+        }
+      },
+      "required": ["possible_values", "value"],
+      "additionalProperties": false,
+      "description": "Configuration for player choice action"
+    },    
     "showdown": {
       "type": "object",
       "properties": {
@@ -1027,7 +1059,7 @@
                 "properties": {
                   "type": {
                     "type": "string",
-                    "enum": ["community_card_value", "community_card_suit", "board_composition"],
+                    "enum": ["community_card_value", "community_card_suit", "board_composition", "player_choice"],
                     "description": "Type of condition to check"
                   },
                   "subset": {
@@ -1063,10 +1095,62 @@
                     "type": "integer",
                     "minimum": 1,
                     "description": "Minimum number of matching cards required for the condition to be true"
+                  },
+                  "value": {
+                    "type": "string",
+                    "description": "Value to match for player_choice condition"
                   }                  
                 },
                 "required": ["type"],
-                "additionalProperties": false
+                "additionalProperties": false,
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": { "type": { "enum": ["community_card_value"] } }
+                    },
+                    "then": {
+                      "required": ["subset", "values"]
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": { "type": { "enum": ["community_card_suit"] } }
+                    },
+                    "then": {
+                      "required": ["subset", "suits"]
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": { 
+                        "type": { "enum": ["board_composition"] },
+                        "check": { "enum": ["color"] }
+                      }
+                    },
+                    "then": {
+                      "required": ["subset", "check", "color", "min_count"]
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": { 
+                        "type": { "enum": ["board_composition"] },
+                        "check": { "enum": ["suit"] }
+                      }
+                    },
+                    "then": {
+                      "required": ["subset", "check", "suits", "min_count"]
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": { "type": { "enum": ["player_choice"] } }
+                    },
+                    "then": {
+                      "required": ["subset", "value"]
+                    }
+                  }
+                ]                
               },
               "bestHand": {
                 "type": "array",

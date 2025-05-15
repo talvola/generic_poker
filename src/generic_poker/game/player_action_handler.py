@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional, Tuple, Dict, Set
+from typing import List, Optional, Tuple, Dict, Set, Any
 
 from generic_poker.game.game_state import GameState, PlayerAction
 from generic_poker.core.card import Card, Visibility
@@ -45,6 +45,14 @@ class PlayerActionHandler:
             return []
 
         step = self.game.rules.gameplay[self.game.current_step]
+
+        # Handle CHOOSE action type
+        if step.action_type == GameActionType.CHOOSE:
+            logger.debug(f"Getting valid actions for player {player_id} for CHOOSE action")
+            # Return CHOOSE action with possible values
+            possible_values = step.action_config.get("possible_values", [])
+            return [(PlayerAction.CHOOSE, 0, len(possible_values) - 1, possible_values)]
+            
         config = step.action_config
 
         # Handle grouped actions
@@ -192,7 +200,7 @@ class PlayerActionHandler:
 
         return valid_actions
 
-    def handle_action(self, player_id: str, action: PlayerAction, amount: int = 0, cards: Optional[List[Card]] = None, declaration_data: Optional[List[Dict]] = None) -> ActionResult:
+    def handle_action(self, player_id: str, action: PlayerAction, amount: int = 0, cards: Optional[List[Card]] = None, declaration_data: Optional[List[Dict]] = None, choice_value: Optional[str] = None) -> ActionResult:
         """
         Handle a player action.
 
@@ -215,6 +223,49 @@ class PlayerActionHandler:
 
         logger.debug(f"Handling action {action} for player {player.name} (ID: {player_id})")
 
+        # Handle the CHOOSE action
+        if action == PlayerAction.CHOOSE and step.action_type == GameActionType.CHOOSE:
+            # Validate the player
+            if player_id != self.game.current_player.id:
+                return ActionResult(success=False, message="Not your turn to choose")
+            
+            # Get the choose config
+            config = step.action_config
+            possible_values = config.get("possible_values", [])
+            value_name = config.get("value")
+            
+            if not possible_values:
+                return ActionResult(success=False, message="No choices available")
+            
+            # Determine the chosen value
+            if choice_value is not None:
+                # Direct value provided
+                if choice_value not in possible_values:
+                    return ActionResult(success=False, message=f"Invalid choice: {choice_value}")
+                chosen_value = choice_value
+            else:
+                # Use amount as index
+                choice_index = min(max(0, amount), len(possible_values) - 1)
+                chosen_value = possible_values[choice_index]
+            
+            # Store the choice
+            if not hasattr(self.game, 'game_choices'):
+                self.game.game_choices = {}
+                
+            self.game.game_choices[value_name] = chosen_value
+            logger.info(f"Player {player_id} chose {chosen_value} for {value_name}")
+            
+            # Handle special setup for stud games
+            if chosen_value in ["Seven Card Stud", "Seven Card Stud 8", "Razz"]:
+                self.game.is_stud_game = True
+                self.game.next_stud_street = 4
+                self.game.stud_order = "low" if chosen_value == "Razz" else "high"
+            else:
+                self.game.is_stud_game = False
+                
+            # Advance to next step
+            return ActionResult(success=True, advance_step=True)
+    
         # Handle grouped actions
         if step.action_type == GameActionType.GROUPED:
             return self._handle_grouped_action(player_id, action, amount, cards)
@@ -1036,9 +1087,30 @@ class PlayerActionHandler:
                 formatted.append(f"Bring-in ${min_amount}")
         return formatted
 
-    def setup_discard_round(self, config: Dict) -> None:
-        """Set up a discard round."""
+    def setup_discard_round(self, config: Dict[str, Any]) -> None:
+        """
+        Set up a discard round.
+        
+        Args:
+            config: Discard configuration
+        """
+        # Check conditional state - skip if condition not met
+        conditional_state = config.get("conditional_state")
+        if conditional_state and not self.game._check_condition(conditional_state):
+            logger.info("Skipping discard round - condition not met")
+            # Let the game know to skip this step completely
+            if self.game.auto_progress:
+                self.game._next_step()
+            return
+            
         self.game.current_discard_config = config
+        self.game.state = GameState.DRAWING
+        self.first_player_in_round = None  # Track first player to determine when round is complete
+        
+        # Set the current player to the first player (usually UTG or first active)
+        self.game.current_player = self.game.next_player(round_start=True)
+        if self.game.current_player:
+            self.first_player_in_round = self.game.current_player.id
 
     def setup_draw_round(self, config: Dict) -> None:
         """Set up a draw round."""

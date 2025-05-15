@@ -121,6 +121,8 @@ class Game:
 
         # Initialize the showdown manager
         self.showdown_manager = ShowdownManager(self.table, self.betting, self.rules)        
+        # Give the showdown manager a reference to the game instance for access to game_choices
+        self.showdown_manager.game = self
 
         self.state = GameState.WAITING
         self.current_step = -1  # Not started
@@ -285,6 +287,11 @@ class Game:
             step = self.rules.gameplay[self.current_step]
             logger.info(f"Processing step {self.current_step}: {step.name} {step.action_type}")
                            
+            # First check if this step should be skipped due to conditional state
+            if self._check_and_skip_conditional_step():
+                logger.info(f"   Skipping conditional step {self.current_step}: '{step.name}'")
+                return  # Step was skipped, _next_step was called, no further processing needed
+                                   
             if step.action_type == GameActionType.GROUPED:
                 self.action_handler.setup_grouped_step(step.action_config)
                 first_subaction = step.action_config[0]
@@ -324,6 +331,16 @@ class Game:
                     self.state = GameState.DRAWING
                     self.action_handler.setup_declare_round(first_subaction["declare"])
                     self.current_player = self.next_player(round_start=True)
+                # not sure if we ever see 'deal' here - need to test GROUPED combinations of actions more to validate
+                elif "deal" in first_subaction:
+                    self.state = GameState.DEALING
+                    self._handle_deal(first_subaction["deal"])
+                    if self.auto_progress:
+                        self.action_handler.current_substep += 1
+                        if self.action_handler.current_substep >= len(step.action_config):
+                            self._next_step()
+                        else:
+                            self.process_current_step()  # Process next grouped action                    
 
             elif step.action_type == GameActionType.BET:
                 if step.action_config["type"] in ["antes", "blinds", "bring-in"]:
@@ -351,13 +368,26 @@ class Game:
                     self.current_player = self.next_player(round_start=True)
 
             elif step.action_type == GameActionType.DEAL:
+                # Check conditional state for the deal step
+                conditional_state = step.action_config.get("conditional_state")
+                if conditional_state and not self._check_condition(conditional_state):
+                    logger.info(f"Skipping deal step '{step.name}' - condition not met")
+                    if self.auto_progress:
+                        self._next_step()
+                    return
+                    
                 logger.debug(f"Handling deal action: {step.action_config}")
                 self.state = GameState.DEALING
                 self._handle_deal(step.action_config)
                 if self.auto_progress:  
                     self._next_step()
 
-            # In Game.process_current_step() method
+            elif step.action_type == GameActionType.CHOOSE:
+                logger.info("Handling player choice")
+                self.state = GameState.DEALING
+                self._handle_choose(step.action_config)
+                # Don't auto-progress - wait for player's choice
+
             elif step.action_type == GameActionType.ROLL_DIE:
                 self.state = GameState.DEALING
                 self._handle_roll_die(step.action_config)
@@ -365,15 +395,24 @@ class Game:
                     self._next_step()                    
 
             elif step.action_type == GameActionType.REMOVE:
-                logger.debug(f"Handling deal action: {step.action_config}")
+                logger.debug(f"Handling remove action: {step.action_config}")
                 self.state = GameState.DEALING
                 self._handle_remove(step.action_config)
                 if self.auto_progress:  
-                    self._next_step()                    
+                    self._next_step()                             
 
             # treating discard and draw (which is discard/draw) separately for now,
             # but could be refactored to be the same thing
             elif step.action_type == GameActionType.DISCARD:
+                # Check conditional state for the discard step
+                # ET: isn't this handled above?   this might be dead code
+                conditional_state = step.action_config.get("conditional_state")
+                if conditional_state and not self._check_condition(conditional_state):
+                    logger.info(f"Skipping discard step '{step.name}' - condition not met")
+                    if self.auto_progress:
+                        self._next_step()
+                    return
+
                 self.state = GameState.DRAWING
                 self.action_handler.setup_discard_round(step.action_config)
                 self.current_player = self.next_player(round_start=True)
@@ -414,6 +453,114 @@ class Game:
                 self.state = GameState.SHOWDOWN
                 self._handle_showdown()
 
+    def _check_condition(self, condition: Dict[str, Any]) -> bool:
+        """
+        Check if a condition is met.
+        
+        Args:
+            condition: Condition specification from rules
+            
+        Returns:
+            True if condition matches, False otherwise
+        """
+        # If no condition, then it's always true
+        if not condition:
+            return True
+            
+        condition_type = condition.get('type')
+        
+        if condition_type == "all_exposed" or condition_type == "any_exposed" or condition_type == "none_exposed":
+            # Original conditional states logic for exposed cards (unchanged)
+            # This would be for games where dealing depends on exposed cards
+            # We should implement this logic if needed
+            return True  # Placeholder - implement actual logic as needed
+                
+        elif condition_type == "board_composition":
+            # Condition type for board composition checks
+            subset = condition.get('subset', 'default')
+            check_type = condition.get('check')
+            
+            if check_type == "color":
+                check_color = condition.get('color', 'black')
+                min_count = condition.get('min_count', 2)
+                
+                # Get cards from the specified subset
+                subset_cards = self.table.community_cards.get(subset, [])
+                
+                # Count cards of the specified color
+                color_count = sum(1 for card in subset_cards if card.color == check_color)
+                
+                # Determine if condition is met
+                meets_condition = color_count >= min_count
+                logger.info(f"Condition check for {check_color} cards in {subset}: " +
+                        f"found {color_count}, need {min_count}, condition {'met' if meets_condition else 'not met'}")
+                return meets_condition
+                
+        elif condition_type == "player_choice":
+            # New condition type for player choices
+            subset = condition.get('subset')  # The choice variable name
+            
+            # Check if we have game_choices dictionary
+            if not hasattr(self, 'game_choices'):
+                logger.warning("No game choices available to check condition")
+                return False
+                
+            # Check for single value match
+            if 'value' in condition:
+                expected_value = condition.get('value')
+                actual_value = self.game_choices.get(subset)
+                matches = actual_value == expected_value
+                logger.info(f"Checking player choice condition: {subset}={actual_value}, expected {expected_value}, {'match' if matches else 'no match'}")
+                return matches
+                
+            # Check for value in list
+            if 'values' in condition:
+                expected_values = condition.get('values', [])
+                actual_value = self.game_choices.get(subset)
+                matches = actual_value in expected_values
+                logger.info(f"Checking player choice condition: {subset}={actual_value}, expected one of {expected_values}, {'match' if matches else 'no match'}")
+                return matches
+        
+        # Default: condition not recognized or not implemented
+        logger.warning(f"Unknown or unhandled condition type: {condition_type}")
+        return False
+
+    def _check_and_skip_conditional_step(self) -> bool:
+        """
+        Check if the current step has a conditional state that isn't met, and skip it if necessary.
+        
+        Returns:
+            True if the step was skipped, False otherwise
+        """
+        step = self.rules.gameplay[self.current_step]
+        
+        # Check for conditional state based on action type
+        conditional_state = None
+        
+        if step.action_type == GameActionType.DEAL:
+            conditional_state = step.action_config.get("conditional_state")
+        elif step.action_type == GameActionType.DISCARD:
+            # Discard might have conditional_state in different places
+            if isinstance(step.action_config, dict) and "conditional_state" in step.action_config:
+                conditional_state = step.action_config["conditional_state"]
+            elif hasattr(step, "conditional_state"):
+                conditional_state = step.conditional_state
+        elif step.action_type == GameActionType.DRAW:
+            conditional_state = step.action_config.get("conditional_state")
+        elif step.action_type == GameActionType.EXPOSE:
+            conditional_state = step.action_config.get("conditional_state")
+        elif step.action_type == GameActionType.GROUPED:
+            # For grouped actions, check if there's a top-level conditional
+            conditional_state = getattr(step, "conditional_state", None)
+        
+        # Check the condition if present
+        if conditional_state and not self._check_condition(conditional_state):
+            logger.info(f"Skipping step {self.current_step}: '{step.name}' - condition not met")
+            self._next_step()
+            return True
+            
+        return False
+
     def _handle_deal(self, config: Dict[str, Any], player_id=None) -> None:
         """
         Handle a dealing action.
@@ -428,38 +575,12 @@ class Game:
      
         # Handle conditional dealing based on conditions
         if conditional_state:
-            condition_type = conditional_state.get("type")
+            # Use the new _check_condition method to determine if condition is met
+            should_deal = self._check_condition(conditional_state)
+            
             true_state = conditional_state.get("true_state")
             false_state = conditional_state.get("false_state", "none")
             
-            # Skip dealing if condition is not met
-            should_deal = False
-            
-            if condition_type == "all_exposed" or condition_type == "any_exposed" or condition_type == "none_exposed":
-                # Original conditional states logic (unchanged)
-                # This would be for games where dealing depends on exposed cards
-                pass
-                
-            elif condition_type == "board_composition":
-                # New conditional type for board composition checks
-                subset = conditional_state.get("subset", "default")
-                check_type = conditional_state.get("check")
-                
-                if check_type == "color":
-                    check_color = conditional_state.get("color", "black")
-                    min_count = conditional_state.get("min_count", 2)
-                    
-                    # Get cards from the specified subset
-                    subset_cards = self.table.community_cards.get(subset, [])
-                    
-                    # Count cards of the specified color
-                    color_count = sum(1 for card in subset_cards if card.color == check_color)
-                    
-                    # Determine if condition is met
-                    should_deal = color_count >= min_count
-                    logger.info(f"Condition check for {check_color} cards in {subset}: " +
-                            f"found {color_count}, need {min_count}, condition {'met' if should_deal else 'not met'}")
-                
             # If condition not met, update card state or skip dealing
             if not should_deal:
                 logger.info(f"Conditional dealing - condition not met, using '{false_state}' state")
@@ -527,6 +648,11 @@ class Game:
                     logger.info(f"Dealt card to {current_player.name} ({state}) based on condition '{condition_type}'")
             else:
                 state = card_config.get("state", "face down")
+                # Skip if state is "none" (for conditional dealing where we don't deal)
+                if state == "none":
+                    logger.info("Skipping deal with 'none' state")
+                    continue       
+
                 subsets = card_config.get("subset", "default")  # Now can be string or list
                 hole_subset = card_config.get("hole_subset", "default")  # Default to "default" if not specified
                 face_up = state == "face up"
@@ -567,45 +693,66 @@ class Game:
                             if card.rank == Rank.JOKER:
                                 self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
 
-    def _apply_wild_card_rules_to_card(self, card: Card, wild_card_rules: List[Dict], face_up: bool) -> None:
+    def _apply_wild_card_rules_to_card(self, card: Card, wild_rules: List[Dict[str, Any]], face_up: bool) -> None:
         """
-        Apply wild card rules to a single card during dealing.
+        Apply wild card rules to a specific card.
         
         Args:
             card: The card to apply rules to
-            wild_card_rules: List of wild card rule configurations
-            face_up: Whether the card was dealt face up
+            wild_rules: List of wild card rules to apply
+            face_up: Whether the card is face up
         """
-        for rule in wild_card_rules:
-            if rule["type"] != "joker" or card.rank != Rank.JOKER:
-                continue
-                
-            # Handle conditional wild card roles based on how card was dealt
-            if rule.get("role") == "conditional" and "condition" in rule:
-                condition = rule["condition"]
-                visibility_condition = condition.get("visibility")
-                true_role = condition.get("true_role", "wild")
-                false_role = condition.get("false_role", "wild")
-                
-                # Mexican Poker specifically: Joker status is determined at deal time
-                # and doesn't change if later exposed
-                if visibility_condition == "face up":
-                    if face_up:
-                        # Use the true_role (usually "bug") for face up Jokers
-                        wild_type = WildType.BUG if true_role == "bug" else WildType.NAMED
-                        card.make_wild(wild_type)
-                        logger.debug(f"Joker dealt face up - setting as {true_role}")
-                    else:
-                        # Use the false_role (usually "wild") for face down Jokers
-                        wild_type = WildType.BUG if false_role == "bug" else WildType.NAMED
-                        card.make_wild(wild_type)
-                        logger.debug(f"Joker dealt face down - setting as {false_role}")
+        for rule in wild_rules:
+            wild_type = rule.get("type")
+            role = rule.get("role", "wild")
+            
+            # Determine which WildType to use
+            if role == "bug":
+                wild_card_type = WildType.BUG
+            elif role == "wild":
+                wild_card_type = WildType.NAMED
             else:
-                # Handle non-conditional wild card rules
-                role = rule.get("role", "wild")
-                wild_type = WildType.BUG if role == "bug" else WildType.NAMED
-                card.make_wild(wild_type)
-                logger.debug(f"Joker set as {role} (non-conditional)")
+                # For other types, use MATCHING or NATURAL as appropriate
+                wild_card_type = WildType.MATCHING
+            
+            # Check if card matches the rule
+            if wild_type == "joker" and card.rank == Rank.JOKER:
+                card.make_wild(wild_card_type)
+                logger.info(f"Applied wild card rule: {wild_type} as {role}")
+                
+            elif wild_type == "rank":
+                target_rank = Rank(rule.get("rank", "R"))  # Default to Joker if no rank
+                if card.rank == target_rank:
+                    card.make_wild(wild_card_type)
+                    logger.info(f"Applied wild card rule: {wild_type} {target_rank} as {role}")
+                    
+            # Other wild card types can be added as needed
+            
+            # Handle conditional wild cards
+            if role == "conditional" and "condition" in rule:
+                condition = rule.get("condition", {})
+                visibility_condition = condition.get("visibility")
+                
+                if visibility_condition == "face up" and face_up:
+                    # Face up condition met
+                    true_role = condition.get("true_role", "wild")
+                    true_wild_type = WildType.BUG if true_role == "bug" else WildType.NAMED
+                    card.make_wild(true_wild_type)
+                    logger.info(f"Applied conditional wild card rule (face up): {wild_type} as {true_role}")
+                    
+                elif visibility_condition == "face down" and not face_up:
+                    # Face down condition met
+                    true_role = condition.get("true_role", "wild")
+                    true_wild_type = WildType.BUG if true_role == "bug" else WildType.NAMED
+                    card.make_wild(true_wild_type)
+                    logger.info(f"Applied conditional wild card rule (face down): {wild_type} as {true_role}")
+                    
+                else:
+                    # Condition not met
+                    false_role = condition.get("false_role", "wild")
+                    false_wild_type = WildType.BUG if false_role == "bug" else WildType.NAMED
+                    card.make_wild(false_wild_type)
+                    logger.info(f"Applied conditional wild card rule (condition not met): {wild_type} as {false_role}")
 
     def _handle_roll_die(self, config: Dict[str, Any]) -> None:
         """Handle a die roll action."""
@@ -685,6 +832,45 @@ class Game:
                 del self.table.community_cards[subset]
                 logger.info(f"Removed subset {subset} due to lowest river card rank")                 
                               
+    def _handle_choose(self, config: Dict[str, Any]) -> None:
+        """
+        Handle a player choice action.
+        
+        Args:
+            config: Choose action configuration
+        """
+        possible_values = config.get("possible_values", [])
+        value_name = config.get("value")
+        
+        if not possible_values:
+            logger.warning("No possible values provided for choice")
+            return
+            
+        # Initialize game_choices if needed
+        if not hasattr(self, 'game_choices'):
+            self.game_choices = {}
+        
+        # Determine which player makes the choice (UTG by default)
+        # Use the existing table.get_player_after_big_blind method
+        chooser = self.table.get_player_after_big_blind()
+        
+        # Special case for heads-up (2 players) - button chooses
+        player_count = len([p for p in self.table.players.values() if p.is_active])
+        if player_count <= 3:
+            # In heads-up or 3-handed, button player chooses
+            players = self.table.get_position_order()
+            button_player = next((p for p in players if p.position and p.position.has_position(Position.BUTTON)), None)
+            if button_player:
+                chooser = button_player
+                logger.info(f"Heads-up/3-handed game: Button player {button_player.name} will choose game variant")
+        
+        if chooser:
+            self.current_player = chooser
+            logger.info(f"Player {chooser.name} to choose from {possible_values} for {value_name}")
+        else:
+            logger.warning("Could not determine which player should choose")
+            # Don't set a default here - wait for player_action
+
     def handle_forced_bets(self, bet_type: str):
         """Handle forced bets (antes or blinds) at the start of a hand."""
         logger.info(f"Handling forced bets: {bet_type}")
@@ -765,6 +951,8 @@ class Game:
                 delattr(self, attr)        
                 
         self.current_step += 1
+
+        # Process the next step
         self.process_current_step()
         
     def next_player(self, round_start: bool = False) -> Optional[Player]:
@@ -861,6 +1049,10 @@ class Game:
         # Transfer declarations to the showdown manager if needed
         if hasattr(self, 'declarations') and self.rules.showdown.declaration_mode == "declare":
             self.showdown_manager.set_declarations(self.declarations)
+
+        # Transfer game_choices to ShowdownManager if needed
+        if hasattr(self, 'game_choices'):
+            self.showdown_manager.game_choices = self.game_choices            
         
         # Use the ShowdownManager to handle the showdown
         self.last_hand_result = self.showdown_manager.handle_showdown()

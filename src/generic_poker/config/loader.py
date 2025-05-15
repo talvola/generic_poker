@@ -32,6 +32,7 @@ class GameActionType(Enum):
     SHOWDOWN = auto()
     GROUPED = auto()  # New type for grouped actions
     ROLL_DIE = auto()
+    CHOOSE = auto()  # New action type for player choices
 
 
 @dataclass

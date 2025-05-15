@@ -1,0 +1,284 @@
+{
+    "game": "Paradise Road Pick’em",
+    "references": [
+        "https://www.barge.org/rulebook/paradise-road-pickem.html"
+    ],        
+    "players": {
+        "min": 2,
+        "max": 7
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Initial Hole Cards"
+        },
+        {
+            "choose": {
+                "possible_values": [
+                    "Hold'em",
+                    "Omaha 8",
+                    "Razz",
+                    "Seven Card Stud",
+                    "Seven Card Stud 8"
+                ],
+                "value": "Game",
+                "chooser": "utg",
+                "default": "Hold'em"                
+            },
+            "name": "Choose Game Type"
+        },
+        {
+            "deal": {
+              "location": "player",
+              "conditional_state": {
+                "type": "player_choice",
+                "subset": "Game",
+                "value": "Omaha 8"
+              },
+              "cards": [
+                {
+                  "number": 1,
+                  "state": "face down"
+                }
+              ]
+            },
+            "name": "Deal Additional Card If Omaha 8 selected"
+        },          
+        {
+            "discard": {
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face down"
+                    }
+                ],
+                "conditional_state": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "value": "Hold'em"
+                }                
+            },      
+            "name": "Discard One if Hold'em selected"
+        },             
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Pre-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face up"
+                    }
+                ],
+                "conditional_state": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "values": ["Hold'em","Omaha 8"]
+                }                
+            },          
+            "name": "Deal Flop"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ],
+                "conditional_state": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "values": ["Razz",
+                        "Seven Card Stud",
+                        "Seven Card Stud 8"]
+                }                
+            },        
+            "name": "Deal Fourth Street"
+        },        
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Post-Flop/Fourth Street Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ],
+                "conditional_state": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "values": ["Hold'em","Omaha 8"]
+                }                  
+            },
+            "name": "Deal Turn"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Turn/Fifth Street Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ],
+                "conditional_state": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "values": ["Hold'em","Omaha 8"]
+                }     
+            },
+            "name": "Deal River"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "River/Sixth Street Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "any combination of hole and community cards",
+        "conditionalBestHands": [      
+            {
+                "condition": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "value": "Hold'em"
+                },      
+                "bestHand": [
+                    {
+                        "evaluationType": "high",
+                        "anyCards": 5
+                    }
+                ]                          
+            },
+            {
+                "condition": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "value": "Omaha 8"
+                },      
+                "bestHand": [
+                    {
+                        "name": "High Hand",
+                        "evaluationType": "high",
+                        "holeCards": 2,
+                        "communityCards": 3
+                    },
+                    {
+                        "name": "Low Hand",
+                        "evaluationType": "a5_low",
+                        "holeCards": 2,
+                        "communityCards": 3,
+                        "qualifier": [
+                            1,
+                            56
+                        ]
+                    }
+                ]                         
+            },   
+            {
+                "condition": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "value": "Razz"
+                },  
+                "bestHand": [
+                    {
+                        "evaluationType": "a5_low",
+                        "anyCards": 5
+                    }
+                ]                
+            }  ,
+            {
+                "condition": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "value": "Seven Card Stud"
+                },           
+                "bestHand": [
+                    {
+                        "evaluationType": "high",
+                        "holeCards": 5,
+                        "communityCards": 0
+                    }
+                ]                       
+            } ,
+            {
+                "condition": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "value": "Seven Card Stud 8"
+                },           
+                "bestHand": [
+                    {
+                        "name": "High Hand",
+                        "evaluationType": "high",
+                        "holeCards": 5,
+                        "communityCards": 0
+                    },
+                    {
+                        "name": "Low Hand",
+                        "evaluationType": "a5_low",
+                        "holeCards": 5,
+                        "communityCards": 0,
+                        "qualifier": [
+                            1,
+                            56
+                        ]
+                    }
+                ]                    
+            }                
+        ] 
+    }
+}

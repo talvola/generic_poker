@@ -57,7 +57,11 @@ class ShowdownManager:
             for condition_rule in conditionalBestHands:
                 if self._check_best_hand_condition(condition_rule['condition']):
                     best_hand_configs = condition_rule['bestHand']
-                    logger.info(f"Using conditional best hand configuration based on matching condition")
+                    logger.info(f"Using conditional best hand configuration based on matching condition: {condition_rule['condition'].get('type')}")
+                    # If the condition is based on player choice, log which game type is being used
+                    if condition_rule['condition'].get('type') == 'player_choice':
+                        game_choice = condition_rule['condition'].get('value')
+                        logger.info(f"Evaluating hands for game type: {game_choice}")
                     break
         
         # If no conditional rule matched, use default or standard best hands
@@ -375,7 +379,30 @@ class ShowdownManager:
         """
         condition_type = condition.get('type')
         
-        if condition_type == "community_card_value":
+        if condition_type == "player_choice":
+            subset = condition.get('subset')  # The choice variable name (e.g., "Game")
+            expected_value = condition.get('value')  # Expected chosen value (e.g., "Hold'em")
+            
+            # Check if we have game_choices available (should be passed from Game)
+            if not hasattr(self.game, 'game_choices'):
+                logger.warning("No game choices available for condition check")
+                return False
+                
+            # Get the actual chosen value
+            actual_value = self.game.game_choices.get(subset)
+            
+            # Check if values match
+            matches = actual_value == expected_value
+            logger.info(f"Checking player choice condition: {subset}={actual_value}, expected {expected_value}, {'match' if matches else 'no match'}")
+            
+            # Check both single value and list of values
+            if not matches and isinstance(expected_value, list):
+                matches = actual_value in expected_value
+                logger.info(f"Checking player choice condition against list: {subset}={actual_value}, expected one of {expected_value}, {'match' if matches else 'no match'}")
+                
+            return matches
+        
+        elif condition_type == "community_card_value":
             subset = condition.get('subset')
             values = condition.get('values', [])
             

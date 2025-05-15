@@ -25,4 +25,4 @@ class PlayerAction(Enum):
     PASS = "pass"  # New player action
     DECLARE = "declare"  # New action
     DEAL = "deal"  # for when deal is part of a grouped player action
-
+    CHOOSE = "choose"   # New action for game variant selection
