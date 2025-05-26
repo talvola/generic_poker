@@ -3,6 +3,108 @@
   "title": "Poker Game Configuration Schema",
   "type": "object",
   "definitions": {
+    "conditionalState": {
+      "type": "object",
+      "properties": {
+        "type": { 
+          "type": "string", 
+          "enum": ["all_exposed", "any_exposed", "none_exposed", "board_composition", "player_choice"],
+          "description": "Type of condition to check"
+        },
+        "true_state": { 
+          "type": "string",
+          "description": "Card state to use if condition is true" 
+        },
+        "false_state": { 
+          "type": "string",
+          "description": "Card state to use if condition is false (default 'none' means don't deal)" 
+        },
+        "subset": {
+          "type": "string",
+          "description": "Community card subset to check for board composition condition or choice variable name for player_choice"
+        },
+        "check": {
+          "type": "string",
+          "enum": ["color", "suit", "rank"],
+          "description": "Type of card property to check in board composition"
+        },
+        "color": {
+          "type": "string",
+          "enum": ["red", "black"],
+          "description": "Card color to check for in board composition"
+        },
+        "min_count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minimum number of matching cards required for the condition to be true"
+        },
+        "value": {
+          "type": "string",
+          "description": "Single value to match for player_choice condition"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Array of values to match for player_choice condition"
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "enum": ["all_exposed", "any_exposed", "none_exposed"] } }
+          },
+          "then": {
+            "required": ["true_state", "false_state"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "enum": ["board_composition"] } }
+          },
+          "then": {
+            "required": ["subset", "true_state", "false_state"]
+          }
+        },
+        {
+          "if": {
+            "properties": { 
+              "type": { "enum": ["board_composition"] },
+              "check": { "enum": ["color"] }
+            }
+          },
+          "then": {
+            "required": ["check", "color", "min_count"]
+          }
+        },
+        {
+          "if": {
+            "properties": { 
+              "type": { "enum": ["board_composition"] },
+              "check": { "enum": ["suit"] }
+            }
+          },
+          "then": {
+            "required": ["check", "suits", "min_count"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "enum": ["player_choice"] } }
+          },
+          "then": {
+            "required": ["subset"],
+            "anyOf": [
+              { "required": ["value"] },
+              { "required": ["values"] }
+            ]
+          }
+        }
+      ]
+    },
     "cardSubsetAllowed": {
       "type": "object",
       "properties": {
@@ -440,75 +542,7 @@
           "description": "Location of the deal (player or community)"
         },
         "conditional_state": {
-          "type": "object",
-          "properties": {
-            "type": { 
-              "type": "string", 
-              "enum": ["all_exposed", "any_exposed", "none_exposed", "board_composition"],
-              "description": "Type of condition to check"
-            },
-            "true_state": { 
-              "type": "string",
-              "description": "Card state to use if condition is true" 
-            },
-            "false_state": { 
-              "type": "string",
-              "description": "Card state to use if condition is false (default 'none' means don't deal)" 
-            },
-            "subset": {
-              "type": "string",
-              "description": "Community card subset to check for board composition condition"
-            },
-            "check": {
-              "type": "string",
-              "enum": ["color", "suit", "rank"],
-              "description": "Type of card property to check in board composition"
-            },
-            "color": {
-              "type": "string",
-              "enum": ["red", "black"],
-              "description": "Card color to check for in board composition"
-            },
-            "min_count": {
-              "type": "integer",
-              "minimum": 1,
-              "description": "Minimum number of matching cards required for the condition to be true"
-            }
-          },
-          "required": ["type", "true_state", "false_state"],
-          "allOf": [
-            {
-              "if": {
-                "properties": { "type": { "enum": ["board_composition"] } }
-              },
-              "then": {
-                "required": ["subset"]
-              }
-            },
-            {
-              "if": {
-                "properties": { 
-                  "type": { "enum": ["board_composition"] },
-                  "check": { "enum": ["color"] }
-                }
-              },
-              "then": {
-                "required": ["check", "color", "min_count"]
-              }
-            },
-            {
-              "if": {
-                "properties": { 
-                  "type": { "enum": ["board_composition"] },
-                  "check": { "enum": ["suit"] }
-                }
-              },
-              "then": {
-                "required": ["check", "suits", "min_count"]
-              }
-            }
-          ],
-          "additionalProperties": false
+          "$ref": "#/definitions/conditionalState"
         },   
         "wildCards": {
           "type": "array",
@@ -1031,6 +1065,10 @@
             "type": "string",
             "description": "Name of the gameplay step"
           },
+          "conditional_state": {
+            "$ref": "#/definitions/conditionalState",
+            "description": "Conditional state that determines if this step should be executed"
+          },
           "groupedActions": {
             "type": "array",
             "description": "List of actions to execute together for each player in turn order",
@@ -1063,7 +1101,8 @@
           "declare": { "$ref": "#/definitions/declare" },
           "separate": { "$ref": "#/definitions/separate" },
           "showdown": { "$ref": "#/definitions/showdown" },
-          "roll_die": { "$ref": "#/definitions/roll_die" } 
+          "roll_die": { "$ref": "#/definitions/roll_die" },
+          "choose": { "$ref": "#/definitions/choose" }
         },
         "oneOf": [
           { "required": ["name", "groupedActions"] },

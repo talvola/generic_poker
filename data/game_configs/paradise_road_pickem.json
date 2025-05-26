@@ -1,5 +1,5 @@
 {
-    "game": "Paradise Road Pick’em",
+    "game": "Paradise Road Pick'em",
     "references": [
         "https://www.barge.org/rulebook/paradise-road-pickem.html"
     ],        
@@ -37,7 +37,7 @@
                     "order": "high_hand"
                 }
             ],
-        "default": "dealer"
+            "default": "dealer"
         }
     },
     "gamePlay": [
@@ -76,18 +76,20 @@
         },
         {
             "deal": {
-              "location": "player",
-              "conditional_state": {
-                "type": "player_choice",
-                "subset": "Game",
-                "value": "Omaha 8"
-              },
-              "cards": [
-                {
-                  "number": 1,
-                  "state": "face down"
-                }
-              ]
+                "location": "player",
+                "conditional_state": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "value": "Omaha 8",
+                    "true_state": "face down",
+                    "false_state": "none"
+                },
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face down"
+                    }
+                ]
             },
             "name": "Deal Additional Card If Omaha 8 selected"
         },          
@@ -98,24 +100,24 @@
                         "number": 1,
                         "state": "face down"
                     }
-                ],
-                "conditional_state": {
-                    "type": "player_choice",
-                    "subset": "Game",
-                    "value": "Hold'em"
-                }                
-            },      
+                ]
+            },
+            "conditional_state": {
+                "type": "player_choice",
+                "subset": "Game",
+                "value": "Hold'em"
+            },                
             "name": "Discard One if Hold'em selected"
         },             
         {
             "bet": {
-                "type": "small",
-                "conditional_state": {
-                    "type": "player_choice",
-                    "subset": "Game",
-                    "values": ["Hold'em","Omaha 8"]            
-                }                            
+                "type": "small"
             },
+            "conditional_state": {
+                "type": "player_choice",
+                "subset": "Game",
+                "values": ["Hold'em","Omaha 8"]            
+            },                            
             "name": "Pre-Flop Bet for Hold'em and Omaha 8"
         },
         {
@@ -131,7 +133,6 @@
                             {
                                 "number": 1,
                                 "state": "face down",
-                                "oncePerStep": true,
                                 "immediate": true
                             }
                         ]
@@ -157,7 +158,9 @@
                 "conditional_state": {
                     "type": "player_choice",
                     "subset": "Game",
-                    "values": ["Hold'em","Omaha 8"]
+                    "values": ["Hold'em","Omaha 8"],
+                    "true_state": "face up",
+                    "false_state": "none"
                 }                
             },          
             "name": "Deal Flop"
@@ -174,9 +177,9 @@
                 "conditional_state": {
                     "type": "player_choice",
                     "subset": "Game",
-                    "values": ["Razz",
-                        "Seven Card Stud",
-                        "Seven Card Stud 8"]
+                    "values": ["Razz", "Seven Card Stud", "Seven Card Stud 8"],
+                    "true_state": "face up",
+                    "false_state": "none"
                 }                
             },        
             "name": "Deal Fourth Street"
@@ -199,7 +202,9 @@
                 "conditional_state": {
                     "type": "player_choice",
                     "subset": "Game",
-                    "values": ["Hold'em","Omaha 8"]
+                    "values": ["Hold'em","Omaha 8"],
+                    "true_state": "face up",
+                    "false_state": "none"
                 }                  
             },
             "name": "Deal Turn"
@@ -222,7 +227,9 @@
                 "conditional_state": {
                     "type": "player_choice",
                     "subset": "Game",
-                    "values": ["Hold'em","Omaha 8"]
+                    "values": ["Hold'em","Omaha 8"],
+                    "true_state": "face up",
+                    "false_state": "none"
                 }     
             },
             "name": "Deal River"
@@ -295,7 +302,7 @@
                         "anyCards": 5
                     }
                 ]                
-            }  ,
+            },
             {
                 "condition": {
                     "type": "player_choice",
@@ -309,7 +316,7 @@
                         "communityCards": 0
                     }
                 ]                       
-            } ,
+            },
             {
                 "condition": {
                     "type": "player_choice",
