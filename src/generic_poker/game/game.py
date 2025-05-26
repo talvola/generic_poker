@@ -919,27 +919,52 @@ class Game:
                     #self.betting.pot.add_bet(player.id, amount, is_all_in=(amount == player.stack), stack_before=player.stack)
                     self.betting.place_bet(player.id, amount, player.stack + amount, is_forced=True, is_ante=True)
                     logger.info(f"{player.name} posts ante of ${amount} (Remaining stack: ${player.stack})")
-           # self.current_player = None  # No player has acted yet; bring-in will determine first
-           # self.betting.new_round(preserve_current_bet=True)  # Preserve ante as part of round but reset acted flags
 
         elif bet_type == "blinds":
             positions = self.table.get_position_order()
-            sb_player = next((p for p in positions if p.position and p.position.has_position(Position.SMALL_BLIND)), None)
-            bb_player = next((p for p in positions if p.position and p.position.has_position(Position.BIG_BLIND)), None)
-            # use small_blind and big_blind here - they should be set appropriately for the game giving the betting
-            # style (limit, no-limit, pot-limit)
-            if sb_player and self.small_blind > 0:
-                sb_amount = min(self.small_blind, sb_player.stack)
-                sb_player.stack -= sb_amount
-                self.betting.place_bet(sb_player.id, sb_amount, sb_player.stack + sb_amount, is_forced=True)
-                logger.info(f"{sb_player.name} posts small blind of ${sb_amount}...")
-            if bb_player and self.big_blind > 0:
-                bb_amount = min(self.big_blind, bb_player.stack)
-                bb_player.stack -= bb_amount
-                self.betting.place_bet(bb_player.id, bb_amount, bb_player.stack + bb_amount, is_forced=True)
-                logger.info(f"{bb_player.name} posts big blind of ${bb_amount}...")
-          #  self.current_player = self.next_player(round_start=True)
-          #  self.betting.new_round(preserve_current_bet=True)        
+
+            # Determine who posts the blind based on betting order
+            if self.rules.betting_order.initial == "dealer":
+                # New England Hold'em style - dealer posts blind (and possibly ante)
+                blind_player = next((p for p in positions if p.position and p.position.has_position(Position.BUTTON)), None)
+                blind_amount = self.big_blind  # Use big_blind as the single blind amount
+                blind_name = "dealer blind"
+                ante_player = blind_player
+            else:
+                # Traditional style - separate small and big blinds
+                sb_player = next((p for p in positions if p.position and p.position.has_position(Position.SMALL_BLIND)), None)
+                bb_player = next((p for p in positions if p.position and p.position.has_position(Position.BIG_BLIND)), None)
+                ante_player = bb_player
+
+                # Post small blind
+                if sb_player and self.small_blind > 0:
+                    sb_amount = min(self.small_blind, sb_player.stack)
+                    sb_player.stack -= sb_amount
+                    self.betting.place_bet(sb_player.id, sb_amount, sb_player.stack + sb_amount, is_forced=True)
+                    logger.info(f"{sb_player.name} posts small blind of ${sb_amount}...")
+
+                # Post big blind
+                if bb_player and self.big_blind > 0:
+                    bb_amount = min(self.big_blind, bb_player.stack)
+                    bb_player.stack -= bb_amount
+                    self.betting.place_bet(bb_player.id, bb_amount, bb_player.stack + bb_amount, is_forced=True)
+                    logger.info(f"{bb_player.name} posts big blind of ${bb_amount}...")
+                     
+            # Handle dealer blind + ante (New England Hold'em)
+            if self.rules.betting_order.initial == "dealer" and blind_player:
+                # Post the dealer blind
+                if self.big_blind > 0:
+                    blind_amount = min(self.big_blind, blind_player.stack)
+                    blind_player.stack -= blind_amount
+                    self.betting.place_bet(blind_player.id, blind_amount, blind_player.stack + blind_amount, is_forced=True)
+                    logger.info(f"{blind_player.name} posts {blind_name} of ${blind_amount}...")
+                    
+            # Post the ante (if configured)
+            if self.ante and self.ante > 0 and ante_player:
+                ante_amount = min(self.ante, ante_player.stack)
+                ante_player.stack -= ante_amount
+                self.betting.place_bet(ante_player.id, ante_amount, ante_player.stack + ante_amount, is_forced=True, is_ante=True)
+                logger.info(f"{ante_player.name} posts ante of ${ante_amount}...")                     
 
         elif bet_type == "bring-in":
             bring_in_amount = self.bring_in or self.small_bet  # Use bring_in if set, else small_bet

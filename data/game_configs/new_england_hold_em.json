@@ -17,7 +17,7 @@
         "Pot Limit"
     ],
     "bettingOrder": {
-        "initial": "after_big_blind", 
+        "initial": "dealer", 
         "subsequent": "last_actor"   
     },
     "gamePlay": [
@@ -25,7 +25,7 @@
             "bet": {
                 "type": "blinds"
             },
-            "name": "Post Blinds"
+            "name": "Post Dealer Blind and Ante"
         },
         {
             "deal": {

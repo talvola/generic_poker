@@ -634,12 +634,16 @@ class PlayerActionHandler:
             player.is_active = False
             bet = self.game.betting.current_bets.get(player_id, PlayerBet())
             bet.has_acted = True
+            self.game.betting.current_bets[player_id] = bet  # Make sure the updated bet is stored
+
             active_players = [p for p in self.game.table.get_position_order() if p.is_active]
             if len(active_players) == 1:
                 self.game._handle_fold_win()
                 return ActionResult(success=True, advance_step=True)
             logger.info(f"{player.name} folds")
-            return self._advance_player_if_needed(manage_player, False)
+
+            # Check if round is complete after this fold
+            return self._advance_player_if_needed(manage_player, self.game.betting.round_complete())
 
         elif action == PlayerAction.CHECK:
             required_bet = self.game.betting.get_required_bet(player_id)
@@ -684,9 +688,14 @@ class PlayerActionHandler:
         # this will also handle a complete action - which is a BET in a bring-in game phase
         elif action == PlayerAction.BET or action == PlayerAction.RAISE:
             valid_bet = next((a for a in valid_actions if a[0] == action), None)
-            if not valid_bet or amount not in range(valid_bet[1], valid_bet[2] + 1):
-                logger.debug(f"Invalid {action.value} for {player.name}: ${amount}, expected range ${valid_bet[1]}-${valid_bet[2] if valid_bet else 'N/A'}")
-                return ActionResult(success=False, error=f"Invalid {action.value} amount: ${amount}")
+            if not valid_bet:
+                logger.debug(f"No valid {action.value} action available for {player.name}")
+                return ActionResult(success=False, error=f"Invalid {action.value} - no valid action available")
+
+            if amount not in range(valid_bet[1], valid_bet[2] + 1):
+                logger.debug(f"Invalid {action.value} for {player.name}: ${amount}, expected range ${valid_bet[1]}-${valid_bet[2]}")
+                return ActionResult(success=False, error=f"Invalid {action.value} amount: ${amount}")  
+
             current_bet = self.game.betting.current_bets.get(player_id, PlayerBet()).amount
             current_ante = self.game.betting.pot.total_antes.get(f"round_{self.game.betting.pot.current_round}_{player_id}", 0)
             total_amount, additional_amount = self._calculate_bet_amounts(player_id, action, amount, current_bet, current_ante)
