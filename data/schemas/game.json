@@ -52,18 +52,62 @@
         "initial": {
           "type": "string",
           "enum": ["after_big_blind", "bring_in", "dealer"],
-          "description": "Determines the starting player for the initial betting round: 'after_big_blind' (left of big blind), 'bring_in' (bring-in player), 'dealer' (left of dealer)"
+          "description": "Determines the starting player for the initial betting round"
         },
         "subsequent": {
-          "type": "string",
-          "enum": ["high_hand", "dealer"],
-          "description": "Determines the starting player for subsequent betting rounds: 'high_hand' (highest visible hand), 'dealer' (left of dealer or first active player)"
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": ["high_hand", "dealer", "after_big_blind", "bring_in", "last_actor"],
+              "description": "Static subsequent betting order"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "conditionalOrders": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "condition": {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": ["player_choice"]
+                          },
+                          "subset": {
+                            "type": "string"
+                          },
+                          "values": {
+                            "type": "array",
+                            "items": {"type": "string"}
+                          }
+                        },
+                        "required": ["type", "subset", "values"]
+                      },
+                      "order": {
+                        "type": "string",
+                        "enum": ["high_hand", "dealer", "after_big_blind", "bring_in"]
+                      }
+                    },
+                    "required": ["condition", "order"]
+                  }
+                },
+                "default": {
+                  "type": "string",
+                  "enum": ["high_hand", "dealer", "after_big_blind", "bring_in"],
+                  "description": "Default order when no conditions match"
+                }
+              },
+              "required": ["conditionalOrders", "default"]
+            }
+          ]
         }
       },
       "required": ["initial", "subsequent"],
-      "additionalProperties": false,
-      "description": "Rules for determining the starting player for each betting round; defaults based on forcedBets if omitted"
-    },    
+      "additionalProperties": false
+    },
     "action": {
       "type": "object",
       "properties": {

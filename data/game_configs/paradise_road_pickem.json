@@ -16,6 +16,30 @@
         "No Limit",
         "Pot Limit"
     ],
+    "bettingOrder": {
+        "initial": "after_big_blind",
+        "subsequent": {
+            "conditionalOrders": [
+                {
+                    "condition": {
+                        "type": "player_choice",
+                        "subset": "Game",
+                        "values": ["Hold'em", "Omaha 8"]
+                    },
+                    "order": "dealer"
+                },
+                {
+                    "condition": {
+                        "type": "player_choice",
+                        "subset": "Game", 
+                        "values": ["Razz", "Seven Card Stud", "Seven Card Stud 8"]
+                    },
+                    "order": "high_hand"
+                }
+            ],
+        "default": "dealer"
+        }
+    },
     "gamePlay": [
         {
             "bet": {
@@ -85,10 +109,42 @@
         },             
         {
             "bet": {
-                "type": "small"
+                "type": "small",
+                "conditional_state": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "values": ["Hold'em","Omaha 8"]            
+                }                            
             },
-            "name": "Pre-Flop Bet"
+            "name": "Pre-Flop Bet for Hold'em and Omaha 8"
         },
+        {
+            "groupedActions": [
+                {
+                    "bet": {
+                        "type": "small"
+                    }
+                },
+                {
+                    "expose": {
+                        "cards": [
+                            {
+                                "number": 1,
+                                "state": "face down",
+                                "oncePerStep": true,
+                                "immediate": true
+                            }
+                        ]
+                    }
+                }
+            ],
+            "conditional_state": {
+                "type": "player_choice",
+                "subset": "Game",
+                "values": ["Razz", "Seven Card Stud", "Seven Card Stud 8"]
+            },
+            "name": "Bet and Expose Card if Stud game selected"
+        },  
         {
             "deal": {
                 "location": "community",

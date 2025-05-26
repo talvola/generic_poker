@@ -16,6 +16,10 @@
         "No Limit",
         "Pot Limit"
     ],
+    "bettingOrder": {
+        "initial": "after_big_blind", 
+        "subsequent": "last_actor"   
+    },
     "gamePlay": [
         {
             "bet": {

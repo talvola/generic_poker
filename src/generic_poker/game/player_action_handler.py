@@ -133,6 +133,9 @@ class PlayerActionHandler:
         player = self.game.table.players[player_id]
         current_bet = self.game.betting.current_bets.get(player_id, PlayerBet()).amount
         required_bet = self.game.betting.get_required_bet(player_id)
+
+        logger.debug(f"  Current bet: {current_bet}, Required bet: {required_bet}, Player stack: {player.stack}")
+
         valid_actions = []
 
         if bet_config.get("type") == "bring-in" and not self.game.betting.bring_in_posted:
@@ -217,9 +220,9 @@ class PlayerActionHandler:
         if player_id != self.game.current_player.id:
             logger.warning(f"Invalid action - not {player.name}'s turn")
             return ActionResult(success=False, error="Not your turn")
+        active_players = [p for p in self.game.table.players.values() if p.is_active]
 
         step = self.game.rules.gameplay[self.game.current_step]
-        active_players = [p for p in self.game.table.players.values() if p.is_active]
 
         logger.debug(f"Handling action {action} for player {player.name} (ID: {player_id})")
 
@@ -646,6 +649,11 @@ class PlayerActionHandler:
             current_bet = self.game.betting.current_bets.get(player_id, PlayerBet())
             current_bet.has_acted = True
             self.game.betting.current_bets[player_id] = current_bet
+
+            # NEW: Track the last actor for check as well
+            self.game.betting.last_actor_id = player_id
+            logger.debug(f"handle_betting_action(CHECK): Updated last_actor_id to {player_id} (check)")
+
             logger.info(f"{player.name} checks")
             return self._advance_player_if_needed(manage_player, self.game.betting.round_complete())
 
@@ -709,6 +717,7 @@ class PlayerActionHandler:
             self.game.state = GameState.BETTING
             bet_config = next_subaction["bet"]
             if bet_config.get("type") not in ["antes", "blinds", "bring-in"] and not self.game.betting.round_complete():
+                logger.debug(f"Starting betting round: {next_subaction} with new_round({self.game._is_first_betting_round()})")
                 self.game.betting.new_round(self.game._is_first_betting_round())
         elif "discard" in next_key:
             self.game.state = GameState.DRAWING

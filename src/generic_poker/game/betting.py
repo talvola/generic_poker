@@ -55,6 +55,7 @@ class BettingManager(ABC):
         self.last_raise_size = 0 # Track minimum raise rules (still needed?)
         self.small_bet: int = 0  
         self.bring_in_posted = False  # Track if bring-in has been posted
+        self.last_actor_id: Optional[str] = None  # Track last player to act
         
     def get_main_pot_amount(self) -> int:
         """Get the amount in the current round's main pot."""
@@ -296,6 +297,11 @@ class BettingManager(ABC):
         self.current_bets[player_id] = new_bet
         logger.debug(f"current_bets after: {[(pid, bet.amount) for pid, bet in self.current_bets.items()]}")
 
+        # Track the last actor (only for non-forced bets)
+        if not is_forced and not is_ante:
+            self.last_actor_id = player_id
+            logger.debug(f"place_bet: Updated last_actor_id to {player_id}")
+
         # Update pot with the additional amount
         if amount_to_add > 0:
     #        self.pot.add_bet(player_id, new_bet.amount, is_all_in, stack, is_ante=is_ante)
@@ -365,6 +371,35 @@ class BettingManager(ABC):
 
         return self.current_bet - current_bet + current_ante
         
+    # def round_complete(self) -> bool:
+    #     """
+    #     Check if betting round is complete.
+        
+    #     Round is complete when:
+    #     1. All active players have acted
+    #     2. All active players have matched the current bet or are all-in
+    #     """
+    #     active_players = [p.id for p in self.table.players.values() if p.is_active]
+        
+    #     if len(self.current_bets) != len(active_players):
+    #         logger.debug(f"Round not complete - not all players acted len(self.current_bets): {len(self.current_bets)}, len(active_players): {len(active_players)}")
+    #         logger.debug(f"  self.current_bets: {self.current_bets}")
+    #         return False
+        
+    #     for bet in self.current_bets.values():
+    #         if not bet.has_acted:
+    #             logger.debug("Round not complete - not everyone has acted")
+    #             return False
+        
+    #     amounts = set(bet.amount for bet in self.current_bets.values() if not bet.is_all_in)
+    #     logger.debug(f"Unique bet amounts: {amounts}")
+    #     if len(amounts) > 1:
+    #         logger.debug("Round not complete - bets not equal")
+    #         return False
+        
+    #     logger.debug("Round complete - all players acted and bets equal")
+    #     return True
+    
     def round_complete(self) -> bool:
         """
         Check if betting round is complete.
@@ -375,22 +410,30 @@ class BettingManager(ABC):
         """
         active_players = [p.id for p in self.table.players.values() if p.is_active]
         
-        if len(self.current_bets) != len(active_players):
-            logger.debug("Round not complete - not all players acted")
-            return False
-        
-        for bet in self.current_bets.values():
-            if not bet.has_acted:
-                logger.debug("Round not complete - not everyone has acted")
+        # Check that every active player has a bet entry and has acted
+        for player_id in active_players:
+            if player_id not in self.current_bets:
+                logger.debug(f"Round not complete - active player {player_id} has no bet entry")
+                return False
+            if not self.current_bets[player_id].has_acted:
+                logger.debug(f"Round not complete - active player {player_id} has not acted")
                 return False
         
-        amounts = set(bet.amount for bet in self.current_bets.values() if not bet.is_all_in)
-        logger.debug(f"Unique bet amounts: {amounts}")
-        if len(amounts) > 1:
-            logger.debug("Round not complete - bets not equal")
+        # Check that all active players have matching bet amounts (or are all-in)
+        active_bet_amounts = set(
+            self.current_bets[player_id].amount 
+            for player_id in active_players 
+            if not self.current_bets[player_id].is_all_in
+        )
+        
+        logger.debug(f"Active players: {active_players}")
+        logger.debug(f"Unique bet amounts from active players: {active_bet_amounts}")
+        
+        if len(active_bet_amounts) > 1:
+            logger.debug("Round not complete - active players have unequal bets")
             return False
         
-        logger.debug("Round complete - all players acted and bets equal")
+        logger.debug("Round complete - all active players acted and have equal bets")
         return True
         
     def new_round(self, preserve_current_bet: bool = False) -> None:

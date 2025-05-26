@@ -251,16 +251,50 @@ class Game:
         return True        
 
         
+    def _should_skip_step(self, step) -> bool:
+        """
+        Check if a step should be skipped based on its conditional state.
+        
+        Args:
+            step: The GameStep to check
+            
+        Returns:
+            True if the step should be skipped (condition not met), False otherwise
+        """
+        # Check for conditional state directly on the GameStep
+        if hasattr(step, 'conditional_state') and step.conditional_state:
+            return not self._check_condition(step.conditional_state)
+        
+        # Check for conditional state in action_config if not found directly on step
+        elif step.action_type in [GameActionType.DEAL, GameActionType.DISCARD, 
+                                GameActionType.DRAW, GameActionType.EXPOSE,
+                                GameActionType.BET]:
+            if isinstance(step.action_config, dict) and "conditional_state" in step.action_config:
+                conditional_state = step.action_config["conditional_state"]
+                if conditional_state:
+                    return not self._check_condition(conditional_state)
+        
+        return False
+        
     def _is_first_betting_round(self):
+        """
+        Determine if we are currently in the first betting round, accounting for conditional steps.
+        """
         for i, step in enumerate(self.rules.gameplay):
+            # Skip steps that wouldn't execute due to unmet conditions
+            if self._should_skip_step(step):
+                continue
+                
             if step.action_type == GameActionType.BET and step.action_config.get("type") == "small":
                 return i == self.current_step
             elif step.action_type == GameActionType.GROUPED:
+                # For grouped actions, we need to check if any substep has a small bet
+                # and if the grouped action itself should be skipped
                 for j, subaction in enumerate(step.action_config):
                     if "bet" in subaction and subaction["bet"].get("type") == "small":
                         return i == self.current_step and self.action_handler.current_substep == j
-        return False
-        
+                        
+        return False        
          
     def player_action(self, player_id: str, action: PlayerAction, amount: int = 0, cards: Optional[List[Card]] = None, declaration_data: Optional[List[Dict]] = None) -> ActionResult:
         """Delegate to PlayerActionHandler and handle step advancement."""
@@ -305,7 +339,9 @@ class Game:
                         if self.auto_progress:
                             self._next_step()
                     else:
-                        self.betting.new_round(self._is_first_betting_round())
+                        logger.debug(f"Starting betting round: {step.name} with new_round({(self.betting.betting_round == 0)})")
+                        preserve_bet = (self.betting.betting_round == 0)
+                        self.betting.new_round(preserve_bet)
                         self.current_player = self.next_player(round_start=True)
                 elif "discard" in first_subaction:
                     self.state = GameState.DRAWING
@@ -364,6 +400,7 @@ class Game:
                             if first_bet_step is not None:
                                 break
                     preserve_bet = (first_bet_step == self.current_step)
+                    logger.debug(f"Starting betting round: {step.name} with new_round({preserve_bet})")
                     self.betting.new_round(preserve_bet)
                     self.current_player = self.next_player(round_start=True)
 
@@ -468,6 +505,8 @@ class Game:
             return True
             
         condition_type = condition.get('type')
+
+        logger.info(f"Checking condition: {condition_type}")
         
         if condition_type == "all_exposed" or condition_type == "any_exposed" or condition_type == "none_exposed":
             # Original conditional states logic for exposed cards (unchanged)
@@ -500,6 +539,8 @@ class Game:
             # New condition type for player choices
             subset = condition.get('subset')  # The choice variable name
             
+            logger.info(f"   subset: {subset}")
+
             # Check if we have game_choices dictionary
             if not hasattr(self, 'game_choices'):
                 logger.warning("No game choices available to check condition")
@@ -534,31 +575,30 @@ class Game:
         """
         step = self.rules.gameplay[self.current_step]
         
-        # Check for conditional state based on action type
-        conditional_state = None
+        # Check for conditional state directly on the GameStep
+        if hasattr(step, 'conditional_state') and step.conditional_state:
+            conditional_state = step.conditional_state
+            
+            # Check the condition
+            if not self._check_condition(conditional_state):
+                logger.info(f"Skipping step {self.current_step}: '{step.name}' - condition not met")
+                self._next_step()
+                return True
         
-        if step.action_type == GameActionType.DEAL:
-            conditional_state = step.action_config.get("conditional_state")
-        elif step.action_type == GameActionType.DISCARD:
-            # Discard might have conditional_state in different places
+        # Check for conditional state in action_config if not found directly on step
+        elif step.action_type in [GameActionType.DEAL, GameActionType.DISCARD, 
+                                GameActionType.DRAW, GameActionType.EXPOSE,
+                                GameActionType.BET]:
+            conditional_state = None
+            
             if isinstance(step.action_config, dict) and "conditional_state" in step.action_config:
                 conditional_state = step.action_config["conditional_state"]
-            elif hasattr(step, "conditional_state"):
-                conditional_state = step.conditional_state
-        elif step.action_type == GameActionType.DRAW:
-            conditional_state = step.action_config.get("conditional_state")
-        elif step.action_type == GameActionType.EXPOSE:
-            conditional_state = step.action_config.get("conditional_state")
-        elif step.action_type == GameActionType.GROUPED:
-            # For grouped actions, check if there's a top-level conditional
-            conditional_state = getattr(step, "conditional_state", None)
-        
-        # Check the condition if present
-        if conditional_state and not self._check_condition(conditional_state):
-            logger.info(f"Skipping step {self.current_step}: '{step.name}' - condition not met")
-            self._next_step()
-            return True
-            
+                
+                if conditional_state and not self._check_condition(conditional_state):
+                    logger.info(f"Skipping step {self.current_step}: '{step.name}' - condition not met")
+                    self._next_step()
+                    return True
+                
         return False
 
     def _handle_deal(self, config: Dict[str, Any], player_id=None) -> None:
@@ -577,25 +617,15 @@ class Game:
         if conditional_state:
             # Use the new _check_condition method to determine if condition is met
             should_deal = self._check_condition(conditional_state)
-            
-            true_state = conditional_state.get("true_state")
-            false_state = conditional_state.get("false_state", "none")
-            
-            # If condition not met, update card state or skip dealing
+                       
+            # If condition not met skip dealing
             if not should_deal:
-                logger.info(f"Conditional dealing - condition not met, using '{false_state}' state")
-                if false_state == "none":
-                    return  # Skip dealing entirely
-                
-                # Otherwise, use the false_state for the cards
-                for card_config in config["cards"]:
-                    card_config["state"] = false_state
-            else:
-                logger.info(f"Conditional dealing - condition met, using '{true_state}' state")
-                # Condition met, use true_state
-                for card_config in config["cards"]:
-                    card_config["state"] = true_state
-             
+                logger.info(f"Conditional dealing - condition not met, skipping deal/discard")
+                return  # Skip dealing entirely
+
+        logger.info(f"Conditional dealing - condition met, continuing with deal")
+
+        # Process the deal configuration             
         for card_config in config["cards"]:
             num_cards = card_config["number"]
 
@@ -922,6 +952,7 @@ class Game:
                 self.current_player = active_players[0]  # Fallback
             # No current_player set; next_player() will use betting_order.initial
                            
+        logger.debug(f"Starting betting round with new_round(True)")
         self.betting.new_round(preserve_current_bet=True)  # Reset bets, keep forced bets in pot
         if bet_type != "bring-in":  # Only set current_player after bring-in if not already set
             self.current_player = self.next_player(round_start=True)
@@ -955,6 +986,34 @@ class Game:
         # Process the next step
         self.process_current_step()
         
+    def _get_subsequent_order_type(self) -> str:
+        """
+        Determine the subsequent betting order type, considering conditional orders.
+        
+        Returns:
+            The order type string (e.g., "dealer", "high_hand", "last_actor", etc.)
+        """
+        subsequent_config = self.rules.betting_order.subsequent
+
+        logger.debug(f"  Subsequent order config: {subsequent_config}")
+        
+        # If it's a simple string, return it directly
+        if isinstance(subsequent_config, str):
+            return subsequent_config
+        
+        # If it's a conditional configuration, evaluate conditions
+        if isinstance(subsequent_config, dict) and "conditionalOrders" in subsequent_config:
+            for conditional_order in subsequent_config["conditionalOrders"]:
+                condition = conditional_order["condition"]
+                if self._check_condition(condition):
+                    return conditional_order["order"]
+            
+            # No conditions matched, use default
+            return subsequent_config.get("default", "dealer")
+        
+        # Fallback
+        return "dealer"
+        
     def next_player(self, round_start: bool = False) -> Optional[Player]:
         logger.debug(f"Determining next player (round_start={round_start}, current_step={self.current_step})")
         
@@ -981,27 +1040,53 @@ class Game:
         current_bets = self.betting.current_bets  # {player_id: PlayerBet}
         forced_bettors = [pid for pid, bet in current_bets.items() if bet.posted_blind]
         
+        logger.debug(f"  round_start = {round_start}")
+        logger.debug(f"  is_voluntary_bet = {is_voluntary_bet}" )
+        logger.debug(f"  forced_bettors = {forced_bettors}" )
+        logger.debug(f"  self.betting.betting_round = {self.betting.betting_round}" )
+
+        # Check if this is the first voluntary bet after forced bets
+        is_first_after_blinds = (self.betting.betting_round == 0 and is_voluntary_bet and forced_bettors)
+        
+        # Check if this is a continued action after player has chosen something
+        is_after_choice = (hasattr(self, 'game_choices') and self.game_choices and self.current_player is not None)
+        
+        logger.debug(f"  is_first_after_blinds = {is_first_after_blinds}")
+        logger.debug(f"  is_after_choice = {is_after_choice}")
+
         if round_start:
-            # Use initial order only for the first voluntary betting round after forced bets
-            if self.betting.betting_round == 0 and is_voluntary_bet and forced_bettors:
-                last_forced_bettor_id = forced_bettors[-1]  # Last player to post a blind (BB)
-                players = self.table.get_position_order()
-                try:
-                    forced_bettor_idx = next(i for i, p in enumerate(players) if p.id == last_forced_bettor_id)
-                    next_idx = (forced_bettor_idx + 1) % len(players)
-                    while not players[next_idx].is_active:
-                        next_idx = (next_idx + 1) % len(players)
-                        if next_idx == forced_bettor_idx:  # Full circle
-                            return None
-                    next_player = players[next_idx]
-                    logger.debug(f"First voluntary betting round: Starting with {next_player.name}")
-                    return next_player
-                except StopIteration:
-                    return active_players[0]  # Fallback
+            # In Paradise Road Pick'em, when a player chooses a game type, they should
+            # be the first to act in the subsequent betting round. This is true for any
+            # choice, not just stud games.
+            if is_first_after_blinds:
+                # If we've just had a player make a choice, let them act first
+                if is_after_choice and self.action_handler.current_substep == 0:
+                    logger.debug(f"After game choice: keeping current player {self.current_player.name}")
+                    return self.current_player
+                
+                # Otherwise use standard first-after-blinds logic 
+                last_forced_bettor_id = forced_bettors[-1] if forced_bettors else None
+                if last_forced_bettor_id:
+                    players = self.table.get_position_order()
+                    try:
+                        forced_bettor_idx = next(i for i, p in enumerate(players) if p.id == last_forced_bettor_id)
+                        next_idx = (forced_bettor_idx + 1) % len(players)
+                        while not players[next_idx].is_active:
+                            next_idx = (next_idx + 1) % len(players)
+                            if next_idx == forced_bettor_idx:  # Full circle
+                                return None
+                        next_player = players[next_idx]
+                        logger.debug(f"First voluntary betting round: Starting with {next_player.name}")
+                        return next_player
+                    except StopIteration:
+                        return active_players[0]  # Fallback                                  
+
             else:
                 # Use subsequent order for all other round starts (including draw phases)
-                order_type = self.rules.betting_order.subsequent
+                # Now using the conditional order evaluation
+                order_type = self._get_subsequent_order_type()
                 logger.debug(f"Using subsequent order type: {order_type} (step={self.current_step}, betting_round={self.betting.betting_round})")
+                
                 if order_type == "dealer":
                     next_player = self.table.get_next_active_player(self.table.button_pos)
                     logger.debug(f"  dealer: Starting with {next_player.name}")
@@ -1013,7 +1098,41 @@ class Game:
                     logger.debug(f"  bring_in: Starting with {next_player.name}")
                 elif order_type == "high_hand":
                     next_player = self.table.get_player_with_best_hand()
-                    logger.debug(f"  high_hand: Starting with {next_player.name}")                    
+                    logger.debug(f"  high_hand: Starting with {next_player.name}")       
+                elif order_type == "last_actor":
+                    # New England Hold'em: player who would have been next to act goes first
+                    if self.betting.last_actor_id:
+                        last_actor = self.table.players.get(self.betting.last_actor_id)
+                        if last_actor and last_actor.is_active:
+                            # Get the player AFTER the last actor
+                            players = self.table.get_position_order()
+                            try:
+                                last_actor_idx = next(i for i, p in enumerate(players) if p.id == self.betting.last_actor_id)
+                                next_idx = (last_actor_idx + 1) % len(players)
+                                while not players[next_idx].is_active:
+                                    next_idx = (next_idx + 1) % len(players)
+                                    if next_idx == last_actor_idx:  # Full circle
+                                        next_player = None
+                                        break
+                                else:
+                                    next_player = players[next_idx]
+                                
+                                if next_player:
+                                    logger.debug(f"  last_actor: Last actor was {last_actor.name}, starting with {next_player.name}")
+                                else:
+                                    logger.debug(f"  last_actor: Could not find next player after {last_actor.name}")
+                                    next_player = self.table.get_next_active_player(self.table.button_pos)
+                            except StopIteration:
+                                logger.debug(f"  last_actor not found in position order, falling back to dealer")
+                                next_player = self.table.get_next_active_player(self.table.button_pos)
+                        else:
+                            # Fallback if last actor is no longer active
+                            logger.debug(f"  last_actor not active, falling back to dealer")
+                            next_player = self.table.get_next_active_player(self.table.button_pos)
+                    else:
+                        # No last actor recorded, fallback to dealer
+                        logger.debug(f"  no last_actor recorded, falling back to dealer")
+                        next_player = self.table.get_next_active_player(self.table.button_pos)                            
                 else:
                     logger.warning(f"Unsupported subsequent order '{order_type}', defaulting to dealer")
                     next_player = self.table.get_next_active_player(self.table.button_pos)

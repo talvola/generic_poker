@@ -57,7 +57,7 @@ class ForcedBets:
 class BettingOrder:
     """Configuration for determining the starting player of betting rounds."""
     initial: str
-    subsequent: str
+    subsequent: Union[str, Dict[str, Any]]  # Now supports both string and conditional object
 
 @dataclass
 class ShowdownAction:
@@ -71,6 +71,7 @@ class GameStep:
     name: str
     action_type: GameActionType
     action_config: Union[Dict[str, Any], List[Dict[str, Any]]]  # Supports single or grouped actions
+    conditional_state: Optional[Dict[str, Any]] = None  # Add conditional_state field with default None
 
 @dataclass
 class ShowdownConfig:
@@ -174,12 +175,42 @@ class GameRules:
         if betting_order_data:
             initial = betting_order_data.get('initial')
             subsequent = betting_order_data.get('subsequent')
+
+            # Validate initial
             if initial not in ["after_big_blind", "bring_in", "dealer"]:
                 logger.warning(f"Invalid bettingOrder.initial '{initial}', defaulting based on forcedBets")
                 initial = None
-            if subsequent not in ["high_hand", "dealer"]:
-                logger.warning(f"Invalid bettingOrder.subsequent '{subsequent}', defaulting based on forcedBets")
-                subsequent = None
+
+            # Validate subsequent - now handles both string and conditional object
+            if isinstance(subsequent, str):
+                if subsequent not in ["high_hand", "dealer", "after_big_blind", "bring_in", "last_actor"]:
+                    logger.warning(f"Invalid bettingOrder.subsequent '{subsequent}', defaulting based on forcedBets")
+                    subsequent = None
+            elif isinstance(subsequent, dict):
+                # Validate conditional subsequent structure
+                if "conditionalOrders" not in subsequent or "default" not in subsequent:
+                    logger.warning("Invalid conditional betting order structure, defaulting based on forcedBets")
+                    subsequent = None
+                else:
+                    # Validate each conditional order
+                    valid_orders = ["high_hand", "dealer", "after_big_blind", "bring_in", "last_actor"]
+                    for cond_order in subsequent["conditionalOrders"]:
+                        if "condition" not in cond_order or "order" not in cond_order:
+                            logger.warning("Invalid conditional order structure, defaulting based on forcedBets")
+                            subsequent = None
+                            break
+                        if cond_order["order"] not in valid_orders:
+                            logger.warning(f"Invalid conditional order '{cond_order['order']}', defaulting based on forcedBets")
+                            subsequent = None
+                            break
+                    
+                    # Validate default order
+                    if subsequent and subsequent["default"] not in valid_orders:
+                        logger.warning(f"Invalid default order '{subsequent['default']}', defaulting based on forcedBets")
+                        subsequent = None
+            else:
+                logger.warning("Invalid bettingOrder.subsequent type, defaulting based on forcedBets")
+                subsequent = None                        
         else:
             initial = None
             subsequent = None
@@ -206,6 +237,9 @@ class GameRules:
         # Parse gameplay steps
         gameplay = []
         for step in data['gamePlay']:
+            # Extract conditional state (might be needed for any action type)
+            conditional_state = step.get('conditional_state')
+            
             if "groupedActions" in step:
                 # Handle grouped actions
                 action_type = GameActionType.GROUPED
@@ -219,7 +253,7 @@ class GameRules:
                 action_type = None
                 action_config = {}
                 for key in step.keys():
-                    if key == 'name':
+                    if key in ['name', 'conditional_state']:
                         continue
                     try:
                         action_type = GameActionType[key.upper()]
@@ -229,12 +263,19 @@ class GameRules:
                         continue
                 if action_type is None:
                     raise ValueError(f"Invalid game step: {step}")
-                
-            gameplay.append(GameStep(
+            
+            # Create the GameStep with the conditional_state if it exists
+            game_step = GameStep(
                 name=step['name'],
                 action_type=action_type,
                 action_config=action_config
-            ))
+            )
+            
+            # Add conditional_state as an attribute if it exists
+            if conditional_state:
+                game_step.conditional_state = conditional_state
+                
+            gameplay.append(game_step)
 
         # Parse showdown config
         showdown_data = data['showdown']
