@@ -177,9 +177,8 @@ def test_game_bringin():
     assert game.betting.get_ante_total() == 3  # 3 players x $1
 
     # test current_bets in BettingManager
-    assert game.betting.current_bets == {'p1': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
-                                         'p2': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
-                                         'p3': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False)}
+    assert game.betting.current_bets == {}  # Should be empty after antes
+    assert game.betting.current_bet == 0   # No betting action yet
     # also test total_bets and total_antes from Pot
     assert game.betting.pot.total_bets == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 1}
     assert game.betting.pot.total_antes == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 1}
@@ -198,9 +197,8 @@ def test_game_bringin():
     assert game.betting.get_ante_total() == 3  # 3 players x $1
 
     # test current_bets in BettingManager
-    assert game.betting.current_bets == {'p1': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
-                                         'p2': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
-                                         'p3': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False)}
+    assert game.betting.current_bets == {}  # Should be empty after antes
+    assert game.betting.current_bet == 0   # No betting action yet
     # also test total_bets and total_antes from Pot
     assert game.betting.pot.total_bets == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 1}
     assert game.betting.pot.total_antes == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 1}
@@ -235,9 +233,7 @@ def test_game_bringin():
     assert game.betting.get_ante_total() == 3  # 3 players x $1
 
     # test current_bets in BettingManager
-    assert game.betting.current_bets == {'p1': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False),
-                                         'p3': PlayerBet(amount=4, has_acted=False, posted_blind=True, is_all_in=False),
-                                         'p2': PlayerBet(amount=1, has_acted=False, posted_blind=False, is_all_in=False)}
+    assert game.betting.current_bets == {'p3': PlayerBet(amount=3, has_acted=False, posted_blind=True, is_all_in=False)}
     # also test total_bets and total_antes from Pot
     assert game.betting.pot.total_bets == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 4}
     assert game.betting.pot.total_antes == {'round_1_p1': 1, 'round_1_p2': 1, 'round_1_p3': 1}    

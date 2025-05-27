@@ -607,7 +607,8 @@ class PlayerActionHandler:
                 additional_amount = player.stack
                 total_amount = player.stack + current_bet
             else:
-                additional_amount = amount - current_bet + current_ante
+        #        additional_amount = amount - current_bet + current_ante
+                additional_amount = amount - current_bet  # Remove the + current_ante
                 total_amount = amount
         return total_amount, additional_amount
     
@@ -722,6 +723,7 @@ class PlayerActionHandler:
         next_subaction = subactions[self.current_substep]
         next_key = list(next_subaction.keys())[0]
         logger.debug(f"Updating state for next subaction: {next_subaction} {next_key}")
+
         if "bet" in next_key:
             self.game.state = GameState.BETTING
             bet_config = next_subaction["bet"]
@@ -731,21 +733,27 @@ class PlayerActionHandler:
         elif "discard" in next_key:
             self.game.state = GameState.DRAWING
             self.setup_discard_round(next_subaction["discard"])  # Changed to self
+            # DON'T change current_player here - keep the same player for grouped actions
         elif "draw" in next_key:
             self.game.state = GameState.DRAWING
             self.setup_draw_round(next_subaction["draw"])  # Changed to self
+            # DON'T change current_player here - keep the same player for grouped actions
         elif "separate" in next_key:
             self.game.state = GameState.DRAWING
             self.setup_separate_round(next_subaction["separate"])  # Changed to self
+            # DON'T change current_player here - keep the same player for grouped actions
         elif "expose" in next_key:
             self.game.state = GameState.DRAWING
             self.setup_expose_round(next_subaction["expose"])  # Changed to self
+            # DON'T change current_player here - keep the same player for grouped actions
         elif "pass" in next_key:
             self.game.state = GameState.DRAWING
             self.setup_pass_round(next_subaction["pass"])  # Changed to self
+            # DON'T change current_player here - keep the same player for grouped actions
         elif "declare" in next_key:
             self.game.state = GameState.DECLARING
             self.setup_declare_round(next_subaction["declare"])     
+            # DON'T change current_player here - keep the same player for grouped actions
         elif "deal" in next_key:
             self.game.state = GameState.DEALING
             logging.info(f"Next step is a deal - not a player action - no setup needed for {self.game.current_player.name}")
@@ -1123,12 +1131,20 @@ class PlayerActionHandler:
             
         self.game.current_discard_config = config
         self.game.state = GameState.DRAWING
-        self.first_player_in_round = None  # Track first player to determine when round is complete
+
+        # Only set first_player_in_round and current_player if NOT in a grouped action
+        if not hasattr(self, 'current_substep') or self.current_substep is None:
+            self.first_player_in_round = None
+            self.game.current_player = self.game.next_player(round_start=True)
+            if self.game.current_player:
+                self.first_player_in_round = self.game.current_player.id        
         
-        # Set the current player to the first player (usually UTG or first active)
-        self.game.current_player = self.game.next_player(round_start=True)
-        if self.game.current_player:
-            self.first_player_in_round = self.game.current_player.id
+    #    self.first_player_in_round = None  # Track first player to determine when round is complete
+    #    
+    #    # Set the current player to the first player (usually UTG or first active)
+    #    self.game.current_player = self.game.next_player(round_start=True)
+    #    if self.game.current_player:
+    #        self.first_player_in_round = self.game.current_player.id
 
     def setup_draw_round(self, config: Dict) -> None:
         """Set up a draw round."""

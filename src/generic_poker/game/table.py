@@ -193,6 +193,7 @@ class Table:
         # Get the appropriate evaluation type based on the number of visible cards and rules
         from generic_poker.game.bringin import BringInDeterminator, CardRule
         bring_in_rule = CardRule(self.rules.forced_bets.rule) if self.rules and self.rules.forced_bets.rule else CardRule.LOW_CARD
+        logger.debug(f"calling get_dynamic_eval_type with num_visible={num_visible}, bring_in_rule={bring_in_rule}")
         eval_type = BringInDeterminator._get_dynamic_eval_type(num_visible, bring_in_rule, self.rules)
         logger.debug(f"Evaluating best hand with {num_visible} visible cards using {eval_type}")
 

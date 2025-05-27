@@ -549,11 +549,11 @@ def test_game_results_two_player_holdem():
     assert game.betting.get_main_pot_amount() == 400  
 
     # Step 4: Optional additional Deal to players
-    # in this case, flop is all black cards, so we deal two additional cards to each player 
+    # in this case, flop is 2 red cards, so game proceeds as hold'em - no deal takes place
 
-    game._next_step()
-    assert game.current_step == 4
-    assert game.state == GameState.DEALING 
+    #game._next_step()
+    #assert game.current_step == 4
+    #assert game.state == GameState.DEALING 
        
     # Step 5: Post-Flop Bet
     game._next_step()  # Move to post-flop bet
