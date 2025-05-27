@@ -5,7 +5,7 @@ import itertools
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Tuple, Set
 
-from generic_poker.config.loader import GameRules, GameActionType
+from generic_poker.config.loader import GameRules, GameActionType, ForcedBets
 from generic_poker.game.game_state import GameState, PlayerAction
 from generic_poker.game.table import Table, Player, Position
 from generic_poker.game.betting import (
@@ -901,6 +901,25 @@ class Game:
             logger.warning("Could not determine which player should choose")
             # Don't set a default here - wait for player_action
 
+    def get_effective_forced_bets(game_instance, forced_bets: ForcedBets) -> Dict[str, Any]:
+        """Get the effective forced bets configuration based on current game state."""
+        if forced_bets.conditionalOrders is not None:
+            # Check each conditional order using the existing _check_condition method
+            for cond_order in forced_bets.conditionalOrders:
+                condition = cond_order['condition']
+                if game_instance._check_condition(condition):
+                    return cond_order['forcedBet']
+            
+            # No conditions matched, return default
+            return forced_bets.default
+        else:
+            # Simple configuration
+            return {
+                'style': forced_bets.style,
+                'rule': forced_bets.rule,
+                'bringInEval': forced_bets.bringInEval
+            }
+    
     def handle_forced_bets(self, bet_type: str):
         """Handle forced bets (antes or blinds) at the start of a hand."""
         logger.info(f"Handling forced bets: {bet_type}")
@@ -1122,7 +1141,8 @@ class Game:
                     next_player = self.table.get_bring_in_player(self.bring_in or self.small_bet)
                     logger.debug(f"  bring_in: Starting with {next_player.name}")
                 elif order_type == "high_hand":
-                    next_player = self.table.get_player_with_best_hand()
+                    forced_bets = self.get_effective_forced_bets(self.rules.forced_bets)
+                    next_player = self.table.get_player_with_best_hand(forced_bets)
                     logger.debug(f"  high_hand: Starting with {next_player.name}")       
                 elif order_type == "last_actor":
                     # New England Hold'em: player who would have been next to act goes first

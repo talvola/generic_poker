@@ -49,9 +49,24 @@ class BetAction:
 @dataclass
 class ForcedBets:
     """Configuration for forced bets."""
-    style: str
+    style: Optional[str] = None
     rule: Optional[str] = None
     bringInEval: Optional[str] = None
+    conditionalOrders: Optional[List[Dict[str, Any]]] = None
+    default: Optional[Dict[str, Any]] = None
+
+    def __post_init__(self):
+        """Validate that we have either a simple config or conditional config."""
+        if self.conditionalOrders is not None:
+            # Conditional configuration
+            if self.default is None:
+                raise ValueError("Conditional forced bets must have a default configuration")
+            if self.style is not None or self.rule is not None or self.bringInEval is not None:
+                raise ValueError("Cannot specify both simple and conditional forced bet configurations")
+        else:
+            # Simple configuration
+            if self.style is None:
+                self.style = "blinds"  # Default style
 
 @dataclass
 class BettingOrder:
@@ -116,6 +131,73 @@ class GameRules:
             return cls.from_json(f.read())
 
     @classmethod
+    def load_forced_bets_from_json(cls, data: Dict[str, Any]) -> ForcedBets:
+        """Load forced bets configuration from JSON data."""
+        forced_bets_data = data.get('forcedBets', {})
+        
+        if not forced_bets_data:
+            # No forced bets specified, use default
+            return ForcedBets(style="blinds")
+        
+        # Check if this is a conditional configuration
+        if 'conditionalOrders' in forced_bets_data:
+            # Conditional forced bets
+            conditional_orders = forced_bets_data.get('conditionalOrders', [])
+            default_config = forced_bets_data.get('default', {})
+            
+            # Validate conditional orders
+            for i, cond_order in enumerate(conditional_orders):
+                if 'condition' not in cond_order or 'forcedBet' not in cond_order:
+                    logger.warning(f"Invalid conditional forced bet order at index {i}, missing condition or forcedBet")
+                    continue
+                    
+                # Validate the forcedBet configuration
+                forced_bet = cond_order['forcedBet']
+                style = forced_bet.get('style')
+                if style not in ["blinds", "bring-in", "antes_only"]:
+                    logger.warning(f"Invalid forcedBet style '{style}' in conditional order {i}, should be one of: blinds, bring-in, antes_only")
+                    
+                # Validate rule is provided for bring-in style
+                if style == "bring-in" and not forced_bet.get('rule'):
+                    logger.warning(f"Missing 'rule' for bring-in style in conditional order {i}, defaulting to 'low card'")
+                    cond_order['forcedBet']['rule'] = "low card"
+            
+            # Validate default configuration
+            default_style = default_config.get('style')
+            if default_style not in ["blinds", "bring-in", "antes_only"]:
+                logger.warning(f"Invalid default forcedBet style '{default_style}', defaulting to 'blinds'")
+                default_config['style'] = "blinds"
+                
+            if default_style == "bring-in" and not default_config.get('rule'):
+                logger.warning("Missing 'rule' for bring-in style in default forced bet, defaulting to 'low card'")
+                default_config['rule'] = "low card"
+            
+            return ForcedBets(
+                conditionalOrders=conditional_orders,
+                default=default_config
+            )
+        
+        else:
+            # Simple forced bets configuration
+            style = forced_bets_data.get('style')
+            if style not in ["blinds", "bring-in", "antes_only"]:
+                logger.warning(f"Invalid forcedBets style '{style}', defaulting to 'blinds'")
+                style = "blinds"
+                
+            forced_bets = ForcedBets(
+                style=style,
+                rule=forced_bets_data.get('rule'),
+                bringInEval=forced_bets_data.get('bringInEval')
+            )
+            
+            # Validate rule is provided for bring-in style
+            if style == "bring-in" and not forced_bets.rule:
+                logger.warning("Missing 'rule' for bring-in style, defaulting to 'low card'")
+                forced_bets.rule = "low card"
+                
+            return forced_bets    
+        
+    @classmethod
     def from_json(cls, json_str: str) -> 'GameRules':
         """
         Create GameRules from JSON string.
@@ -146,29 +228,7 @@ class GameRules:
         except ValueError as e:
             raise ValueError(f"Invalid betting structure: {e}")
 
-        # In the loader function (e.g., load_game_rules):
-        # Parse forced bets - default to blinds if nothing specified
-        forced_bets_data = data.get('forcedBets', {})
-        if forced_bets_data:
-            style = forced_bets_data.get('style')
-            if style not in ["blinds", "bring-in", "antes_only"]:
-                logger.warning(f"Invalid forcedBets style '{style}', defaulting to 'blinds'")
-                style = "blinds"
-            forced_bets = ForcedBets(
-                style=style,
-                rule=forced_bets_data.get('rule'),  # None if not provided
-                bringInEval=forced_bets_data.get('bringInEval')  # None if not provided
-            )
-            # Validate rule is provided for bring-in style
-            if style == "bring-in" and not forced_bets.rule:
-                logger.warning("Missing 'rule' for bring-in style, defaulting to 'low card'")
-                forced_bets.rule = "low card"
-        else:
-            forced_bets = ForcedBets(
-                style="blinds",
-                rule=None,
-                bringInEval=None
-            )
+        forced_bets = cls.load_forced_bets_from_json(data)
             
         # Parse betting order - infer defaults from forcedBets if not specified
         betting_order_data = data.get('bettingOrder', {})
@@ -215,14 +275,21 @@ class GameRules:
             initial = None
             subsequent = None
 
-        # Set defaults based on forcedBets if bettingOrder is missing or partially invalid
-        if forced_bets.style == "blinds":
+        # Set defaults based on forcedBets - need to handle conditional case
+        if forced_bets.conditionalOrders is not None:
+            # For conditional forced bets, use the default configuration for inference
+            default_style = forced_bets.default.get('style', 'blinds')
+        else:
+            # Simple forced bets
+            default_style = forced_bets.style
+
+        if default_style == "blinds":
             default_initial = "after_big_blind"
             default_subsequent = "dealer"
-        elif forced_bets.style == "bring-in":
+        elif default_style == "bring-in":
             default_initial = "bring_in"
             default_subsequent = "high_hand"
-        elif forced_bets.style == "antes_only":
+        elif default_style == "antes_only":
             default_initial = "dealer"
             default_subsequent = "high_hand"
         else:  # Fallback for invalid styles

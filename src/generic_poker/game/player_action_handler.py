@@ -176,24 +176,29 @@ class PlayerActionHandler:
 
             logger.debug(f"Player {player.name} (ID: {player_id}) is first after bring-in: {is_first_after_bring_in}, current_total: {current_total}")
             logger.debug(f"  is_stud= {is_stud}, step_type: {step_type}, bring_in_idx: {bring_in_idx}, acted_count: {acted_count}, active: {active_players[(bring_in_idx + 1) % len(active_players)].id}")
+            logger.debug(f"  bet_size: {bet_size}")
             if is_first_after_bring_in:
                 # if the previous player completed instead of bet, then allow a raise here
                 if current_total == self.game.bring_in:
                     action = PlayerAction.BET
                     min_amount = self.game.small_bet
                     max_amount = min_amount if self.game.betting_structure == BettingStructure.LIMIT else self.game.betting.get_max_bet(player_id, BetType.SMALL, player.stack)
+                    logger.debug(f"   Player {player.name} (ID: {player_id}) min_amount: {min_amount}, max_amount: {max_amount}")
                 else:
                     action = PlayerAction.RAISE
                     min_amount = self.game.betting.get_min_raise(player_id)
                     max_amount = min_amount if self.game.betting_structure == BettingStructure.LIMIT else self.game.betting.get_max_bet(player_id, BetType.SMALL, player.stack)
+                    logger.debug(f"   Player {player.name} (ID: {player_id}) min_amount: {min_amount}, max_amount: {max_amount}")
             elif current_total == 0:
                 action = PlayerAction.BET
                 min_amount = bet_size
                 max_amount = min_amount if self.game.betting_structure == BettingStructure.LIMIT else self.game.betting.get_max_bet(player_id, BetType.SMALL if step_type == "small" else BetType.BIG, player.stack)
+                logger.debug(f"   Player {player.name} (ID: {player_id}) min_amount: {min_amount}, max_amount: {max_amount}")
             else:
                 action = PlayerAction.RAISE
                 min_amount = self.game.betting.get_min_raise(player_id)
                 max_amount = min_amount if self.game.betting_structure == BettingStructure.LIMIT else self.game.betting.get_max_bet(player_id, BetType.BIG, player.stack)
+                logger.debug(f"   Player {player.name} (ID: {player_id}) min_amount: {min_amount}, max_amount: {max_amount}")
 
             if player.stack >= min_amount:
                 valid_actions.append((action, min_amount, max_amount))

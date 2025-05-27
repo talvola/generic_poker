@@ -5,7 +5,7 @@
     ],        
     "players": {
         "min": 2,
-        "max": 7
+        "max": 5
     },
     "deck": {
         "type": "standard",
@@ -38,6 +38,47 @@
                 }
             ],
             "default": "dealer"
+        }
+    },
+    "forcedBets": {
+        "conditionalOrders": [
+            {
+                "condition": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "value": "Razz"
+                },
+                "forcedBet": {
+                    "style": "bring-in",
+                    "rule": "high card",
+                    "bringInEval": "a5_low"
+                }
+            },
+            {
+                "condition": {
+                    "type": "player_choice",
+                    "subset": "Game", 
+                    "values": ["Seven Card Stud", "Seven Card Stud 8"]
+                },
+                "forcedBet": {
+                    "style": "bring-in",
+                    "rule": "low card",
+                    "bringInEval": "high"
+                }
+            },
+            {
+                "condition": {
+                    "type": "player_choice",
+                    "subset": "Game", 
+                    "values": ["Hold'em", "Omaha 8"]
+                },
+                "forcedBet": {
+                    "style": "blinds"
+                }
+            }        
+        ],
+        "default": {
+            "style": "blinds"
         }
     },
     "gamePlay": [
@@ -210,6 +251,25 @@
             "name": "Deal Turn"
         },
         {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ],
+                "conditional_state": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "values": ["Razz", "Seven Card Stud", "Seven Card Stud 8"],
+                    "true_state": "face up",
+                    "false_state": "none"
+                }                
+            },        
+            "name": "Deal Fifth Street"
+        },            
+        {
             "bet": {
                 "type": "big"
             },
@@ -235,11 +295,60 @@
             "name": "Deal River"
         },
         {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ],
+                "conditional_state": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "values": ["Razz", "Seven Card Stud", "Seven Card Stud 8"],
+                    "true_state": "face up",
+                    "false_state": "none"
+                }                
+            },        
+            "name": "Deal Sixth Street"
+        },           
+        {
             "bet": {
                 "type": "big"
             },
             "name": "River/Sixth Street Bet"
         },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face down"
+                    }
+                ],
+                "conditional_state": {
+                    "type": "player_choice",
+                    "subset": "Game",
+                    "values": ["Razz", "Seven Card Stud", "Seven Card Stud 8"],
+                    "true_state": "face up",
+                    "false_state": "none"
+                }                
+            },        
+            "name": "Deal Seventh Street"
+        },           
+        {
+            "bet": {
+                "type": "big"
+            },
+            "conditional_state": {
+                "type": "player_choice",
+                "subset": "Game",
+                "values": ["Razz", "Seven Card Stud", "Seven Card Stud 8"]
+            },                
+            "name": "Seventh Street Bet"
+        },        
         {
             "showdown": {
                 "type": "final"

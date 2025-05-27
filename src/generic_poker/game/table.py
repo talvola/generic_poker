@@ -7,7 +7,7 @@ from enum import Enum
 from generic_poker.core.card import Card, Visibility
 from generic_poker.core.deck import Deck, DeckType
 from generic_poker.core.hand import PlayerHand
-from generic_poker.config.loader import GameRules
+from generic_poker.config.loader import GameRules, ForcedBets
 from generic_poker.evaluation.evaluator import EvaluationType, evaluator
 from generic_poker.evaluation.cardrule import CardRule
 from generic_poker.game.bringin import BringInDeterminator
@@ -178,8 +178,9 @@ class Table:
             return active_players[0]  # Fallback to first active player        
         return player
     
-    def get_player_with_best_hand(self) -> Optional[Player]:
+    def get_player_with_best_hand(self, forced_bets: ForcedBets) -> Optional[Player]:
         """Return the player with the best visible hand based on game rules."""
+        logger.debug(f"Evaluating best hand among active players using forced bets: {forced_bets}")
         active_players = [p for p in self.players.values() if p.is_active]
         if not active_players:
             return None
@@ -192,9 +193,9 @@ class Table:
         
         # Get the appropriate evaluation type based on the number of visible cards and rules
         from generic_poker.game.bringin import BringInDeterminator, CardRule
-        bring_in_rule = CardRule(self.rules.forced_bets.rule) if self.rules and self.rules.forced_bets.rule else CardRule.LOW_CARD
+        bring_in_rule = CardRule(forced_bets['rule']) if self.rules and forced_bets['rule'] else CardRule.LOW_CARD
         logger.debug(f"calling get_dynamic_eval_type with num_visible={num_visible}, bring_in_rule={bring_in_rule}")
-        eval_type = BringInDeterminator._get_dynamic_eval_type(num_visible, bring_in_rule, self.rules)
+        eval_type = BringInDeterminator._get_dynamic_eval_type(num_visible, bring_in_rule, forced_bets, self.rules)
         logger.debug(f"Evaluating best hand with {num_visible} visible cards using {eval_type}")
 
         # Compare visible hands to find the best player

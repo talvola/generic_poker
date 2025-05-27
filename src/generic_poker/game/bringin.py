@@ -8,7 +8,7 @@ from generic_poker.core.card import Card, Visibility
 from generic_poker.game.player import Player
 from generic_poker.evaluation.evaluator import evaluator, EvaluationType
 from generic_poker.evaluation.cardrule import CardRule
-from generic_poker.config.loader import GameRules
+from generic_poker.config.loader import GameRules, ForcedBets
 
 logger = logging.getLogger(__name__)
   
@@ -103,12 +103,12 @@ class BringInDeterminator:
         return best_player
         
     @classmethod
-    def _get_dynamic_eval_type(cls, num_cards: int, card_rule: CardRule, rules: 'GameRules') -> EvaluationType:
+    def _get_dynamic_eval_type(cls, num_cards: int, card_rule: CardRule, forced_bets: ForcedBets, rules: 'GameRules') -> EvaluationType:
         """Construct the evaluation type based on card count and showdown rules."""
-        logger.debug(f"Getting dynamic evaluation type for num_cards={num_cards}, card_rule={card_rule}, rules={rules}")
+        logger.debug(f"Getting dynamic evaluation type for num_cards={num_cards}, card_rule={card_rule}, forced_bets={forced_bets}, rules={rules}")
 
         best_hands = rules.showdown.best_hand
-        if not best_hands:
+        if not best_hands and not forced_bets.get('bringInEval'):
             logger.warning("No bestHand configurations found, falling back to HIGH")
             return EvaluationType.HIGH
 
@@ -127,9 +127,8 @@ class BringInDeterminator:
             #     logger.debug(f"Single hand game, using base_eval: {base_eval}")
             # else:
             # Multi-hand game: use bringInEval if specified, else default to first
-            forced_bets = rules.forced_bets
             try:
-                base_eval = forced_bets.bringInEval if forced_bets.bringInEval else best_hands[0]["evaluationType"]
+                base_eval = forced_bets.get('bringInEval') if forced_bets.get('bringInEval') else best_hands[0]["evaluationType"]
                 logger.debug(f"Using bringInEval: {base_eval}")
             except (AttributeError, ValueError):
                 logger.debug("bringInEval not specified or invalid, defaulting to first bestHand evaluation type")

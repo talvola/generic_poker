@@ -126,7 +126,7 @@
       "required": ["subsets"],
       "additionalProperties": false
     },
-    "forcedBets": {
+    "forcedBetsBase": {
       "type": "object",
       "properties": {
         "style": {
@@ -145,7 +145,61 @@
         }
       },
       "required": ["style"],
-      "additionalProperties": false,
+      "additionalProperties": false
+    },
+    "forcedBets": {
+      "oneOf": [
+        {
+          "$ref": "#/definitions/forcedBetsBase",
+          "description": "Simple forced bets configuration"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "conditionalOrders": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "condition": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": ["player_choice"]
+                      },
+                      "subset": {
+                        "type": "string"
+                      },
+                      "value": {
+                        "type": "string"
+                      },
+                      "values": {
+                        "type": "array",
+                        "items": {"type": "string"}
+                      }
+                    },
+                    "required": ["type", "subset"],
+                    "anyOf": [
+                      { "required": ["value"] },
+                      { "required": ["values"] }
+                    ]
+                  },
+                  "forcedBet": {
+                    "$ref": "#/definitions/forcedBetsBase"
+                  }
+                },
+                "required": ["condition", "forcedBet"]
+              }
+            },
+            "default": {
+              "$ref": "#/definitions/forcedBetsBase"
+            }
+          },
+          "required": ["conditionalOrders", "default"],
+          "description": "Conditional forced bets configuration based on game state"
+        }
+      ],
       "description": "Configuration for initial forced bets in the game"
     },
     "bettingOrder": {
