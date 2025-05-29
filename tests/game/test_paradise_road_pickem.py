@@ -632,9 +632,11 @@ def test_game_results_two_player_omaha_hilo():
     # Check pot after turn
     assert game.betting.get_main_pot_amount() == 400  # 
     
-    # Step 11: Turn Bet
+    # Step 11: Deal Fifth Street (skipped for non-Stud games)
+
+    # Step 12: Turn Bet
     game._next_step()  # Move to turn bet
-    assert game.current_step == 11
+    assert game.current_step == 12
     assert game.state == GameState.BETTING
 
     # Check valid actions for SB (Bob)
@@ -658,9 +660,9 @@ def test_game_results_two_player_omaha_hilo():
 
 
 
-    # Step 12: Deal River
+    # Step 13: Deal River
     game._next_step()  # Deal river
-    assert game.current_step == 12
+    assert game.current_step == 13
     assert game.state == GameState.DEALING
 
     # Check community cards
@@ -669,9 +671,11 @@ def test_game_results_two_player_omaha_hilo():
     # Check pot after river
     assert game.betting.get_main_pot_amount() == 400  #
     
-    # Step 13: River Bet
+    # Step 14: Deal Sixth Street (skipped for non-Stud games)
+
+    # Step 15: River Bet
     game._next_step()  # Move to river bet
-    assert game.current_step == 13
+    assert game.current_step == 15
     assert game.state == GameState.BETTING
 
     # Check valid actions for SB (Bob)
@@ -692,9 +696,12 @@ def test_game_results_two_player_omaha_hilo():
     # Check pot after river betting
     assert game.betting.get_main_pot_amount() == 400  # SB + BB + BTN raise
     
-    # Step 14: Showdown
+    # Step 16: Deal Seventh Street (skipped for non-Stud games)
+    # Step 17: Seventh Street Bet (Skipped for non-Stud games)
+
+    # Step 18: Showdown
     game._next_step()  # Move to showdown
-    assert game.current_step == 14
+    assert game.current_step == 18
     assert game.state == GameState.COMPLETE
 
     # Get results
@@ -926,11 +933,11 @@ def test_game_results_two_player_holdem():
     # Check pot after turn
     assert game.betting.get_main_pot_amount() == 400  # 
     
+    # Step 11: Deal Fifth Street (skipped for non-Stud games)
 
-
-    # Step 11: Turn Bet
+    # Step 12: Turn Bet
     game._next_step()  # Move to turn bet
-    assert game.current_step == 11
+    assert game.current_step == 12
     assert game.state == GameState.BETTING
 
     # Check valid actions for SB (Bob)
@@ -953,9 +960,9 @@ def test_game_results_two_player_holdem():
     
 
 
-    # Step 12: Deal River
+    # Step 13: Deal River
     game._next_step()  # Deal river
-    assert game.current_step == 12
+    assert game.current_step == 13
     assert game.state == GameState.DEALING
 
     # Check community cards
@@ -964,11 +971,12 @@ def test_game_results_two_player_holdem():
     # Check pot after river
     assert game.betting.get_main_pot_amount() == 400  #
     
+    # Step 14: Deal Sixth Street (skipped for non-Stud games)
 
 
-    # Step 13: River Bet
+    # Step 15: River Bet
     game._next_step()  # Move to river bet
-    assert game.current_step == 13
+    assert game.current_step == 15
     assert game.state == GameState.BETTING
 
     # Check valid actions for SB (Bob)
@@ -989,11 +997,11 @@ def test_game_results_two_player_holdem():
     # Check pot after river betting
     assert game.betting.get_main_pot_amount() == 400  # SB + BB + BTN raise
     
+    # Step 16/17 - Seventh Street (skipped for non-Stud games)
 
-
-    # Step 14: Showdown
+    # Step 18: Showdown
     game._next_step()  # Move to showdown
-    assert game.current_step == 14
+    assert game.current_step == 18
     assert game.state == GameState.COMPLETE
 
     # Get results
@@ -1410,7 +1418,7 @@ def test_game_results_three_player_seven_card_stud():
     # Check pot after 6th street
     assert game.betting.get_main_pot_amount() == 36  # $24 + $12 ($4 x 3 players)
     
-    # Step 15: Seventh Street (river) deal and betting
+    # Step 16: Seventh Street (river) deal and betting
     game._next_step()
     assert game.state == GameState.DEALING
     assert game.current_step == 16
