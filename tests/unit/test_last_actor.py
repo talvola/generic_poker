@@ -26,33 +26,6 @@ def setup_logging():
         force=True  # Force reconfiguration of logging
     )
 
-@pytest.fixture
-def test_hands():
-    """Fixed test hands for different scenarios."""
-    return {
-        'BTN': [  # Royal flush
-            Card(Rank.ACE, Suit.HEARTS),
-            Card(Rank.KING, Suit.HEARTS),
-            Card(Rank.QUEEN, Suit.HEARTS),
-            Card(Rank.JACK, Suit.HEARTS),
-            Card(Rank.TEN, Suit.HEARTS),
-        ],
-        'SB': [  # Full house
-            Card(Rank.KING, Suit.SPADES),
-            Card(Rank.KING, Suit.HEARTS),
-            Card(Rank.KING, Suit.DIAMONDS),
-            Card(Rank.QUEEN, Suit.SPADES),
-            Card(Rank.QUEEN, Suit.HEARTS),
-        ],
-        'BB': [  # Two pair
-            Card(Rank.JACK, Suit.SPADES),
-            Card(Rank.JACK, Suit.HEARTS),
-            Card(Rank.TEN, Suit.SPADES),
-            Card(Rank.TEN, Suit.HEARTS),
-            Card(Rank.NINE, Suit.SPADES),
-        ]
-    }
-
 def create_test_game(mock_hands=None):
     """Create a test game with three players and optional preset hands."""
     rules = {

@@ -123,7 +123,9 @@ def test_first_round_low_card(players_with_door_cards):
     players = players_with_door_cards
 
     rules = minimal_stud_rules(rule="low card", evaluation_type="high")
-    
+    print(f"Rules: {rules}")
+
+
     # In first round with 'low card' rule, player with 2 of Clubs should go first
     first_player = BringInDeterminator.determine_first_to_act(
         players, 1, CardRule.LOW_CARD, rules
