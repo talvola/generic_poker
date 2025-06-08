@@ -239,7 +239,7 @@ def test_basic_call_sequence_with_fold():
     result = game.player_action("p2", PlayerAction.FOLD)
     assert result.success
     assert not result.advance_step
-    assert game.current_player.id == "p3"  # Should move to p4
+    assert game.current_player.id == "p3"  # Should move to p3
     
     # Big blind checks
     result = game.player_action("p3", PlayerAction.CHECK, 0)
