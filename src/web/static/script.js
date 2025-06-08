@@ -24,6 +24,556 @@ let currentGameStep = null;
 let raiseModalActive = false;
 let currentPlayerCards = [];
 
+// Enhanced state management
+let gameConfig = {
+    selectedVariant: null,
+    bettingStructure: null,
+    stakes: {}
+};
+
+let chatVisible = true;
+let isSpectator = false;
+let disconnectTimer = null;
+
+// Initialize enhanced features
+document.addEventListener('DOMContentLoaded', function() {
+    initializeEnhancedFeatures();
+});
+
+function initializeEnhancedFeatures() {
+    // Add game variant selection button
+    addGameVariantButton();
+    
+    // Initialize chat system
+    initializeChatSystem();
+    
+    // Add disconnect detection
+    initializeConnectionMonitoring();
+    
+    // Enhanced notification system
+    createNotificationContainer();
+    
+    addToLog('Enhanced poker client loaded. Choose your game variant to begin.');
+}
+
+function addGameVariantButton() {
+    const joinForm = document.getElementById('join-form');
+    
+    const variantButton = document.createElement('button');
+    variantButton.type = 'button';
+    variantButton.id = 'select-variant';
+    variantButton.className = 'btn-secondary';
+    variantButton.textContent = 'Select Game Variant';
+    variantButton.style.display = 'block';
+    variantButton.style.margin = '10px auto';
+    
+    variantButton.onclick = showGameVariantSelection;
+    
+    joinForm.insertBefore(variantButton, joinForm.querySelector('button'));
+}
+
+function showGameVariantSelection() {
+    const modal = document.createElement('div');
+    modal.className = 'modal game-selection-modal';
+    
+    // Common poker variants
+    const gameVariants = [
+        {
+            name: "Texas Hold'em",
+            description: "The most popular poker variant. 2 hole cards, 5 community cards.",
+            file: "hold_em"
+        },
+        {
+            name: "Omaha",
+            description: "4 hole cards, must use exactly 2. 5 community cards.",
+            file: "omaha"
+        },
+        {
+            name: "Omaha 8",
+            description: "Omaha with high-low split. 8-or-better qualifier for low.",
+            file: "omaha_8"
+        },
+        {
+            name: "7-Card Stud",
+            description: "Classic stud poker. 7 cards per player, best 5-card hand wins.",
+            file: "7_card_stud"
+        },
+        {
+            name: "7-Card Stud 8",
+            description: "7-Card Stud with high-low split. 8-or-better qualifier for low.",
+            file: "7_card_stud_8"
+        },
+        {
+            name: "Razz",
+            description: "Lowball stud poker. Lowest 5-card hand wins.",
+            file: "razz"
+        },
+        {
+            name: "Mexican Poker",
+            description: "Stud variant with joker and conditional wild cards.",
+            file: "mexican_poker"
+        }
+    ];
+    
+    let optionsHtml = '';
+    gameVariants.forEach(variant => {
+        optionsHtml += `
+            <div class="game-option" data-variant="${variant.file}">
+                <h4>${variant.name}</h4>
+                <p>${variant.description}</p>
+            </div>
+        `;
+    });
+    
+    modal.innerHTML = `
+        <div class="modal-content game-selection-content">
+            <h3>Select Poker Variant</h3>
+            <div class="game-options">
+                ${optionsHtml}
+            </div>
+            <div id="betting-config" style="display: none;">
+                <h4>Betting Structure</h4>
+                <div class="betting-config">
+                    <div class="betting-option">
+                        <input type="radio" name="betting" value="limit" id="limit">
+                        <label for="limit">Limit - Fixed bet sizes</label>
+                    </div>
+                    <div class="betting-option">
+                        <input type="radio" name="betting" value="no-limit" id="no-limit" checked>
+                        <label for="no-limit">No Limit - Bet any amount</label>
+                    </div>
+                    <div class="betting-option">
+                        <input type="radio" name="betting" value="pot-limit" id="pot-limit">
+                        <label for="pot-limit">Pot Limit - Bet up to pot size</label>
+                    </div>
+                    
+                    <div id="stakes-config">
+                        <div class="stakes-input">
+                            <label>Small Blind:</label>
+                            <input type="number" id="small-blind" value="1" min="1">
+                        </div>
+                        <div class="stakes-input">
+                            <label>Big Blind:</label>
+                            <input type="number" id="big-blind" value="2" min="1">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button id="cancel-variant" class="btn-secondary">Cancel</button>
+                <button id="confirm-variant" class="btn-primary" disabled>Confirm Selection</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Add event listeners
+    const gameOptions = modal.querySelectorAll('.game-option');
+    const bettingConfig = modal.querySelector('#betting-config');
+    const confirmButton = modal.querySelector('#confirm-variant');
+    const cancelButton = modal.querySelector('#cancel-variant');
+    
+    gameOptions.forEach(option => {
+        option.addEventListener('click', function() {
+            gameOptions.forEach(opt => opt.classList.remove('selected'));
+            this.classList.add('selected');
+            gameConfig.selectedVariant = this.dataset.variant;
+            bettingConfig.style.display = 'block';
+            updateConfirmButton();
+        });
+    });
+    
+    modal.querySelectorAll('input[name="betting"]').forEach(radio => {
+        radio.addEventListener('change', function() {
+            gameConfig.bettingStructure = this.value;
+            updateStakesConfig(this.value);
+            updateConfirmButton();
+        });
+    });
+    
+    function updateStakesConfig(structure) {
+        const stakesConfig = modal.querySelector('#stakes-config');
+        if (structure === 'limit') {
+            stakesConfig.innerHTML = `
+                <div class="stakes-input">
+                    <label>Small Bet:</label>
+                    <input type="number" id="small-bet" value="10" min="1">
+                </div>
+                <div class="stakes-input">
+                    <label>Big Bet:</label>
+                    <input type="number" id="big-bet" value="20" min="1">
+                </div>
+                <div class="stakes-input">
+                    <label>Ante:</label>
+                    <input type="number" id="ante" value="1" min="0">
+                </div>
+            `;
+        } else {
+            stakesConfig.innerHTML = `
+                <div class="stakes-input">
+                    <label>Small Blind:</label>
+                    <input type="number" id="small-blind" value="1" min="1">
+                </div>
+                <div class="stakes-input">
+                    <label>Big Blind:</label>
+                    <input type="number" id="big-blind" value="2" min="1">
+                </div>
+            `;
+        }
+    }
+    
+    function updateConfirmButton() {
+        confirmButton.disabled = !gameConfig.selectedVariant || !gameConfig.bettingStructure;
+    }
+    
+    confirmButton.addEventListener('click', function() {
+        // Collect stakes
+        if (gameConfig.bettingStructure === 'limit') {
+            gameConfig.stakes = {
+                small_bet: parseInt(modal.querySelector('#small-bet').value),
+                big_bet: parseInt(modal.querySelector('#big-bet').value),
+                ante: parseInt(modal.querySelector('#ante').value)
+            };
+        } else {
+            gameConfig.stakes = {
+                small_blind: parseInt(modal.querySelector('#small-blind').value),
+                big_blind: parseInt(modal.querySelector('#big-blind').value)
+            };
+        }
+        
+        // Send configuration to server
+        socket.emit('configure_game', {
+            variant: gameConfig.selectedVariant,
+            betting_structure: gameConfig.bettingStructure,
+            stakes: gameConfig.stakes
+        });
+        
+        document.body.removeChild(modal);
+        
+        // Update UI
+        const variantButton = document.getElementById('select-variant');
+        variantButton.textContent = `Selected: ${gameVariants.find(v => v.file === gameConfig.selectedVariant).name}`;
+        variantButton.classList.add('btn-success');
+        
+        showNotification('Game variant configured successfully!', 'success');
+    });
+    
+    cancelButton.addEventListener('click', function() {
+        document.body.removeChild(modal);
+    });
+}
+
+function initializeChatSystem() {
+    const gameContainer = document.getElementById('game-container');
+    
+    const chatHtml = `
+        <div class="chat-container" id="chat-container">
+            <div class="chat-header">
+                <span>Table Chat</span>
+                <button class="chat-toggle" onclick="toggleChat()">Hide</button>
+            </div>
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input-container">
+                <input type="text" class="chat-input" id="chat-input" placeholder="Type a message..." maxlength="200">
+                <button class="chat-send" onclick="sendChatMessage()">Send</button>
+            </div>
+        </div>
+    `;
+    
+    gameContainer.insertAdjacentHTML('beforeend', chatHtml);
+    
+    // Add enter key support for chat
+    document.getElementById('chat-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            sendChatMessage();
+        }
+    });
+}
+
+function toggleChat() {
+    const chatContainer = document.getElementById('chat-container');
+    const chatMessages = document.getElementById('chat-messages');
+    const chatInput = document.querySelector('.chat-input-container');
+    const toggleButton = document.querySelector('.chat-toggle');
+    
+    chatVisible = !chatVisible;
+    
+    if (chatVisible) {
+        chatMessages.style.display = 'block';
+        chatInput.style.display = 'flex';
+        toggleButton.textContent = 'Hide';
+    } else {
+        chatMessages.style.display = 'none';
+        chatInput.style.display = 'none';
+        toggleButton.textContent = 'Show';
+    }
+}
+
+function sendChatMessage() {
+    const chatInput = document.getElementById('chat-input');
+    const message = chatInput.value.trim();
+    
+    if (message && myPlayerId) {
+        socket.emit('chat_message', {
+            message: message,
+            player_id: myPlayerId
+        });
+        chatInput.value = '';
+    }
+}
+
+function addChatMessage(data) {
+    const chatMessages = document.getElementById('chat-messages');
+    if (!chatMessages) return;
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `chat-message ${data.type || 'player'}`;
+    
+    const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    
+    messageDiv.innerHTML = `
+        <span class="chat-sender">${data.sender}:</span>
+        ${data.message}
+        <span class="chat-time">${time}</span>
+    `;
+    
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    // Limit chat history
+    if (chatMessages.children.length > 50) {
+        chatMessages.removeChild(chatMessages.firstChild);
+    }
+}
+
+function initializeConnectionMonitoring() {
+    // Monitor connection status
+    socket.on('connect', () => {
+        clearTimeout(disconnectTimer);
+        hideConnectionWarning();
+        addToLog('Connected to server');
+    });
+    
+    socket.on('disconnect', () => {
+        showConnectionWarning();
+        addToLog('Disconnected from server', 'error');
+    });
+    
+    socket.on('reconnect', () => {
+        addToLog('Reconnected to server', 'success');
+        // Attempt to rejoin with same name
+        const playerName = localStorage.getItem('poker_player_name');
+        if (playerName) {
+            socket.emit('join', { name: playerName, is_reconnect: true });
+        }
+    });
+}
+
+function showConnectionWarning() {
+    let warning = document.getElementById('connection-warning');
+    if (!warning) {
+        warning = document.createElement('div');
+        warning.id = 'connection-warning';
+        warning.className = 'notification notification-error';
+        warning.style.position = 'fixed';
+        warning.style.top = '50%';
+        warning.style.left = '50%';
+        warning.style.transform = 'translate(-50%, -50%)';
+        warning.style.zIndex = '10000';
+        warning.innerHTML = `
+            <h3>Connection Lost</h3>
+            <p>Attempting to reconnect...</p>
+            <div class="loading-spinner"></div>
+        `;
+        document.body.appendChild(warning);
+    }
+}
+
+function hideConnectionWarning() {
+    const warning = document.getElementById('connection-warning');
+    if (warning) {
+        document.body.removeChild(warning);
+    }
+}
+
+function createNotificationContainer() {
+    if (!document.getElementById('notification-container')) {
+        const container = document.createElement('div');
+        container.id = 'notification-container';
+        container.className = 'notification-container';
+        document.body.appendChild(container);
+    }
+}
+
+// Enhanced notification system
+function showNotification(message, type = 'info', duration = 4000) {
+    const container = document.getElementById('notification-container') || createNotificationContainer();
+    
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    
+    notification.innerHTML = `
+        ${message}
+        <button class="notification-close" onclick="closeNotification(this)">&times;</button>
+    `;
+    
+    container.appendChild(notification);
+    
+    // Animate in
+    setTimeout(() => {
+        notification.classList.add('show');
+    }, 10);
+    
+    // Auto-remove
+    setTimeout(() => {
+        closeNotification(notification.querySelector('.notification-close'));
+    }, duration);
+}
+
+function closeNotification(closeButton) {
+    const notification = closeButton.parentElement;
+    notification.classList.add('hiding');
+    setTimeout(() => {
+        if (notification.parentElement) {
+            notification.parentElement.removeChild(notification);
+        }
+    }, 300);
+}
+
+// Enhanced socket event handlers
+socket.on('chat_message', addChatMessage);
+
+socket.on('player_disconnected', (data) => {
+    addChatMessage({
+        type: 'system',
+        sender: 'System',
+        message: `${data.player_name} has disconnected. Auto-fold in ${data.timeout_seconds}s if not reconnected.`
+    });
+    
+    // Mark player as disconnected in UI
+    const playerElements = document.querySelectorAll('.player');
+    playerElements.forEach(el => {
+        if (el.getAttribute('data-player-id') === data.player_id) {
+            el.classList.add('disconnected');
+        }
+    });
+});
+
+socket.on('player_reconnected', (data) => {
+    addChatMessage({
+        type: 'system',
+        sender: 'System',
+        message: `${data.player_name} has reconnected.`
+    });
+    
+    // Remove disconnected status
+    const playerElements = document.querySelectorAll('.player');
+    playerElements.forEach(el => {
+        if (el.getAttribute('data-player-id') === data.player_id) {
+            el.classList.remove('disconnected');
+        }
+    });
+});
+
+socket.on('player_auto_folded', (data) => {
+    addChatMessage({
+        type: 'system',
+        sender: 'Dealer',
+        message: `Player auto-folded due to ${data.reason.replace('_', ' ')}.`
+    });
+});
+
+// Store player name for reconnection
+function storePlayerName(name) {
+    localStorage.setItem('poker_player_name', name);
+}
+
+// Modify existing join button handler to store name
+const originalJoinHandler = joinButton.onclick;
+joinButton.onclick = function() {
+    const name = playerNameInput.value.trim();
+    if (name) {
+        storePlayerName(name);
+    }
+    originalJoinHandler();
+};
+
+// Add spectator mode toggle
+function toggleSpectatorMode() {
+    isSpectator = !isSpectator;
+    
+    if (isSpectator) {
+        // Hide action controls
+        document.getElementById('actions-container').style.display = 'none';
+        
+        // Add spectator indicator
+        if (!document.getElementById('spectator-indicator')) {
+            const indicator = document.createElement('div');
+            indicator.id = 'spectator-indicator';
+            indicator.className = 'spectator-indicator';
+            indicator.textContent = 'SPECTATOR MODE';
+            document.body.appendChild(indicator);
+        }
+        
+        showNotification('Spectator mode enabled', 'info');
+    } else {
+        // Show action controls
+        document.getElementById('actions-container').style.display = 'block';
+        
+        // Remove spectator indicator
+        const indicator = document.getElementById('spectator-indicator');
+        if (indicator) {
+            document.body.removeChild(indicator);
+        }
+        
+        showNotification('Spectator mode disabled', 'info');
+    }
+}
+
+// Add keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+    // Only handle shortcuts when game is active and it's player's turn
+    if (document.getElementById('actions').style.display === 'flex') {
+        switch(e.key.toLowerCase()) {
+            case 'f':
+                // Quick fold
+                handleQuickAction('fold');
+                break;
+            case 'c':
+                // Quick call/check
+                handleQuickAction('call') || handleQuickAction('check');
+                break;
+            case 'r':
+                // Quick raise (minimum)
+                handleQuickAction('raise');
+                break;
+        }
+    }
+    
+    // Global shortcuts
+    if (e.ctrlKey || e.metaKey) {
+        switch(e.key.toLowerCase()) {
+            case 'enter':
+                // Focus chat input
+                e.preventDefault();
+                document.getElementById('chat-input').focus();
+                break;
+        }
+    }
+});
+
+function handleQuickAction(actionType) {
+    const actionButtons = document.querySelectorAll('.action-btn');
+    for (let button of actionButtons) {
+        if (button.textContent.toLowerCase().includes(actionType)) {
+            button.click();
+            return true;
+        }
+    }
+    return false;
+}
+
 // Playing card display functions
 function getCardColor(card) {
     if (!card || card === '**') return 'black';
@@ -378,6 +928,18 @@ function updateGameState(data) {
             el.classList.remove('active-turn');
         });
     }
+
+    // Check if someone is making a choice (optional visual feedback)
+    if (data.game_info && data.game_info.step_name && 
+        data.game_info.step_name.toLowerCase().includes('choose')) {
+        
+        // Find who is making the choice
+        const choosingPlayer = data.players.find(p => p.is_current);
+        if (choosingPlayer && choosingPlayer.id !== myPlayerId) {
+            // Show that another player is making a choice
+            showNotification(`${choosingPlayer.name} is making a choice...`, 'info', 2000);
+        }
+    }    
 }
 
 function updateCommunityCards(communityCards) {
@@ -692,6 +1254,107 @@ function showBetSlider(action) {
             showNotification(`Amount must be between $${minAmount} and $${maxAmount}`, 'error');
         }
     });
+}
+
+// Player Choice Action Handling
+
+socket.on('player_choice', (data) => {
+    console.log('Received player_choice event:', data);
+    showChoiceModal(data);
+    addToLog(`Make your choice: ${data.possible_values.join(' or ')}`);
+});
+
+socket.on('choice_made', (data) => {
+    console.log('Choice was made:', data);
+    addToLog(`${data.player_name} chose: ${data.choice}`);
+});
+
+function showChoiceModal(choiceData) {
+    // Remove any existing choice modal
+    const existingModal = document.querySelector('.choice-modal');
+    if (existingModal) {
+        document.body.removeChild(existingModal);
+    }
+
+    const modal = document.createElement('div');
+    modal.className = 'modal choice-modal';
+    
+    const possibleValues = choiceData.possible_values || [];
+    const choiceName = choiceData.value_name || 'choice';
+    
+    let optionsHtml = '';
+    possibleValues.forEach((value, index) => {
+        // Make the text more user-friendly
+        const displayText = value.replace(/_/g, ' ').toUpperCase();
+        optionsHtml += `
+            <button class="choice-option btn-primary" data-value="${value}">
+                ${displayText}
+            </button>
+        `;
+    });
+    
+    modal.innerHTML = `
+        <div class="modal-content choice-content">
+            <h3>Make Your Choice</h3>
+            <p>Select the ${choiceName.replace('_', ' ')} for this hand:</p>
+            <div class="choice-options">
+                ${optionsHtml}
+            </div>
+            <div class="choice-info">
+                <p>Your choice will determine the rules for this hand.</p>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Add event listeners to choice buttons
+    const choiceButtons = modal.querySelectorAll('.choice-option');
+    choiceButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const selectedValue = button.getAttribute('data-value');
+            
+            // Log the choice
+            addToLog(`You chose: ${selectedValue.replace('_', ' ')}`);
+            
+            // Send choice to server
+            socket.emit('player_choice', {
+                value_name: choiceName,
+                selected_value: selectedValue
+            });
+            
+            // Remove modal
+            document.body.removeChild(modal);
+            
+            // Show feedback
+            showNotification(`Choice made: ${selectedValue.replace('_', ' ')}`, 'success');
+        });
+    });
+    
+    // Add escape key to close modal
+    const escapeHandler = (e) => {
+        if (e.key === 'Escape' && document.body.contains(modal)) {
+            // Don't allow escape - force the choice
+            showNotification('You must make a choice to continue', 'warning');
+        }
+    };
+    
+    document.addEventListener('keydown', escapeHandler);
+    
+    // Remove escape handler when modal is removed
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'childList') {
+                mutation.removedNodes.forEach((node) => {
+                    if (node === modal) {
+                        document.removeEventListener('keydown', escapeHandler);
+                        observer.disconnect();
+                    }
+                });
+            }
+        });
+    });
+    observer.observe(document.body, { childList: true });
 }
 
 // Helper function to play sound effects
