@@ -367,12 +367,13 @@ class ShowdownManager:
         
         return game_result
 
-    def _check_best_hand_condition(self, condition: Dict[str, Any]) -> bool:
+    def _check_best_hand_condition(self, condition: Dict[str, Any], player: Player = None) -> bool:
         """
         Check if a condition for conditional best hands matches.
         
         Args:
             condition: Condition specification from rules
+            player: Specific player to check condition for (for player-specific conditions)
             
         Returns:
             True if condition matches, False otherwise
@@ -401,6 +402,49 @@ class ShowdownManager:
                 logger.info(f"Checking player choice condition against list: {subset}={actual_value}, expected one of {expected_value}, {'match' if matches else 'no match'}")
                 
             return matches
+
+        elif condition_type == "player_hand_size":
+            # NEW: Check player hand size condition
+            hand_sizes = condition.get('hand_sizes', [])
+            min_hand_size = condition.get('min_hand_size')
+            max_hand_size = condition.get('max_hand_size')
+            
+            # If a specific player is provided, check their hand size
+            if player:
+                player_hand_size = len(player.hand.get_cards())
+            else:
+                # Get all active players and check their hand sizes
+                active_players = [p for p in self.table.players.values() if p.is_active]
+                
+                # For this condition to match, we need to check if ANY player matches the criteria
+                # In Tapiola Hold'em, all players should have the same number of cards after discarding
+                # so we can check the first active player
+                if not active_players:
+                    return False
+                    
+                player_hand_size = len(active_players[0].hand.get_cards())
+            
+            # Check against specific hand sizes
+            if hand_sizes:
+                matches = player_hand_size in hand_sizes
+                player_info = f"player {player.id}" if player else "player"
+                logger.info(f"Checking hand size condition: {player_info} has {player_hand_size} cards, expected one of {hand_sizes}, {'match' if matches else 'no match'}")
+                return matches
+                
+            # Check against min/max range
+            if min_hand_size is not None and player_hand_size < min_hand_size:
+                player_info = f"Player {player.id}" if player else "Player"
+                logger.info(f"{player_info} hand size {player_hand_size} below minimum {min_hand_size}")
+                return False
+                
+            if max_hand_size is not None and player_hand_size > max_hand_size:
+                player_info = f"Player {player.id}" if player else "Player"
+                logger.info(f"{player_info} hand size {player_hand_size} above maximum {max_hand_size}")
+                return False
+                
+            player_info = f"Player {player.id}" if player else "Player"
+            logger.info(f"{player_info} hand size condition met: {player_hand_size} cards")
+            return True      
         
         elif condition_type == "community_card_value":
             subset = condition.get('subset')
@@ -459,6 +503,111 @@ class ShowdownManager:
         # Default: condition not recognized or not implemented
         logger.warning(f"Unknown condition type: {condition_type}")
         return False
+
+    # Add this method to handle community subset requirements
+    def _find_hand_with_subset_requirements(
+        self,
+        hole_cards: List[Card],
+        community_cards: Dict[str, List[Card]],
+        showdown_rules: dict,
+        eval_type: EvaluationType
+    ) -> Tuple[List[Card], List[Card]]:
+        """Find best hand using community subset requirements."""
+        required_hole = showdown_rules.get("holeCards", 0)
+        subset_requirements = showdown_rules.get("communitySubsetRequirements", [])
+        
+        if isinstance(required_hole, str) and required_hole == "all":
+            required_hole = len(hole_cards)
+        else:
+            required_hole = int(required_hole)
+        
+        best_hand = None
+        best_used_hole_cards = []
+        
+        # Generate hole card combinations
+        if required_hole == 0:
+            hole_combos = [tuple()]
+        elif required_hole > len(hole_cards):
+            logger.warning(f"Not enough hole cards: need {required_hole}, have {len(hole_cards)}")
+            return [], []
+        else:
+            hole_combos = list(itertools.combinations(hole_cards, required_hole))
+        
+        # For each hole card combination, try all valid community combinations
+        for hole_combo in hole_combos:
+            # Generate all valid community card combinations based on subset requirements
+            community_combinations = self._generate_subset_combinations(
+                community_cards, subset_requirements
+            )
+            
+            for comm_combo in community_combinations:
+                hand = list(hole_combo) + list(comm_combo)
+                
+                if best_hand is None or evaluator.compare_hands(hand, best_hand, eval_type) > 0:
+                    best_hand = hand
+                    best_used_hole_cards = list(hole_combo)
+        
+        logger.info(f"Best hand found: {best_hand}")
+        return best_hand if best_hand else [], best_used_hole_cards
+
+    def _generate_subset_combinations(
+        self,
+        community_cards: Dict[str, List[Card]],
+        subset_requirements: List[Dict[str, Any]]
+    ) -> List[List[Card]]:
+        """Generate all valid combinations of community cards based on subset requirements."""
+        if not subset_requirements:
+            return [[]]
+        
+        def generate_combinations_recursive(requirements_index: int, current_combination: List[Card]) -> List[List[Card]]:
+            if requirements_index >= len(subset_requirements):
+                return [current_combination]
+            
+            requirement = subset_requirements[requirements_index]
+            subset_name = requirement["subset"]
+            count = requirement["count"]
+            required = requirement.get("required", True)
+            
+            available_cards = community_cards.get(subset_name, [])
+            combinations = []
+            
+            if not available_cards and required:
+                logger.warning(f"Required subset '{subset_name}' not available")
+                return []  # Required subset not available
+            
+            if not available_cards and not required:
+                # Optional subset not available, skip it
+                return generate_combinations_recursive(requirements_index + 1, current_combination)
+            
+            if len(available_cards) < count and required:
+                logger.warning(f"Not enough cards in required subset '{subset_name}': need {count}, have {len(available_cards)}")
+                return []  # Not enough cards in required subset
+            
+            # Generate combinations for this subset
+            if count == 0:
+                subset_combos = [tuple()]
+            elif count > len(available_cards):
+                if required:
+                    return []  # Not enough cards
+                else:
+                    subset_combos = [tuple()]  # Use no cards from optional subset
+            else:
+                subset_combos = list(itertools.combinations(available_cards, count))
+            
+            logger.debug(f"Generated {len(subset_combos)} combinations for subset '{subset_name}'")
+
+            # For each combination from this subset, recurse to next requirement
+            for subset_combo in subset_combos:
+                new_combination = current_combination + list(subset_combo)
+                combinations.extend(
+                    generate_combinations_recursive(requirements_index + 1, new_combination)
+                )
+            
+            return combinations
+        
+        result = generate_combinations_recursive(0, [])
+        logger.debug(f"Generated {len(result)} total community card combinations")
+        return result
 
     def handle_fold_win(self, active_players: List[Player]) -> GameResult:
         """Handle the case when all but one player folds."""
@@ -1654,6 +1803,11 @@ class ShowdownManager:
         if "wildCards" in showdown_rules:
             self.apply_wild_cards(player, comm_cards=comm_cards, wild_rules=showdown_rules["wildCards"])
         
+        # NEW: Handle community subset requirements
+        if "communitySubsetRequirements" in showdown_rules:
+            return self._find_hand_with_subset_requirements(
+                hole_cards, community_cards, showdown_rules, eval_type)
+            
         # Handle different hand configuration types
         if "combinations" in showdown_rules:
             # Pass the full community_cards dictionary for combinations lookup

@@ -1,0 +1,256 @@
+{
+    "game": "Tapiola Hold'em",
+    "references": [
+        "https://www.koodikulma.fi/card-games/tapiola-holdem"
+    ],
+    "players": {
+        "min": 2,
+        "max": 9
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Center"
+                    }
+                ]
+            },
+            "name": "Deal Community Center Card"
+        },        
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "First Betting Round"
+        },
+        {
+            "deal": {
+                "location": "community", 
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Tower1"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Tower2"
+                    }                    
+                ]
+            },
+            "name": "Deal First Tower Cards"
+        }, 
+        {
+            "discard": {
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "First Discard Round"
+        },        
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Second Betting Round"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Tower1"
+                    },                    
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Tower2"
+                    }
+                ]
+            },
+            "name": "Deal Second Tower Cards"
+        },
+        {
+            "discard": {
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Second Discard Round"
+        },                
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Third Betting Round"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Tower1"
+                    },                    
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Tower2"
+                    }
+                ]
+            },
+            "name": "Deal Third Tower Cards"
+        },        
+        {
+            "discard": {
+                "cards": [
+                    {
+                        "min_number": 0,
+                        "number": 1,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Third Optional Discard Round"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Final Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "hole cards plus one card from each community subset",
+        "conditionalBestHands": [
+            {
+                "condition": {
+                    "type": "player_hand_size",
+                    "hand_sizes": [2]
+                },
+                "bestHand": [
+                    {
+                        "name": "Best Hand (2 hole cards)",
+                        "evaluationType": "high",
+                        "holeCards": 2,
+                        "communitySubsetRequirements": [
+                            {
+                                "subset": "Center",
+                                "count": 1,
+                                "required": true
+                            },
+                            {
+                                "subset": "Tower1",
+                                "count": 1,
+                                "required": true
+                            },
+                            {
+                                "subset": "Tower2",
+                                "count": 1,
+                                "required": true
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "condition": {
+                    "type": "player_hand_size",
+                    "hand_sizes": [3]
+                },
+                "bestHand": [
+                    {
+                        "name": "Best Hand (3 hole cards)",
+                        "evaluationType": "high",
+                        "holeCards": 3,
+                        "communitySubsetRequirements": [
+                            {
+                                "subset": "Tower1",
+                                "count": 1,
+                                "required": true
+                            },
+                            {
+                                "subset": "Tower2",
+                                "count": 1,
+                                "required": true
+                            }
+                        ]
+                    }
+                ]
+            }
+        ],
+        "defaultBestHand": [
+            {
+                "name": "Best Hand (default)",
+                "evaluationType": "high",
+                "holeCards": "all",
+                "communitySubsetRequirements": [
+                    {
+                        "subset": "Center",
+                        "count": 1,
+                        "required": false
+                    },
+                    {
+                        "subset": "Tower1",
+                        "count": 1,
+                        "required": true
+                    },
+                    {
+                        "subset": "Tower2",
+                        "count": 1,
+                        "required": true
+                    }
+                ]
+            }
+        ]
+    }
+}

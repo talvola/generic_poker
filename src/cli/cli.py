@@ -84,11 +84,14 @@ def get_discard_action(game: Game, player: Player) -> Tuple[PlayerAction, int, O
     if step.action_type == GameActionType.GROUPED:
         discard_config = step.action_config[game.action_handler.current_substep]
     else:
-        discard_config = step.action_config["cards"][0]  # Assume one discard object for now
+        discard_config = step.action_config
     
+    # Get the actual card configuration from the discard config
+    card_config = discard_config["cards"][0]  # Assume one discard object for now
+
     # Check for forced discard
     if "rule" in discard_config:
-        print(f"\n{player.name}'s Turn | Forced discard ({discard_config['rule']})")
+        print(f"\n{player.name}'s Turn | Forced discard ({card_config['rule']})")
         return PlayerAction.DISCARD, 0, []  # Engine handles the rule-based discard
     
     hand = player.hand.get_cards()
@@ -116,16 +119,29 @@ def get_discard_action(game: Game, player: Player) -> Tuple[PlayerAction, int, O
     for idx, (label, card) in enumerate(card_list, 1):
         print(f"{idx}: {card}")
     
-    prompt = f"Select {min_discards} to {max_discards} cards to discard (e.g., '1 3 5' or press Enter to discard {min_discards}):"
+    # Fix the prompt to correctly handle optional discards
+    if min_discards == 0:
+        if max_discards == 0:
+            prompt = "No cards need to be discarded. Press Enter to continue:"
+        elif max_discards == 1:
+            prompt = f"Select 0 or 1 card to discard (press Enter to discard nothing, or enter card number):"
+        else:
+            prompt = f"Select 0 to {max_discards} cards to discard (press Enter to discard nothing, or enter card numbers):"
+    else:
+        prompt = f"Select {min_discards} to {max_discards} cards to discard (e.g., '1 3 5'):"
     print(prompt)
-    
+
     while True:
         choice = input("Enter card numbers: ").strip()
-        if not choice and min_discards == 0:
-            return PlayerAction.DISCARD, 0, []
-        elif not choice:
-            print(f"Must discard at least {min_discards} cards.")
-            continue
+
+        # Handle empty input - only allowed if min_discards is 0
+        if not choice:
+            if min_discards == 0:
+                return PlayerAction.DISCARD, 0, []
+            else:
+                print(f"Must discard at least {min_discards} cards.")
+                continue
+
         try:
             indices = [int(x) - 1 for x in choice.split()]
             if not all(0 <= i < len(card_list) for i in indices):

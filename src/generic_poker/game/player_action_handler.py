@@ -102,7 +102,7 @@ class PlayerActionHandler:
             if hasattr(self.game, "current_discard_config"):
                 card_config = self.game.current_discard_config["cards"][0]
                 max_discard = card_config.get("number", 0)
-                min_discard = card_config.get("number", 0)
+                min_discard = card_config.get("min_number", card_config.get("number", 0))
                 return [(PlayerAction.DISCARD, min_discard, max_discard)]
             elif hasattr(self.game, "current_draw_config"):
                 card_config = self.game.current_draw_config["cards"][0]
