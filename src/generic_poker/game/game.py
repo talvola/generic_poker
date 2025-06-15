@@ -133,6 +133,8 @@ class Game:
         self.bring_in_player_id = None
 
         self.declarations: Dict[str, Dict[int, str]] = {}
+
+        self.dynamic_wild_rank = None  # Store rank that becomes wild due to last card dealt
     
 
     def get_game_description(self) -> str:
@@ -694,8 +696,8 @@ class Game:
                         logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to player {player_name} ({state})")
                         for _ in range(num_cards):
                             card = self.table.deal_card_to_player(player_id, subset=hole_subset, face_up=face_up)
-                            # Apply wild card rules if this is a Joker
-                            if card and wild_card_rules and card.rank == Rank.JOKER:
+                            # Apply wild card rules if needed
+                            if card and wild_card_rules:
                                 self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
                     else:
                         # Deal to all active players
@@ -706,8 +708,8 @@ class Game:
                         if wild_card_rules:
                             for active_player_id, cards in cards_dealt_dict.items():
                                 for card in cards:
-                                    if card.rank == Rank.JOKER:
-                                        self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
+                                    # Check if ANY wild card rule applies to this card
+                                    self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
                                         
                 else:  # community
                     # Convert single string subset to list for consistency
@@ -720,8 +722,8 @@ class Game:
                     # Apply wild card rules to any Jokers dealt to community
                     if wild_card_rules and cards:
                         for card in cards:
-                            if card.rank == Rank.JOKER:
-                                self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
+                            # Check if ANY wild card rule applies to this card
+                            self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
 
     def _apply_wild_card_rules_to_card(self, card: Card, wild_rules: List[Dict[str, Any]], face_up: bool) -> None:
         """
@@ -735,7 +737,9 @@ class Game:
         for rule in wild_rules:
             wild_type = rule.get("type")
             role = rule.get("role", "wild")
-            
+            scope = rule.get("scope", "global")
+            match_type = rule.get("match", "rank")  # Default to "rank" for backward compatibility
+
             # Determine which WildType to use
             if role == "bug":
                 wild_card_type = WildType.BUG
@@ -745,6 +749,33 @@ class Game:
                 # For other types, use MATCHING or NATURAL as appropriate
                 wild_card_type = WildType.MATCHING
             
+            # Handle the new last_community_card type
+            if wild_type == "last_community_card":
+                # Always make this specific card wild
+                card.make_wild(wild_card_type)
+                
+                if match_type == "rank":
+                    # Store the wild rank and make all existing cards of this rank wild
+                    target_rank = card.rank
+                    self.dynamic_wild_rank = target_rank
+                    
+                    if scope == "global":
+                        self._make_all_existing_matching_rank_wild(target_rank, wild_card_type)
+                    
+                    logger.info(f"Applied last_community_card rule: {target_rank} rank is now wild")
+                    
+                elif match_type == "card":
+                    # Only this specific card is wild
+                    logger.info(f"Applied last_community_card rule: only {card} is wild")
+                    
+                elif match_type == "suit":
+                    # Future extension: all cards of this suit are wild
+                    target_suit = card.suit
+                    # Implementation would go here
+                    logger.info(f"Applied last_community_card rule: {target_suit} suit is now wild")
+                
+                continue
+
             # Check if card matches the rule
             if wild_type == "joker" and card.rank == Rank.JOKER:
                 card.make_wild(wild_card_type)
@@ -755,7 +786,7 @@ class Game:
                 if card.rank == target_rank:
                     card.make_wild(wild_card_type)
                     logger.info(f"Applied wild card rule: {wild_type} {target_rank} as {role}")
-                    
+                
             # Other wild card types can be added as needed
             
             # Handle conditional wild cards
@@ -783,6 +814,23 @@ class Game:
                     false_wild_type = WildType.BUG if false_role == "bug" else WildType.NAMED
                     card.make_wild(false_wild_type)
                     logger.info(f"Applied conditional wild card rule (condition not met): {wild_type} as {false_role}")
+
+    def _make_all_existing_matching_rank_wild(self, target_rank: Rank, wild_card_type: WildType) -> None:
+        """Make all existing cards of a specific rank wild (not cards still in deck)."""
+        
+        # Make all player cards of this rank wild
+        for player in self.table.players.values():
+            for card in player.hand.get_cards():
+                if card.rank == target_rank and not card.is_wild:
+                    card.make_wild(wild_card_type)
+                    logger.debug(f"Made existing card {card} wild for player {player.name}")
+        
+        # Make all community cards of this rank wild
+        for subset_name, cards in self.table.community_cards.items():
+            for card in cards:
+                if card.rank == target_rank and not card.is_wild:
+                    card.make_wild(wild_card_type)
+                    logger.debug(f"Made existing community card {card} wild in subset {subset_name}")
 
     def _handle_roll_die(self, config: Dict[str, Any]) -> None:
         """Handle a die roll action."""

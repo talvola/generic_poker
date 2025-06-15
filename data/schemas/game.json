@@ -580,7 +580,36 @@
               }              
             },
             "required": ["type", "role"],
-            "additionalProperties": false
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": { "type": { "enum": ["rank"] } }
+                },
+                "then": {
+                  "required": ["rank"]
+                }
+              },
+              {
+                "if": {
+                  "properties": { "type": { "enum": ["lowest_hole"] } }
+                },
+                "then": {
+                  "required": ["visibility"]
+                }
+              },
+              {
+                "if": {
+                  "properties": { "type": { "enum": ["last_community_card"] } }
+                },
+                "then": {
+                  "properties": {
+                    "match": { "type": "string" },
+                    "scope": { "type": "string" }
+                  }
+                }
+              }
+            ]            
           }
         },
         "qualifier": {
@@ -693,13 +722,13 @@
         },   
         "wildCards": {
           "type": "array",
-          "description": "List of wild card rules that apply to cards being dealt",
+          "description": "List of wild card rules that apply to cards being dealt. Can include static rules (jokers, specific ranks) and dynamic rules (based on cards actually dealt)",
           "items": {
             "type": "object",
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["joker", "rank", "lowest_community", "lowest_hole"],
+                "enum": ["joker", "rank", "lowest_community", "lowest_hole", "last_community_card"],
                 "description": "Specifies the wild card rule type"
               },
               "count": {
@@ -708,7 +737,7 @@
               },
               "rank": {
                 "type": "string",
-                "description": "Rank that is wild (only for type 'rank')"
+                "description": "Rank that is wild (only for type 'rank'). Not needed for dynamic types like 'last_community_card'"
               },
               "subset": {
                 "type": "string",
@@ -721,13 +750,13 @@
               },
               "match": {
                 "type": "string",
-                "enum": ["rank"],
-                "description": "Match condition that defines wild cards (e.g., 'rank')"
+                "enum": ["rank", "card", "suit"],
+                "description": "Match condition for dynamic wild cards: 'rank' makes all cards of the dealt card's rank wild, 'card' makes only the specific dealt card wild, 'suit' makes all cards of the dealt card's suit wild"
               },
               "scope": {
                 "type": "string",
                 "enum": ["player", "global"],
-                "description": "Scope of wildness (default is global)"
+                "description": "Scope of wildness: 'player' affects only the current player's cards, 'global' affects all players and community cards (default is global)"
               },
               "role": {
                 "type": "string",

@@ -2371,6 +2371,23 @@ class ShowdownManager:
         for rule in wild_rules:
             rule_type = rule["type"]
 
+            if rule_type == "last_community_card":
+                match_type = rule.get("match", "rank")
+                
+                if match_type == "rank" and hasattr(self.game, 'dynamic_wild_rank') and self.game.dynamic_wild_rank:
+                    # Use stored wild rank to make any cards dealt after the rule was set wild
+                    target_rank = self.game.dynamic_wild_rank
+                    role = rule.get("role", "wild")
+                    wild_type = WildType.BUG if role == "bug" else WildType.NAMED
+                    
+                    for card in player.hand.get_cards() + comm_cards:
+                        if card.rank == target_rank and not card.is_wild:
+                            card.make_wild(wild_type)
+                            logger.debug(f"Made {card} wild due to stored dynamic_wild_rank")
+                
+                # For match_type == "card", no additional action needed since only the specific card was made wild
+                continue
+
             # Handle conditional wild card roles
             if rule.get("role") == "conditional" and "condition" in rule:        
                 condition = rule["condition"]
@@ -2407,7 +2424,7 @@ class ShowdownManager:
                 rank = Rank(rule["rank"])
                 for card in player.hand.get_cards() + comm_cards:
                     if card.rank == rank:
-                        card.make_wild(wild_type)
+                        card.make_wild(wild_type)                       
 
             elif rule_type == "lowest_community":
                 subset = rule.get("subset", "default")
@@ -2418,7 +2435,7 @@ class ShowdownManager:
                 lowest_rank = sorted_cards[0].rank
                 for card in player.hand.get_cards() + comm_cards:
                     if card.rank == lowest_rank:
-                        card.make_wild(wild_type)
+                        card.make_wild(wild_type)                  
 
             elif rule_type == "lowest_hole":
                 subset = rule.get("subset", "default")

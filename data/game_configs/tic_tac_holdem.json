@@ -1,0 +1,202 @@
+{
+    "game": "Tic Tac Hold'em",
+    "references": [
+        "https://www.ichabod801.com/poker_db/common/05-card.html#variant-1111"
+    ],
+    "players": {
+        "min": 2,
+        "max": 10
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 2,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Row1", "Col1"]
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Row1", "Col3"]
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Row3", "Col1"]
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Row3", "Col3"]
+                    }
+                ]
+            },
+            "name": "Deal Corner Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "First Betting Round"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Row1", "Col2"]
+                    }
+                ]
+            },
+            "name": "Deal Top Card"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Second Betting Round"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Row2", "Col3"]
+                    }
+                ]
+            },
+            "name": "Deal Right Card"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Third Betting Round"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Row3", "Col2"]
+                    }
+                ]
+            },
+            "name": "Deal Bottom Card"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Fourth Betting Round"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Row2", "Col1"]
+                    }
+                ]
+            },
+            "name": "Deal Left Card"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Fifth Betting Round"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": ["Row2", "Col2"]
+                    }
+                ],
+                "wildCards": [
+                    {
+                        "type": "last_community_card",
+                        "role": "wild",
+                        "scope": "global",
+                        "match": "rank"
+                    }
+                ]
+            },
+            "name": "Deal Final Center Card (Wild)"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Final Betting Round"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "two hole cards and one horizontal or vertical row of community cards",
+        "bestHand": [
+            {
+                "evaluationType": "high_wild_bug",
+                "holeCards": 2,
+                "communityCards": 3,
+                "communityCardCombinations": [
+                    ["Row1"],
+                    ["Row2"], 
+                    ["Row3"],
+                    ["Col1"],
+                    ["Col2"],
+                    ["Col3"]
+                ]
+            }
+        ]
+    }
+}

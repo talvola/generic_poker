@@ -215,6 +215,26 @@ Each object in the cards array has the following properties:
 | **chooser** | Chooser | String | Position that gets to make the choice (utg, button, dealer, sb, bb) | No |
 | **time_limit** | Time Limit | Integer | Time limit in seconds for making the choice | No |
 
+#### Dynamic Wild Cards
+
+Some wild card rules are determined by cards actually dealt during the game:
+
+- **last_community_card**: The last community card dealt determines wildness
+  - `match: "rank"`: All cards of the same rank as the last community card become wild
+  - `match: "card"`: Only the specific last community card dealt is wild
+  - `match: "suit"`: All cards of the same suit as the last community card become wild
+
+Example for Tic Tac Hold'em:
+```json
+"wildCards": [
+  {
+    "type": "last_community_card",
+    "role": "wild",
+    "scope": "global", 
+    "match": "rank"
+  }
+]
+
 #### Roll Die Object
 
 | Field | Name | Type | Definition | Required |
