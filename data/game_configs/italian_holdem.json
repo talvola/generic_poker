@@ -1,0 +1,125 @@
+{
+    "game": "Italian Poker",
+    "references": [
+        "https://www.ichabod801.com/poker_db/common/05-card.html#variant-313"
+    ],
+    "players": {
+        "min": 2,
+        "max": 10
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "bettingOrder": {
+        "initial": "dealer",
+        "subsequent": "dealer"
+    },
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },        
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Initial Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "First Betting Round"
+        },
+        {
+            "discard": {
+                "cards": [
+                    {
+                        "min_number": 0,
+                        "number": 2,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Discard Round"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Common1"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Common2"
+                    }
+                ]
+            },
+            "name": "Deal Common Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Second Betting Round"
+        },
+        {
+            "declare": {
+                "type": "declare",
+                "options": ["high", "low"],
+                "simultaneous": true
+            },
+            "name": "Declare High/Low"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "five cards from hole cards and conditionally available community cards",
+        "declaration_mode": "declare",
+        "bestHand": [
+            {
+                "name": "High Hand",
+                "evaluationType": "high",
+                "playerHandSize": {
+                    "5": {"holeCards": 5, "communityCards": 0},
+                    "4": {"holeCards": 4, "communityCards": 1, "community_subset": "Common1"},
+                    "3": {"holeCards": 3, "communityCards": 2, "community_subsets": ["Common1", "Common2"]}
+                }
+            },
+            {
+                "name": "Low Hand",
+                "evaluationType": "a5_low",
+                "playerHandSize": {
+                    "5": {"holeCards": 5, "communityCards": 0},
+                    "4": {"holeCards": 4, "communityCards": 1, "community_subset": "Common1"},
+                    "3": {"holeCards": 3, "communityCards": 2, "community_subsets": ["Common1", "Common2"]}
+                }
+            }
+        ]
+    }
+}

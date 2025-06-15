@@ -628,7 +628,39 @@
         "usesUnusedFrom": {
           "type": "string",
           "description": "Name of the hand configuration from which to use the unused hole cards"
-        }
+        },
+        "playerHandSize": {
+          "type": "object",
+          "patternProperties": {
+            "^[0-9]+$": {
+              "type": "object",
+              "properties": {
+                "holeCards": {
+                  "type": "integer",
+                  "description": "Number of hole cards to use for this hand size"
+                },
+                "communityCards": {
+                  "type": "integer",
+                  "description": "Number of community cards to use for this hand size"
+                },
+                "community_subset": {
+                  "type": "string",
+                  "description": "Single community subset to use for this hand size"
+                },
+                "community_subsets": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Multiple community subsets to use for this hand size"
+                }
+              },
+              "required": ["holeCards", "communityCards"],
+              "additionalProperties": false
+            }
+          },
+          "description": "Hand evaluation rules based on player's current hand size"
+        }        
       },       
       "required": ["evaluationType"],
       "additionalProperties": false

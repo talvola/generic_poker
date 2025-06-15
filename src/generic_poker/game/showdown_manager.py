@@ -30,52 +30,6 @@ class ShowdownManager:
         self.rules = rules
         self.declarations: Dict[str, Dict[int, str]] = {}
 
-    # def handle_showdown(self) -> GameResult:
-    #     """
-    #     Handle showdown and determine winners.
-        
-    #     Returns:
-    #         GameResult object with complete results of the hand
-    #     """
-    #     active_players = [p for p in self.table.players.values() if p.is_active]
-    #     if not active_players:
-    #         return GameResult(pots=[], hands={}, winning_hands=[], is_complete=True)
-        
-    #     # Check if using declarations mode
-    #     if self.rules.showdown.declaration_mode == "declare":
-    #         return self._handle_showdown_with_declare()   
-            
-    #     # Determine which best hand configuration to use
-    #     best_hand_configs = self._determine_best_hand_configs()
-    #     default_actions = self.rules.showdown.defaultActions
-    #     global_default_action = self.rules.showdown.globalDefaultAction
-
-    #     # Initialize tracking structures
-    #     hand_results, pot_results, winning_hands = self._initialize_showdown_tracking()
-        
-    #     # Get original pot amounts for tracking
-    #     original_main_pot, original_side_pots, total_pot = self._get_original_pot_amounts()
-        
-    #     # Process each hand configuration
-    #     awarded_portions, had_any_winners = self._process_hand_configurations(
-    #         best_hand_configs, active_players, hand_results, pot_results, winning_hands,
-    #         original_main_pot, original_side_pots, default_actions
-    #     )
-        
-    #     # Handle redistribution if some portions weren't awarded
-    #     if awarded_portions > 0 and awarded_portions < len(best_hand_configs):
-    #         self._redistribute_exact_pot(original_main_pot, original_side_pots, pot_results)
-        
-    #     # Handle global default action if no winners in any division
-    #     if not had_any_winners and global_default_action:
-    #         self._handle_global_default_action(
-    #             global_default_action, active_players, original_main_pot, original_side_pots,
-    #             pot_results, hand_results, winning_hands
-    #         )
-        
-    #     # Create and validate final result
-    #     return self._create_final_game_result(pot_results, hand_results, winning_hands, total_pot)        
-        
     def handle_showdown(self) -> GameResult:
         """
         Handle showdown and determine winners.
@@ -2219,6 +2173,85 @@ class ShowdownManager:
         logger.debug(f'Best hand found using showdown rules: {best_hand}')
         return best_hand if best_hand else [], best_used_hole_cards    
     
+    def _find_hand_with_player_hand_size(
+        self,
+        hole_cards: List[Card],
+        community_cards: Dict[str, List[Card]],
+        showdown_rules: dict,
+        eval_type: EvaluationType
+    ) -> Tuple[List[Card], List[Card]]:
+        """Find best hand using playerHandSize configuration."""
+        player_hand_size_rules = showdown_rules["playerHandSize"]
+        current_hand_size = len(hole_cards)
+        
+        # Look up the rule for the current hand size
+        size_key = str(current_hand_size)
+        if size_key not in player_hand_size_rules:
+            logger.warning(f"No rule found for hand size {current_hand_size}")
+            return [], []
+        
+        rule = player_hand_size_rules[size_key]
+        required_hole = rule["holeCards"]
+        required_community = rule["communityCards"]
+        
+        logger.info(f"Player has {current_hand_size} cards, using rule: {required_hole} hole + {required_community} community")
+        
+        # Get community cards based on the rule
+        comm_cards = []
+        if required_community > 0:
+            # Check for single subset
+            if "community_subset" in rule:
+                subset_name = rule["community_subset"]
+                subset_cards = community_cards.get(subset_name, [])
+                if len(subset_cards) < required_community:
+                    logger.warning(f"Not enough cards in subset '{subset_name}': need {required_community}, have {len(subset_cards)}")
+                    return [], []
+                comm_cards = subset_cards[:required_community]
+                
+            # Check for multiple subsets
+            elif "community_subsets" in rule:
+                subset_names = rule["community_subsets"]
+                for subset_name in subset_names:
+                    subset_cards = community_cards.get(subset_name, [])
+                    comm_cards.extend(subset_cards)
+                
+                if len(comm_cards) < required_community:
+                    logger.warning(f"Not enough cards in subsets {subset_names}: need {required_community}, have {len(comm_cards)}")
+                    return [], []
+                comm_cards = comm_cards[:required_community]
+                
+            # Fallback to default community cards
+            else:
+                default_cards = community_cards.get("default", [])
+                if len(default_cards) < required_community:
+                    logger.warning(f"Not enough default community cards: need {required_community}, have {len(default_cards)}")
+                    return [], []
+                comm_cards = default_cards[:required_community]
+        
+        # Validate hole cards
+        if len(hole_cards) < required_hole:
+            logger.warning(f"Not enough hole cards: need {required_hole}, have {len(hole_cards)}")
+            return [], []
+        
+        # Generate combinations
+        best_hand = None
+        best_used_hole_cards = []
+        
+        hole_combos = list(itertools.combinations(hole_cards, required_hole))
+        community_combos = [tuple()] if required_community == 0 else list(itertools.combinations(comm_cards, required_community))
+        
+        # Try all combinations and find the best
+        for hole_combo in hole_combos:
+            for comm_combo in community_combos:
+                hand = list(hole_combo) + list(comm_combo)
+                
+                if best_hand is None or evaluator.compare_hands(hand, best_hand, eval_type) > 0:
+                    best_hand = hand
+                    best_used_hole_cards = list(hole_combo)
+        
+        logger.info(f"Best hand found with playerHandSize: {best_hand}")
+        return best_hand if best_hand else [], best_used_hole_cards
+    
     def _find_best_hand_for_player(
         self,
         player: Player,
@@ -2286,6 +2319,10 @@ class ShowdownManager:
             # Standard hole cards + community cards case
             return self._find_hand_with_hole_and_community(
                 hole_cards, comm_cards, player, showdown_rules, eval_type)
+        
+        if "playerHandSize" in showdown_rules:
+            return self._find_hand_with_player_hand_size(
+                hole_cards, community_cards, showdown_rules, eval_type)
         
         # Default: just use all hole cards
         return hole_cards, hole_cards    
