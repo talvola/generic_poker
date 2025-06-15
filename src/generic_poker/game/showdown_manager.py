@@ -30,6 +30,52 @@ class ShowdownManager:
         self.rules = rules
         self.declarations: Dict[str, Dict[int, str]] = {}
 
+    # def handle_showdown(self) -> GameResult:
+    #     """
+    #     Handle showdown and determine winners.
+        
+    #     Returns:
+    #         GameResult object with complete results of the hand
+    #     """
+    #     active_players = [p for p in self.table.players.values() if p.is_active]
+    #     if not active_players:
+    #         return GameResult(pots=[], hands={}, winning_hands=[], is_complete=True)
+        
+    #     # Check if using declarations mode
+    #     if self.rules.showdown.declaration_mode == "declare":
+    #         return self._handle_showdown_with_declare()   
+            
+    #     # Determine which best hand configuration to use
+    #     best_hand_configs = self._determine_best_hand_configs()
+    #     default_actions = self.rules.showdown.defaultActions
+    #     global_default_action = self.rules.showdown.globalDefaultAction
+
+    #     # Initialize tracking structures
+    #     hand_results, pot_results, winning_hands = self._initialize_showdown_tracking()
+        
+    #     # Get original pot amounts for tracking
+    #     original_main_pot, original_side_pots, total_pot = self._get_original_pot_amounts()
+        
+    #     # Process each hand configuration
+    #     awarded_portions, had_any_winners = self._process_hand_configurations(
+    #         best_hand_configs, active_players, hand_results, pot_results, winning_hands,
+    #         original_main_pot, original_side_pots, default_actions
+    #     )
+        
+    #     # Handle redistribution if some portions weren't awarded
+    #     if awarded_portions > 0 and awarded_portions < len(best_hand_configs):
+    #         self._redistribute_exact_pot(original_main_pot, original_side_pots, pot_results)
+        
+    #     # Handle global default action if no winners in any division
+    #     if not had_any_winners and global_default_action:
+    #         self._handle_global_default_action(
+    #             global_default_action, active_players, original_main_pot, original_side_pots,
+    #             pot_results, hand_results, winning_hands
+    #         )
+        
+    #     # Create and validate final result
+    #     return self._create_final_game_result(pot_results, hand_results, winning_hands, total_pot)        
+        
     def handle_showdown(self) -> GameResult:
         """
         Handle showdown and determine winners.
@@ -41,319 +87,739 @@ class ShowdownManager:
         if not active_players:
             return GameResult(pots=[], hands={}, winning_hands=[], is_complete=True)
         
-        # Get showdown rules
-        showdown_rules = self.rules.showdown
-
         # Check if using declarations mode
-        if showdown_rules.declaration_mode == "declare":
+        if self.rules.showdown.declaration_mode == "declare":
             return self._handle_showdown_with_declare()     
         
+        # Check if we have player-specific conditions (like player_hand_size)
+        if self._has_player_specific_conditions():
+            return self._handle_player_specific_showdown(active_players)
+        
+        # Standard showdown processing for global conditions
+        return self._handle_standard_showdown(active_players)
+        
+    def _has_player_specific_conditions(self) -> bool:
+        """Check if any conditional best hands use player-specific conditions."""
+        conditionalBestHands = getattr(self.rules.showdown, 'conditionalBestHands', None)
+        if not conditionalBestHands:
+            return False
+            
+        for condition_rule in conditionalBestHands:
+            condition_type = condition_rule['condition'].get('type')
+            if condition_type == 'player_hand_size':
+                return True
+        return False
+    
+    def _handle_player_specific_showdown(self, active_players: List) -> GameResult:
+        """
+        Handle showdown where different players might use different hand configurations.
+        This is used for conditions like player_hand_size where each player's condition
+        needs to be evaluated individually.
+        """
+        # Initialize tracking structures
+        hand_results, pot_results, winning_hands = self._initialize_showdown_tracking()
+        
+        # Get original pot amounts for tracking
+        original_main_pot, original_side_pots, total_pot = self._get_original_pot_amounts()
+        
+        # Group players by their applicable hand configuration
+        player_configs, config_lookup = self._group_players_by_config(active_players)
+        
+        # If no players matched any specific condition, use default
+        if not any(player_configs.values()):
+            logger.info("No players matched conditional configurations, using default")
+            default_configs = self._get_default_config()
+            if default_configs:
+                # For default config, create a tuple and add all players
+                default_config = default_configs[0]  # Use first default config
+                default_tuple = self._config_to_tuple(default_config)
+                player_configs = {default_tuple: active_players}
+                config_lookup = {default_tuple: default_config}
+        
+        # Process each group of players with their specific configuration
+        config_results = {}  # config_tuple -> {player_id: HandResult}
+        
+        for config_tuple, players in player_configs.items():
+            if not players:
+                continue
+                
+            config = config_lookup[config_tuple]
+            config_name = config.get('name', 'Hand Configuration')
+            eval_type = EvaluationType(config.get('evaluationType', 'high'))
+            
+            logger.info(f"Evaluating {len(players)} players with config: {config_name}")
+            
+            # Evaluate hands for this group of players
+            group_results = self._evaluate_hands_for_config(players, config, eval_type)
+            config_results[config_tuple] = group_results
+            
+            # Update hand_results
+            self._update_hand_results(hand_results, group_results, config_name)
+        
+        # Now award pots - all players compete together regardless of their config
+        # Find the best hands across all configurations
+        all_hand_results = {}
+        for group_results in config_results.values():
+            all_hand_results.update(group_results)
+        
+        # Award the entire pot to the best hand(s) across all configurations
+        if all_hand_results:
+            # Since all players are competing for the same pot, we need to compare
+            # hands across different evaluation types. For Tapiola Hold'em, they're
+            # all "high" evaluation, so we can compare directly.
+            
+            # Find the best hand(s) among all players
+            best_players = self._find_best_across_all_configs(active_players, all_hand_results)
+            
+            if best_players:
+                # Award full pot to winners
+                self._award_full_pot_to_winners(
+                    best_players, original_main_pot, original_side_pots, pot_results
+                )
+                
+                # Add winning hands
+                for player in best_players:
+                    if player.id in all_hand_results:
+                        winning_hand = all_hand_results[player.id]
+                        winning_hands.append(winning_hand)
+        
+        # Create and validate final result
+        return self._create_final_game_result(pot_results, hand_results, winning_hands, total_pot)    
+    
+    def _handle_standard_showdown(self, active_players: List) -> GameResult:
+        """Handle standard showdown with global conditions."""
         # Determine which best hand configuration to use
-        best_hand_configs = None
-
+        best_hand_configs = self._determine_best_hand_configs()
+        default_actions = self.rules.showdown.defaultActions
+        global_default_action = self.rules.showdown.globalDefaultAction
+                
+        # Initialize tracking structures
+        hand_results, pot_results, winning_hands = self._initialize_showdown_tracking()
+        
+        # Get original pot amounts for tracking
+        original_main_pot, original_side_pots, total_pot = self._get_original_pot_amounts()
+        
+        # Process each hand configuration
+        awarded_portions, had_any_winners = self._process_hand_configurations(
+            best_hand_configs, active_players, hand_results, pot_results, winning_hands,
+            original_main_pot, original_side_pots, default_actions
+        )
+        
+        # Handle redistribution if some portions weren't awarded
+        if awarded_portions > 0 and awarded_portions < len(best_hand_configs):
+            self._redistribute_exact_pot(original_main_pot, original_side_pots, pot_results)
+        
+        # Handle global default action if no winners in any division
+        if not had_any_winners and global_default_action:
+            self._handle_global_default_action(
+                global_default_action, active_players, original_main_pot, original_side_pots,
+                pot_results, hand_results, winning_hands
+            )
+        
+        # Create and validate final result
+        return self._create_final_game_result(pot_results, hand_results, winning_hands, total_pot)    
+        
+    def _group_players_by_config(self, active_players: List) -> Dict[tuple, List]:
+        """
+        Group players by their applicable hand configuration based on player-specific conditions.
+        
+        Returns:
+            Dictionary mapping config tuples to lists of players who match that config
+        """
+        player_configs = {}
+        config_lookup = {}  # tuple -> actual config dict
+        conditionalBestHands = getattr(self.rules.showdown, 'conditionalBestHands', [])
+        
+        # Initialize groups for each conditional config
+        for condition_rule in conditionalBestHands:
+            for config in condition_rule['bestHand']:
+                config_tuple = self._config_to_tuple(config)
+                player_configs[config_tuple] = []
+                config_lookup[config_tuple] = config
+        
+        # Assign each player to their matching configuration
+        for player in active_players:
+            assigned = False
+            
+            for condition_rule in conditionalBestHands:
+                condition = condition_rule['condition']
+                
+                # Check if this player matches this condition
+                if self._check_best_hand_condition(condition, player):
+                    # Add player to all configs in this condition rule
+                    for config in condition_rule['bestHand']:
+                        config_tuple = self._config_to_tuple(config)
+                        if config_tuple in player_configs:
+                            player_configs[config_tuple].append(player)
+                    assigned = True
+                    break  # Player matches this condition, don't check others
+            
+            if not assigned:
+                logger.info(f"Player {player.id} didn't match any conditional configuration")
+        
+        return player_configs, config_lookup
+    
+    def _config_to_tuple(self, config: dict) -> tuple:
+        """Convert a config dictionary to a hashable tuple for use as a dictionary key."""
+        # We need to make the config hashable. Since we can't hash dicts directly,
+        # we'll use the config's name and key properties as a tuple
+        name = config.get('name', 'Unnamed')
+        eval_type = config.get('evaluationType', 'high')
+        hole_cards = str(config.get('holeCards', 0))  # Convert to string to handle "all"
+        
+        # Create a hashable tuple from key config properties
+        # We'll store the config separately and use this tuple as a key
+        return (name, eval_type, hole_cards)
+    
+    def _get_default_config(self) -> List[dict]:
+        """Get the default hand configuration."""
+        showdown_rules = self.rules.showdown
+        
+        if hasattr(showdown_rules, 'defaultBestHand') and showdown_rules.defaultBestHand:
+            return showdown_rules.defaultBestHand
+        elif hasattr(showdown_rules, 'best_hand') and showdown_rules.best_hand:
+            return showdown_rules.best_hand
+        else:
+            return []    
+        
+    def _find_best_across_all_configs(self, active_players: List, all_hand_results: Dict) -> List:
+        """
+        Find the best hand(s) across all configurations.
+        
+        For player-specific conditions like hand size, all players compete for the same pot
+        but may have used different evaluation rules to build their hands.
+        """
+        if not all_hand_results:
+            return []
+        
+        # Since all configurations in Tapiola Hold'em use "high" evaluation,
+        # we can compare hands directly. For games with mixed evaluation types,
+        # this would need more sophisticated logic.
+        
+        best_players = []
+        best_hand = None
+        eval_type = EvaluationType.HIGH  # Assume high for now
+        
+        for player in active_players:
+            if player.id not in all_hand_results:
+                continue
+                
+            hand_result = all_hand_results[player.id]
+            current_hand = hand_result.cards
+            
+            if not current_hand:
+                continue
+                
+            if best_hand is None:
+                best_players = [player]
+                best_hand = current_hand
+            else:
+                comparison = evaluator.compare_hands(current_hand, best_hand, eval_type)
+                if comparison > 0:  # Current hand is better
+                    best_players = [player]
+                    best_hand = current_hand
+                elif comparison == 0:  # Tie
+                    best_players.append(player)
+        
+        return best_players       
+    
+    def _award_full_pot_to_winners(
+        self,
+        winners: List,
+        original_main_pot: int,
+        original_side_pots: List[int],
+        pot_results: List
+    ) -> None:
+        """Award the full pot to the winning players."""
+        # Award side pots first
+        for i, side_pot_amount in enumerate(original_side_pots):
+            if side_pot_amount <= 0:
+                continue
+                
+            eligible_ids = self.betting.get_side_pot_eligible_players(i)
+            eligible_winners = [p for p in winners if p.id in eligible_ids]
+            
+            if eligible_winners:
+                self.betting.award_pots(eligible_winners, i, side_pot_amount)
+                
+                pot_result = PotResult(
+                    amount=side_pot_amount,
+                    winners=[p.id for p in eligible_winners],
+                    pot_type="side",
+                    hand_type="Best Hand",
+                    side_pot_index=i,
+                    eligible_players=set(eligible_ids)
+                )
+                pot_results.append(pot_result)
+        
+        # Award main pot
+        if original_main_pot > 0:
+            self.betting.award_pots(winners, None, original_main_pot)
+            
+            pot_result = PotResult(
+                amount=original_main_pot,
+                winners=[p.id for p in winners],
+                pot_type="main",
+                hand_type="Best Hand",
+                eligible_players=set(p.id for p in winners)
+            )
+            pot_results.append(pot_result)    
+        
+    def _determine_best_hand_configs(self) -> List[dict]:
+        """Determine which best hand configuration to use based on conditions."""
+        showdown_rules = self.rules.showdown
+        
         # Check for conditional best hands
         conditionalBestHands = getattr(showdown_rules, 'conditionalBestHands', None)
         if conditionalBestHands and isinstance(conditionalBestHands, list):
             for condition_rule in conditionalBestHands:
                 if self._check_best_hand_condition(condition_rule['condition']):
-                    best_hand_configs = condition_rule['bestHand']
                     logger.info(f"Using conditional best hand configuration based on matching condition: {condition_rule['condition'].get('type')}")
                     # If the condition is based on player choice, log which game type is being used
                     if condition_rule['condition'].get('type') == 'player_choice':
                         game_choice = condition_rule['condition'].get('value')
                         logger.info(f"Evaluating hands for game type: {game_choice}")
-                    break
+                    return condition_rule['bestHand']
         
         # If no conditional rule matched, use default or standard best hands
-        if best_hand_configs is None:
-            if hasattr(showdown_rules, 'defaultBestHand') and showdown_rules.defaultBestHand:
-                best_hand_configs = showdown_rules.defaultBestHand
-                logger.info("No condition matched; using default best hand configuration")
-            else:
-                best_hand_configs = showdown_rules.best_hand
-                logger.info("Using standard best hand configuration")
-               
-        default_actions = showdown_rules.defaultActions
-        global_default_action = showdown_rules.globalDefaultAction
-                
-        # Initialize structures for tracking results
-        pot_results = []
+        if hasattr(showdown_rules, 'defaultBestHand') and showdown_rules.defaultBestHand:
+            logger.info("No condition matched; using default best hand configuration")
+            return showdown_rules.defaultBestHand
+        else:
+            logger.info("Using standard best hand configuration")
+            return showdown_rules.best_hand
+        
+    def _initialize_showdown_tracking(self) -> Tuple[Dict, List, List]:
+        """Initialize data structures for tracking showdown results."""
         hand_results = {}  # player_id -> {config_name: HandResult}
+        pot_results = []
         winning_hands = []
-        
-        # Get total pot amount for tracking
+        return hand_results, pot_results, winning_hands   
+
+    def _get_original_pot_amounts(self) -> Tuple[int, List[int], int]:
+        """Get original pot amounts for tracking and redistribution."""
         original_main_pot = self.betting.get_main_pot_amount()
-        original_side_pots = [self.betting.get_side_pot_amount(i) for i in range(self.betting.get_side_pot_count())]        
+        original_side_pots = [self.betting.get_side_pot_amount(i) for i in range(self.betting.get_side_pot_count())]
         total_pot = self.betting.get_total_pot()
-                
-        # If there's only one hand configuration, it gets 100% of the pot
-        pot_percentage = 1.0 / len(best_hand_configs)
-
-        # Track awarded divisions
-        had_any_winners = False       
-
-        # Track which portions of the pot were awarded
-        awarded_portions = 0
-        awarded_pot_results = []        
+        return original_main_pot, original_side_pots, total_pot         
+               
+    def _process_hand_configurations(
+        self,
+        best_hand_configs: List[dict],
+        active_players: List,
+        hand_results: Dict,
+        pot_results: List,
+        winning_hands: List,
+        original_main_pot: int,
+        original_side_pots: List[int],
+        default_actions: List
+    ) -> Tuple[int, bool]:
+        """
+        Process each hand configuration and award pots.
         
-        logger.info(f"Showdown with {len(best_hand_configs)} possible hands to win")  
+        Returns:
+            Tuple of (awarded_portions, had_any_winners)
+        """        
+        pot_percentage = 1.0 / len(best_hand_configs)
+        awarded_portions = 0
+        had_any_winners = False
+        
+        logger.info(f"Showdown with {len(best_hand_configs)} possible hands to win")
 
-        # Process each hand configuration
         for config in best_hand_configs:
             config_name = config.get('name', f"Configuration {len(hand_results)+1}")
             eval_type = EvaluationType(config.get('evaluationType', 'high'))
-            qualifier = config.get('qualifier', None)
             
-            logger.info(f"  Evaluating {config_name} with evaluation type {eval_type}")  
-            if qualifier:
-                logger.info(f"    with qualifier {qualifier}")  
-
-            config_results = {}
-            if 'usesUnusedFrom' in config:
-                # Handle configurations like "Remaining Two Cards"
-                ref_config_name = config['usesUnusedFrom']
-                for player in active_players:
-                    if player.id in hand_results and ref_config_name in hand_results[player.id]:
-                        ref_result = hand_results[player.id][ref_config_name]
-                        used_hole = ref_result.used_hole_cards
-                        all_hole = player.hand.get_cards()
-                        unused_hole = [c for c in all_hole if c not in used_hole]
-                        required_hole = config.get("holeCards", 2)
-                        required_community = config.get("communityCards", 0)
-
-                        if len(unused_hole) < required_hole:
-                            logger.warning(f"Player {player.id} has insufficient unused hole cards for {config_name}")
-                            config_results[player.id] = None
-                            continue
-
-                        hand = unused_hole[:required_hole]  # Take required number of unused hole cards
-                        if required_community > 0:
-                            comm_cards = self.table.community_cards.get('default', [])
-                            if len(comm_cards) >= required_community:
-                                hand.extend(list(itertools.combinations(comm_cards, required_community))[0])
-
-                        from generic_poker.evaluation.hand_description import HandDescriber
-                        describer = HandDescriber(eval_type)
-                        result = HandResult(
-                            player_id=player.id,     
-                            cards=hand,                                                   
-                            hand_name=describer.describe_hand(hand),
-                            hand_description=describer.describe_hand_detailed(hand),
-                            hand_type=config_name,
-                            evaluation_type=eval_type.value,
-                            used_hole_cards=unused_hole[:required_hole]  # Used hole cards are the hand's hole cards
-                        )
-                        config_results[player.id] = result
-                    else:
-                        logger.warning(f"Referenced config '{ref_config_name}' not found for player {player.id}")
-                        config_results[player.id] = None
-            else:
-                # Normal evaluation for configurations like "High Hand"
-                config_results = self._evaluate_hands_for_config(active_players, config, eval_type)
-           
+            logger.info(f"  Evaluating {config_name} with evaluation type {eval_type}")
+            if config.get('qualifier'):
+                logger.info(f"    with qualifier {config.get('qualifier')}")
+            
+            # Evaluate hands for this configuration
+            config_results = self._evaluate_config_hands(active_players, config, eval_type, hand_results)
+            
             # Update hand_results with config_results
-            for player_id, result in config_results.items():
-                if result:  # Only store if there's a valid result
-                    if player_id not in hand_results:
-                        hand_results[player_id] = {}
-                    hand_results[player_id][config_name] = result
-                    logger.info(f"  Player {player_id} has {result.hand_description} for {config_name}")
+            self._update_hand_results(hand_results, config_results, config_name)
             
             # Award pots for this configuration
-            pot_winners, had_winners = self._award_pots_for_config(
-                active_players,
-                config_results,
-                eval_type,
-                config,
-                pot_percentage,
-                original_main_pot,
-                original_side_pots
+            had_winners = self._award_config_pots(
+                active_players, config_results, eval_type, config, pot_percentage,
+                original_main_pot, original_side_pots, pot_results, winning_hands
             )
-            had_any_winners = had_any_winners or had_winners
             
-            # Track if this portion was awarded
-            if had_winners:
-                logging.debug("Had winners - saving pot results")
-                awarded_portions += 1
-                awarded_pot_results.extend(pot_winners)
-                
-                # Add winning hands to the list with proper type
-                for pot_result in pot_winners:
-                    for winner_id in pot_result.winners:
-                        if winner_id in config_results and config_results[winner_id]:
-                            winning_hand = config_results[winner_id]
-                            winning_hand.hand_type = config_name
-                            winning_hands.append(winning_hand)
-            else:
-                # No winners due to qualifier not met; check for per-configuration default actions
-                applicable_actions = [da for da in default_actions if config_name in da.get('appliesTo', [])]
-                if applicable_actions:
-                    logger.debug(f"No winners for {config_name}; applying default action")
-                    for default_action in applicable_actions:
-                        action = default_action.get('action', {})
-                        if action.get('type') == 'evaluate_special':
-                            # Apply special evaluation (e.g., highest spade in hole)
-                            best_players, best_cards_dict = self._find_best_players_for_special(
-                                active_players=active_players,
-                                criterion=action['evaluation'].get('criterion'),
-                                suit=action['evaluation'].get('suit'),
-                                from_source=action['evaluation'].get('from'),
-                                subsets=action['evaluation'].get('subsets', ['default'])
-                            )
-                            if best_players:
-                                # Award this configuration's pot portion to the best players
-                                special_pot_winners = self._award_special_pot(
-                                    best_players=best_players,
-                                    main_pot=original_main_pot,
-                                    side_pots=original_side_pots,
-                                    pot_percentage=pot_percentage,
-                                    config_name=config_name
-                                )
-                                awarded_portions += 1
-                                awarded_pot_results.extend(special_pot_winners)
-                                had_any_winners = True
-                                # Record the winning hands dynamically
-                                for player in best_players:
-                                    qualifying_cards = best_cards_dict.get(player.id, [])
-                                    criterion = action['evaluation'].get('criterion', 'unknown')
-                                    suit = action['evaluation'].get('suit', '')
-                                    # Format criterion and suit: replace underscores with spaces and capitalize each word
-                                    criterion_formatted = ' '.join(word.capitalize() for word in criterion.split('_'))
-                                    suit_formatted = ' '.join(word.capitalize() for word in suit.split('_')) if suit else ''
-                                    hand_name = f"{criterion_formatted} {suit_formatted}".strip() if suit else criterion_formatted
-                                    hand_description = f"{hand_name} ({', '.join(str(c) for c in qualifying_cards)})" if qualifying_cards else hand_name
-
-                                    special_hand = HandResult(
-                                        player_id=player.id,
-                                        cards=qualifying_cards,
-                                        hand_name=hand_name,
-                                        hand_description=hand_description,
-                                        hand_type=config_name,
-                                        evaluation_type="special",
-                                        used_hole_cards=qualifying_cards,
-                                        community_cards=[]
-                                    )
-                                    if player.id not in hand_results:
-                                        hand_results[player.id] = {}
-                                    hand_results[player.id][config_name] = special_hand
-                                    winning_hands.append(special_hand)
-                if not applicable_actions or not any(pot_result.winners for pot_result in awarded_pot_results[-len(pot_winners):]):
-                    # No applicable action or no winners found; record empty pot results
-                    for pot_result in pot_winners:
-                        pot_result.winners = []
-                        awarded_pot_results.append(pot_result)
-               
-        # If some portions were not awarded, redistribute to the winners of other portions
-        if awarded_portions > 0 and awarded_portions < len(best_hand_configs):
-            logging.debug("Some portions not awarded - redistribute to the winners of other portions")
-
-            # Instead of calculating by percentage, calculate exact remaining amounts
-            self._redistribute_exact_pot(
-                original_main_pot, 
-                original_side_pots, 
-                awarded_pot_results
-            )
-
-        # Handle default action if no winners in any division
-        if not had_any_winners and global_default_action and global_default_action.get('condition') == 'no_qualifier_met':
-            logger.debug("No player qualified for any hand - handling global default action")
-            action = global_default_action.get('action')
-            action_type = action.get('type', 'split_pot')
-            
-            if action_type == 'split_pot':
-                logger.debug("   split_pot: split the pot among all active players")
-                # For 'split_pot' action, split the pot among all active players
-                self._handle_split_among_active(active_players, original_main_pot, original_side_pots)
-                
-                # Create pot result entries for the split
-                for i in range(len(original_side_pots)):
-                    eligible_ids = self.betting.get_side_pot_eligible_players(i)
-                    eligible_players = [p for p in active_players if p.id in eligible_ids]
-                    
-                    if eligible_players:
-                        pot_result = PotResult(
-                            amount=original_side_pots[i],
-                            winners=[p.id for p in eligible_players],
-                            pot_type="side",
-                            hand_type="Split (No Qualifier)",
-                            side_pot_index=i,
-                            eligible_players=set(p.id for p in eligible_players)
-                        )
-                        awarded_pot_results.append(pot_result)
-                
-                # Main pot
-                pot_result = PotResult(
-                    amount=original_main_pot,
-                    winners=[p.id for p in active_players],
-                    pot_type="main",
-                    hand_type="Split (No Qualifier)",
-                    eligible_players=set(p.id for p in active_players)
+            # Handle case where no winners due to qualifier
+            if not had_winners:
+                had_winners = self._handle_no_qualifier_winners(
+                    config, config_name, default_actions, active_players,
+                    original_main_pot, original_side_pots, pot_percentage,
+                    pot_results, hand_results, winning_hands
                 )
-                awarded_pot_results.append(pot_result)
-                
-                # Also mark all hands as "winning" in this case
-                for player in active_players:
-                    if player.id in hand_results:
-                        for hand in hand_results[player.id].values():
-                            hand.hand_type = "Split (No Qualifier)"
-                            winning_hands.append(hand)             
+            
+            # Track results
+            had_any_winners = had_any_winners or had_winners
+            if had_winners:
+                awarded_portions += 1
+        
+        return awarded_portions, had_any_winners
+    
+    def _evaluate_config_hands(
+        self,
+        active_players: List,
+        config: dict,
+        eval_type: EvaluationType,
+        hand_results: Dict
+    ) -> Dict:
+        """Evaluate hands for a specific configuration."""
+        if 'usesUnusedFrom' in config:
+            return self._evaluate_unused_cards_config(active_players, config, eval_type, hand_results)
+        else:
+            return self._evaluate_hands_for_config(active_players, config, eval_type)    
+        
+    def _evaluate_unused_cards_config(
+        self,
+        active_players: List,
+        config: dict,
+        eval_type: EvaluationType,
+        hand_results: Dict
+    ) -> Dict:
+        """Handle configurations that use unused cards from other configurations."""
+        config_results = {}
+        ref_config_name = config['usesUnusedFrom']
 
-            elif action_type == 'best_hand':
-                logger.debug("   best_hand: evaluate hands using the alternate evaluation type")
-                # For 'best_hand' action, evaluate hands using the alternate evaluation type
-                alternate_configs = action.get('bestHand', [])
-                
-                if alternate_configs:
-                    # Process each alternate hand configuration
-                    alt_pot_results = []
-                    alt_winning_hands = []
-                    
-                    for alt_config in alternate_configs:
-                        alt_name = alt_config.get('name', 'Alternate Hand')
-                        alt_eval_type = EvaluationType(alt_config.get('evaluationType', 'high'))
-                        
-                        # Find best hands using alternate evaluation
-                        alt_results = self._evaluate_hands_for_config(
-                            active_players, 
-                            alt_config,
-                            alt_eval_type
-                        )
-                        
-                        # Update the hand results
-                        for player_id, result in alt_results.items():
-                            if player_id not in hand_results:
-                                hand_results[player_id] = {}
-                            if result:
-                                result.hand_type = alt_name
-                                hand_results[player_id][alt_name] = result
-                        
-                        # Award pots using the alternate evaluation
-                        alt_winners, had_alt_winners = self._award_alternate_pots(
-                            active_players,
-                            alt_results,
-                            alt_eval_type,
-                            alt_config,
-                            original_main_pot,
-                            original_side_pots
-                        )
-                        
-                        alt_pot_results.extend(alt_winners)
-                        
-                        # Add winning hands
-                        for pot_result in alt_winners:
-                            for winner_id in pot_result.winners:
-                                if winner_id in alt_results and alt_results[winner_id]:
-                                    winning_hand = alt_results[winner_id]
-                                    winning_hand.hand_type = alt_name
-                                    alt_winning_hands.append(winning_hand)
-                    
-                    # Use the alternate results
-                    awarded_pot_results = alt_pot_results
-                    winning_hands = alt_winning_hands                                             
+        for player in active_players:
+            if player.id in hand_results and ref_config_name in hand_results[player.id]:
+                ref_result = hand_results[player.id][ref_config_name]
+                used_hole = ref_result.used_hole_cards
+                all_hole = player.hand.get_cards()
+                unused_hole = [c for c in all_hole if c not in used_hole]
+                required_hole = config.get("holeCards", 2)
+                required_community = config.get("communityCards", 0)
 
-        # Store the complete game result
+                if len(unused_hole) < required_hole:
+                    logger.warning(f"Player {player.id} has insufficient unused hole cards for {config.get('name')}")
+                    config_results[player.id] = None
+                    continue
+
+                hand = unused_hole[:required_hole]
+                if required_community > 0:
+                    comm_cards = self.table.community_cards.get('default', [])
+                    if len(comm_cards) >= required_community:
+                        hand.extend(list(itertools.combinations(comm_cards, required_community))[0])
+
+                from generic_poker.evaluation.hand_description import HandDescriber
+                describer = HandDescriber(eval_type)
+                result = HandResult(
+                    player_id=player.id,     
+                    cards=hand,                                                   
+                    hand_name=describer.describe_hand(hand),
+                    hand_description=describer.describe_hand_detailed(hand),
+                    hand_type=config.get('name'),
+                    evaluation_type=eval_type.value,
+                    used_hole_cards=unused_hole[:required_hole]
+                )
+                config_results[player.id] = result
+            else:
+                logger.warning(f"Referenced config '{ref_config_name}' not found for player {player.id}")
+                config_results[player.id] = None
+        
+        return config_results
+    
+    def _update_hand_results(self, hand_results: Dict, config_results: Dict, config_name: str) -> None:
+        """Update hand_results dictionary with new configuration results."""
+        for player_id, result in config_results.items():
+            if result:  # Only store if there's a valid result
+                if player_id not in hand_results:
+                    hand_results[player_id] = {}
+                hand_results[player_id][config_name] = result
+                logger.info(f"  Player {player_id} has {result.hand_description} for {config_name}")    
+
+    def _award_config_pots(
+        self,
+        active_players: List,
+        config_results: Dict,
+        eval_type: EvaluationType,
+        config: dict,
+        pot_percentage: float,
+        original_main_pot: int,
+        original_side_pots: List[int],
+        pot_results: List,
+        winning_hands: List
+    ) -> bool:
+        """Award pots for a specific configuration and return whether there were winners."""
+        pot_winners, had_winners = self._award_pots_for_config(
+            active_players, config_results, eval_type, config, pot_percentage,
+            original_main_pot, original_side_pots
+        )
+        
+        if had_winners:
+            logging.debug("Had winners - saving pot results")
+            pot_results.extend(pot_winners)
+            
+            # Add winning hands to the list with proper type
+            for pot_result in pot_winners:
+                for winner_id in pot_result.winners:
+                    if winner_id in config_results and config_results[winner_id]:
+                        winning_hand = config_results[winner_id]
+                        winning_hand.hand_type = config.get('name')
+                        winning_hands.append(winning_hand)
+        
+        return had_winners           
+
+    def _handle_no_qualifier_winners(
+        self,
+        config: dict,
+        config_name: str,
+        default_actions: List,
+        active_players: List,
+        original_main_pot: int,
+        original_side_pots: List[int],
+        pot_percentage: float,
+        pot_results: List,
+        hand_results: Dict,
+        winning_hands: List
+    ) -> bool:
+        """Handle the case where no players qualified for a configuration."""
+        applicable_actions = [da for da in default_actions if config_name in da.get('appliesTo', [])]
+        
+        if not applicable_actions:
+            return False
+        
+        logger.debug(f"No winners for {config_name}; applying default action")
+        
+        for default_action in applicable_actions:
+            action = default_action.get('action', {})
+            if action.get('type') == 'evaluate_special':
+                return self._handle_special_evaluation_action(
+                    action, active_players, original_main_pot, original_side_pots,
+                    pot_percentage, config_name, pot_results, hand_results, winning_hands
+                )
+        
+        return False
+    
+    def _handle_special_evaluation_action(
+        self,
+        action: dict,
+        active_players: List,
+        original_main_pot: int,
+        original_side_pots: List[int],
+        pot_percentage: float,
+        config_name: str,
+        pot_results: List,
+        hand_results: Dict,
+        winning_hands: List
+    ) -> bool:
+        """Handle special evaluation actions (e.g., highest spade in hole)."""
+        evaluation = action['evaluation']
+        best_players, best_cards_dict = self._find_best_players_for_special(
+            active_players=active_players,
+            criterion=evaluation.get('criterion'),
+            suit=evaluation.get('suit'),
+            from_source=evaluation.get('from'),
+            subsets=evaluation.get('subsets', ['default'])
+        )
+        
+        if not best_players:
+            return False
+        
+        # Award this configuration's pot portion to the best players
+        special_pot_winners = self._award_special_pot(
+            best_players=best_players,
+            main_pot=original_main_pot,
+            side_pots=original_side_pots,
+            pot_percentage=pot_percentage,
+            config_name=config_name
+        )
+        pot_results.extend(special_pot_winners)
+        
+        # Record the winning hands dynamically
+        self._record_special_winning_hands(
+            best_players, best_cards_dict, action, config_name, hand_results, winning_hands
+        )
+        
+        return True    
+    
+    def _record_special_winning_hands(
+        self,
+        best_players: List,
+        best_cards_dict: Dict,
+        action: dict,
+        config_name: str,
+        hand_results: Dict,
+        winning_hands: List
+    ) -> None:
+        """Record winning hands for special evaluation actions."""
+        evaluation = action['evaluation']
+        criterion = evaluation.get('criterion', 'unknown')
+        suit = evaluation.get('suit', '')
+        
+        # Format criterion and suit: replace underscores with spaces and capitalize each word
+        criterion_formatted = ' '.join(word.capitalize() for word in criterion.split('_'))
+        suit_formatted = ' '.join(word.capitalize() for word in suit.split('_')) if suit else ''
+        hand_name = f"{criterion_formatted} {suit_formatted}".strip() if suit else criterion_formatted
+        
+        for player in best_players:
+            qualifying_cards = best_cards_dict.get(player.id, [])
+            hand_description = f"{hand_name} ({', '.join(str(c) for c in qualifying_cards)})" if qualifying_cards else hand_name
+
+            special_hand = HandResult(
+                player_id=player.id,
+                cards=qualifying_cards,
+                hand_name=hand_name,
+                hand_description=hand_description,
+                hand_type=config_name,
+                evaluation_type="special",
+                used_hole_cards=qualifying_cards,
+                community_cards=[]
+            )
+            
+            if player.id not in hand_results:
+                hand_results[player.id] = {}
+            hand_results[player.id][config_name] = special_hand
+            winning_hands.append(special_hand)    
+
+    def _handle_global_default_action(
+        self,
+        global_default_action: dict,
+        active_players: List,
+        original_main_pot: int,
+        original_side_pots: List[int],
+        pot_results: List,
+        hand_results: Dict,
+        winning_hands: List
+    ) -> None:
+        """Handle global default action when no players qualified for any hand."""
+        if global_default_action.get('condition') != 'no_qualifier_met':
+            return
+        
+        logger.debug("No player qualified for any hand - handling global default action")
+        action = global_default_action.get('action')
+        action_type = action.get('type', 'split_pot')
+        
+        if action_type == 'split_pot':
+            self._handle_global_split_pot(
+                active_players, original_main_pot, original_side_pots,
+                pot_results, hand_results, winning_hands
+            )
+        elif action_type == 'best_hand':
+            self._handle_global_best_hand(
+                action, active_players, original_main_pot, original_side_pots,
+                pot_results, hand_results, winning_hands
+            )
+
+    def _handle_global_split_pot(
+        self,
+        active_players: List,
+        original_main_pot: int,
+        original_side_pots: List[int],
+        pot_results: List,
+        hand_results: Dict,
+        winning_hands: List
+    ) -> None:
+        """Handle global split pot action."""
+        logger.debug("   split_pot: split the pot among all active players")
+        
+        self._handle_split_among_active(active_players, original_main_pot, original_side_pots)
+        
+        # Create pot result entries for the split
+        for i in range(len(original_side_pots)):
+            eligible_ids = self.betting.get_side_pot_eligible_players(i)
+            eligible_players = [p for p in active_players if p.id in eligible_ids]
+            
+            if eligible_players:
+                pot_result = PotResult(
+                    amount=original_side_pots[i],
+                    winners=[p.id for p in eligible_players],
+                    pot_type="side",
+                    hand_type="Split (No Qualifier)",
+                    side_pot_index=i,
+                    eligible_players=set(p.id for p in eligible_players)
+                )
+                pot_results.append(pot_result)
+        
+        # Main pot
+        pot_result = PotResult(
+            amount=original_main_pot,
+            winners=[p.id for p in active_players],
+            pot_type="main",
+            hand_type="Split (No Qualifier)",
+            eligible_players=set(p.id for p in active_players)
+        )
+        pot_results.append(pot_result)
+        
+        # Mark all hands as "winning" in this case
+        for player in active_players:
+            if player.id in hand_results:
+                for hand in hand_results[player.id].values():
+                    hand.hand_type = "Split (No Qualifier)"
+                    winning_hands.append(hand)
+
+    def _handle_global_best_hand(
+        self,
+        action: dict,
+        active_players: List,
+        original_main_pot: int,
+        original_side_pots: List[int],
+        pot_results: List,
+        hand_results: Dict,
+        winning_hands: List
+    ) -> None:
+        """Handle global best hand action with alternate evaluation."""
+        logger.debug("   best_hand: evaluate hands using the alternate evaluation type")
+        
+        alternate_configs = action.get('bestHand', [])
+        if not alternate_configs:
+            return
+        
+        # Process each alternate hand configuration
+        alt_pot_results = []
+        alt_winning_hands = []
+        
+        for alt_config in alternate_configs:
+            alt_name = alt_config.get('name', 'Alternate Hand')
+            alt_eval_type = EvaluationType(alt_config.get('evaluationType', 'high'))
+            
+            # Find best hands using alternate evaluation
+            alt_results = self._evaluate_hands_for_config(active_players, alt_config, alt_eval_type)
+            
+            # Update the hand results
+            for player_id, result in alt_results.items():
+                if player_id not in hand_results:
+                    hand_results[player_id] = {}
+                if result:
+                    result.hand_type = alt_name
+                    hand_results[player_id][alt_name] = result
+            
+            # Award pots using the alternate evaluation
+            alt_winners, had_alt_winners = self._award_alternate_pots(
+                active_players, alt_results, alt_eval_type, alt_config,
+                original_main_pot, original_side_pots
+            )
+            
+            alt_pot_results.extend(alt_winners)
+            
+            # Add winning hands
+            for pot_result in alt_winners:
+                for winner_id in pot_result.winners:
+                    if winner_id in alt_results and alt_results[winner_id]:
+                        winning_hand = alt_results[winner_id]
+                        winning_hand.hand_type = alt_name
+                        alt_winning_hands.append(winning_hand)
+        
+        # Replace the results with alternate results
+        pot_results.clear()
+        pot_results.extend(alt_pot_results)
+        winning_hands.clear()
+        winning_hands.extend(alt_winning_hands)
+
+    def _create_final_game_result(
+        self,
+        pot_results: List,
+        hand_results: Dict,
+        winning_hands: List,
+        total_pot: int
+    ) -> GameResult:
+        """Create the final GameResult and perform validation."""
         game_result = GameResult(
-            pots=awarded_pot_results,
+            pots=pot_results,
             hands={pid: list(results.values()) for pid, results in hand_results.items()},
             winning_hands=winning_hands,
             is_complete=True
@@ -361,9 +827,7 @@ class ShowdownManager:
         
         # Sanity check - verify total pot amounts match
         if game_result.total_pot != total_pot:
-            logger.warning(
-                f"Pot amount mismatch: {game_result.total_pot} vs {total_pot}"
-            )
+            logger.warning(f"Pot amount mismatch: {game_result.total_pot} vs {total_pot}")
         
         return game_result
 
@@ -409,41 +873,29 @@ class ShowdownManager:
             min_hand_size = condition.get('min_hand_size')
             max_hand_size = condition.get('max_hand_size')
             
-            # If a specific player is provided, check their hand size
-            if player:
-                player_hand_size = len(player.hand.get_cards())
-            else:
-                # Get all active players and check their hand sizes
-                active_players = [p for p in self.table.players.values() if p.is_active]
+            # For player_hand_size, we MUST have a specific player
+            if not player:
+                logger.warning("player_hand_size condition requires a specific player")
+                return False
                 
-                # For this condition to match, we need to check if ANY player matches the criteria
-                # In Tapiola Hold'em, all players should have the same number of cards after discarding
-                # so we can check the first active player
-                if not active_players:
-                    return False
-                    
-                player_hand_size = len(active_players[0].hand.get_cards())
+            player_hand_size = len(player.hand.get_cards())
             
             # Check against specific hand sizes
             if hand_sizes:
                 matches = player_hand_size in hand_sizes
-                player_info = f"player {player.id}" if player else "player"
-                logger.info(f"Checking hand size condition: {player_info} has {player_hand_size} cards, expected one of {hand_sizes}, {'match' if matches else 'no match'}")
+                logger.info(f"Checking hand size condition for player {player.id}: has {player_hand_size} cards, expected one of {hand_sizes}, {'match' if matches else 'no match'}")
                 return matches
                 
             # Check against min/max range
             if min_hand_size is not None and player_hand_size < min_hand_size:
-                player_info = f"Player {player.id}" if player else "Player"
-                logger.info(f"{player_info} hand size {player_hand_size} below minimum {min_hand_size}")
+                logger.info(f"Player {player.id} hand size {player_hand_size} below minimum {min_hand_size}")
                 return False
                 
             if max_hand_size is not None and player_hand_size > max_hand_size:
-                player_info = f"Player {player.id}" if player else "Player"
-                logger.info(f"{player_info} hand size {player_hand_size} above maximum {max_hand_size}")
+                logger.info(f"Player {player.id} hand size {player_hand_size} above maximum {max_hand_size}")
                 return False
                 
-            player_info = f"Player {player.id}" if player else "Player"
-            logger.info(f"{player_info} hand size condition met: {player_hand_size} cards")
+            logger.info(f"Player {player.id} hand size condition met: {player_hand_size} cards")
             return True      
         
         elif condition_type == "community_card_value":

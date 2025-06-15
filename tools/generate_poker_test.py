@@ -45,12 +45,12 @@ def update_test_with_json(script_path: str):
         if in_showdown:
             if "assert main_pot.amount == results.total_pot" in line:
                 # Replace with per-pot amount check
-                line = "    # Check each pot’s amount\n"
+                line = "    # Check each pot's amount\n"
                 for i, pot in enumerate(results['pots']):
                     updated_lines.append(f"    assert results.pots[{i}].amount == {pot['amount']}  # {pot['hand_type']} pot\n")
                 continue  # Skip adding the original line
             elif "assert main_pot.pot_type == 'main'" in line:
-                # Keep this as-is for the first pot, but we’ll check others below
+                # Keep this as-is for the first pot, but we'll check others below
                 line = f"    assert main_pot.pot_type == '{results['pots'][0]['pot_type']}'  # Updated from run\n"
             elif "assert not main_pot.split" in line:
                 is_split = results['pots'][0]['split']
@@ -79,6 +79,57 @@ def update_test_with_json(script_path: str):
     with open(script_path, 'w') as f:
         f.writelines(updated_lines)
     print(f"Updated {script_path} with JSON results")
+
+def get_community_subsets_from_deal(deal_step):
+    """Extract community card subsets from a deal step."""
+    subsets = set()
+    if "cards" in deal_step:
+        for card_config in deal_step["cards"]:
+            if "subset" in card_config:
+                subset = card_config["subset"]
+                if isinstance(subset, list):
+                    subsets.update(subset)
+                else:
+                    subsets.add(subset)
+            elif "community_subset" in card_config:
+                subsets.add(card_config["community_subset"])
+    return list(subsets)
+
+def analyze_community_card_flow(game_rules):
+    """Analyze the community card flow throughout the game to track cumulative counts per subset."""
+    community_flow = {}  # step_idx -> {subset: cumulative_count}
+    current_counts = {}  # subset -> current_count
+    
+    for step_idx, step in enumerate(game_rules["gamePlay"]):
+        if "deal" in step and step["deal"]["location"] == "community":
+            subsets = get_community_subsets_from_deal(step["deal"])
+            cards_dealt = step["deal"]["cards"]
+            
+            for card_config in cards_dealt:
+                num_cards = card_config["number"]
+                subset = card_config.get("subset") or card_config.get("community_subset", "default")
+                
+                if isinstance(subset, list):
+                    # If multiple subsets, distribute cards evenly
+                    cards_per_subset = num_cards // len(subset)
+                    for s in subset:
+                        current_counts[s] = current_counts.get(s, 0) + cards_per_subset
+                else:
+                    current_counts[subset] = current_counts.get(subset, 0) + num_cards
+            
+            community_flow[step_idx] = dict(current_counts)
+    
+    return community_flow
+
+def get_expected_discard_amount(discard_config):
+    """Get the expected number of cards to discard from config."""
+    if "number" in discard_config:
+        return discard_config["number"]
+    elif "min_number" in discard_config:
+        # For optional discards, use the minimum as default test behavior
+        return discard_config["min_number"]
+    else:
+        return 1  # Default fallback
 
 def generate_test_script(json_file_path: str, output_file_path: str) -> None:
     """Generate a pytest script for a poker game defined in a JSON file."""
@@ -184,13 +235,8 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
 
     first_betting_round = True
 
-    # Calculate cumulative community cards per step
-    community_card_counts = {}
-    total_community_cards = 0
-    for step_idx, step in enumerate(game_rules["gamePlay"]):
-        if "deal" in step and step["deal"]["location"] == "community":
-            total_community_cards += sum(c["number"] for c in step["deal"]["cards"])
-            community_card_counts[step_idx] = total_community_cards    
+    # Analyze community card flow
+    community_flow = analyze_community_card_flow(game_rules)
 
     for step_idx, step in enumerate(game_rules["gamePlay"]):
         step_name = step["name"].replace(" ", "_").lower()
@@ -282,13 +328,36 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
                     f"        print(f'{{pid}}: {{[str(c) for c in game.table.players[pid].hand.get_cards()]}}')",
                 ])
             elif location == "community":
-                total_so_far = community_card_counts.get(step_idx, num_cards)  # Use cumulative total
                 script.extend([
                     "    assert game.state == GameState.DEALING",
-                    f"    assert len(game.table.community_cards['default']) == {total_so_far}",
-                    f"    print(f'\\nStep {step_idx} - Community Cards:')",
-                    "    print([str(c) for c in game.table.community_cards['default']])",
                 ])
+                
+                # Handle community cards with subsets
+                if step_idx in community_flow:
+                    subset_counts = community_flow[step_idx]
+                    if len(subset_counts) == 1 and 'default' in subset_counts:
+                        # Single default subset
+                        script.extend([
+                            f"    assert len(game.table.community_cards['default']) == {subset_counts['default']}",
+                            f"    print(f'\\nStep {step_idx} - Community Cards:')",
+                            "    print([str(c) for c in game.table.community_cards['default']])",
+                        ])
+                    else:
+                        # Multiple named subsets
+                        for subset, count in subset_counts.items():
+                            script.append(f"    assert len(game.table.community_cards['{subset}']) == {count}  # {subset} subset")
+                        script.append(f"    print(f'\\nStep {step_idx} - Community Cards:')")
+                        for subset in subset_counts.keys():
+                            script.append(f"    print(f'{subset}: {{[str(c) for c in game.table.community_cards[\"{subset}\"]]}}')")
+                else:
+                    # Fallback for games without clear subset tracking
+                    script.extend([
+                        f"    # Community cards dealt - check appropriate subsets",
+                        f"    print(f'\\nStep {step_idx} - Community Cards:')",
+                        "    for subset, cards in game.table.community_cards.items():",
+                        "        if cards:",
+                        "            print(f'{subset}: {[str(c) for c in cards]}')",
+                    ])
 
         elif action_type == "separate":
             total_cards = sum(c["number"] for c in step["separate"]["cards"])
@@ -299,13 +368,13 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
                 f"    assert game.current_player.id == '{action_order[0]}'  # Start with SB",
                 "    actions = game.get_valid_actions(game.current_player.id)",
                 f"    assert any(a[0] == PlayerAction.SEPARATE and a[1] == {total_cards} for a in actions)",
-                "    for pid in {}:".format(action_order),  # Added colon here
+                "    for pid in {}:".format(action_order),
                 "        hand = game.table.players[pid].hand",
                 f"        cards = hand.get_cards()[:{total_cards}]",
                 "        game.player_action(pid, PlayerAction.SEPARATE, cards=cards)",
                 *[f"        assert len(hand.get_subset('{subset}')) == {subset_sizes[subset]}  # {subset}" for subset in subsets],
                 f"    print(f'\\nStep {step_idx} - Post-Separate Hands:')",
-                "    for pid in {}:".format(action_order),  # Added colon here
+                "    for pid in {}:".format(action_order),
                 *[f"        print(f'{{pid}} - {subset}: {{[str(c) for c in game.table.players[pid].hand.get_subset(\"{subset}\")]}}')" for subset in subsets],
             ])
 
@@ -329,26 +398,42 @@ def generate_test_script(json_file_path: str, output_file_path: str) -> None:
 
         elif action_type == "discard":
             discard_config = step["discard"]["cards"][0]
-            # protect against number being optional
-            if "number" not in discard_config:
-                num_to_discard = 1  # placeholder
-            else:
-                num_to_discard = discard_config["number"]
+            num_to_discard = get_expected_discard_amount(discard_config)
+            
             script.extend([
                 "    assert game.state == GameState.DRAWING",
                 f"    assert game.current_player.id == '{action_order[0]}'  # Start with SB",
                 "    actions = game.get_valid_actions(game.current_player.id)",
-                f"    assert any(a[0] == PlayerAction.DISCARD and a[1] == {num_to_discard} for a in actions)",
-                f"    for pid in {action_order}:",
-                "        hand = game.table.players[pid].hand",
-                "        initial_count = len(hand.get_cards())",
-                f"        cards_to_discard = hand.get_cards()[:{num_to_discard}]",
-                f"        game.player_action(pid, PlayerAction.DISCARD, cards=cards_to_discard)",
-                f"        assert len(hand.get_cards()) == initial_count - {num_to_discard}  # Hand size reduced by discards",
+            ])
+            
+            # Handle optional discards differently
+            if discard_config.get("min_number", num_to_discard) == 0:
+                script.extend([
+                    f"    assert any(a[0] == PlayerAction.DISCARD and a[1] >= 0 and a[2] == {num_to_discard} for a in actions)",
+                    f"    for pid in {action_order}:",
+                    "        hand = game.table.players[pid].hand",
+                    "        initial_count = len(hand.get_cards())",
+                    f"        # For optional discard, choose to discard {num_to_discard} cards",
+                    f"        cards_to_discard = hand.get_cards()[:{num_to_discard}] if {num_to_discard} > 0 else []",
+                    f"        game.player_action(pid, PlayerAction.DISCARD, cards=cards_to_discard)",
+                    f"        assert len(hand.get_cards()) == initial_count - {num_to_discard}  # Hand size reduced by discards",
+                ])
+            else:
+                script.extend([
+                    f"    assert any(a[0] == PlayerAction.DISCARD and a[1] == {num_to_discard} for a in actions)",
+                    f"    for pid in {action_order}:",
+                    "        hand = game.table.players[pid].hand",
+                    "        initial_count = len(hand.get_cards())",
+                    f"        cards_to_discard = hand.get_cards()[:{num_to_discard}]",
+                    f"        game.player_action(pid, PlayerAction.DISCARD, cards=cards_to_discard)",
+                    f"        assert len(hand.get_cards()) == initial_count - {num_to_discard}  # Hand size reduced by discards",
+                ])
+            
+            script.extend([
                 f"    print(f'\\nStep {step_idx} - Post-Discard Hands:')",
                 f"    for pid in {action_order}:",
                 f"        print(f'{{pid}}: {{[str(c) for c in game.table.players[pid].hand.get_cards()]}}')",
-            ])            
+            ])
 
         elif action_type == "showdown":
             script.extend([

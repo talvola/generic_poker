@@ -179,7 +179,7 @@
                 },
                 "bestHand": [
                     {
-                        "name": "Best Hand (2 hole cards)",
+                        "name": "Best Hand",
                         "evaluationType": "high",
                         "holeCards": 2,
                         "communitySubsetRequirements": [
@@ -209,7 +209,7 @@
                 },
                 "bestHand": [
                     {
-                        "name": "Best Hand (3 hole cards)",
+                        "name": "Best Hand",
                         "evaluationType": "high",
                         "holeCards": 3,
                         "communitySubsetRequirements": [
