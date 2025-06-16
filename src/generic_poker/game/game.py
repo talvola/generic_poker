@@ -776,20 +776,20 @@ class Game:
                 
                 continue
 
-            # Check if card matches the rule
+            # FIRST: Check if card matches the rule type
+            card_matches_rule = False
             if wild_type == "joker" and card.rank == Rank.JOKER:
-                card.make_wild(wild_card_type)
-                logger.info(f"Applied wild card rule: {wild_type} as {role}")
-                
+                card_matches_rule = True
             elif wild_type == "rank":
                 target_rank = Rank(rule.get("rank", "R"))  # Default to Joker if no rank
                 if card.rank == target_rank:
-                    card.make_wild(wild_card_type)
-                    logger.info(f"Applied wild card rule: {wild_type} {target_rank} as {role}")
-                
-            # Other wild card types can be added as needed
-            
-            # Handle conditional wild cards
+                    card_matches_rule = True
+
+            # Only proceed if the card matches the rule type
+            if not card_matches_rule:
+                continue                    
+
+            # Handle conditional wild cards (only for matching cards)
             if role == "conditional" and "condition" in rule:
                 condition = rule.get("condition", {})
                 visibility_condition = condition.get("visibility")
@@ -814,6 +814,10 @@ class Game:
                     false_wild_type = WildType.BUG if false_role == "bug" else WildType.NAMED
                     card.make_wild(false_wild_type)
                     logger.info(f"Applied conditional wild card rule (condition not met): {wild_type} as {false_role}")
+            else:
+                # Non-conditional wild card (for matching cards)
+                card.make_wild(wild_card_type)
+                logger.info(f"Applied wild card rule: {wild_type} as {role}")
 
     def _make_all_existing_matching_rank_wild(self, target_rank: Rank, wild_card_type: WildType) -> None:
         """Make all existing cards of a specific rank wild (not cards still in deck)."""

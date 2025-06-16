@@ -2370,6 +2370,13 @@ class ShowdownManager:
         logger.debug(f"Applying wild card rules for player {player.name} with community cards: {comm_cards} and wild rules: {wild_rules}") 
         for rule in wild_rules:
             rule_type = rule["type"]
+            role = rule.get("role", "wild")
+
+            # Skip conditional wild cards during showdown evaluation
+            # They should have been set correctly when cards were dealt
+            if role == "conditional":
+                logger.debug(f"Skipping conditional wild card rule during showdown - should already be set")
+                continue
 
             if rule_type == "last_community_card":
                 match_type = rule.get("match", "rank")
@@ -2386,32 +2393,9 @@ class ShowdownManager:
                             logger.debug(f"Made {card} wild due to stored dynamic_wild_rank")
                 
                 # For match_type == "card", no additional action needed since only the specific card was made wild
-                continue
+                continue             
 
-            # Handle conditional wild card roles
-            if rule.get("role") == "conditional" and "condition" in rule:        
-                condition = rule["condition"]
-                visibility_condition = condition.get("visibility")
-                true_role = condition.get("true_role", "wild")
-                false_role = condition.get("false_role", "wild")
-                
-                wild_type_true = WildType.BUG if true_role == "bug" else WildType.NAMED
-                wild_type_false = WildType.BUG if false_role == "bug" else WildType.NAMED
-                
-                # Apply conditional logic to each card
-                all_cards = player.hand.get_cards() + comm_cards
-                for card in all_cards:
-                    if rule_type == "joker" and card.rank == Rank.JOKER:
-                        # Check the visibility condition
-                        if visibility_condition == "face up" and card.visibility == Visibility.FACE_UP:
-                            card.make_wild(wild_type_true)
-                            logger.debug(f"Card {card} set as {true_role} (visible joker)")
-                        else:
-                            card.make_wild(wild_type_false)
-                            logger.debug(f"Card {card} set as {false_role} (hidden joker)")
-                continue                    
-
-            role = rule.get("role", "wild")
+            # Handle other wild card types normally
             wild_type = WildType.BUG if role == "bug" else WildType.NAMED
 
             if rule_type == "joker":
