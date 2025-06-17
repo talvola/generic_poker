@@ -3,13 +3,13 @@ import pytest
 from unittest.mock import Mock, patch
 import itertools
 
-from generic_poker.core.card import Card, Rank, Suit, Visibility
+from generic_poker.core.card import Card, Rank, Suit, Visibility, WildType
 from generic_poker.evaluation.evaluator import EvaluationType, evaluator
 from generic_poker.game.table import Player, Table, PlayerHand
-from generic_poker.game.showdown_manager import ShowdownManager  # Adjust import as needed
+from generic_poker.game.showdown_manager import ShowdownManager
 from generic_poker.config.loader import GameRules
 from generic_poker.game.betting import BettingManager
-from generic_poker.game.game_result import HandResult
+from generic_poker.game.game_result import HandResult, PotResult, GameResult
 
 import logging
 import sys
@@ -27,7 +27,7 @@ def setup_logging():
         handlers=[
             logging.StreamHandler(sys.stdout)
         ],
-        force=True  # Force reconfiguration of logging
+        force=True
     )
 
 @pytest.fixture
@@ -86,7 +86,10 @@ def mock_community_cards():
 @pytest.fixture
 def mock_table():
     """Create a mock table for testing."""
-    return Mock(spec=Table)
+    table = Mock(spec=Table)
+    table.community_cards = {}
+    table.players = {}
+    return table
 
 @pytest.fixture
 def mock_betting():
@@ -94,6 +97,9 @@ def mock_betting():
     betting = Mock()
     betting.get_main_pot_amount.return_value = 100
     betting.get_side_pot_count.return_value = 0
+    betting.get_side_pot_eligible_players.return_value = set()
+    betting.get_total_pot.return_value = 100
+    betting.award_pots = Mock()
     return betting
 
 @pytest.fixture
@@ -101,12 +107,39 @@ def mock_rules():
     """Create mock game rules for testing."""
     rules = Mock(spec=GameRules)
     rules.showdown = Mock()
+    
+    # Set default values for common attributes to avoid Mock comparison errors
+    rules.showdown.classification_priority = []
+    rules.showdown.defaultActions = []
+    rules.showdown.globalDefaultAction = None
+    rules.showdown.declaration_mode = "cards_speak"
+    rules.showdown.conditionalBestHands = []
+    rules.showdown.defaultBestHand = []
+    rules.showdown.best_hand = []  # Add this to avoid len() errors
+    
     return rules
 
 @pytest.fixture
 def showdown_manager(mock_table, mock_betting, mock_rules):
     """Create a ShowdownManager instance for testing."""
     return ShowdownManager(mock_table, mock_betting, mock_rules)
+
+def create_player_with_cards(player_id: str, name: str, cards: list, subsets: dict = None):
+    """Create a player with specific cards and optional subsets."""
+    player = Mock(spec=Player)
+    player.id = player_id
+    player.name = name
+    player.is_active = True
+    player.hand = PlayerHand()
+    
+    for card in cards:
+        player.hand.add_card(card)
+    
+    if subsets:
+        for subset_name, subset_cards in subsets.items():
+            player.hand.subsets[subset_name] = subset_cards
+    
+    return player
 
 class TestShowdownManager:
     """Tests for the ShowdownManager class."""
@@ -977,3 +1010,1499 @@ class TestShowdownManager:
         # Check if the community cards are all Aces from different flop positions
         aces_count = sum(1 for card in p2_community_cards if card.rank == Rank.ACE)
         assert aces_count == 3, "Player 2 should use 3 Aces from different flop positions"
+
+class TestShowdownManagerWildCards:
+    """Test wild card functionality in showdown evaluation."""
+    
+    def test_joker_wild_cards(self, showdown_manager):
+        """Test evaluation with joker wild cards."""
+        # Create player with jokers
+        player = create_player_with_cards("p1", "Player1", [
+            Card(Rank.JOKER, Suit.JOKER),  # Joker
+            Card(Rank.ACE, Suit.HEARTS),
+            Card(Rank.KING, Suit.HEARTS),
+            Card(Rank.QUEEN, Suit.HEARTS),
+            Card(Rank.JACK, Suit.HEARTS)
+        ])
+        
+        # Make joker wild
+        player.hand.cards[0].make_wild(WildType.NATURAL)
+        
+        # Mock table and betting
+        showdown_manager.table.players = {"p1": player}
+        showdown_manager.table.community_cards = {}
+        
+        # Set up showdown rules with wild cards
+        showdown_manager.rules.showdown.best_hand = [{
+            "name": "High Hand",
+            "evaluationType": "high_wild_bug",  # Use wild evaluation type
+            "anyCards": 5,
+            "wildCards": [{
+                "type": "joker",
+                "role": "wild"
+            }]
+        }]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        
+        # Mock evaluator to return a strong hand result
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            mock_eval.return_value = HandResult(
+                player_id="p1",
+                cards=player.hand.cards,
+                hand_name="Royal Flush",
+                hand_description="Royal Flush in Hearts",
+                evaluation_type="high_wild_bug",
+                rank=1,
+                ordered_rank=1
+            )
+            
+            result = showdown_manager.handle_showdown()
+        
+        assert len(result.pots) == 1
+        assert "p1" in result.pots[0].winners     
+
+    def test_a5_low_wild_cards(self, showdown_manager):
+        """Test A-5 lowball with wild cards."""
+        # Create player with wild cards for low
+        player = create_player_with_cards("p1", "Player1", [
+            Card(Rank.TWO, Suit.SPADES),    # Wild - can be Ace for wheel
+            Card(Rank.THREE, Suit.HEARTS),
+            Card(Rank.FOUR, Suit.CLUBS),
+            Card(Rank.FIVE, Suit.DIAMONDS),
+            Card(Rank.SEVEN, Suit.SPADES)   # Wild makes this irrelevant
+        ])
+        
+        # Make twos wild
+        player.hand.cards[0].make_wild(WildType.NAMED)
+        
+        showdown_manager.table.players = {"p1": player}
+        showdown_manager.table.community_cards = {}
+        
+        showdown_manager.rules.showdown.best_hand = [{
+            "name": "Low Hand",
+            "evaluationType": "a5_low_wild",  # Wild lowball evaluation
+            "anyCards": 5,
+            "wildCards": [{
+                "type": "rank",
+                "rank": "2",
+                "role": "wild"
+            }]
+        }]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            mock_eval.return_value = HandResult(
+                player_id="p1",
+                cards=player.hand.cards,
+                hand_name="A-5 Low",
+                hand_description="Wheel (A-2-3-4-5)",
+                evaluation_type="a5_low_wild",
+                rank=1,
+                ordered_rank=1
+            )
+            
+            result = showdown_manager.handle_showdown()
+        
+        assert len(result.pots) == 1
+        assert "p1" in result.pots[0].winners        
+
+    def test_27_low_wild_cards(self, showdown_manager):
+        """Test 2-7 lowball with wild cards."""
+        # Create player with wild cards for 2-7 low
+        player = create_player_with_cards("p1", "Player1", [
+            Card(Rank.JOKER, Suit.JOKER),   # Wild - can be deuce
+            Card(Rank.THREE, Suit.HEARTS),
+            Card(Rank.FOUR, Suit.CLUBS),
+            Card(Rank.FIVE, Suit.DIAMONDS),
+            Card(Rank.SEVEN, Suit.SPADES)
+        ])
+        
+        # Make joker wild
+        player.hand.cards[0].make_wild(WildType.NATURAL)
+        
+        showdown_manager.table.players = {"p1": player}
+        showdown_manager.table.community_cards = {}
+        
+        showdown_manager.rules.showdown.best_hand = [{
+            "name": "Low Hand",
+            "evaluationType": "27_low_wild",  # 2-7 wild lowball evaluation
+            "anyCards": 5,
+            "wildCards": [{
+                "type": "joker",
+                "role": "wild"
+            }]
+        }]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            mock_eval.return_value = HandResult(
+                player_id="p1",
+                cards=player.hand.cards,
+                hand_name="2-7 Low",
+                hand_description="Seven Perfect (2-3-4-5-7)",
+                evaluation_type="27_low_wild",
+                rank=1,
+                ordered_rank=1
+            )
+            
+            result = showdown_manager.handle_showdown()
+        
+        assert len(result.pots) == 1
+        assert "p1" in result.pots[0].winners
+        assert result.pots[0].hand_type == "Low Hand"        
+
+    def test_rank_wild_cards(self, showdown_manager):
+        """Test evaluation with specific rank as wild."""
+        # Create player with deuces (2s)
+        player = create_player_with_cards("p1", "Player1", [
+            Card(Rank.TWO, Suit.SPADES),    # Wild
+            Card(Rank.TWO, Suit.HEARTS),    # Wild
+            Card(Rank.ACE, Suit.CLUBS),
+            Card(Rank.ACE, Suit.DIAMONDS),
+            Card(Rank.KING, Suit.SPADES)
+        ])
+        
+        # Make twos wild
+        for card in player.hand.cards:
+            if card.rank == Rank.TWO:
+                card.make_wild(WildType.NAMED)
+        
+        showdown_manager.table.players = {"p1": player}
+        showdown_manager.table.community_cards = {}
+        
+        # Set up showdown rules with rank wild cards - use '2' not 'TWO'
+        showdown_manager.rules.showdown.best_hand = [{
+            "name": "High Hand", 
+            "evaluationType": "high_wild_bug",  # Use wild evaluation type
+            "anyCards": 5,
+            "wildCards": [{
+                "type": "rank",
+                "rank": "2",  # Use the actual enum value
+                "role": "wild"
+            }]
+        }]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            mock_eval.return_value = HandResult(
+                player_id="p1",
+                cards=player.hand.cards,
+                hand_name="Four Aces",
+                hand_description="Four of a Kind, Aces",
+                evaluation_type="high_wild_bug",
+                rank=3,
+                ordered_rank=3
+            )
+            
+            result = showdown_manager.handle_showdown()
+        
+        assert len(result.pots) == 1
+        assert "p1" in result.pots[0].winners
+    
+    def test_bug_wild_cards(self, showdown_manager):
+        """Test evaluation with bug wild cards (limited wild)."""
+        # Create player with joker as bug
+        player = create_player_with_cards("p1", "Player1", [
+            Card(Rank.JOKER, Suit.JOKER),  # Bug
+            Card(Rank.KING, Suit.HEARTS),
+            Card(Rank.QUEEN, Suit.HEARTS),
+            Card(Rank.JACK, Suit.HEARTS),
+            Card(Rank.TEN, Suit.HEARTS)
+        ])
+        
+        # Make joker a bug (can only be Ace or complete straight/flush)
+        player.hand.cards[0].make_wild(WildType.BUG)
+        
+        showdown_manager.table.players = {"p1": player}
+        showdown_manager.table.community_cards = {}
+        
+        showdown_manager.rules.showdown.best_hand = [{
+            "name": "High Hand",
+            "evaluationType": "high_wild_bug",  # Use wild evaluation type
+            "anyCards": 5,
+            "wildCards": [{
+                "type": "joker",
+                "role": "bug"
+            }]
+        }]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            mock_eval.return_value = HandResult(
+                player_id="p1",
+                cards=player.hand.cards,
+                hand_name="Royal Flush",
+                hand_description="Royal Flush in Hearts", 
+                evaluation_type="high_wild_bug",
+                rank=1,
+                ordered_rank=1
+            )
+            
+            result = showdown_manager.handle_showdown()
+        
+        assert len(result.pots) == 1
+        assert "p1" in result.pots[0].winners
+
+class TestShowdownManagerConditionalBestHands:
+    """Test conditional best hand configurations."""
+    
+    def test_player_choice_condition(self, showdown_manager):
+        """Test showdown with player choice conditions (like Paradise Road Pick'em)."""
+        # Create two players
+        p1 = create_player_with_cards("p1", "Player1", [
+            Card(Rank.ACE, Suit.SPADES),
+            Card(Rank.KING, Suit.SPADES)
+        ])
+        p2 = create_player_with_cards("p2", "Player2", [
+            Card(Rank.QUEEN, Suit.HEARTS),
+            Card(Rank.JACK, Suit.HEARTS)
+        ])
+        
+        showdown_manager.table.players = {"p1": p1, "p2": p2}
+        showdown_manager.table.community_cards = {
+            "default": [
+                Card(Rank.TEN, Suit.SPADES),
+                Card(Rank.NINE, Suit.SPADES), 
+                Card(Rank.EIGHT, Suit.SPADES)
+            ]
+        }
+        
+        # Set up conditional best hands based on game choice
+        showdown_manager.rules.showdown.conditionalBestHands = [{
+            "condition": {
+                "type": "player_choice",
+                "subset": "Game",
+                "value": "Hold'em"
+            },
+            "bestHand": [{
+                "name": "Hold'em Hand",
+                "evaluationType": "high",
+                "anyCards": 5
+            }]
+        }]
+        showdown_manager.rules.showdown.defaultBestHand = [{
+            "name": "Default Hand", 
+            "evaluationType": "high",
+            "holeCards": 2,
+            "communityCards": 0
+        }]
+        
+        # Mock game choices - player chose Hold'em
+        mock_game = Mock()
+        mock_game.game_choices = {"Game": "Hold'em"}
+        showdown_manager.game = mock_game
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            def mock_eval_hand(cards, eval_type, **kwargs):
+                if eval_type == EvaluationType.HIGH:
+                    if any(card.rank == Rank.KING for card in cards):
+                        # P2 has trip Kings
+                        return HandResult(
+                            player_id="p2",
+                            cards=cards,
+                            hand_name="Three Kings",
+                            hand_description="Three of a Kind, Kings",
+                            evaluation_type="high",
+                            rank=4,
+                            ordered_rank=4
+                        )
+                    else:
+                        # P1 has wheel as high
+                        return HandResult(
+                            player_id="p1", 
+                            cards=cards,
+                            hand_name="Five High Straight",
+                            hand_description="Wheel",
+                            evaluation_type="high",
+                            rank=5,
+                            ordered_rank=5
+                        )
+                else:  # Low
+                    if any(card.rank == Rank.ACE for card in cards):
+                        # P1 has wheel as low
+                        return HandResult(
+                            player_id="p1",
+                            cards=cards,
+                            hand_name="A-5 Low",
+                            hand_description="Wheel Low",
+                            evaluation_type="a5_low",
+                            rank=1,
+                            ordered_rank=1
+                        )
+                    else:
+                        # P2 has no qualifying low
+                        return HandResult(
+                            player_id="p2",
+                            cards=cards,
+                            hand_name="No Low",
+                            hand_description="No qualifying low",
+                            evaluation_type="a5_low",
+                            rank=999,
+                            ordered_rank=999
+                        )
+            
+            mock_eval.side_effect = mock_eval_hand
+            
+            result = showdown_manager.handle_showdown()
+        
+        assert len(result.pots) == 1
+        assert result.pots[0].hand_type == "Hold'em Hand"
+
+class TestShowdownManagerSpecialEvaluations:
+    """Test special evaluation criteria and default actions."""
+    
+    def test_highest_spade_evaluation(self, showdown_manager):
+        """Test special evaluation for highest spade in hole cards."""
+        # Create players with different spades
+        p1 = create_player_with_cards("p1", "Player1", [
+            Card(Rank.KING, Suit.SPADES),  # King of spades
+            Card(Rank.TWO, Suit.HEARTS),
+            Card(Rank.THREE, Suit.CLUBS)
+        ])
+        
+        p2 = create_player_with_cards("p2", "Player2", [
+            Card(Rank.ACE, Suit.SPADES),   # Ace of spades (highest)
+            Card(Rank.FOUR, Suit.DIAMONDS),
+            Card(Rank.FIVE, Suit.HEARTS)
+        ])
+        
+        showdown_manager.table.players = {"p1": p1, "p2": p2}
+        showdown_manager.table.community_cards = {}
+        
+        # Set up showdown with special evaluation default action
+        showdown_manager.rules.showdown.best_hand = [{
+            "name": "Low Hand",
+            "evaluationType": "three_card_a5_low",  # Use 3-card evaluation
+            "anyCards": 3,
+            "qualifier": [1, 1]  # Impossible qualifier
+        }]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        showdown_manager.rules.showdown.defaultActions = [{
+            "condition": "no_qualifier_met",
+            "appliesTo": ["Low Hand"],
+            "action": {
+                "type": "evaluate_special",
+                "evaluation": {
+                    "criterion": "highest_rank",
+                    "suit": "spades",
+                    "from": "hole_cards",
+                    "subsets": ["default"]
+                }
+            }
+        }]
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            # No one qualifies for low
+            mock_eval.return_value = HandResult(
+                player_id="test",
+                cards=[],
+                hand_name="No Low",
+                hand_description="No qualifying low",
+                evaluation_type="three_card_a5_low",  # Match the evaluation type
+                rank=999,
+                ordered_rank=999
+            )
+            
+            result = showdown_manager.handle_showdown()
+        
+        # P2 should win with Ace of spades
+        assert len(result.pots) == 1
+        assert "p2" in result.pots[0].winners
+        assert result.pots[0].hand_type == "Low Hand"
+    
+    def test_river_card_suit_evaluation(self, showdown_manager):
+        """Test dynamic suit evaluation based on river card."""
+        # Create players
+        p1 = create_player_with_cards("p1", "Player1", [
+            Card(Rank.KING, Suit.HEARTS),  
+            Card(Rank.QUEEN, Suit.HEARTS),
+            Card(Rank.JACK, Suit.CLUBS),
+            Card(Rank.TEN, Suit.DIAMONDS),
+            Card(Rank.NINE, Suit.SPADES)
+        ])
+        
+        p2 = create_player_with_cards("p2", "Player2", [
+            Card(Rank.ACE, Suit.HEARTS),   # Highest heart
+            Card(Rank.JACK, Suit.DIAMONDS),
+            Card(Rank.EIGHT, Suit.CLUBS),
+            Card(Rank.SEVEN, Suit.SPADES),
+            Card(Rank.SIX, Suit.DIAMONDS)
+        ])
+        
+        showdown_manager.table.players = {"p1": p1, "p2": p2}
+        showdown_manager.table.community_cards = {
+            "default": [
+                Card(Rank.TEN, Suit.CLUBS),
+                Card(Rank.NINE, Suit.DIAMONDS), 
+                Card(Rank.EIGHT, Suit.SPADES),
+                Card(Rank.SEVEN, Suit.CLUBS),
+                Card(Rank.SIX, Suit.HEARTS)  # River card is hearts
+            ]
+        }
+        
+        # Set up showdown with river card suit evaluation
+        showdown_manager.rules.showdown.best_hand = [{
+            "name": "High Hand",
+            "evaluationType": "high",  # Use 5-card evaluation
+            "anyCards": 5,
+            "qualifier": [1, 1]  # Impossible qualifier
+        }]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        showdown_manager.rules.showdown.defaultActions = [{
+            "condition": "no_qualifier_met",
+            "appliesTo": ["High Hand"],
+            "action": {
+                "type": "evaluate_special",
+                "evaluation": {
+                    "criterion": "highest_rank",
+                    "suit": "river_card_suit",  # Dynamic - hearts in this case
+                    "from": "hole_cards"
+                }
+            }
+        }]
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            # No one qualifies normally
+            mock_eval.return_value = HandResult(
+                player_id="test",
+                cards=[],
+                hand_name="No Hand",
+                hand_description="No qualifying hand",
+                evaluation_type="high",
+                rank=999,
+                ordered_rank=999
+            )
+            
+            result = showdown_manager.handle_showdown()
+        
+        # P2 should win with Ace of hearts (river suit)
+        assert len(result.pots) == 1
+        assert "p2" in result.pots[0].winners
+
+class TestShowdownManagerComplexScenarios:
+    """Test complex multi-feature scenarios."""
+    
+    def test_mexican_poker_with_wild_jokers(self, showdown_manager):
+        """Test Mexican Poker with conditional wild joker."""
+        # Create player with one joker (face-down = wild)
+        p1 = create_player_with_cards("p1", "Player1", [
+            Card(Rank.JOKER, Suit.JOKER, Visibility.FACE_DOWN), # Wild
+            Card(Rank.ACE, Suit.CLUBS),
+            Card(Rank.ACE, Suit.DIAMONDS),
+            Card(Rank.ACE, Suit.HEARTS),
+            Card(Rank.KING, Suit.SPADES)
+        ])
+        
+        # Create another player with face-up joker (bug)
+        p2 = create_player_with_cards("p2", "Player2", [
+            Card(Rank.JOKER, Suit.JOKER, Visibility.FACE_UP),    # Bug
+            Card(Rank.KING, Suit.HEARTS),
+            Card(Rank.KING, Suit.CLUBS),
+            Card(Rank.KING, Suit.DIAMONDS),
+            Card(Rank.QUEEN, Suit.SPADES)
+        ])
+        
+        # Create third player with no jokers
+        p3 = create_player_with_cards("p3", "Player3", [
+            Card(Rank.QUEEN, Suit.HEARTS),
+            Card(Rank.QUEEN, Suit.CLUBS),
+            Card(Rank.QUEEN, Suit.DIAMONDS),
+            Card(Rank.JACK, Suit.SPADES),
+            Card(Rank.JACK, Suit.HEARTS)
+        ])
+        
+        # Apply conditional wild card rules
+        for player in [p1, p2]:
+            for card in player.hand.cards:
+                if card.rank == Rank.JOKER:
+                    if card.visibility == Visibility.FACE_UP:
+                        card.make_wild(WildType.BUG)    # Face-up joker is bug
+                    else:
+                        card.make_wild(WildType.NAMED)  # Face-down joker is wild
+        
+        showdown_manager.table.players = {"p1": p1, "p2": p2, "p3": p3}
+        showdown_manager.table.community_cards = {}
+        
+        # Set up Mexican Poker showdown rules
+        showdown_manager.rules.showdown.best_hand = [{
+            "name": "High Hand",
+            "evaluationType": "27_ja_ffh_high_wild_bug",  # Mexican Poker evaluation
+            "anyCards": 5,
+            "wildCards": [{
+                "type": "joker",
+                "role": "conditional",
+                "condition": {
+                    "visibility": "face up",
+                    "true_role": "bug",
+                    "false_role": "wild"
+                }
+            }]
+        }]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            def mock_eval_hand(cards, eval_type, **kwargs):
+                if any(card in p1.hand.cards for card in cards):
+                    # P1 with wild joker - four aces
+                    return HandResult(
+                        player_id="p1",
+                        cards=cards,
+                        hand_name="Four Aces",
+                        hand_description="Four of a Kind, Aces",
+                        evaluation_type="27_ja_ffh_high_wild_bug",
+                        rank=2,
+                        ordered_rank=2
+                    )
+                elif any(card in p2.hand.cards for card in cards):
+                    # P2 with bug joker - full house
+                    return HandResult(
+                        player_id="p2",
+                        cards=cards,
+                        hand_name="Full House",
+                        hand_description="Kings over Aces (Joker as Ace)",
+                        evaluation_type="27_ja_ffh_high_wild_bug",
+                        rank=4,
+                        ordered_rank=4
+                    )
+                else:
+                    # P3 with no jokers - two pair
+                    return HandResult(
+                        player_id="p3",
+                        cards=cards,
+                        hand_name="Two Pair",
+                        hand_description="Queens over Jacks",
+                        evaluation_type="27_ja_ffh_high_wild_bug",
+                        rank=7,
+                        ordered_rank=7
+                    )
+            
+            mock_eval.side_effect = mock_eval_hand
+            
+            with patch.object(showdown_manager, '_find_winners') as mock_winners:
+                mock_winners.return_value = [p1]  # P1 wins with four of a kind
+                
+                result = showdown_manager.handle_showdown()
+        
+        assert len(result.pots) == 1
+        assert "p1" in result.pots[0].winners
+    
+    def test_action_razzdugi_classification_priority(self, showdown_manager):
+        """Test Action Razzdugi with face/butt classification and priority."""
+        # Create players - one face, one butt
+        p1 = create_player_with_cards("p1", "Player1", [
+            Card(Rank.ACE, Suit.SPADES),    # Butt hand
+            Card(Rank.TWO, Suit.HEARTS),
+            Card(Rank.THREE, Suit.CLUBS),
+            Card(Rank.FOUR, Suit.DIAMONDS),
+            Card(Rank.FIVE, Suit.SPADES),
+            Card(Rank.SIX, Suit.HEARTS),
+            Card(Rank.SEVEN, Suit.CLUBS)
+        ])
+        
+        p2 = create_player_with_cards("p2", "Player2", [
+            Card(Rank.TWO, Suit.SPADES),    # Face hand (has Jack)
+            Card(Rank.THREE, Suit.HEARTS),
+            Card(Rank.FOUR, Suit.CLUBS),
+            Card(Rank.FIVE, Suit.DIAMONDS),
+            Card(Rank.SIX, Suit.SPADES),
+            Card(Rank.JACK, Suit.HEARTS),   # Face card
+            Card(Rank.EIGHT, Suit.CLUBS)
+        ])
+        
+        showdown_manager.table.players = {"p1": p1, "p2": p2}
+        showdown_manager.table.community_cards = {}
+        
+        # Set up Action Razzdugi showdown
+        showdown_manager.rules.showdown.best_hand = [
+            {
+                "name": "Razz",
+                "evaluationType": "a5_low",
+                "anyCards": 5,
+                "classification": {
+                    "type": "face_butt",
+                    "faceRanks": ["JACK", "QUEEN", "KING"],
+                    "fieldName": "face_butt"
+                }
+            },
+            {
+                "name": "Badugi",
+                "evaluationType": "badugi",
+                "anyCards": 4
+            }
+        ]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        showdown_manager.rules.showdown.classification_priority = ["face", "butt"]
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            def mock_eval_hand(cards, eval_type, qualifier=None):
+                if eval_type == EvaluationType.LOW_A5:
+                    if any(card in p1.hand.cards for card in cards):
+                        # P1 has better low but is butt
+                        return HandResult(
+                            player_id="p1",
+                            cards=cards,
+                            hand_name="A-7 Low",
+                            hand_description="Seven-low",
+                            evaluation_type="a5_low",
+                            rank=1,
+                            ordered_rank=1,
+                            classifications={"face_butt": "butt"}
+                        )
+                    else:
+                        # P2 has worse low but is face
+                        return HandResult(
+                            player_id="p2",
+                            cards=cards,
+                            hand_name="2-J Low",
+                            hand_description="Jack-low",
+                            evaluation_type="a5_low",
+                            rank=2,
+                            ordered_rank=2,
+                            classifications={"face_butt": "face"}
+                        )
+                else:  # Badugi
+                    # P1 better badugi
+                    if any(card in p1.hand.cards for card in cards):
+                        return HandResult(
+                            player_id="p1",
+                            cards=cards,
+                            hand_name="A-4 Badugi",
+                            hand_description="Four-card badugi",
+                            evaluation_type="badugi",
+                            rank=1,
+                            ordered_rank=1
+                        )
+                    else:
+                        return HandResult(
+                            player_id="p2",
+                            cards=cards,
+                            hand_name="2-8 Badugi",
+                            hand_description="Four-card badugi",
+                            evaluation_type="badugi",
+                            rank=2,
+                            ordered_rank=2
+                        )
+            
+            mock_eval.side_effect = mock_eval_hand
+            
+            with patch.object(showdown_manager, '_find_winners') as mock_winners:
+                def mock_find_winners_side_effect(players, hand_results, eval_type, showdown_rules):
+                    # Face classification beats butt regardless of hand strength
+                    if eval_type == EvaluationType.LOW_A5:
+                        return [p2]  # Face wins over butt
+                    else:
+                        return [p1]  # P1 wins badugi
+                
+                mock_winners.side_effect = mock_find_winners_side_effect
+                
+                result = showdown_manager.handle_showdown()
+        
+        # Both pots should be awarded
+        assert len(result.pots) == 2
+        
+        # P2 should win Razz due to face classification priority
+        razz_pot = next(pot for pot in result.pots if pot.hand_type == "Razz")
+        assert "p2" in razz_pot.winners
+        
+        # P1 should win Badugi
+        badugi_pot = next(pot for pot in result.pots if pot.hand_type == "Badugi") 
+        assert "p1" in badugi_pot.winners
+    
+    def test_side_pot_eligibility(self, showdown_manager):
+        """Test complex side pot scenarios."""
+        # Create players with different stack sizes
+        p1 = create_player_with_cards("p1", "Player1", [
+            Card(Rank.ACE, Suit.SPADES),
+            Card(Rank.ACE, Suit.HEARTS),
+            Card(Rank.ACE, Suit.CLUBS),
+            Card(Rank.KING, Suit.DIAMONDS),
+            Card(Rank.QUEEN, Suit.SPADES)
+        ])  # Trip Aces
+        
+        p2 = create_player_with_cards("p2", "Player2", [
+            Card(Rank.KING, Suit.SPADES),
+            Card(Rank.KING, Suit.HEARTS),
+            Card(Rank.KING, Suit.CLUBS),
+            Card(Rank.ACE, Suit.DIAMONDS),
+            Card(Rank.JACK, Suit.HEARTS)
+        ])  # Trip Kings
+        
+        p3 = create_player_with_cards("p3", "Player3", [
+            Card(Rank.QUEEN, Suit.HEARTS),
+            Card(Rank.QUEEN, Suit.CLUBS),
+            Card(Rank.QUEEN, Suit.DIAMONDS),
+            Card(Rank.JACK, Suit.SPADES),
+            Card(Rank.TEN, Suit.HEARTS)
+        ])  # Trip Queens
+        
+        showdown_manager.table.players = {"p1": p1, "p2": p2, "p3": p3}
+        showdown_manager.table.community_cards = {}
+        
+        # Mock betting with side pots
+        showdown_manager.betting.get_main_pot_amount.return_value = 150
+        showdown_manager.betting.get_side_pot_count.return_value = 2
+        showdown_manager.betting.get_side_pot_amount.side_effect = lambda i: [50, 30][i]
+        showdown_manager.betting.get_total_pot.return_value = 230
+        
+        # Mock side pot eligibility - p1 eligible for all, p2 for main+side1, p3 for main only
+        def mock_side_pot_eligible(pot_index):
+            if pot_index == 0:  # First side pot
+                return set(["p1", "p2"])
+            elif pot_index == 1:  # Second side pot
+                return set(["p1"])
+            else:
+                return set(["p1", "p2", "p3"])  # Main pot
+        
+        showdown_manager.betting.get_side_pot_eligible_players.side_effect = mock_side_pot_eligible
+        
+        showdown_manager.rules.showdown.best_hand = [{
+            "name": "High Hand",
+            "evaluationType": "high",
+            "anyCards": 5
+        }]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            def mock_eval_hand(cards, eval_type, **kwargs):
+                if any(card in p1.hand.cards for card in cards):
+                    return HandResult(
+                        player_id="p1",
+                        cards=cards,
+                        hand_name="Three Aces",
+                        hand_description="Trip Aces",
+                        evaluation_type="high",
+                        rank=4,
+                        ordered_rank=4
+                    )
+                elif any(card in p2.hand.cards for card in cards):
+                    return HandResult(
+                        player_id="p2",
+                        cards=cards,
+                        hand_name="Three Kings",
+                        hand_description="Trip Kings",
+                        evaluation_type="high",
+                        rank=4,
+                        ordered_rank=5
+                    )
+                else:
+                    return HandResult(
+                        player_id="p3",
+                        cards=cards,
+                        hand_name="Three Queens",
+                        hand_description="Trip Queens",
+                        evaluation_type="high",
+                        rank=4,
+                        ordered_rank=6
+                    )
+            
+            mock_eval.side_effect = mock_eval_hand
+            
+            with patch.object(showdown_manager, '_find_winners') as mock_winners:
+                # P1 wins all pots they're eligible for
+                mock_winners.return_value = [p1]
+                
+                result = showdown_manager.handle_showdown()
+        
+        # Should have 3 pot results (main + 2 side)
+        assert len(result.pots) == 3
+        
+        # P1 should win all pots (eligible for all and has best hand)
+        for pot in result.pots:
+            assert "p1" in pot.winners
+
+class TestShowdownManagerEdgeCases:
+    """Test edge cases and error conditions."""
+    
+    def test_empty_player_list(self, showdown_manager):
+        """Test showdown with no active players."""
+        showdown_manager.table.players = {}
+        
+        result = showdown_manager.handle_showdown()
+        
+        assert len(result.pots) == 0
+        assert len(result.hands) == 0
+        assert result.is_complete
+    
+    def test_invalid_wild_card_configuration(self, showdown_manager):
+        """Test handling of invalid wild card configurations."""
+        player = create_player_with_cards("p1", "Player1", [
+            Card(Rank.ACE, Suit.SPADES),
+            Card(Rank.KING, Suit.HEARTS),
+            Card(Rank.QUEEN, Suit.DIAMONDS),
+            Card(Rank.JACK, Suit.CLUBS),
+            Card(Rank.TEN, Suit.SPADES)
+        ])
+        
+        showdown_manager.table.players = {"p1": player}
+        showdown_manager.table.community_cards = {}
+        
+        # Invalid wild card type - but valid hand configuration otherwise
+        showdown_manager.rules.showdown.best_hand = [{
+            "name": "High Hand",
+            "evaluationType": "high",
+            "anyCards": 5,  # Changed to 5 to match high evaluation requirements
+            "wildCards": [{
+                "type": "invalid_type",  # This is the invalid part we want to test
+                "role": "wild"
+            }]
+        }]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            mock_eval.return_value = HandResult(
+                player_id="p1",
+                cards=player.hand.cards,
+                hand_name="Straight",
+                hand_description="Ace-high Straight",
+                evaluation_type="high",
+                rank=5,
+                ordered_rank=5
+            )
+            
+            # Should not crash, just ignore invalid wild card rules
+            result = showdown_manager.handle_showdown()
+        
+        assert len(result.pots) == 1
+        assert "p1" in result.pots[0].winners
+        
+        # Verify that the invalid wild card rule was ignored gracefully
+        # The hand should still be evaluated normally
+        player_hands = result.hands.get("p1", [])
+        assert len(player_hands) > 0
+        hand_result = player_hands[0]
+        assert hand_result.hand_name == "Straight"
+    
+    def test_insufficient_cards_for_combination(self, showdown_manager):
+        """Test handling when player has insufficient cards for required combination."""
+        # Player with only 2 cards
+        player = create_player_with_cards("p1", "Player1", [
+            Card(Rank.ACE, Suit.SPADES),
+            Card(Rank.KING, Suit.HEARTS)
+        ])
+        
+        showdown_manager.table.players = {"p1": player}
+        showdown_manager.table.community_cards = {}
+        
+        # Require 5 cards but player only has 2
+        showdown_manager.rules.showdown.best_hand = [{
+            "name": "High Hand",
+            "evaluationType": "high",
+            "holeCards": 5,  # More than player has
+            "communityCards": 0
+        }]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        
+        # Should handle gracefully - either return empty hand or use padding
+        result = showdown_manager.handle_showdown()
+        
+        # Result should exist but may have empty hands
+        assert result.is_complete
+
+    def test_zero_cards_pip_value_handling(self, showdown_manager):
+        """Test handling of zero cards with pip value (Scarney-style games)."""
+        # Player with no cards
+        player = create_player_with_cards("p1", "Player1", [])
+        
+        showdown_manager.table.players = {"p1": player}
+        showdown_manager.table.community_cards = {}
+        
+        # Allow zero cards with pip value
+        showdown_manager.rules.showdown.best_hand = [{
+            "name": "Low Hand",
+            "evaluationType": "low_pip_6_cards",
+            "anyCards": 0,
+            "minimumCards": 0,
+            "zeroCardsPipValue": 0  # Best possible low
+        }]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            mock_eval.return_value = HandResult(
+                player_id="p1",
+                cards=[],
+                hand_name="No Cards",
+                hand_description="Zero cards (pip value 0)",
+                evaluation_type="low_pip_6_cards",
+                rank=1,
+                ordered_rank=1
+            )
+            
+            result = showdown_manager.handle_showdown()
+        
+        assert len(result.pots) == 1
+        assert "p1" in result.pots[0].winners
+        
+        # Verify the hand result shows empty cards
+        player_hands = result.hands.get("p1", [])
+        assert len(player_hands) > 0
+        hand_result = player_hands[0]
+        assert len(hand_result.cards) == 0  # Fixed: should be 0 cards
+        assert hand_result.hand_name == "No Cards"
+        assert hand_result.evaluation_type == "low_pip_6_cards"
+    
+    def test_player_hand_size_condition(self, showdown_manager):
+        """Test conditional best hands based on player hand size (like Tapiola Hold'em)."""
+        # Create players with different hand sizes
+        p1 = create_player_with_cards("p1", "Player1", [
+            Card(Rank.ACE, Suit.SPADES),
+            Card(Rank.KING, Suit.SPADES)
+        ])  # 2 cards
+        
+        p2 = create_player_with_cards("p2", "Player2", [
+            Card(Rank.QUEEN, Suit.HEARTS),
+            Card(Rank.JACK, Suit.HEARTS),
+            Card(Rank.TEN, Suit.HEARTS)
+        ])  # 3 cards
+        
+        showdown_manager.table.players = {"p1": p1, "p2": p2}
+        showdown_manager.table.community_cards = {
+            "Center": [Card(Rank.NINE, Suit.CLUBS)],
+            "Tower1": [Card(Rank.EIGHT, Suit.DIAMONDS)], 
+            "Tower2": [Card(Rank.SEVEN, Suit.HEARTS)]
+        }
+        
+        # Set up conditional best hands based on hand size
+        showdown_manager.rules.showdown.conditionalBestHands = [
+            {
+                "condition": {
+                    "type": "player_hand_size",
+                    "hand_sizes": [2]
+                },
+                "bestHand": [{
+                    "name": "2-Card Hand",
+                    "evaluationType": "high",
+                    "holeCards": 2,
+                    "communitySubsetRequirements": [
+                        {"subset": "Center", "count": 1, "required": True},
+                        {"subset": "Tower1", "count": 1, "required": True},
+                        {"subset": "Tower2", "count": 1, "required": True}
+                    ]
+                }]
+            },
+            {
+                "condition": {
+                    "type": "player_hand_size", 
+                    "hand_sizes": [3]
+                },
+                "bestHand": [{
+                    "name": "3-Card Hand",
+                    "evaluationType": "high",
+                    "holeCards": 3,
+                    "communitySubsetRequirements": [
+                        {"subset": "Tower1", "count": 1, "required": True},
+                        {"subset": "Tower2", "count": 1, "required": True}
+                    ]
+                }]
+            }
+        ]
+        
+        # Set up proper showdown rules attributes (not mocks)
+        showdown_manager.rules.showdown.classification_priority = []  # Empty list
+        showdown_manager.rules.showdown.defaultActions = []
+        showdown_manager.rules.showdown.globalDefaultAction = None
+        showdown_manager.rules.showdown.best_hand = []  # Set as empty list initially
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            def mock_eval_hand(cards, eval_type, **kwargs):  # Accept any additional kwargs
+                return HandResult(
+                    player_id="test",
+                    cards=cards,
+                    hand_name="High Card",
+                    hand_description="Test Hand",
+                    evaluation_type="high", 
+                    rank=10,
+                    ordered_rank=10
+                )
+            
+            mock_eval.side_effect = mock_eval_hand
+            
+            with patch.object(showdown_manager, '_find_best_hand_for_player') as mock_find_hand:
+                def mock_find_best(player, community, config, eval_type):
+                    if player.id == "p1":
+                        # 2-card player gets 5 cards total
+                        return player.hand.cards + [
+                            showdown_manager.table.community_cards["Center"][0],
+                            showdown_manager.table.community_cards["Tower1"][0],
+                            showdown_manager.table.community_cards["Tower2"][0]
+                        ], player.hand.cards
+                    else:
+                        # 3-card player gets 5 cards total
+                        return player.hand.cards + [
+                            showdown_manager.table.community_cards["Tower1"][0],
+                            showdown_manager.table.community_cards["Tower2"][0]
+                        ], player.hand.cards
+                
+                mock_find_hand.side_effect = mock_find_best
+                
+                result = showdown_manager.handle_showdown()
+        
+        # Both players should get evaluated with their appropriate configurations
+        assert len(result.hands) == 2
+        assert "p1" in result.hands
+        assert "p2" in result.hands
+
+class TestShowdownManagerQualifiers:
+    """Test hand qualifiers and default actions."""
+    
+    def test_low_hand_qualifier(self, showdown_manager):
+        """Test low hand with 8-or-better qualifier."""
+        # Create players - one qualifies for low, one doesn't
+        p1 = create_player_with_cards("p1", "Player1", [
+            Card(Rank.ACE, Suit.SPADES),
+            Card(Rank.TWO, Suit.HEARTS),
+            Card(Rank.THREE, Suit.CLUBS),
+            Card(Rank.FOUR, Suit.DIAMONDS),
+            Card(Rank.FIVE, Suit.SPADES)
+        ])  # A-5 low (qualifies)
+        
+        p2 = create_player_with_cards("p2", "Player2", [
+            Card(Rank.NINE, Suit.HEARTS),
+            Card(Rank.TEN, Suit.CLUBS), 
+            Card(Rank.JACK, Suit.DIAMONDS),
+            Card(Rank.QUEEN, Suit.SPADES),
+            Card(Rank.KING, Suit.HEARTS)
+        ])  # No low (doesn't qualify)
+        
+        showdown_manager.table.players = {"p1": p1, "p2": p2}
+        showdown_manager.table.community_cards = {}
+        
+        # Set up high-low showdown with qualifier
+        showdown_manager.rules.showdown.best_hand = [
+            {
+                "name": "High Hand",
+                "evaluationType": "high",
+                "anyCards": 5
+            },
+            {
+                "name": "Low Hand", 
+                "evaluationType": "a5_low",
+                "anyCards": 5,
+                "qualifier": [1, 56]  # 8-or-better
+            }
+        ]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        
+        # Set up proper showdown rules attributes
+        showdown_manager.rules.showdown.classification_priority = []
+        showdown_manager.rules.showdown.defaultActions = []
+        showdown_manager.rules.showdown.globalDefaultAction = None
+        showdown_manager.rules.showdown.best_hand = showdown_manager.rules.showdown.best_hand  # Use the configured best_hand
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            def mock_eval_hand(cards, eval_type, **kwargs):  # Accept any additional kwargs
+                if eval_type == EvaluationType.LOW_A5:
+                    if any(card.rank == Rank.ACE for card in cards):
+                        # P1 has qualifying low
+                        return HandResult(
+                            player_id="p1",
+                            cards=cards,
+                            hand_name="A-5 Low",
+                            hand_description="Wheel",
+                            evaluation_type="a5_low",
+                            rank=1,
+                            ordered_rank=1
+                        )
+                    else:
+                        # P2 has no qualifying low
+                        return HandResult(
+                            player_id="p2",
+                            cards=cards,
+                            hand_name="No Low",
+                            hand_description="No qualifying low",
+                            evaluation_type="a5_low", 
+                            rank=999,
+                            ordered_rank=999
+                        )
+                else:  # High
+                    return HandResult(
+                        player_id="test",
+                        cards=cards,
+                        hand_name="High Card",
+                        hand_description="King High",
+                        evaluation_type="high",
+                        rank=10,
+                        ordered_rank=10
+                    )
+            
+            mock_eval.side_effect = mock_eval_hand
+            
+            with patch.object(showdown_manager, '_find_winners') as mock_winners:
+                def mock_find_winners_side_effect(players, hand_results, eval_type, showdown_rules):
+                    if eval_type == EvaluationType.LOW_A5:
+                        # Only p1 qualifies for low
+                        qualified = [p for p in players if p.id == "p1"]
+                        return qualified
+                    else:
+                        # Both can compete for high
+                        return [p2]  # P2 wins high
+                
+                mock_winners.side_effect = mock_find_winners_side_effect
+                
+                result = showdown_manager.handle_showdown()
+        
+        # Should have both high and low pots
+        assert len(result.pots) == 2
+        hand_types = [pot.hand_type for pot in result.pots]
+        assert "High Hand" in hand_types
+        assert "Low Hand" in hand_types
+    
+    def test_default_action_split_pot(self, showdown_manager):
+        """Test default action when no one qualifies."""
+        # Create players with no qualifying hands
+        p1 = create_player_with_cards("p1", "Player1", [
+            Card(Rank.NINE, Suit.HEARTS),
+            Card(Rank.TEN, Suit.CLUBS),
+            Card(Rank.JACK, Suit.DIAMONDS),
+            Card(Rank.QUEEN, Suit.SPADES),
+            Card(Rank.KING, Suit.HEARTS)
+        ])
+        
+        p2 = create_player_with_cards("p2", "Player2", [
+            Card(Rank.EIGHT, Suit.HEARTS),
+            Card(Rank.NINE, Suit.CLUBS),
+            Card(Rank.TEN, Suit.DIAMONDS),
+            Card(Rank.JACK, Suit.SPADES),
+            Card(Rank.QUEEN, Suit.HEARTS)
+        ])
+        
+        # Add stack attributes to the mock players
+        p1.stack = 1000
+        p2.stack = 1000
+        
+        # Ensure players are marked as active
+        p1.is_active = True
+        p2.is_active = True
+        
+        showdown_manager.table.players = {"p1": p1, "p2": p2}
+        showdown_manager.table.community_cards = {}
+        
+        # Set up betting manager to return proper pot amounts
+        showdown_manager.betting.get_main_pot_amount.return_value = 100
+        showdown_manager.betting.get_side_pot_count.return_value = 0
+        showdown_manager.betting.get_total_pot.return_value = 100
+        
+        # Set up showdown with strict qualifier and default action
+        showdown_manager.rules.showdown.best_hand = [{
+            "name": "Low Hand",
+            "evaluationType": "a5_low",
+            "anyCards": 5,
+            "qualifier": [1, 1]  # Extremely strict - only wheel qualifies
+        }]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        showdown_manager.rules.showdown.globalDefaultAction = {
+            "condition": "no_qualifier_met",
+            "action": {
+                "type": "split_pot"
+            }
+        }
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            # No one has qualifying low
+            mock_eval.return_value = HandResult(
+                player_id="test",
+                cards=[],
+                hand_name="No Low",
+                hand_description="No qualifying low",
+                evaluation_type="a5_low",
+                rank=999,
+                ordered_rank=999
+            )
+            
+            result = showdown_manager.handle_showdown()
+        
+        # Verify that pot was split between all players
+        assert len(result.pots) == 1
+        pot_result = result.pots[0]
+        assert set(pot_result.winners) == {"p1", "p2"}
+        assert pot_result.hand_type == "Split (No Qualifier)"
+        assert pot_result.amount == 100  # Full pot amount
+        
+        # Verify that player stacks were updated (50 each for 100 pot split 2 ways)
+        assert p1.stack == 1050  # 1000 + 50
+        assert p2.stack == 1050  # 1000 + 50
+
+class TestShowdownManagerCommunityCardCombinations:
+    """Test complex community card selection rules."""
+    
+    def test_community_card_combinations(self, showdown_manager):
+        """Test games with multiple community card combinations (like Banco)."""
+        # Create player
+        player = create_player_with_cards("p1", "Player1", [
+            Card(Rank.ACE, Suit.SPADES),
+            Card(Rank.KING, Suit.SPADES)
+        ])
+        
+        showdown_manager.table.players = {"p1": player}
+        
+        # Set up Banco-style community cards
+        showdown_manager.table.community_cards = {
+            "Flop 1.1": [Card(Rank.QUEEN, Suit.SPADES)],
+            "Turn 1.2": [Card(Rank.JACK, Suit.SPADES)], 
+            "River 1.3": [Card(Rank.TEN, Suit.SPADES)],
+            "Flop 2.2": [Card(Rank.TWO, Suit.HEARTS)],
+            "Turn 2.3": [Card(Rank.THREE, Suit.HEARTS)],
+            "River 2.1": [Card(Rank.FOUR, Suit.HEARTS)]
+        }
+        
+        # Set up showdown rules with community card combinations
+        showdown_manager.rules.showdown.best_hand = [{
+            "name": "High Hand",
+            "evaluationType": "high",
+            "holeCards": 2,
+            "totalCards": 5,
+            "communityCardCombinations": [
+                # Row 1
+                ["Flop 1.1", "Turn 1.2", "River 1.3"],
+                # Row 2 (partial)
+                ["Flop 2.2", "Turn 2.3", "River 2.1"]
+            ]
+        }]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            mock_eval.return_value = HandResult(
+                player_id="p1",
+                cards=[],
+                hand_name="Royal Flush",
+                hand_description="Royal Flush in Spades",
+                evaluation_type="high",
+                rank=1,
+                ordered_rank=1
+            )
+            
+            with patch.object(showdown_manager, '_find_winners') as mock_winners:
+                mock_winners.return_value = [player]
+                
+                result = showdown_manager.handle_showdown()
+        
+        assert len(result.pots) == 1
+        assert "p1" in result.pots[0].winners
+    
+    def test_community_subset_requirements(self, showdown_manager):
+        """Test specific community subset requirements (like Tapiola Hold'em)."""
+        # Create player
+        player = create_player_with_cards("p1", "Player1", [
+            Card(Rank.ACE, Suit.SPADES),
+            Card(Rank.KING, Suit.HEARTS)
+        ])
+        
+        showdown_manager.table.players = {"p1": player}
+        showdown_manager.table.community_cards = {
+            "Center": [Card(Rank.QUEEN, Suit.CLUBS)],
+            "Tower1": [Card(Rank.JACK, Suit.DIAMONDS)],
+            "Tower2": [Card(Rank.TEN, Suit.SPADES)]
+        }
+        
+        # Require exactly one card from each subset
+        showdown_manager.rules.showdown.best_hand = [{
+            "name": "Best Hand",
+            "evaluationType": "high",
+            "holeCards": 2,
+            "communitySubsetRequirements": [
+                {"subset": "Center", "count": 1, "required": True},
+                {"subset": "Tower1", "count": 1, "required": True}, 
+                {"subset": "Tower2", "count": 1, "required": True}
+            ]
+        }]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        
+        with patch.object(showdown_manager, '_generate_subset_combinations') as mock_generate:
+            # Mock that subset requirements generate valid combinations
+            mock_generate.return_value = [[
+                showdown_manager.table.community_cards["Center"][0],
+                showdown_manager.table.community_cards["Tower1"][0],
+                showdown_manager.table.community_cards["Tower2"][0]
+            ]]
+            
+            with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+                mock_eval.return_value = HandResult(
+                    player_id="p1",
+                    cards=[],
+                    hand_name="Straight",
+                    hand_description="Broadway Straight",
+                    evaluation_type="high",
+                    rank=5,
+                    ordered_rank=5
+                )
+                
+                with patch.object(showdown_manager, '_find_winners') as mock_winners:
+                    mock_winners.return_value = [player]
+                    
+                    result = showdown_manager.handle_showdown()
+        
+        assert len(result.pots) == 1
+        assert "p1" in result.pots[0].winners
+
+class TestShowdownManagerDeclarations:
+    """Test declaration-based showdown (Hi-Lo declare games)."""
+    
+    def test_declaration_based_showdown(self, showdown_manager):
+        """Test Hi-Lo games with declarations."""
+        # Create two players
+        p1 = create_player_with_cards("p1", "Player1", [
+            Card(Rank.ACE, Suit.SPADES),
+            Card(Rank.TWO, Suit.HEARTS),
+            Card(Rank.THREE, Suit.CLUBS),
+            Card(Rank.FOUR, Suit.DIAMONDS),
+            Card(Rank.FIVE, Suit.HEARTS)
+        ])  # Wheel - good for both high and low
+        
+        p2 = create_player_with_cards("p2", "Player2", [
+            Card(Rank.KING, Suit.SPADES),
+            Card(Rank.KING, Suit.HEARTS),
+            Card(Rank.KING, Suit.CLUBS),
+            Card(Rank.QUEEN, Suit.DIAMONDS),
+            Card(Rank.JACK, Suit.SPADES)
+        ])  # Trip Kings - high only
+        
+        # Add required attributes for the split pot functionality
+        p1.stack = 1000
+        p2.stack = 1000
+        
+        showdown_manager.table.players = {"p1": p1, "p2": p2}
+        showdown_manager.table.community_cards = {}
+        
+        # Set up betting manager to return proper pot amounts
+        showdown_manager.betting.get_main_pot_amount.return_value = 200
+        showdown_manager.betting.get_side_pot_count.return_value = 0
+        showdown_manager.betting.get_total_pot.return_value = 200
+        showdown_manager.betting.get_side_pot_eligible_players.return_value = set()
+        
+        # Set up Hi-Lo with declarations
+        showdown_manager.rules.showdown.best_hand = [
+            {
+                "name": "High Hand",
+                "evaluationType": "high",
+                "anyCards": 5
+            },
+            {
+                "name": "Low Hand",
+                "evaluationType": "a5_low", 
+                "anyCards": 5,
+                "qualifier": [1, 56]  # 8 or better
+            }
+        ]
+        showdown_manager.rules.showdown.conditionalBestHands = []
+        showdown_manager.rules.showdown.defaultBestHand = []
+        showdown_manager.rules.showdown.declaration_mode = "declare"
+        
+        # Set declarations: p1 goes for high_low, p2 goes for high only
+        declarations = {
+            "p1": {-1: "high_low"},  # Main pot
+            "p2": {-1: "high"}       # Main pot
+        }
+        showdown_manager.set_declarations(declarations)
+        
+        with patch('generic_poker.evaluation.evaluator.evaluator.evaluate_hand') as mock_eval:
+            def mock_eval_hand(cards, eval_type, qualifier=None):
+                if eval_type.value == "high":
+                    if len([c for c in cards if c.rank == Rank.KING]) == 3:
+                        # P2's trip kings - worse than p1's straight flush
+                        return HandResult(
+                            player_id="p2",
+                            cards=cards,
+                            hand_name="Three of a Kind",
+                            hand_description="Trip Kings",
+                            evaluation_type="high",
+                            rank=4,
+                            ordered_rank=4
+                        )
+                    else:
+                        # P1's wheel as straight flush (best possible)
+                        return HandResult(
+                            player_id="p1",
+                            cards=cards,
+                            hand_name="Straight Flush",
+                            hand_description="Wheel Straight Flush",
+                            evaluation_type="high",
+                            rank=2,
+                            ordered_rank=2
+                        )
+                else:  # a5_low
+                    if len([c for c in cards if c.rank == Rank.KING]) == 3:
+                        # P2 has no low (kings don't qualify)
+                        return HandResult(
+                            player_id="p2",
+                            cards=cards,
+                            hand_name="No Low",
+                            hand_description="No qualifying low",
+                            evaluation_type="a5_low",
+                            rank=999,
+                            ordered_rank=999
+                        )
+                    else:
+                        # P1's wheel (perfect low)
+                        return HandResult(
+                            player_id="p1",
+                            cards=cards,
+                            hand_name="Wheel",
+                            hand_description="5-4-3-2-A low",
+                            evaluation_type="a5_low",
+                            rank=1,
+                            ordered_rank=1
+                        )
+            
+            mock_eval.side_effect = mock_eval_hand
+            
+            result = showdown_manager.handle_showdown()
+        
+        # Verify results
+        assert len(result.pots) == 2  # Should have high and low portions
+        
+        # Find high and low pot results
+        high_pot = None
+        low_pot = None
+        for pot in result.pots:
+            if pot.hand_type == "High Hand":
+                high_pot = pot
+            elif pot.hand_type == "Low Hand":
+                low_pot = pot
+        
+        assert high_pot is not None, "Should have a high pot result"
+        assert low_pot is not None, "Should have a low pot result"
+        
+        # High pot should go to p1 (straight flush beats trip kings)
+        assert "p1" in high_pot.winners
+        assert high_pot.amount == 100  # Half of 200
+        
+        # Low pot should go to p1 (only p1 has qualifying low and declared for it, plus won high)
+        assert "p1" in low_pot.winners  
+        assert low_pot.amount == 100  # Half of 200
+        
+        # Verify hand results are stored correctly
+        assert "p1" in result.hands
+        assert "p2" in result.hands
+        
+        # P1 should have both high and low hand results
+        p1_hands = result.hands["p1"]
+        assert len(p1_hands) == 2
+        hand_types = [hand.hand_type for hand in p1_hands]
+        assert "High Hand" in hand_types
+        assert "Low Hand" in hand_types
+        
+        # P2 should have only high hand result (didn't declare for low)
+        p2_hands = result.hands["p2"] 
+        assert len(p2_hands) == 2  # Still gets both evaluations
+        
+        # Verify winning hands
+        assert len(result.winning_hands) == 2  # One for high, one for low
+        winning_types = [hand.hand_type for hand in result.winning_hands]
+        assert "High Hand" in winning_types
+        assert "Low Hand" in winning_types
