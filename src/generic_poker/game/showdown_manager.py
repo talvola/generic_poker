@@ -2372,8 +2372,8 @@ class ShowdownManager:
         """Get community cards with player-specific wild card rules applied."""
         comm_cards = self._get_community_cards(community_cards, showdown_rules)
         
-        # Apply player-specific wild ranks
-        if hasattr(self.game, 'player_wild_ranks'):
+        # Apply player-specific wild ranks if game instance is available
+        if hasattr(self, 'game') and hasattr(self.game, 'player_wild_ranks'):
             player_wild_rank = self.game.player_wild_ranks.get(player.id)
             if player_wild_rank:
                 # Create copies with wild status for this player
@@ -2381,7 +2381,6 @@ class ShowdownManager:
                 for card in comm_cards:
                     if card.rank == player_wild_rank:
                         card_copy = Card(card.rank, card.suit, card.visibility)
-                        logger.debug(f"Making card {card_copy} wild for player {player.name} with rank {player_wild_rank}")
                         card_copy.make_wild(WildType.NAMED)
                         player_comm_cards.append(card_copy)
                     else:
