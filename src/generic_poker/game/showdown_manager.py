@@ -1963,6 +1963,9 @@ class ShowdownManager:
         eval_type: EvaluationType
     ) -> Tuple[List[Card], List[Card]]:
         """Find best hand using 'anyCards' configuration."""
+        logger.debug(f"Finding hand with anyCards for player {player.id}")
+        logger.debug(f"  Hole cards: {hole_cards}, Community cards: {comm_cards}")
+
         total_cards = showdown_rules["anyCards"]
         allowed_combinations = showdown_rules.get("holeCardsAllowed", [])
         padding = showdown_rules.get("padding", False)
@@ -2282,7 +2285,7 @@ class ShowdownManager:
                 return [], []
         
         # Get community cards
-        comm_cards = self._get_community_cards(community_cards, showdown_rules)
+        comm_cards = self._get_community_cards_for_player(player, community_cards, showdown_rules)
         
         # Apply wild cards if present
         if "wildCards" in showdown_rules:
@@ -2365,6 +2368,28 @@ class ShowdownManager:
         
         return result_cards
 
+    def _get_community_cards_for_player(self, player: Player, community_cards: Dict[str, List[Card]], showdown_rules: dict) -> List[Card]:
+        """Get community cards with player-specific wild card rules applied."""
+        comm_cards = self._get_community_cards(community_cards, showdown_rules)
+        
+        # Apply player-specific wild ranks
+        if hasattr(self.game, 'player_wild_ranks'):
+            player_wild_rank = self.game.player_wild_ranks.get(player.id)
+            if player_wild_rank:
+                # Create copies with wild status for this player
+                player_comm_cards = []
+                for card in comm_cards:
+                    if card.rank == player_wild_rank:
+                        card_copy = Card(card.rank, card.suit, card.visibility)
+                        logger.debug(f"Making card {card_copy} wild for player {player.name} with rank {player_wild_rank}")
+                        card_copy.make_wild(WildType.NAMED)
+                        player_comm_cards.append(card_copy)
+                    else:
+                        player_comm_cards.append(card)
+                return player_comm_cards
+        
+        return comm_cards
+
     def apply_wild_cards(self, player: Player, comm_cards: List[Card], wild_rules: List[dict]) -> None:
         """Apply wild card rules to the player's hand and community cards."""
         logger.debug(f"Applying wild card rules for player {player.name} with community cards: {comm_cards} and wild rules: {wild_rules}") 
@@ -2432,7 +2457,7 @@ class ShowdownManager:
                 lowest_rank = sorted_cards[0].rank
                 for card in player.hand.get_cards():  # Player-specific
                     if card.rank == lowest_rank:
-                        card.make_wild(wild_type)          
+                        card.make_wild(wild_type)                             
 
     def _find_best_players_for_special(self, active_players, criterion, suit, from_source, subsets):
         """

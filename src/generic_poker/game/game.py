@@ -135,7 +135,9 @@ class Game:
         self.declarations: Dict[str, Dict[int, str]] = {}
 
         self.dynamic_wild_rank = None  # Store rank that becomes wild due to last card dealt
-    
+        
+        self.player_wild_ranks: Dict[str, Optional[Rank]] = {}  # player_id -> wild_rank
+
 
     def get_game_description(self) -> str:
         """
@@ -625,7 +627,7 @@ class Game:
                 logger.info(f"Conditional dealing - condition not met, skipping deal/discard")
                 return  # Skip dealing entirely
 
-        logger.info(f"Conditional dealing - condition met, continuing with deal")
+            logger.info(f"Conditional dealing - condition met, continuing with deal")
 
         # Process the deal configuration             
         for card_config in config["cards"]:
@@ -725,6 +727,11 @@ class Game:
                             # Check if ANY wild card rule applies to this card
                             self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
 
+        # After dealing, update player wild ranks if there are lowest_hole rules
+        wild_card_rules = config.get("wildCards", [])
+        if any(rule.get("type") == "lowest_hole" for rule in wild_card_rules):
+            self._update_player_wild_ranks(wild_card_rules)                    
+
     def _apply_wild_card_rules_to_card(self, card: Card, wild_rules: List[Dict[str, Any]], face_up: bool) -> None:
         """
         Apply wild card rules to a specific card.
@@ -739,6 +746,10 @@ class Game:
             role = rule.get("role", "wild")
             scope = rule.get("scope", "global")
             match_type = rule.get("match", "rank")  # Default to "rank" for backward compatibility
+
+            # Skip lowest_hole rules - they're processed separately after all cards are dealt
+            if wild_type == "lowest_hole":
+                continue
 
             # Determine which WildType to use
             if role == "bug":
@@ -784,6 +795,7 @@ class Game:
                 target_rank = Rank(rule.get("rank", "R"))  # Default to Joker if no rank
                 if card.rank == target_rank:
                     card_matches_rule = True
+                    
 
             # Only proceed if the card matches the rule type
             if not card_matches_rule:
@@ -818,6 +830,65 @@ class Game:
                 # Non-conditional wild card (for matching cards)
                 card.make_wild(wild_card_type)
                 logger.info(f"Applied wild card rule: {wild_type} as {role}")
+
+    def _update_player_wild_ranks(self, wild_rules: List[Dict[str, Any]]) -> None:
+        """Update wild ranks for all players based on their current hole cards."""
+        logger.info("Updating player wild ranks based on lowest_hole rules")
+        for rule in wild_rules:
+            if rule.get("type") != "lowest_hole":
+                continue
+                
+            visibility = Visibility.FACE_DOWN if rule.get("visibility") == "face down" else Visibility.FACE_UP
+            role = rule.get("role", "wild")
+            wild_type = WildType.BUG if role == "bug" else WildType.NAMED
+            
+            for player in self.table.get_active_players():
+                old_wild_rank = self.player_wild_ranks.get(player.id)
+                new_wild_rank = self._find_player_wild_rank(player, visibility)
+                
+                if old_wild_rank != new_wild_rank:
+                    # Remove old wild status
+                    if old_wild_rank:
+                        self._remove_wild_status_for_player(player, old_wild_rank)
+                    
+                    # Set new wild status
+                    if new_wild_rank:
+                        self._set_wild_status_for_player(player, new_wild_rank, wild_type)
+                        
+                    # Update tracking
+                    self.player_wild_ranks[player.id] = new_wild_rank
+                    
+                    logger.info(f"Player {player.name} wild rank changed from {old_wild_rank} to {new_wild_rank}")
+
+    def _find_player_wild_rank(self, player: Player, visibility: Visibility) -> Optional[Rank]:
+        """Find the lowest rank card for a player with the specified visibility."""
+        hole_cards = player.hand.get_cards()
+        eligible_cards = [c for c in hole_cards if c.visibility == visibility]
+        
+        if not eligible_cards:
+            return None
+            
+        from generic_poker.evaluation.constants import BASE_RANKS
+        # BASE_RANKS is ordered high to low (A, K, Q, ..., 3, 2)
+        # So we want MAX index for lowest rank
+        lowest_card = max(eligible_cards, key=lambda c: BASE_RANKS.index(c.rank.value))
+        return lowest_card.rank
+
+    def _remove_wild_status_for_player(self, player: Player, rank: Rank) -> None:
+        """Remove wild status from all cards of a specific rank for a player."""
+        # Remove from player's hole cards
+        for card in player.hand.get_cards():
+            if card.rank == rank and card.is_wild:
+                card.clear_wild()  # We'll need to add this method to Card
+                logger.debug(f"Removed wild status from {card} for player {player.name}")
+
+    def _set_wild_status_for_player(self, player: Player, rank: Rank, wild_type: WildType) -> None:
+        """Set wild status for all cards of a specific rank for a player."""
+        # Set for player's hole cards - ALL cards of this rank
+        for card in player.hand.get_cards():
+            if card.rank == rank and not card.is_wild:
+                card.make_wild(wild_type)
+                logger.debug(f"Made {card} wild for player {player.name}")                  
 
     def _make_all_existing_matching_rank_wild(self, target_rank: Rank, wild_card_type: WildType) -> None:
         """Make all existing cards of a specific rank wild (not cards still in deck)."""
