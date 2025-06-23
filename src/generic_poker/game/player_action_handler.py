@@ -123,6 +123,15 @@ class PlayerActionHandler:
             elif hasattr(self.game, "current_declare_config"):
                 return [(PlayerAction.DECLARE, None, None)]            
 
+        if self.game.state == GameState.PROTECTION_DECISION:
+            pending = self.game.pending_protection_decisions.get(player_id)
+            if pending:
+                cost = pending["cost"]
+                return [
+                    (PlayerAction.PROTECT_CARD, cost, cost),
+                    (PlayerAction.DECLINE_PROTECTION, None, None)
+                ]
+        
         if self.game.state == GameState.BETTING:
             return self._get_betting_actions(player_id, config)
         return []
@@ -231,6 +240,12 @@ class PlayerActionHandler:
 
         logger.debug(f"Handling action {action} for player {player.name} (ID: {player_id})")
 
+        # NEW: Handle protection actions
+        if action in [PlayerAction.PROTECT_CARD, PlayerAction.DECLINE_PROTECTION]:
+            if self.game.state != GameState.PROTECTION_DECISION:
+                return ActionResult(success=False, error="No protection decision pending")
+            return self._handle_protection_action(player_id, action)
+    
         # Handle the CHOOSE action
         if action == PlayerAction.CHOOSE and step.action_type == GameActionType.CHOOSE:
             # Validate the player
@@ -762,6 +777,65 @@ class PlayerActionHandler:
         elif "deal" in next_key:
             self.game.state = GameState.DEALING
             logging.info(f"Next step is a deal - not a player action - no setup needed for {self.game.current_player.name}")
+
+    def _handle_protection_action(self, player_id: str, action: PlayerAction) -> ActionResult:
+        """Handle protection card purchase decision."""
+        if not hasattr(self.game, 'pending_protection_decisions'):
+            return ActionResult(success=False, error="No protection decisions pending")
+        
+        if player_id not in self.game.pending_protection_decisions:
+            return ActionResult(success=False, error="No protection decision pending for this player")
+        
+        decision = self.game.pending_protection_decisions[player_id]
+        player = self.game.table.players[player_id]
+        
+        if action == PlayerAction.PROTECT_CARD:
+            cost = decision["cost"]
+            if player.stack < cost:
+                return ActionResult(success=False, error=f"Insufficient chips (need ${cost})")
+            
+            # Pay the protection fee (treated as ante)
+            player.stack -= cost
+            self.game.betting.place_bet(player_id, cost, player.stack + cost, is_forced=True, is_ante=True)
+            
+            # Flip the card face up
+            decision["card"].visibility = Visibility.FACE_UP
+            logger.info(f"{player.name} paid ${cost} to protect {decision['card']}")
+            
+        elif action == PlayerAction.DECLINE_PROTECTION:
+            logger.info(f"{player.name} declined protection for {decision['card']}")
+        
+        # Remove this player's pending decision
+        del self.game.pending_protection_decisions[player_id]
+        
+        # Check if all protection decisions are complete
+        if self._all_protection_decisions_complete():
+            # Update wild cards after all decisions
+            self.game._complete_protection_round()
+            return ActionResult(success=True, advance_step=True)
+        else:
+            # Move to next player who needs to make a protection decision
+            self.game.current_player = self._get_next_protection_player()
+            return ActionResult(success=True, advance_step=False)
+
+    def _all_protection_decisions_complete(self) -> bool:
+        """Check if all pending protection decisions have been made."""
+        return len(self.game.pending_protection_decisions) == 0
+
+    def _get_next_protection_player(self) -> Optional[Player]:
+        """Get the next player who needs to make a protection decision."""
+        if not self.game.pending_protection_decisions:
+            return None
+        
+        # Use the stored order from dealing
+        if hasattr(self.game, 'protection_decision_order'):
+            for player_id in self.game.protection_decision_order:
+                if player_id in self.game.pending_protection_decisions:
+                    return self.game.table.players[player_id]
+        
+        # Fallback to any pending player
+        player_id = next(iter(self.game.pending_protection_decisions.keys()))
+        return self.game.table.players[player_id]
 
     def _handle_discard_action(self, player: Player, cards: List[Card]) -> bool:
         """Handle discard or draw action."""

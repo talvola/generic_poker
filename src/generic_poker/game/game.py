@@ -5,7 +5,7 @@ import itertools
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Tuple, Set
 
-from generic_poker.config.loader import GameRules, GameActionType, ForcedBets
+from generic_poker.config.loader import GameRules, GameActionType, ForcedBets, ProtectionOption
 from generic_poker.game.game_state import GameState, PlayerAction
 from generic_poker.game.table import Table, Player, Position
 from generic_poker.game.betting import (
@@ -59,7 +59,8 @@ class Game:
         # Common parameters
         min_buyin: int = 100,
         max_buyin: int = 2000,
-        auto_progress: bool = True
+        auto_progress: bool = True,
+        named_bets: Optional[Dict[str, int]] = None
     ):
         """
         Initialize new game.
@@ -137,6 +138,9 @@ class Game:
         self.dynamic_wild_rank = None  # Store rank that becomes wild due to last card dealt
         
         self.player_wild_ranks: Dict[str, Optional[Rank]] = {}  # player_id -> wild_rank
+
+        self.named_bets = named_bets or {}
+        self.pending_protection_decisions: Dict[str, Dict] = {}
 
 
     def get_game_description(self) -> str:
@@ -632,106 +636,225 @@ class Game:
         # Process the deal configuration             
         for card_config in config["cards"]:
             num_cards = card_config["number"]
+            protection_option = card_config.get("protection_option")  # NEW
 
-            # Determine card state - handle conditional state if present
-            if conditional_state and "state" not in card_config:
-                # Get players to deal to (single player or all active players)
-                if player_id:
-                    # Find the player object by ID
-                    player = next((p for p in self.table.get_active_players() if p.id == player_id), None)
-                    players_to_deal = [player] if player else []
-                    if not player:
-                        logger.warning(f"Player with ID {player_id} not found or not active")
-                else:
-                    players_to_deal = self.table.get_active_players()
-                
-                # Process the conditional logic for each player
-                for current_player in players_to_deal:
-                    # Get player's current visible state
-                    player_cards = current_player.hand.get_cards()
-                    condition_type = conditional_state["type"]
-                    
-                    # Evaluate the condition
-                    if condition_type == "all_exposed":
-                        condition_met = all(card.visibility == Visibility.FACE_UP for card in player_cards)
-                    elif condition_type == "any_exposed":
-                        condition_met = any(card.visibility == Visibility.FACE_UP for card in player_cards)
-                    elif condition_type == "none_exposed":
-                        condition_met = all(card.visibility == Visibility.FACE_DOWN for card in player_cards)
-                    else:
-                        logger.warning(f"Unknown condition type: {condition_type}")
-                        condition_met = False
-                    
-                    # Determine state based on condition
-                    if condition_met:
-                        state = conditional_state["true_state"]
-                    else:
-                        state = conditional_state["false_state"]
-                        
-                    face_up = state == "face up"
-                    
-                    # Deal the card to this specific player
-                    if location == "player":
-                        # Deal the card
-                        card = self.table.deal_card_to_player(current_player.id, face_up=face_up)
-                        
-                        # Apply wild card rules if this is a Joker
-                        if card and wild_card_rules and card.rank == Rank.JOKER:
-                            self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
-                    
-                    logger.info(f"Dealt card to {current_player.name} ({state}) based on condition '{condition_type}'")
+            # NEW: Check if this card has protection options
+            if protection_option and location == "player":
+                self._handle_protected_deal(card_config, player_id, wild_card_rules)
             else:
-                state = card_config.get("state", "face down")
-                # Skip if state is "none" (for conditional dealing where we don't deal)
-                if state == "none":
-                    logger.info("Skipping deal with 'none' state")
-                    continue       
-
-                subsets = card_config.get("subset", "default")  # Now can be string or list
-                hole_subset = card_config.get("hole_subset", "default")  # Default to "default" if not specified
-                face_up = state == "face up"
-                
-                if location == "player":
-                    if player_id:
-                        # Deal to the specific player by ID
-                        player_name = self.table.players[player_id].name or f"Player {player_id}"
-                        logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to player {player_name} ({state})")
-                        for _ in range(num_cards):
-                            card = self.table.deal_card_to_player(player_id, subset=hole_subset, face_up=face_up)
-                            # Apply wild card rules if needed
-                            if card and wild_card_rules:
-                                self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
-                    else:
-                        # Deal to all active players
-                        logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to each player ({state}.  subset: {hole_subset}, face_up: {face_up})")
-                        cards_dealt_dict = self.table.deal_hole_cards(num_cards, subset=hole_subset, face_up=face_up)
-
-                        # Apply wild card rules to any Jokers dealt
-                        if wild_card_rules:
-                            for active_player_id, cards in cards_dealt_dict.items():
-                                for card in cards:
-                                    # Check if ANY wild card rule applies to this card
-                                    self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
-                                        
-                else:  # community
-                    # Convert single string subset to list for consistency
-                    if isinstance(subsets, str):
-                        subsets = [subsets]
-
-                    logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to community subsets {subsets} ({state})")
-                    cards = self.table.deal_community_cards(num_cards, subsets=subsets, face_up=face_up)
-                    
-                    # Apply wild card rules to any Jokers dealt to community
-                    if wild_card_rules and cards:
-                        for card in cards:
-                            # Check if ANY wild card rule applies to this card
-                            self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
+                # Existing dealing logic - returns True if should continue, False if should skip
+                should_continue = self._handle_standard_deal(card_config, location, player_id, wild_card_rules, conditional_state, num_cards)
+                if not should_continue:
+                    continue  # Skip this card_config iteration
 
         # After dealing, update player wild ranks if there are lowest_hole rules
         wild_card_rules = config.get("wildCards", [])
         if any(rule.get("type") == "lowest_hole" for rule in wild_card_rules):
             self._update_player_wild_ranks(wild_card_rules)                    
 
+    def _handle_protected_deal(self, card_config: Dict, player_id: Optional[str], wild_card_rules: List) -> None:
+        """Handle dealing with protection option."""
+        protection_option = card_config["protection_option"]
+        timing = protection_option.get("timing", "post_deal")
+        
+        # Store wild card rules for later use
+        self._current_wild_rules = wild_card_rules
+        
+        if timing == "pre_deal":
+            self._handle_pre_deal_protection(card_config, player_id, wild_card_rules)
+        else:
+            self._handle_post_deal_protection(card_config, player_id, wild_card_rules)
+        
+        # Set game state and current player for protection decisions
+        if self.pending_protection_decisions:
+            self.state = GameState.PROTECTION_DECISION
+            # Use the first player from our stored order
+            if hasattr(self, 'protection_decision_order') and self.protection_decision_order:
+                first_player_id = self.protection_decision_order[0]
+                self.current_player = self.table.players[first_player_id]
+            else:
+                # Fallback
+                first_player_id = next(iter(self.pending_protection_decisions.keys()))
+                self.current_player = self.table.players[first_player_id]
+            logger.info(f"Protection decisions needed - starting with {self.current_player.name}")
+
+    def _handle_post_deal_protection(self, card_config: Dict, player_id: Optional[str], wild_card_rules: List) -> None:
+        """Deal card face down first, then offer protection."""
+        players_to_deal = self._get_players_to_deal(player_id)
+        
+        if not hasattr(self, 'pending_protection_decisions'):
+            self.pending_protection_decisions = {}
+        
+        # Store the order of players for protection decisions
+        self.protection_decision_order = []
+        
+        for player in players_to_deal:
+            # Deal card face down initially
+            card = self.table.deal_card_to_player(player.id, face_up=False)
+            
+            if card and wild_card_rules:
+                self._apply_wild_card_rules_to_card(card, wild_card_rules, False)
+            
+            # Set up protection decision
+            protection_option = card_config["protection_option"]
+            cost_name = protection_option["cost"]
+            cost = self.named_bets.get(cost_name, 0)
+            
+            self.pending_protection_decisions[player.id] = {
+                "card": card,
+                "cost": cost,
+                "cost_name": cost_name,
+                "prompt": protection_option.get("prompt", f"Pay ${cost} to flip {card} face up?")
+            }
+            
+            # Track the order
+            self.protection_decision_order.append(player.id)
+            
+            logger.info(f"Dealt {card} to {player.name} face down - protection available for ${cost}")
+
+    def _complete_protection_round(self) -> None:
+        """Called when all protection decisions are complete."""
+        # Update wild cards after all protection decisions
+        if hasattr(self, '_current_wild_rules'):
+            wild_card_rules = self._current_wild_rules
+            if any(rule.get("type") == "lowest_hole" for rule in wild_card_rules):
+                self._update_player_wild_ranks(wild_card_rules)
+        
+        # Clear any temporary state
+        if hasattr(self, '_current_wild_rules'):
+            delattr(self, '_current_wild_rules')
+        if hasattr(self, 'protection_decision_order'):
+            delattr(self, 'protection_decision_order')
+        
+        # Reset game state
+        self.state = GameState.DEALING
+        self.current_player = None
+        
+        logger.info("Protection round complete - all decisions made")
+
+    def _handle_standard_deal(self, card_config: Dict, location: str, player_id: Optional[str], 
+                            wild_card_rules: List, conditional_state: Dict, num_cards: int) -> bool:
+        """
+        Handle standard dealing logic.
+        
+        Returns:
+            bool: True if processing should continue, False if this card should be skipped
+        """
+        # Determine card state - handle conditional state if present
+        if conditional_state and "state" not in card_config:
+            # Get players to deal to (single player or all active players)
+            if player_id:
+                # Find the player object by ID
+                player = next((p for p in self.table.get_active_players() if p.id == player_id), None)
+                players_to_deal = [player] if player else []
+                if not player:
+                    logger.warning(f"Player with ID {player_id} not found or not active")
+            else:
+                players_to_deal = self.table.get_active_players()
+            
+            # Process the conditional logic for each player
+            for current_player in players_to_deal:
+                # Get player's current visible state
+                player_cards = current_player.hand.get_cards()
+                condition_type = conditional_state["type"]
+                
+                # Evaluate the condition
+                if condition_type == "all_exposed":
+                    condition_met = all(card.visibility == Visibility.FACE_UP for card in player_cards)
+                elif condition_type == "any_exposed":
+                    condition_met = any(card.visibility == Visibility.FACE_UP for card in player_cards)
+                elif condition_type == "none_exposed":
+                    condition_met = all(card.visibility == Visibility.FACE_DOWN for card in player_cards)
+                else:
+                    logger.warning(f"Unknown condition type: {condition_type}")
+                    condition_met = False
+                
+                # Determine state based on condition
+                if condition_met:
+                    state = conditional_state["true_state"]
+                else:
+                    state = conditional_state["false_state"]
+                    
+                face_up = state == "face up"
+                
+                # Deal the card to this specific player
+                if location == "player":
+                    # Deal the card
+                    card = self.table.deal_card_to_player(current_player.id, face_up=face_up)
+                    
+                    # Apply wild card rules if this is a Joker
+                    if card and wild_card_rules and card.rank == Rank.JOKER:
+                        self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
+                
+                logger.info(f"Dealt card to {current_player.name} ({state}) based on condition '{condition_type}'")
+        else:
+            state = card_config.get("state", "face down")
+            # Skip if state is "none" (for conditional dealing where we don't deal)
+            if state == "none":
+                logger.info("Skipping deal with 'none' state")
+                return False  # Signal to skip this card    
+
+            subsets = card_config.get("subset", "default")  # Now can be string or list
+            hole_subset = card_config.get("hole_subset", "default")  # Default to "default" if not specified
+            face_up = state == "face up"
+            
+            if location == "player":
+                if player_id:
+                    # Deal to the specific player by ID
+                    player_name = self.table.players[player_id].name or f"Player {player_id}"
+                    logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to player {player_name} ({state})")
+                    for _ in range(num_cards):
+                        card = self.table.deal_card_to_player(player_id, subset=hole_subset, face_up=face_up)
+                        # Apply wild card rules if needed
+                        if card and wild_card_rules:
+                            self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
+                else:
+                    # Deal to all active players
+                    logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to each player ({state}.  subset: {hole_subset}, face_up: {face_up})")
+                    cards_dealt_dict = self.table.deal_hole_cards(num_cards, subset=hole_subset, face_up=face_up)
+
+                    # Apply wild card rules to any Jokers dealt
+                    if wild_card_rules:
+                        for active_player_id, cards in cards_dealt_dict.items():
+                            for card in cards:
+                                # Check if ANY wild card rule applies to this card
+                                self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
+                                    
+            else:  # community
+                # Convert single string subset to list for consistency
+                if isinstance(subsets, str):
+                    subsets = [subsets]
+
+                logger.info(f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to community subsets {subsets} ({state})")
+                cards = self.table.deal_community_cards(num_cards, subsets=subsets, face_up=face_up)
+                
+                # Apply wild card rules to any Jokers dealt to community
+                if wild_card_rules and cards:
+                    for card in cards:
+                        # Check if ANY wild card rule applies to this card
+                        self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
+
+        return True  # Continue processing
+
+    def _get_players_to_deal(self, player_id: Optional[str]) -> List[Player]:
+        """Get list of players to deal to in correct order (SB first)."""
+        if player_id:
+            player = next((p for p in self.table.get_active_players() if p.id == player_id), None)
+            return [player] if player else []
+        else:
+            # Return players in dealing order (SB first, not BTN first)
+            all_players = self.table.get_position_order(include_inactive=True)
+            active_players = [p for p in all_players if p.is_active]
+            
+            if len(active_players) >= 2:
+                # Start from SB
+                sb_idx = next((i for i, p in enumerate(active_players) 
+                            if p.position and p.position.has_position(Position.SMALL_BLIND)), None)
+                if sb_idx is not None:
+                    return active_players[sb_idx:] + active_players[:sb_idx]
+            
+            return active_players
+    
     def _apply_wild_card_rules_to_card(self, card: Card, wild_rules: List[Dict[str, Any]], face_up: bool) -> None:
         """
         Apply wild card rules to a specific card.

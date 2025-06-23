@@ -6,6 +6,7 @@ class GameState(Enum):
     DEALING = "dealing"  # Cards being dealt
     BETTING = "betting"  # Betting round in progress
     DRAWING = "drawing"  # Draw/discard (or other non-bet action with player interaction) in progress
+    PROTECTION_DECISION = "protection_decision"
     SHOWDOWN = "showdown"  # Final showdown
     COMPLETE = "complete"  # Hand complete
 
@@ -26,3 +27,5 @@ class PlayerAction(Enum):
     DECLARE = "declare"  # New action
     DEAL = "deal"  # for when deal is part of a grouped player action
     CHOOSE = "choose"   # New action for game variant selection
+    PROTECT_CARD = "protect_card"
+    DECLINE_PROTECTION = "decline_protection"

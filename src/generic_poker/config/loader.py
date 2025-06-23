@@ -89,6 +89,13 @@ class GameStep:
     conditional_state: Optional[Dict[str, Any]] = None  # Add conditional_state field with default None
 
 @dataclass
+class ProtectionOption:
+    cost: str  # Named bet amount (e.g., "protection_fee")
+    timing: str  # "pre_deal" or "post_deal"
+    benefit: str  # "flip_face_up" or other benefits
+    prompt: Optional[str] = None
+
+@dataclass
 class ShowdownConfig:
     """Configuration for final showdown."""
     order: str
@@ -115,6 +122,7 @@ class GameRules:
     betting_order: BettingOrder
     gameplay: List[GameStep]
     showdown: ShowdownConfig
+    named_bets: Dict[str, int] = field(default_factory=dict)
 
     @classmethod
     def from_file(cls, filepath: Path) -> 'GameRules':

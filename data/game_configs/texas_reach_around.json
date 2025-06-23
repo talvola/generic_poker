@@ -90,7 +90,12 @@
                 "cards": [
                     {
                         "number": 1,
-                        "state": "face down"
+                        "state": "face down",
+                        "protection_option": {
+                            "cost": "protection_fee",
+                            "timing": "post_deal",
+                            "prompt": "Pay protection fee to keep this card face up?"
+                        }
                     }
                 ],
                 "wildCards": [

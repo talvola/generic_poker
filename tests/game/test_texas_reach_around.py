@@ -2,7 +2,7 @@
 import pytest
 from generic_poker.config.loader import GameRules
 from generic_poker.game.game import Game, GameState, PlayerAction
-from generic_poker.core.card import Card, Rank, Suit
+from generic_poker.core.card import Card, Rank, Suit, Visibility
 from generic_poker.game.betting import BettingStructure
 from generic_poker.core.deck import Deck
 from generic_poker.evaluation.hand_description import HandDescriber, EvaluationType
@@ -44,9 +44,9 @@ def create_predetermined_deck():
         Card(Rank.SIX, Suit.DIAMONDS),  # BB card 2
         Card(Rank.QUEEN, Suit.HEARTS),  # Community card 1
         Card(Rank.JACK, Suit.DIAMONDS), # Community card 2
-        Card(Rank.TEN, Suit.SPADES),    # BTN third hole card
         Card(Rank.TWO, Suit.CLUBS),     # SB third hole card
         Card(Rank.EIGHT, Suit.SPADES),  # BB third hole card
+        Card(Rank.TEN, Suit.SPADES),    # BTN third hole card
         Card(Rank.TWO, Suit.HEARTS),    # Community card 3
         Card(Rank.FIVE, Suit.DIAMONDS), # Community card 4
         Card(Rank.TEN, Suit.HEARTS),    #
@@ -68,7 +68,8 @@ def setup_test_game():
         big_bet=20,
         min_buyin=100,
         max_buyin=1000,
-        auto_progress=False
+        auto_progress=False,
+        named_bets={"protection_fee": 5}
     )
     game.add_player('BTN', 'Player1', 500)
     game.add_player('SB', 'Player2', 500)
@@ -122,8 +123,8 @@ def check_wild_cards(game, player_id, expected_wild_rank):
         else:
             assert not card.is_wild, f"Card {card} should not be wild but is"
 
-def test_game_results_showdown():
-    """Test that the game results API provides correct information."""
+def test_protection_decision():
+    """Test the card protection purchase mechanism."""
     game = setup_test_game()
     
     # Play a full hand
@@ -205,23 +206,70 @@ def test_game_results_showdown():
     # BTN checks
     game.player_action('BTN', PlayerAction.CHECK)
 
-    # Step 7: Deal Third Hole Card to each player
+    # Step 7: Deal Third Hole Card to each player - with player decision for protection
     game._next_step()  # Deal third hole card
     assert game.current_step == 7
-    assert game.state == GameState.DEALING        
+    assert game.state == GameState.PROTECTION_DECISION        
+    
+    assert game.current_player.id == "SB"  # SB acts first in post-flop betting rounds
+    valid_actions = game.get_valid_actions('SB')   
+    assert (PlayerAction.PROTECT_CARD, 5, 5) in valid_actions
+    assert (PlayerAction.DECLINE_PROTECTION, None, None) in valid_actions
+    
+    # Test declining protection
+    result = game.player_action('SB', PlayerAction.PROTECT_CARD)
+    assert result.success
+
+    expected_pot = expected_pot + 5  # SB adds 5 for protecting hole card  
+
+    assert game.current_player.id == "BB"  
+    valid_actions = game.get_valid_actions('BB')   
+    assert (PlayerAction.PROTECT_CARD, 5, 5) in valid_actions
+    assert (PlayerAction.DECLINE_PROTECTION, None, None) in valid_actions
+
+    # Test protection purchase
+    result = game.player_action('BB', PlayerAction.DECLINE_PROTECTION)
+    assert result.success
+
+    assert game.current_player.id == "BTN"  
+    valid_actions = game.get_valid_actions('BTN')   
+    assert (PlayerAction.PROTECT_CARD, 5, 5) in valid_actions
+    assert (PlayerAction.DECLINE_PROTECTION, None, None) in valid_actions
+
+    # Test protection purchase
+    result = game.player_action('BTN', PlayerAction.DECLINE_PROTECTION)
+    assert result.success    
+
+    # Test whether cards are face up or face down
+    
+    # SB has 3 face down cards, since they declined protection
+    assert game.table.players['SB'].hand.cards[0].visibility == Visibility.FACE_DOWN
+    assert game.table.players['SB'].hand.cards[1].visibility == Visibility.FACE_DOWN
+    assert game.table.players['SB'].hand.cards[2].visibility == Visibility.FACE_UP
+
+    # BB has 2 face down and 1 face up card, since they bought protection for their hole card
+    assert game.table.players['BB'].hand.cards[0].visibility == Visibility.FACE_DOWN
+    assert game.table.players['BB'].hand.cards[1].visibility == Visibility.FACE_DOWN
+    assert game.table.players['BB'].hand.cards[2].visibility == Visibility.FACE_DOWN
+
+    # BTN also protected their hole card, so they have 2 face down and 1 face up
+    assert game.table.players['BTN'].hand.cards[0].visibility == Visibility.FACE_DOWN
+    assert game.table.players['BTN'].hand.cards[1].visibility == Visibility.FACE_DOWN
+    assert game.table.players['BTN'].hand.cards[2].visibility == Visibility.FACE_DOWN
 
     # Verify third hole cards
-    assert str(game.table.players['BTN'].hand.cards[2]) == "Ts"  # Player1
     assert str(game.table.players['SB'].hand.cards[2]) == "2c"   # Player2  
     assert str(game.table.players['BB'].hand.cards[2]) == "8s"   # Player3    
+    assert str(game.table.players['BTN'].hand.cards[2]) == "Ts"  # Player1
 
     # Check wild cards after third hole card deal
-    # BTN: Ah, Kh, Ts -> Ten is now lowest -> Tens are wild (Kings no longer wild)
-    # SB: Qd, 4c, 2c -> Two is now lowest -> Twos are wild (Fours no longer wild)
+    # SB: Qd, 4c, 2c -> Two is now lowest but protected the four so four is still wild
     # BB: 5s, 6d, 8s -> Five is still lowest -> Fives still wild
-    check_wild_cards(game, 'BTN', Rank.TEN)
-    check_wild_cards(game, 'SB', Rank.TWO)
+    # BTN: Ah, Kh, Ts -> Ten dealt face up - King is still the wild card
+
+    check_wild_cards(game, 'SB', Rank.FOUR)
     check_wild_cards(game, 'BB', Rank.FIVE)
+    check_wild_cards(game, 'BTN', Rank.TEN)
 
     # Step 8: Player Bet
     game._next_step()  
@@ -282,9 +330,9 @@ def test_game_results_showdown():
 
     # Final wild card check before showdown
     print("\n=== Final Wild Card Status Before Showdown ===")
-    check_wild_cards(game, 'BTN', Rank.TEN)  # Tens wild
-    check_wild_cards(game, 'SB', Rank.TWO)   # Twos wild  
+    check_wild_cards(game, 'SB', Rank.FOUR)   # Twos wild  
     check_wild_cards(game, 'BB', Rank.FIVE)  # Fives wild    
+    check_wild_cards(game, 'BTN', Rank.TEN)  # Tens wild
 
     # Print final hands for analysis
     print("\n=== Final Hands ===")
@@ -316,7 +364,7 @@ def test_game_results_showdown():
 
     # Expected winner analysis:
     # BTN: Ah, Kh, Ts + Qh, Jd, 2h, 5d (Tens wild) -> Can make ace high flush with Ah,Kh,Qh,2h with Ts as wild 
-    # SB: Qd, 4c, 2c + Qh, Jd, 2h, 5d (Twos wild) -> Can make four of a kind with Qd, Qh and 2c and 2h as wild cards
+    # SB: Qd, 4c, 2c + Qh, Jd, 2h, 5d (Fours wild) -> Can make queens over twos full house Qd, Qh, 4c (wild), 2c, 2h 
     # BB: 5s, 6d, 8s + Qh, Jd, 2h, 5d (Fives wild) -> Can make a queen high straight with Qj,Jd,8s and 5s and 5d as wild cards
     
     # With wild cards, SB should have the best hand (four of a kind with wild twos)
@@ -324,9 +372,10 @@ def test_game_results_showdown():
     assert 'SB' in main_pot.winners
 
     winning_hand = results.hands['SB']
-    assert "Four of a Kind" in winning_hand[0].hand_name
-    assert "Four Queens" in winning_hand[0].hand_description
+    assert "Full House" in winning_hand[0].hand_name
+    assert "Full House, Queens over Twos" in winning_hand[0].hand_description
 
     # Check winning hands list
     assert len(results.winning_hands) == 1
     assert results.winning_hands[0].player_id == 'SB'    
+

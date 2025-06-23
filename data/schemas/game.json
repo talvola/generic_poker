@@ -799,6 +799,16 @@
                 "type": "string",
                 "description": "State of the cards (face up or face down)"
               },
+              "protection_option": {
+                "type": "object",
+                "properties": {
+                  "cost": {"type": "string", "description": "Named bet amount"},
+                  "timing": {"type": "string", "enum": ["pre_deal", "post_deal"], "default": "post_deal"},
+                  "benefit": {"type": "string", "enum": ["flip_face_up"], "default": "flip_face_up"},
+                  "prompt": {"type": "string", "description": "Custom prompt text"}
+                },
+                "required": ["cost"]
+              },              
               "community_subset": {
                 "description": "Subset of community cards (e.g., 'Board', 'Discard')"
               },
