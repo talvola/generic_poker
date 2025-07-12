@@ -1,0 +1,17 @@
+{
+  "id": "NE_SEVEN_CARD_HIGH",
+  "name": "New England Seven Card High",
+  "description": "New England Hold'em seven-card high evaluation",
+  "hand_size": 7,
+  "rank_order": "BASE_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "database",
+      "path": "data/hand_rankings/hand_rankings.db"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_ne_seven_card_high.csv"
+    }
+  }
+}

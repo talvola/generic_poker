@@ -1,0 +1,17 @@
+{
+  "id": "GAME_21",
+  "name": "21",
+  "description": "Closest to 21 using as many cards as possible (5-card 21 is best)",
+  "hand_size": 5,
+  "rank_order": "BASE_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_21.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_21.csv"
+    }
+  }
+}

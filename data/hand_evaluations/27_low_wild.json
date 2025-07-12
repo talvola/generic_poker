@@ -1,0 +1,17 @@
+{
+  "id": "LOW_27_WILD",
+  "name": "27 Low Wild",
+  "description": "Lowball ranking with deuce as low, with wild cards",
+  "hand_size": 5,
+  "rank_order": "BASE_RANKS_JOKER",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_27_low_wild.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_27_low.csv"
+    }
+  }
+}

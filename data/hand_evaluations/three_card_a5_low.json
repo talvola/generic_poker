@@ -1,0 +1,17 @@
+{
+  "id": "THREE_CARD_LOW",
+  "name": "Three Card A5 Low",
+  "description": "Three card A-5 low evaluation (for stud games)",
+  "hand_size": 3,
+  "rank_order": "LOW_A5_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_three_card_a5_low.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_a5_low.csv"
+    }
+  }
+}

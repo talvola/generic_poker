@@ -1,0 +1,22 @@
+{
+  "id": "GAME_ZERO_6",
+  "name": "Zero 6",
+  "description": "Pip count game for 6-card hands - lowest number of pips wins",
+  "hand_size": 6,
+  "rank_order": "BASE_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_zero_6.csv"
+    },
+    "description": {
+      "source_type": "generated",
+      "generator": "pip_count_range",
+      "parameters": {
+        "start": 0,
+        "end": 58,
+        "step": 1
+      }
+    }
+  }
+}

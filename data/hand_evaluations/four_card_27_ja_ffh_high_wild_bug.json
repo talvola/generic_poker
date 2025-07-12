@@ -1,0 +1,17 @@
+{
+  "id": "FOUR_CARD_HIGH_27_JA_WILD",
+  "name": "Four Card 40-Card High Wild",
+  "description": "Four card high evaluation for 40-card deck with wild cards",
+  "hand_size": 4,
+  "rank_order": "RANKS_27_JA_JOKER",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_four_card_27_ja_ffh_high_wild_bug.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_27_ja_ffh_high.csv"
+    }
+  }
+}

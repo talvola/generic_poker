@@ -1,0 +1,17 @@
+{
+  "id": "FOUR_CARD_LOW_AH",
+  "name": "Four Card 2-7 Low",
+  "description": "Four card 2-7 low evaluation (for stud games)",
+  "hand_size": 4,
+  "rank_order": "BASE_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_four_card_27_low.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_27_low.csv"
+    }
+  }
+}

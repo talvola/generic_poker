@@ -1,0 +1,17 @@
+{
+  "id": "FOUR_CARD_HIGH",
+  "name": "Four Card High",
+  "description": "Four card high evaluation (for stud games)",
+  "hand_size": 4,
+  "rank_order": "BASE_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_four_card_high.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_high.csv"
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "LOW_PIP_6",
+  "name": "Low Pip 6-Card",
+  "description": "Lowest number of pips with 6-card hands - face cards are 10",
+  "hand_size": 6,
+  "rank_order": "BASE_RANKS_PADDED",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_low_pip_6_cards.csv"
+    },
+    "description": {
+      "source_type": "generated",
+      "generator": "pip_count_range",
+      "parameters": {
+        "start": 1,
+        "end": 59,
+        "step": 1
+      }
+    }
+  }
+}

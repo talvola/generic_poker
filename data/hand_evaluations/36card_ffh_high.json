@@ -1,0 +1,17 @@
+{
+  "id": "HIGH_36CARD",
+  "name": "36-Card High",
+  "description": "High hands using a 36-card deck, with flushes ranked higher than full houses",
+  "hand_size": 5,
+  "rank_order": "RANKS_36_CARD",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_36card_ffh_high.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_36card_ffh_high.csv"
+    }
+  }
+}

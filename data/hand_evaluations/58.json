@@ -1,0 +1,22 @@
+{
+  "id": "GAME_58",
+  "name": "58",
+  "description": "Pip count game for 6-card hands - highest number of pips wins",
+  "hand_size": 6,
+  "rank_order": "BASE_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_58.csv"
+    },
+    "description": {
+      "source_type": "generated",
+      "generator": "pip_count_range",
+      "parameters": {
+        "start": 58,
+        "end": 0,
+        "step": -1
+      }
+    }
+  }
+}

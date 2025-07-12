@@ -1,0 +1,17 @@
+{
+  "id": "TWO_CARD_HIGH_27_JA_WILD",
+  "name": "Two Card 40-Card High Wild",
+  "description": "Two card high evaluation for 40-card deck with wild cards",
+  "hand_size": 2,
+  "rank_order": "RANKS_27_JA_JOKER",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_two_card_27_ja_ffh_high_wild_bug.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_27_ja_ffh_high.csv"
+    }
+  }
+}

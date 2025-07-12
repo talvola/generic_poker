@@ -1,0 +1,17 @@
+{
+  "id": "THREE_CARD_HIGH_27_JA",
+  "name": "Three Card 40-Card High",
+  "description": "Three card high evaluation for 40-card deck (no 8-T)",
+  "hand_size": 3,
+  "rank_order": "RANKS_27_JA",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_three_card_27_ja_ffh_high.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_27_ja_ffh_high.csv"
+    }
+  }
+}

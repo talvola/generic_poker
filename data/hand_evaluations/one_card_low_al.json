@@ -1,0 +1,17 @@
+{
+  "id": "ONE_CARD_LOW_AL",
+  "name": "One Card Low (Ace Low)",
+  "description": "Single card low evaluation with Ace low",
+  "hand_size": 1,
+  "rank_order": "LOW_A5_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_one_card_low_al.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_a5_low.csv"
+    }
+  }
+}

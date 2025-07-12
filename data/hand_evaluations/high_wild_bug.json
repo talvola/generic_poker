@@ -1,0 +1,17 @@
+{
+  "id": "HIGH_WILD",
+  "name": "High Wild Bug",
+  "description": "Standard poker hand rankings with wild cards and/or bugs",
+  "hand_size": 5,
+  "rank_order": "BASE_RANKS_JOKER",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_high_wild_bug.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_high_wild_bug.csv"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "THREE_CARD_HIGH_HEART",
+  "name": "Three Card High Heart",
+  "description": "Three card high evaluation focusing on hearts",
+  "hand_size": 3,
+  "rank_order": "BASE_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_three_card_high_heart.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_three_card_high_heart.csv"
+    }
+  }
+}
