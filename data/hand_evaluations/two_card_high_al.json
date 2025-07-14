@@ -1,0 +1,17 @@
+{
+  "id": "TWO_CARD_HIGH_AL",
+  "name": "Two Card High (Ace Low)",
+  "description": "Two card high evaluation with Ace low",
+  "hand_size": 2,
+  "rank_order": "LOW_A5_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_two_card_high_al.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_a5_low.csv"
+    }
+  }
+}

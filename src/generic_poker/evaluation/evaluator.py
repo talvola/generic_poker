@@ -11,6 +11,7 @@ from generic_poker.core.hand import PlayerHand
 from generic_poker.evaluation.eval_types.base import BaseEvaluator, HandRanking
 from generic_poker.evaluation.eval_types.large import LargeHandEvaluator
 from generic_poker.evaluation.eval_types.standard import StandardHandEvaluator
+from generic_poker.evaluation.evaluation_config import evaluation_config_loader
 
 class EvaluationType(str, Enum):
     """Types of poker hand evaluation."""
@@ -88,8 +89,12 @@ class EvaluationType(str, Enum):
     THREE_CARD_HIGH_DIAMOND = 'three_card_high_diamond'
     THREE_CARD_HIGH_CLUB = 'three_card_high_club'
 
-
-
+    @classmethod
+    def validate_with_config(cls, eval_type: 'EvaluationType') -> bool:
+        """Validate that this enum value has a corresponding JSON configuration."""
+        from generic_poker.evaluation.evaluation_config import evaluation_config_loader
+        return evaluation_config_loader.get_config(eval_type.value) is not None
+    
 @dataclass
 class HandResult:
     """
@@ -122,14 +127,17 @@ class HandEvaluator:
     """
     Main interface for poker hand evaluation.
     
-    Loads and caches appropriate evaluators for different game types.
-    Handles comparing hands and determining winners.
+    Now loads evaluator configurations from JSON files instead of hardcoded mappings.
     """
     
     def __init__(self):
         """Initialize evaluator."""
         self._evaluators: Dict[EvaluationType, BaseEvaluator] = {}
-        self._rankings_dir = Path(__file__).parents[3] / 'data' / 'hand_rankings'
+        self._project_root = Path(__file__).parents[3]
+        self._rankings_dir = self._project_root / 'data' / 'hand_rankings'
+        
+        # Ensure configuration is loaded
+        evaluation_config_loader.load_all_configs()
         
     def get_evaluator(self, eval_type: EvaluationType) -> BaseEvaluator:
         """
@@ -145,13 +153,34 @@ class HandEvaluator:
             ValueError: If evaluation type not supported
         """
         if eval_type not in self._evaluators:
+            # Get configuration for this evaluation type
+            config = evaluation_config_loader.get_config(eval_type.value)
+            if config is None:
+                raise ValueError(f"No configuration found for evaluation type: {eval_type}")
+            
+            # Determine evaluator class
             evaluator_class = self._get_evaluator_class(eval_type)
-            if eval_type == EvaluationType.NE_SEVEN_CARD_HIGH:
-                db_file = self._rankings_dir / 'hand_rankings.db'
+            
+            # Create evaluator based on data source type
+            if config.ranking_data.source_type == 'database':
+                # Special case for database files (like New England 7-card)
+                db_file = self._project_root / config.ranking_data.path
                 self._evaluators[eval_type] = evaluator_class(db_file, eval_type.value)
-            else:
-                rankings_file = self._rankings_dir / f'all_card_hands_ranked_{eval_type.value}.csv'
+            elif config.ranking_data.source_type == 'csv':
+                # Standard CSV file
+                rankings_file = self._project_root / config.ranking_data.path
                 self._evaluators[eval_type] = evaluator_class(rankings_file, eval_type.value)
+            elif config.ranking_data.source_type == 'generated':
+                # Generated rankings - we'll need to generate the file or handle this differently
+                # For now, assume we have a CSV file even for generated content
+                rankings_file = self._project_root / config.ranking_data.path
+                if rankings_file.exists():
+                    self._evaluators[eval_type] = evaluator_class(rankings_file, eval_type.value)
+                else:
+                    raise ValueError(f"Generated rankings file not found: {rankings_file}")
+            else:
+                raise ValueError(f"Unsupported ranking data source type: {config.ranking_data.source_type}")
+                
         return self._evaluators[eval_type]
         
     def evaluate_hand(
@@ -166,7 +195,6 @@ class HandEvaluator:
             Args:
                 cards: Cards to evaluate
                 eval_type: Type of evaluation to use
-                wild_cards: Any wild cards in effect
                 qualifier: Minimum hand requirement [rank, ordered_rank]
                 
             Returns:
@@ -198,13 +226,12 @@ class HandEvaluator:
                 rank: Primary rank to retrieve
                 ordered_rank: Secondary ordering within the primary rank
             Returns:
-                HandResult: Sample hand for the specified rank and ordered rank
+                List of cards representing the sample hand
             """
             evaluator = self.get_evaluator(eval_type)
             hand_str = evaluator.get_sample_hand(rank, ordered_rank)
 
             # turn the hand_str into a list of cards
-
             hand = PlayerHand.from_string(hand_str)
             return hand
     
@@ -214,18 +241,22 @@ class HandEvaluator:
         
         Args:
             cards: Cards to sort
-            eval_type: Evaluation type to use for sorting (defaults to current type)
+            eval_type: Evaluation type to use for sorting
             
         Returns:
             Sorted copy of the cards
         """
-        type_str = eval_type.value if eval_type else self.current_type
+        if eval_type is None:
+            # Fallback to basic sorting if no eval_type provided
+            return sorted(cards.copy(), key=lambda c: (c.rank.value, c.suit.value))
         
-        if type_str in self._evaluators:
-            return self._evaluators[type_str]._sort_cards(cards.copy())
+        type_str = eval_type.value
+        
+        if eval_type in self._evaluators:
+            return self._evaluators[eval_type]._sort_cards(cards.copy())
         
         # Fallback to basic sorting if evaluator not found
-        return sorted(cards.copy(), key=lambda c: (c.rank.value, c.suit.value))    
+        return sorted(cards.copy(), key=lambda c: (c.rank.value, c.suit.value))   
         
     def compare_hands(
             self,
@@ -272,6 +303,87 @@ class HandEvaluator:
                     
             return 0  # Completely tied
         
+    def get_hand_size_for_type(self, eval_type: EvaluationType) -> int:
+        """Get the required hand size for an evaluation type."""
+        config = evaluation_config_loader.get_config(eval_type.value)
+        return config.hand_size if config else 5  # Default to 5
+    
+    def get_rank_order_for_type(self, eval_type: EvaluationType) -> List[str]:
+        """Get the rank ordering for an evaluation type."""
+        config = evaluation_config_loader.get_config(eval_type.value)
+        if not config:
+            return ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2']  # Default BASE_RANKS
+        
+        # Import here to avoid circular imports
+        from generic_poker.evaluation.constants import RANK_ORDER_MAP
+        return RANK_ORDER_MAP.get(config.rank_order, ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'])
+    
+    def is_padded_type(self, eval_type: EvaluationType) -> bool:
+        """Check if this evaluation type requires padding."""
+        config = evaluation_config_loader.get_config(eval_type.value)
+        return config and 'PADDED' in config.rank_order
+    
+    def is_rank_only_type(self, eval_type: EvaluationType) -> bool:
+        """Check if this evaluation type only uses rank (pip count games)."""
+        config = evaluation_config_loader.get_config(eval_type.value)
+        if not config:
+            return False
+        
+        # Check if this is a pip count game based on the evaluation type name
+        pip_games = {'49', '58', '6', 'zero', 'zero_6', '21', '21_6', 'low_pip_6_cards', 
+                     'football', 'six_card_football', 'seven_card_football'}
+        return eval_type.value in pip_games
+            
+    def _meets_qualifier(self, result: Optional[HandResult], qualifier: List[int]) -> bool:
+        """Check if hand meets qualifier requirements."""
+        if not result:
+            return False
+
+        rank, ordered_rank = qualifier
+        if result.rank > rank:
+            return False
+        if result.rank == rank and ordered_rank is not None:
+            if result.ordered_rank is None or result.ordered_rank > ordered_rank:
+                return False
+        return True
+        
+    def _get_evaluator_class(self, eval_type: EvaluationType) -> Type[BaseEvaluator]:
+        """Get appropriate evaluator class for eval type."""
+        # Special cases that need the large hand evaluator
+        if eval_type.value == 'ne_seven_card_high':
+            return LargeHandEvaluator
+        return StandardHandEvaluator
+    
+    def validate_all_enum_types(self) -> Dict[str, bool]:
+        """Validate all EvaluationType enum values against loaded configurations.
+        
+        Returns:
+            Dictionary mapping evaluation type names to whether they have valid configs
+        """
+        validation_results = {}
+        for eval_type in EvaluationType:
+            validation_results[eval_type.value] = EvaluationType.validate_with_config(eval_type)
+        
+        return validation_results    
+    
+    def get_missing_configurations(self) -> List[str]:
+        """Get list of evaluation types that are in the enum but missing JSON configurations."""
+        missing = []
+        for eval_type in EvaluationType:
+            if not EvaluationType.validate_with_config(eval_type):
+                missing.append(eval_type.value)
+        
+        return missing    
+    
+    def get_all_evaluation_types(self) -> List[str]:
+        """Get all available evaluation types from loaded configurations."""
+        configs = evaluation_config_loader.get_all_configs()
+        return list(configs.keys())
+    
+    def validate_evaluation_type(self, eval_type_str: str) -> bool:
+        """Check if an evaluation type string is valid."""
+        return evaluation_config_loader.get_config(eval_type_str) is not None          
+      
     def compare_hands_with_offset(
         self,
         hand1: List[Card],

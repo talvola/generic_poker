@@ -1,5 +1,9 @@
-"""Constants for poker hand evaluation."""
+"""Constants for poker hand evaluation - now loaded from JSON configurations."""
+import logging
+from typing import Dict, Set
 from generic_poker.core.card import Suit
+
+logger = logging.getLogger(__name__)
 
 # Suit ordering used in many poker variants
 # Particularly important for stud games where suit order determines bring-in
@@ -35,180 +39,191 @@ BASE_RANKS_PADDED = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3',
 BASE_RANKS_JOKER = ['R', 'A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2']
 LOW_A5_RANKS_JOKER = ['R', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2', 'A']
 
-# Map evaluation types to rank orderings
-RANK_ORDERS = {
-    # High hand games use base ordering
-    'high': BASE_RANKS,
-    'high_wild_bug': BASE_RANKS_JOKER,
-    'soko_high': BASE_RANKS,
-    'ne_seven_card_high': BASE_RANKS,
-    'quick_quads': BASE_RANKS,
-    # 2-7 Lowball can use same ranks
-    '27_low': BASE_RANKS,
-    '27_low_wild': BASE_RANKS_JOKER,
-    # Pip games can also use the same ranks
-    '49': BASE_RANKS,
-    '6': BASE_RANKS,
-    'zero': BASE_RANKS,
-    '21': BASE_RANKS,
-    '58': BASE_RANKS,
-    'zero_6': BASE_RANKS,
-    '21_6': BASE_RANKS,
-    'football': BASE_RANKS,
-    'six_card_football': BASE_RANKS,
-    'seven_card_football': BASE_RANKS,
-    # Hi-Dugi can use standard ranks
-    'hidugi': BASE_RANKS,
+# Mapping from rank order names to actual rank lists
+RANK_ORDER_MAP = {
+    'BASE_RANKS': BASE_RANKS,
+    'LOW_A5_RANKS': LOW_A5_RANKS,
+    'LOW_A6_RANKS': LOW_A6_RANKS,
+    'BADUGI_RANKS': BADUGI_RANKS,
+    'RANKS_36_CARD': RANKS_36_CARD,
+    'RANKS_20_CARD': RANKS_20_CARD,
+    'RANKS_27_JA': RANKS_27_JA,
+    'RANKS_27_JA_JOKER': RANKS_27_JA_JOKER,
+    'BASE_RANKS_PADDED': BASE_RANKS_PADDED,
+    'BASE_RANKS_JOKER': BASE_RANKS_JOKER,
+    'LOW_A5_RANKS_JOKER': LOW_A5_RANKS_JOKER,
+}
 
-    # 36-card deck
-    '36card_ffh_high': RANKS_36_CARD,
-    # 20-card deck
-    '20card_high': RANKS_20_CARD,
-    # 40-card deck 
-    '27_ja_ffh_high': RANKS_27_JA,
-    '27_ja_ffh_high_wild_bug': RANKS_27_JA_JOKER,
+# These will be built dynamically from JSON configurations
+_RANK_ORDERS: Dict[str, list] = {}
+_HAND_SIZES: Dict[str, int] = {}
+_PADDED_TYPES: Set[str] = set()
+_RANK_ONLY_TYPES: Set[str] = set()
+_EVAL_TYPES_BY_SIZE: Dict[int, Set[str]] = {}
+
+def _build_constants_from_config():
+    """Build the constants dictionaries from JSON configurations."""
+    global _RANK_ORDERS, _HAND_SIZES, _PADDED_TYPES, _RANK_ONLY_TYPES, _EVAL_TYPES_BY_SIZE
     
-    # A-5 Lowball games always have Ace low
-    'a5_low': LOW_A5_RANKS,
-    'a5_low_high': LOW_A5_RANKS,
-    'a5_low_wild': LOW_A5_RANKS_JOKER,
-    'a6_low': LOW_A6_RANKS,
+    try:
+        from generic_poker.evaluation.evaluation_config import evaluation_config_loader
+        
+        # Load all configurations
+        evaluation_config_loader.load_all_configs()
+        configs = evaluation_config_loader.get_all_configs()
+        
+        logger.info(f"Building constants from {len(configs)} evaluation configurations")
+        
+        # Build RANK_ORDERS dictionary
+        for eval_type, config in configs.items():
+            rank_order_name = config.rank_order
+            if rank_order_name in RANK_ORDER_MAP:
+                _RANK_ORDERS[eval_type] = RANK_ORDER_MAP[rank_order_name]
+            else:
+                logger.warning(f"Unknown rank order '{rank_order_name}' for {eval_type}, using BASE_RANKS")
+                _RANK_ORDERS[eval_type] = BASE_RANKS
+        
+        # Build HAND_SIZES dictionary
+        for eval_type, config in configs.items():
+            _HAND_SIZES[eval_type] = config.hand_size
+        
+        # Build EVAL_TYPES_BY_SIZE
+        for eval_type, hand_size in _HAND_SIZES.items():
+            if hand_size not in _EVAL_TYPES_BY_SIZE:
+                _EVAL_TYPES_BY_SIZE[hand_size] = set()
+            _EVAL_TYPES_BY_SIZE[hand_size].add(eval_type)
+        
+        # Build PADDED_TYPES (types that require padding)
+        for eval_type, config in configs.items():
+            if 'PADDED' in config.rank_order:
+                _PADDED_TYPES.add(eval_type)
+        
+        # Build RANK_ONLY_TYPES (pip count games)
+        pip_games = {'49', '58', '6', 'zero', 'zero_6', '21', '21_6', 'low_pip_6_cards', 
+                     'football', 'six_card_football', 'seven_card_football'}
+        for eval_type in configs.keys():
+            if eval_type in pip_games:
+                _RANK_ONLY_TYPES.add(eval_type)
+        
+        logger.info("Successfully built constants from JSON configurations")
+        
+    except Exception as e:
+        logger.error(f"Failed to build constants from JSON configurations: {e}")
+        logger.warning("Falling back to hardcoded constants")
+        _build_fallback_constants()
 
-    # Badugi
-    'badugi': BADUGI_RANKS,
+def _build_fallback_constants():
+    """Build fallback constants in case JSON loading fails."""
+    global _RANK_ORDERS, _HAND_SIZES, _PADDED_TYPES, _RANK_ONLY_TYPES, _EVAL_TYPES_BY_SIZE
     
-    # 6-card low pip count
-    'low_pip_6_cards': BASE_RANKS_PADDED,
+    # Fallback to original hardcoded mappings
+    _RANK_ORDERS = {
+        'high': BASE_RANKS,
+        'high_wild_bug': BASE_RANKS_JOKER,
+        'soko_high': BASE_RANKS,
+        'ne_seven_card_high': BASE_RANKS,
+        'quick_quads': BASE_RANKS,
+        '27_low': BASE_RANKS,
+        '27_low_wild': BASE_RANKS_JOKER,
+        '49': BASE_RANKS,
+        '6': BASE_RANKS,
+        'zero': BASE_RANKS,
+        '21': BASE_RANKS,
+        '58': BASE_RANKS,
+        'zero_6': BASE_RANKS,
+        '21_6': BASE_RANKS,
+        'football': BASE_RANKS,
+        'six_card_football': BASE_RANKS,
+        'seven_card_football': BASE_RANKS,
+        'hidugi': BASE_RANKS,
+        '36card_ffh_high': RANKS_36_CARD,
+        '20card_high': RANKS_20_CARD,
+        '27_ja_ffh_high': RANKS_27_JA,
+        '27_ja_ffh_high_wild_bug': RANKS_27_JA_JOKER,
+        'a5_low': LOW_A5_RANKS,
+        'a5_low_high': LOW_A5_RANKS,
+        'a5_low_wild': LOW_A5_RANKS_JOKER,
+        'a6_low': LOW_A6_RANKS,
+        'badugi': BADUGI_RANKS,
+        'low_pip_6_cards': BASE_RANKS_PADDED,
+        # Add more fallbacks as needed...
+    }
+    
+    _HAND_SIZES = {
+        'high': 5,
+        'a5_low': 5,
+        'a5_low_wild': 5,
+        'a6_low': 5,
+        '27_low': 5,
+        '27_low_wild': 5,
+        'a5_low_high': 5,
+        '36card_ffh_high': 5,
+        '20card_high': 5,
+        '27_ja_ffh_high': 5,
+        '27_ja_ffh_high_wild_bug': 5,
+        'quick_quads': 5,
+        '49': 5,
+        '6': 5,
+        'zero': 5,
+        '21': 5,
+        'football': 5,
+        'six_card_football': 6,
+        'seven_card_football': 7,
+        'high_wild_bug': 5,
+        'badugi': 4,
+        'badugi_ah': 4,
+        'hidugi': 4,
+        # Add more fallbacks as needed...
+    }
+    
+    _PADDED_TYPES = {'low_pip_6_cards'}
+    _RANK_ONLY_TYPES = {'49', 'zero', '6', '21', 'low_pip_6_cards', '58', '21_6', 'zero_6', 
+                        'football', 'six_card_football', 'seven_card_football'}
+    
+    _EVAL_TYPES_BY_SIZE = {
+        size: {eval_type for eval_type, req_size in _HAND_SIZES.items() if req_size == size}
+        for size in set(_HAND_SIZES.values())
+    }
 
-    # stud bring-in hands, such as two_card_high, etc.
-    'one_card_low': LOW_A5_RANKS,
-    'two_card_a5_low': LOW_A5_RANKS,
-    'three_card_a5_low': LOW_A5_RANKS,
-    'four_card_a5_low': LOW_A5_RANKS,
-    'one_card_low_al': LOW_A5_RANKS,
-    'two_card_high_al': LOW_A5_RANKS,
-    'three_card_high_al': LOW_A5_RANKS,
-    'four_card_high_al': LOW_A5_RANKS,
-    # special evaluation types for Razz High
-    'two_card_a5_low_high': LOW_A5_RANKS,
-    'three_card_a5_low_high': LOW_A5_RANKS,
-    'four_card_a5_low_high': LOW_A5_RANKS,
+# Build the constants when the module is imported
+_build_constants_from_config()
 
-    'one_card_high': BASE_RANKS,
-    'two_card_high': BASE_RANKS,
-    'three_card_high': BASE_RANKS,
-    'four_card_high': BASE_RANKS,
-    'one_card_high_ah': BASE_RANKS,
-    'two_card_27_low': BASE_RANKS,
-    'three_card_27_low': BASE_RANKS,
-    'four_card_27_low': BASE_RANKS,
+# Expose the dynamically built constants
+@property
+def RANK_ORDERS() -> Dict[str, list]:
+    """Get the rank orders dictionary."""
+    return _RANK_ORDERS
 
-    # 40-card (no 8-T) card Stud evaluations
-    'two_card_27_ja_ffh_high': RANKS_27_JA,
-    'three_card_27_ja_ffh_high': RANKS_27_JA,
-    'four_card_27_ja_ffh_high': RANKS_27_JA,
-    'two_card_27_ja_ffh_high_wild_bug': RANKS_27_JA_JOKER,
-    'three_card_27_ja_ffh_high_wild_bug': RANKS_27_JA_JOKER,
-    'four_card_27_ja_ffh_high_wild_bug': RANKS_27_JA_JOKER,
+@property  
+def HAND_SIZES() -> Dict[str, int]:
+    """Get the hand sizes dictionary."""
+    return _HAND_SIZES
 
-    'one_card_high_ah_wild_bug': BASE_RANKS_JOKER,
+@property
+def PADDED_TYPES() -> Set[str]:
+    """Get the set of evaluation types that require padding."""
+    return _PADDED_TYPES
 
-    # wild hole card 
-    'one_card_high_spade': BASE_RANKS,
-    'one_card_high_heart': BASE_RANKS,
-    'one_card_high_diamond': BASE_RANKS,
-    'one_card_high_club': BASE_RANKS,
-    'one_card_low_spade': BASE_RANKS,
-    'one_card_low_heart': BASE_RANKS,
-    'one_card_low_diamond': BASE_RANKS,
-    'one_card_low_club': BASE_RANKS,    
-    'three_card_high_spade': BASE_RANKS,
-    'three_card_high_heart': BASE_RANKS,
-    'three_card_high_diamond': BASE_RANKS,
-    'three_card_high_club': BASE_RANKS
-}
+@property
+def RANK_ONLY_TYPES() -> Set[str]:
+    """Get the set of evaluation types that only use rank."""
+    return _RANK_ONLY_TYPES
 
-# Mapping of evaluation types to required hand sizes
-HAND_SIZES = {
-    'high': 5,
-    'a5_low': 5,
-    'a5_low_wild': 5,
-    'a6_low': 5,
-    '27_low': 5,
-    '27_low_wild': 5,
-    'a5_low_high': 5,
-    '36card_ffh_high': 5,
-    '20card_high': 5,
-    '27_ja_ffh_high': 5,
-    '27_ja_ffh_high_wild_bug': 5,
-    'quick_quads': 5,
-    '49': 5,
-    '6': 5,
-    'zero': 5,
-    '21': 5,
-    'football': 5,
-    'six_card_football': 6,
-    'seven_card_football': 7,
-    'high_wild_bug': 5,
-    'badugi': 4,
-    'badugi_ah': 4,
-    'hidugi': 4,
-    'four_card_high': 4,
-    'four_card_a5_low': 4,
-    'four_card_high_al': 4,
-    'four_card_27_low': 4,
-    'four_card_a5_low_high': 4,
-    'three_card_high': 3,
-    'three_card_a5_low': 3,
-    'three_card_high_al': 3,
-    'three_card_27_low': 3,
-    'three_card_a5_low_high': 3,
-    'two_card_high': 2,
-    'two_card_a5_low': 2,
-    'two_card_high_al': 2,
-    'two_card_27_low': 2,
-    'two_card_a5_low_high': 2,
-    'one_card_high': 1,
-    'one_card_low': 1,
-    'one_card_high_ah': 1,
-    'one_card_low_al': 1,
-    'two_card_27_ja_ffh_high': 2,
-    'three_card_27_ja_ffh_high': 3,
-    'four_card_27_ja_ffh_high': 4,
-    'two_card_27_ja_ffh_high_wild_bug': 2,
-    'three_card_27_ja_ffh_high_wild_bug': 3,
-    'four_card_27_ja_ffh_high_wild_bug': 4,    
-    'one_card_high_ah_wild_bug': 1,
-    'low_pip_6_cards': 6,
-    '58': 6,
-    'zero_6': 6,
-    '21_6': 6,
-    'soko_high': 5,
-    'ne_seven_card_high': 7,
-    'three_card_high_spade': 3,
-    'three_card_high_heart': 3,
-    'three_card_high_diamond': 3,
-    'three_card_high_club': 3,
-    'one_card_high_spade': 1,
-    'one_card_high_heart': 1,
-    'one_card_high_diamond': 1,
-    'one_card_high_club': 1,
-    'one_card_low_spade': 1,
-    'one_card_low_heart': 1,
-    'one_card_low_diamond': 1,
-    'one_card_low_club': 1 
-}
+@property
+def EVAL_TYPES_BY_SIZE() -> Dict[int, Set[str]]:
+    """Get evaluation types organized by hand size."""
+    return _EVAL_TYPES_BY_SIZE
 
-# evaluation types which require padding to evaluate
-PADDED_TYPES = {'low_pip_6_cards'}
+# For backward compatibility, also expose as module-level attributes
+# (This allows existing code to continue working)
+def _update_module_globals():
+    """Update module global variables for backward compatibility."""
+    import sys
+    module = sys.modules[__name__]
+    setattr(module, 'RANK_ORDERS', _RANK_ORDERS)
+    setattr(module, 'HAND_SIZES', _HAND_SIZES)
+    setattr(module, 'PADDED_TYPES', _PADDED_TYPES)
+    setattr(module, 'RANK_ONLY_TYPES', _RANK_ONLY_TYPES)
+    setattr(module, 'EVAL_TYPES_BY_SIZE', _EVAL_TYPES_BY_SIZE)
 
-# Alternative organization by size
-EVAL_TYPES_BY_SIZE = {
-    size: {eval_type for eval_type, req_size in HAND_SIZES.items() if req_size == size}
-    for size in set(HAND_SIZES.values())
-}
-
-# Which evaluation types only use rank (no suits)
-RANK_ONLY_TYPES = {'49', 'zero', '6', '21', 'low_pip_6_cards', '58', '21_6', 'zero_6', 'football', 'six_card_football', 'seven_card_football'}
-
-
+_update_module_globals()    

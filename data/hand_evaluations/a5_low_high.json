@@ -1,0 +1,17 @@
+{
+  "id": "LOW_A5_HIGH",
+  "name": "A5 Low High",
+  "description": "Lowball ranking with Ace as low, highest unpaired hand wins",
+  "hand_size": 5,
+  "rank_order": "LOW_A5_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_a5_low_high.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_a5_low.csv"
+    }
+  }
+}

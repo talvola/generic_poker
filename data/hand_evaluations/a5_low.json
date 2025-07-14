@@ -1,0 +1,17 @@
+{
+  "id": "LOW_A5",
+  "name": "A5 Low",
+  "description": "Lowball ranking with Ace as low, straights and flushes do not count against the hand",
+  "hand_size": 5,
+  "rank_order": "LOW_A5_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_a5_low.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_a5_low.csv"
+    }
+  }
+}

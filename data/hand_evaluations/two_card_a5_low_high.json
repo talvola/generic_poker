@@ -1,0 +1,17 @@
+{
+  "id": "TWO_CARD_HIGH_AL_RH",
+  "name": "Two Card A5 Low High",
+  "description": "Two card A-5 low evaluation with highest unpaired hand wins",
+  "hand_size": 2,
+  "rank_order": "LOW_A5_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_two_card_a5_low_high.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_a5_low.csv"
+    }
+  }
+}

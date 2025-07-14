@@ -1,0 +1,17 @@
+{
+  "id": "HIGH_27_JA_WILD",
+  "name": "40-Card High Wild",
+  "description": "High hands using a 40-card deck (no 8-T) with wild and/or bug cards",
+  "hand_size": 5,
+  "rank_order": "RANKS_27_JA_JOKER",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_27_ja_ffh_high_wild_bug.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_27_ja_ffh_high.csv"
+    }
+  }
+}

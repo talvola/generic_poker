@@ -1,0 +1,22 @@
+{
+  "id": "SIX_CARD_FOOTBALL",
+  "name": "Six Card Football",
+  "description": "Football pip count game (6-card)",
+  "hand_size": 6,
+  "rank_order": "BASE_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_six_card_football.csv"
+    },
+    "description": {
+      "source_type": "generated",
+      "generator": "pip_count_range",
+      "parameters": {
+        "start": 0,
+        "end": 58,
+        "step": 1
+      }
+    }
+  }
+}

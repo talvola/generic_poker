@@ -1,0 +1,17 @@
+{
+  "id": "ONE_CARD_LOW_CLUB",
+  "name": "One Card Low Club",
+  "description": "Lowest club in hole cards",
+  "hand_size": 1,
+  "rank_order": "BASE_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_one_card_low_club.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_one_card_low_club.csv"
+    }
+  }
+}

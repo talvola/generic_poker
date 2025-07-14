@@ -1,0 +1,22 @@
+{
+  "id": "GAME_49",
+  "name": "49",
+  "description": "Pip count game - highest number of pips wins (face cards are 0)",
+  "hand_size": 5,
+  "rank_order": "BASE_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_49.csv"
+    },
+    "description": {
+      "source_type": "generated",
+      "generator": "pip_count_range",
+      "parameters": {
+        "start": 49,
+        "end": 0,
+        "step": -1
+      }
+    }
+  }
+}

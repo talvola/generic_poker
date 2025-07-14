@@ -1,0 +1,22 @@
+{
+  "id": "GAME_6",
+  "name": "6",
+  "description": "Pip count game - lowest number of pips wins (face cards are 10)",
+  "hand_size": 5,
+  "rank_order": "BASE_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_6.csv"
+    },
+    "description": {
+      "source_type": "generated",
+      "generator": "pip_count_range",
+      "parameters": {
+        "start": 6,
+        "end": 50,
+        "step": 1
+      }
+    }
+  }
+}

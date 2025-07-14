@@ -1,0 +1,17 @@
+{
+  "id": "LOW_27",
+  "name": "27 Low",
+  "description": "Lowball ranking with deuce as low, straights and flushes do count against the hand",
+  "hand_size": 5,
+  "rank_order": "BASE_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_27_low.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_27_low.csv"
+    }
+  }
+}

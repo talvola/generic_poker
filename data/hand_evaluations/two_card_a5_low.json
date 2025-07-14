@@ -1,0 +1,17 @@
+{
+  "id": "TWO_CARD_LOW",
+  "name": "Two Card A5 Low",
+  "description": "Two card A-5 low evaluation (for stud games)",
+  "hand_size": 2,
+  "rank_order": "LOW_A5_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_two_card_a5_low.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_a5_low.csv"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "BADUGI",
+  "name": "Badugi",
+  "description": "Standard badugi hand rankings",
+  "hand_size": 4,
+  "rank_order": "BADUGI_RANKS",
+  "data_files": {
+    "ranking": {
+      "source_type": "csv",
+      "path": "data/hand_rankings/all_card_hands_ranked_badugi.csv"
+    },
+    "description": {
+      "source_type": "csv",
+      "path": "data/hand_descriptions/all_card_hands_description_badugi.csv"
+    }
+  }
+}
