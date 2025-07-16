@@ -1,0 +1,92 @@
+{
+    "game": "One Man's Trash",
+    "references": [
+        "https://www.pagat.com/poker/variants/invented/shared.html#one_mans_trash"
+    ],
+    "players": {
+        "min": 3,
+        "max": 6
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "forcedBets": {
+        "style": "blinds"
+    },
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 2,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal All Community Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "First Betting Round"
+        },
+        {
+            "replaceCommunity": {
+                "cardsToReplace": 2,
+                "order": "clockwise",
+                "startingFrom": "left_of_dealer"
+            },
+            "name": "Community Card Replacement"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Final Betting Round"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "best five cards",
+        "bestHand": [
+            {
+                "evaluationType": "high",
+                "holeCards": 2,
+                "communityCards": 5
+            }
+        ]
+    }
+}

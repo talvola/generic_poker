@@ -54,6 +54,7 @@ The `cards` field in the deck object should match the number of cards in the cho
 - `after_big_blind`: The player left of the big blind starts (common in community card games)
 - `bring_in`: The bring-in player starts (common in stud games)
 - `dealer`: The player left of the dealer button starts
+- `high_hand`: The player with the highest visible hand starts (useful for games like Kryky)
 
 **subsequent** options:
 
@@ -129,6 +130,7 @@ The Game Play array contains objects that describe each step of the game. Each o
 | **draw** | Draw | Object | Describes a drawing action | No |
 | **expose** | Expose | Object | Describes an exposing action | No |
 | **pass** | Pass | Object | Describes an passing action | No |
+| **replaceCommunity** | Replace Community | Object | Describes a community card replacement action | No |
 | **separate** | Separate | Object | Describes a separating action | No |
 | **discard** | Discard | Object | Describes a discarding action | No |
 | **remove** | Remove | Object | Describes a removing action | No |
@@ -234,6 +236,7 @@ Example for Tic Tac Hold'em:
     "match": "rank"
   }
 ]
+```
 
 #### Roll Die Object
 
@@ -279,6 +282,29 @@ Example that draws one less card than discarded:
 "draw_amount": {
   "relative_to": "discard",
   "amount": -1
+}
+```
+
+##### State Preservation
+
+The `preserve_state` field can be used in draw actions to maintain the face-up/face-down state of discarded cards:
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **preserve_state** | Preserve State | Boolean | If true, replacement cards maintain the face-up/face-down state of discarded cards | No |
+
+Example for games like Kryky where face-up cards should remain face-up when replaced:
+
+```json
+"draw": {
+  "cards": [
+    {
+      "min_number": 0,
+      "number": 2,
+      "state": "face down",
+      "preserve_state": true
+    }
+  ]
 }
 ```
 
@@ -330,6 +356,35 @@ Each object in the cards array has the following properties:
 | **number** | Number of Cards | Integer | Number of cards to pass | Yes |
 | **direction** | Pass Direction | String | Direction to pass the cards (left, right, or across) | Yes |
 | **state** | Card State | String | State of the cards being passed | Yes |
+
+#### Replace Community Object
+
+| Field | Name | Type | Definition | Required |
+| ----- | ---- | ---- | ---------- | -------- |
+| **cardsToReplace** | Cards to Replace | Integer | Number of community cards each player must replace | Yes |
+| **order** | Order | String | Order in which players replace cards ("clockwise" or "counterclockwise") | No |
+| **startingFrom** | Starting From | String | Which player starts the replacement process | No |
+
+The `order` field defaults to "clockwise" if not specified.
+
+The `startingFrom` field can have the following values:
+- `left_of_dealer`: The player to the left of the dealer starts (default)
+- `dealer`: The dealer starts
+- `small_blind`: The small blind starts
+- `big_blind`: The big blind starts
+
+Example for One Man's Trash:
+
+```json
+"replaceCommunity": {
+  "cardsToReplace": 2,
+  "order": "clockwise",
+  "startingFrom": "left_of_dealer"
+},
+"name": "Community Card Replacement"
+```
+
+This action allows each player in turn to select and replace community cards. The selected cards are discarded and replaced with new cards from the deck. This creates dynamic gameplay where the community board changes based on player choices.
 
 #### Separate Object
 

@@ -65,6 +65,10 @@ class EvaluationType(str, Enum):
     FOUR_CARD_HIGH = 'four_card_high'
     FOUR_CARD_HIGH_AL = 'four_card_high_al'  # Unimplemented
     FOUR_CARD_HIGH_AL_RH = 'four_card_a5_low_high'
+    # wild card versions of Stud evaluations
+    TWO_CARD_HIGH_WILD = 'two_card_high_wild_bug'  
+    THREE_CARD_HIGH_WILD = 'three_card_high_wild_bug'  
+    FOUR_CARD_HIGH_WILD = 'four_card_high_wild_bug'  
     # 40-card (no 8-T) card Stud evaluations
     TWO_CARD_HIGH_27_JA = 'two_card_27_ja_ffh_high'
     THREE_CARD_HIGH_27_JA = 'three_card_27_ja_ffh_high'

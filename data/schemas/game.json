@@ -207,7 +207,7 @@
       "properties": {
         "initial": {
           "type": "string",
-          "enum": ["after_big_blind", "bring_in", "dealer"],
+          "enum": ["after_big_blind", "bring_in", "dealer", "high_hand"],
           "description": "Determines the starting player for the initial betting round"
         },
         "subsequent": {
@@ -525,7 +525,7 @@
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["joker", "rank", "lowest_community", "lowest_hole"],
+                "enum": ["joker", "rank", "lowest_community", "lowest_hole", "last_community_card"],
                 "description": "Specifies the wild card rule type"
               },
               "count": {
@@ -949,6 +949,10 @@
                 },
                 "required": ["relative_to", "amount"],
                 "additionalProperties": false
+              },
+              "preserve_state": {
+                "type": "boolean",
+                "description": "If true, replacement cards maintain the face-up/face-down state of discarded cards"
               }
             },
             "required": ["number", "state"],
@@ -1048,6 +1052,30 @@
         }
       },
       "required": ["cards"],
+      "additionalProperties": false
+    },
+    "replaceCommunity": {
+      "type": "object",
+      "properties": {
+        "cardsToReplace": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of community cards each player must replace"
+        },
+        "order": {
+          "type": "string",
+          "enum": ["clockwise", "counterclockwise"],
+          "default": "clockwise",
+          "description": "Order in which players replace cards"
+        },
+        "startingFrom": {
+          "type": "string",
+          "enum": ["left_of_dealer", "dealer", "small_blind", "big_blind"],
+          "default": "left_of_dealer",
+          "description": "Which player starts the replacement process"
+        }
+      },
+      "required": ["cardsToReplace"],
       "additionalProperties": false
     },          
     "separate": {
@@ -1269,6 +1297,7 @@
                 "remove": { "$ref": "#/definitions/remove" },
                 "expose": { "$ref": "#/definitions/expose" },
                 "pass": { "$ref": "#/definitions/pass" },
+                "replaceCommunity": { "$ref": "#/definitions/replaceCommunity" },
                 "declare": { "$ref": "#/definitions/declare" },
                 "separate": { "$ref": "#/definitions/separate" },
                 "showdown": { "$ref": "#/definitions/showdown" },
@@ -1284,6 +1313,7 @@
           "remove": { "$ref": "#/definitions/remove" },
           "expose": { "$ref": "#/definitions/expose" },
           "pass": { "$ref": "#/definitions/pass" },
+          "replaceCommunity": { "$ref": "#/definitions/replaceCommunity" },
           "declare": { "$ref": "#/definitions/declare" },
           "separate": { "$ref": "#/definitions/separate" },
           "showdown": { "$ref": "#/definitions/showdown" },

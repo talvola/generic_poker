@@ -1,0 +1,171 @@
+{
+    "game": "Kryky",
+    "references": [
+        "https://www.pagat.com/poker/variants/invented/shared.html#kryky"
+    ],
+    "players": {
+        "min": 2,
+        "max": 7
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "forcedBets": {
+        "style": "bring-in",
+        "rule": "high card"
+    },
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "antes"
+            },
+            "name": "Post Antes"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face down"
+                    },
+                    {
+                        "number": 2,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Player Cards"
+        },
+        {
+            "bet": {
+                "type": "bring-in"
+            },
+            "name": "Post Bring-In"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "First Betting Round"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board"
+                    }
+                ]
+            },
+            "name": "Deal First Community Card"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Second Betting Round"
+        },
+        {
+            "draw": {
+                "cards": [
+                    {
+                        "min_number": 0,
+                        "number": 2,
+                        "state": "face down",
+                        "preserve_state": true
+                    }
+                ]
+            },
+            "name": "Draw Cards"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Third Betting Round"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board"
+                    }
+                ]
+            },
+            "name": "Deal Second Community Card"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Fourth Betting Round"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Wild"
+                    }
+                ],
+                "wildCards": [
+                    {
+                        "type": "last_community_card",
+                        "role": "wild",
+                        "scope": "global",
+                        "match": "rank",
+                        "subset": "Wild"
+                    }
+                ]
+            },
+            "name": "Expose Wild Card"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Fifth Betting Round"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "best five cards",
+        "bestHand": [
+            {
+                "evaluationType": "high_wild_bug",
+                "anyCards": 5,
+                "community_subset": "Board",
+                "wildCards": [
+                    {
+                        "type": "last_community_card",
+                        "role": "wild",
+                        "scope": "global",
+                        "match": "rank",
+                        "subset": "Wild"
+                    }
+                ]
+            }
+        ]
+    }
+}

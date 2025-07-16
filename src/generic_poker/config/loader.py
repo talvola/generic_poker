@@ -33,6 +33,7 @@ class GameActionType(Enum):
     GROUPED = auto()  # New type for grouped actions
     ROLL_DIE = auto()
     CHOOSE = auto()  # New action type for player choices
+    REPLACE_COMMUNITY = auto()  # New action type for community card replacement
 
 
 @dataclass
@@ -245,7 +246,7 @@ class GameRules:
             subsequent = betting_order_data.get('subsequent')
 
             # Validate initial
-            if initial not in ["after_big_blind", "bring_in", "dealer"]:
+            if initial not in ["after_big_blind", "bring_in", "dealer", "high_hand"]:
                 logger.warning(f"Invalid bettingOrder.initial '{initial}', defaulting based on forcedBets")
                 initial = None
 
@@ -331,7 +332,11 @@ class GameRules:
                     if key in ['name', 'conditional_state']:
                         continue
                     try:
-                        action_type = GameActionType[key.upper()]
+                        # Handle special case for replaceCommunity -> REPLACE_COMMUNITY
+                        if key == "replaceCommunity":
+                            action_type = GameActionType.REPLACE_COMMUNITY
+                        else:
+                            action_type = GameActionType[key.upper()]
                         action_config = step[key]
                         break
                     except KeyError:

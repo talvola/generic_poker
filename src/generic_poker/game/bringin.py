@@ -103,8 +103,22 @@ class BringInDeterminator:
             # Multi-hand game: use bringInEval if specified, else default to first bestHand
             try:
                 if bring_in_eval:
-                    base_eval = bring_in_eval
-                    logger.debug(f"Using bringInEval: {base_eval}")
+                    # Extract base evaluation type from bringInEval (e.g., "high" from "two_card_high")
+                    logger.debug(f"Using bringInEval: {bring_in_eval}")
+                    # Parse the base evaluation type from the bringInEval
+                    if "_" in bring_in_eval:
+                        # For patterns like "two_card_high", we want "high"
+                        # For patterns like "two_card_a5_low", we want "a5_low"
+                        parts = bring_in_eval.split("_")
+                        if len(parts) >= 3 and parts[1] == "card":
+                            # e.g., "two_card_high" -> "high", "three_card_a5_low" -> "a5_low"
+                            base_eval = "_".join(parts[2:])
+                        else:
+                            # Fallback: take everything after first underscore
+                            base_eval = "_".join(parts[1:])
+                    else:
+                        base_eval = bring_in_eval
+                    logger.debug(f"Extracted base evaluation: {base_eval}")
                 elif best_hands:
                     base_eval = best_hands[0]["evaluationType"]
                     logger.debug(f"Using first bestHand evaluation: {base_eval}")

@@ -545,9 +545,12 @@ class Table:
         if not active_players:
             return None
         
+        # Get visible community cards from appropriate subsets
+        visible_community = self._get_visible_community_cards_for_betting()
+        
         num_visible = sum(1 for c in active_players[0].hand.get_cards() 
                          if c.visibility == Visibility.FACE_UP)
-        if num_visible == 0:
+        if num_visible == 0 and not visible_community:
             logger.debug("No visible cards, falling back to first active player")
             return active_players[0]
         
@@ -556,24 +559,59 @@ class Table:
                         if self.rules and forced_bets['rule'] 
                         else CardRule.LOW_CARD)
         
+        # Determine total visible cards for evaluation
+        total_visible = num_visible + len(visible_community)
         eval_type = BringInDeterminator._get_dynamic_eval_type(
-            num_visible, bring_in_rule, forced_bets, self.rules
+            total_visible, bring_in_rule, forced_bets, self.rules
         )
-        logger.debug(f"Evaluating best hand with {num_visible} visible cards using {eval_type}")
+        logger.debug(f"Evaluating best hand with {num_visible} player + {len(visible_community)} community visible cards using {eval_type}")
         
         best_player = active_players[0]
-        best_hand = [c for c in best_player.hand.get_cards() 
-                    if c.visibility == Visibility.FACE_UP][:num_visible]
+        best_hand = ([c for c in best_player.hand.get_cards() 
+                     if c.visibility == Visibility.FACE_UP][:num_visible] + visible_community)
         
         for player in active_players[1:]:
-            visible_cards = [c for c in player.hand.get_cards() 
-                           if c.visibility == Visibility.FACE_UP][:num_visible]
+            visible_cards = ([c for c in player.hand.get_cards() 
+                            if c.visibility == Visibility.FACE_UP][:num_visible] + visible_community)
             if evaluator.compare_hands(visible_cards, best_hand, eval_type) > 0:
                 best_hand = visible_cards
                 best_player = player
         
         logger.debug(f"Best hand player: {best_player.name} with cards {best_hand}")
         return best_player
+    
+    def _get_visible_community_cards_for_betting(self) -> List[Card]:
+        """
+        Get visible community cards that should be used for betting order evaluation.
+        
+        This method determines which community card subsets to include based on the
+        showdown configuration. If the showdown specifies a community_subset, only
+        cards from that subset are used. Otherwise, all visible community cards are used.
+        """
+        # Check if we have showdown rules that specify community subsets
+        if (self.rules and 
+            hasattr(self.rules, 'showdown') and 
+            self.rules.showdown and 
+            hasattr(self.rules.showdown, 'best_hand') and
+            self.rules.showdown.best_hand):
+            
+            # Look for community_subset specification in showdown rules
+            for hand_config in self.rules.showdown.best_hand:
+                if isinstance(hand_config, dict) and 'community_subset' in hand_config:
+                    subset_name = hand_config['community_subset']
+                    if subset_name in self.community_cards:
+                        visible_cards = [c for c in self.community_cards[subset_name] 
+                                       if c.visibility == Visibility.FACE_UP]
+                        logger.debug(f"Using community subset '{subset_name}' for betting order: {len(visible_cards)} cards")
+                        return visible_cards
+        
+        # Fallback: use all visible community cards
+        visible_community = []
+        for subset_cards in self.community_cards.values():
+            visible_community.extend([c for c in subset_cards if c.visibility == Visibility.FACE_UP])
+        
+        logger.debug(f"Using all visible community cards for betting order: {len(visible_community)} cards")
+        return visible_community
     
     def get_active_players(self) -> List[Player]:
         """Get list of all active players."""

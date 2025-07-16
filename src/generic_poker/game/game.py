@@ -493,6 +493,12 @@ class Game:
                 self.current_player = self.next_player(round_start=True)
                 self.action_handler.first_player_in_round = self.current_player.id                
 
+            elif step.action_type == GameActionType.REPLACE_COMMUNITY:
+                self.state = GameState.DRAWING
+                self.action_handler.setup_replace_community_round(step.action_config)
+                self.current_player = self.next_player(round_start=True)
+                self.action_handler.first_player_in_round = self.current_player.id
+
             elif step.action_type == GameActionType.SHOWDOWN:
                 logger.info("Moving to showdown")
                 self.state = GameState.SHOWDOWN
@@ -1236,7 +1242,11 @@ class Game:
             bring_in_player = self.table.get_bring_in_player(bring_in_amount)
             if bring_in_player:
                 self.current_player = bring_in_player
-                logger.info(f"Bring-in player: {bring_in_player.name} with {bring_in_player.hand.cards[-1]}")
+                # Get all face-up cards for better logging
+                face_up_cards = [card for card in bring_in_player.hand.cards 
+                               if card.visibility == Visibility.FACE_UP]
+                cards_display = ", ".join(str(card) for card in face_up_cards) if face_up_cards else "no face-up cards"
+                logger.info(f"Bring-in player: {bring_in_player.name} with face-up cards: {cards_display}")
             else:
                 logger.error("No bring-in player determined")
                 self.current_player = active_players[0]  # Fallback
@@ -1387,7 +1397,7 @@ class Game:
                     next_player = self.table.get_bring_in_player(self.bring_in or self.small_bet)
                     logger.debug(f"  bring_in: Starting with {next_player.name}")
                 elif order_type == "high_hand":
-                    forced_bets = self.get_effective_forced_bets(self.rules.forced_bets)
+                    forced_bets = Game.get_effective_forced_bets(self, self.rules.forced_bets)
                     next_player = self.table.get_player_with_best_hand(forced_bets)
                     logger.debug(f"  high_hand: Starting with {next_player.name}")       
                 elif order_type == "last_actor":

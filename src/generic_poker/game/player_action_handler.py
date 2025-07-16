@@ -121,7 +121,10 @@ class PlayerActionHandler:
                 num_to_pass = self.game.current_pass_config["cards"][0]["number"]
                 return [(PlayerAction.PASS, num_to_pass, num_to_pass)]
             elif hasattr(self.game, "current_declare_config"):
-                return [(PlayerAction.DECLARE, None, None)]            
+                return [(PlayerAction.DECLARE, None, None)]
+            elif hasattr(self.game, "current_replace_community_config"):
+                cards_to_replace = self.game.current_replace_community_config.get("cardsToReplace", 2)
+                return [(PlayerAction.REPLACE_COMMUNITY, cards_to_replace, cards_to_replace)]
 
         if self.game.state == GameState.PROTECTION_DECISION:
             pending = self.game.pending_protection_decisions.get(player_id)
@@ -304,6 +307,19 @@ class PlayerActionHandler:
             logger.info(f"{player.name} {'discards' if action == PlayerAction.DISCARD else 'draws'} {len(cards)} cards: {cards}")
             self.game.current_player = self.game.next_player(round_start=False)
             if self._check_discard_round_complete():
+                return ActionResult(success=True, advance_step=True)
+            return ActionResult(success=True)
+
+        if action == PlayerAction.REPLACE_COMMUNITY:
+            if self.game.state != GameState.DRAWING or not hasattr(self.game, "current_replace_community_config"):
+                return ActionResult(success=False, error="Cannot replace community cards in current state")
+            if not cards:
+                return ActionResult(success=False, error="No cards specified for replacement")
+            if not self._handle_replace_community_action(player, cards):
+                return ActionResult(success=False, error="Invalid community card replacement")
+            logger.info(f"{player.name} replaces {len(cards)} community cards: {cards}")
+            self.game.current_player = self.game.next_player(round_start=False)
+            if self._check_replace_community_round_complete():
                 return ActionResult(success=True, advance_step=True)
             return ActionResult(success=True)
 
@@ -916,6 +932,16 @@ class PlayerActionHandler:
             # Draw the cards
             if draw_amount > 0:                
                 new_cards = self.game.table.deck.deal_cards(draw_amount)
+                
+                # Preserve face-up/face-down state from discarded cards
+                preserve_state = card_config.get("preserve_state", False)
+                if preserve_state and len(cards) == len(new_cards):
+                    for i, new_card in enumerate(new_cards):
+                        if i < len(cards):
+                            # Set new card's visibility to match the discarded card
+                            new_card.visibility = cards[i].visibility
+                            logger.debug(f"Preserved {cards[i].visibility.value} state for replacement card {new_card}")
+                
                 player.hand.add_cards(new_cards)
 
                 # Assign new cards to the specified subset if needed
@@ -1252,3 +1278,76 @@ class PlayerActionHandler:
         self.current_substep = 0
 
         self.grouped_step_completed = set()
+
+    def setup_replace_community_round(self, config: Dict) -> None:
+        """Set up a community card replacement round."""
+        self.game.current_replace_community_config = config
+        self.game.state = GameState.DRAWING
+        
+        # Track which players have completed their replacement
+        self.players_completed_replacement = set()
+        
+        # Set the first player based on config
+        starting_from = config.get("startingFrom", "left_of_dealer")
+        if starting_from == "left_of_dealer":
+            self.game.current_player = self.game.next_player(round_start=True)
+        else:
+            # Could add other starting positions if needed
+            self.game.current_player = self.game.next_player(round_start=True)
+        
+        self.first_player_in_round = self.game.current_player.id if self.game.current_player else None
+
+    def _handle_replace_community_action(self, player: Player, cards: List[Card]) -> bool:
+        """Handle a player's replacement of community cards."""
+        config = self.game.current_replace_community_config
+        cards_to_replace = config.get("cardsToReplace", 2)
+        
+        # Validate number of cards to replace
+        if len(cards) != cards_to_replace:
+            logger.warning(f"Player {player.name} attempted to replace {len(cards)} cards, but {cards_to_replace} are required")
+            return False
+        
+        # Validate that all cards are community cards
+        all_community_cards = []
+        for subset_name, subset_cards in self.game.table.community_cards.items():
+            all_community_cards.extend(subset_cards)
+        
+        for card in cards:
+            if card not in all_community_cards:
+                logger.warning(f"Player {player.name} tried to replace a card that is not a community card: {card}")
+                return False
+        
+        # Remove the selected cards from community and replace with new ones from deck
+        for card in cards:
+            # Find which subset this card belongs to and remove it
+            for subset_name, subset_cards in self.game.table.community_cards.items():
+                if card in subset_cards:
+                    subset_cards.remove(card)
+                    # Add to discard pile
+                    self.game.table.discard_pile.add_card(card)
+                    break
+        
+        # Deal replacement cards from deck
+        if len(self.game.table.deck.cards) >= len(cards):
+            new_cards = self.game.table.deck.deal_cards(len(cards))
+            # Add new cards to the default community subset (or first available)
+            community_subset = next(iter(self.game.table.community_cards.keys()), "default")
+            self.game.table.community_cards[community_subset].extend(new_cards)
+            
+            # Make sure new cards are face up
+            for card in new_cards:
+                card.visibility = Visibility.FACE_UP
+            
+            logger.info(f"Replaced {len(cards)} community cards with new cards: {new_cards}")
+        else:
+            logger.warning("Not enough cards in deck for replacement")
+            return False
+        
+        # Mark this player as having completed their replacement
+        self.players_completed_replacement.add(player.id)
+        return True
+
+    def _check_replace_community_round_complete(self) -> bool:
+        """Check if the community card replacement round is complete."""
+        active_players = [p for p in self.game.table.players.values() if p.is_active]
+        return len(self.players_completed_replacement) >= len(active_players)
