@@ -7,5 +7,6 @@
     "python.analysis.diagnosticSeverityOverrides": {
         "reportMissingImports": "none"
     },
-    "python.analysis.typeCheckingMode": "basic"
+    "python.analysis.typeCheckingMode": "basic",
+    "terminal.integrated.defaultProfile.windows": "poker (WSL)"
 }

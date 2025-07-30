@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poker Table - {{ table.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/table.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+</head>
+<body>
+    <div id="app" class="poker-app">
+        <!-- Header -->
+        <header class="table-header">
+            <div class="header-left">
+                <a href="{{ url_for('lobby') }}" class="back-btn">
+                    <span class="back-icon">←</span>
+                    Back to Lobby
+                </a>
+                <div class="table-info">
+                    <h1 class="table-name">{{ table.name }}</h1>
+                    <div class="table-details">
+                        <span class="variant">{{ table.variant | format_variant }}</span>
+                        <span class="stakes">${{ table.stakes.small_blind }}/{{ table.stakes.big_blind }}</span>
+                        <span class="structure">{{ table.betting_structure | format_structure }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="user-info">
+                    <span class="username">{{ current_user.username }}</span>
+                    <span class="bankroll">${{ current_user.bankroll }}</span>
+                </div>
+                <button id="leave-table-btn" class="btn btn-secondary">Leave Table</button>
+            </div>
+        </header>
+
+        <!-- Main Game Area -->
+        <main class="game-container">
+            <!-- Poker Table -->
+            <div class="poker-table-container">
+                <div class="poker-table" id="poker-table">
+                    <!-- Community Cards Area -->
+                    <div class="community-cards" id="community-cards">
+                        <div class="board-label">Community Cards</div>
+                        <div class="cards-container">
+                            <div class="card-slot" data-card="flop1"></div>
+                            <div class="card-slot" data-card="flop2"></div>
+                            <div class="card-slot" data-card="flop3"></div>
+                            <div class="card-slot" data-card="turn"></div>
+                            <div class="card-slot" data-card="river"></div>
+                        </div>
+                    </div>
+
+                    <!-- Pot Information -->
+                    <div class="pot-info" id="pot-info">
+                        <div class="pot-label">Pot</div>
+                        <div class="pot-amount">$0</div>
+                        <div class="side-pots" id="side-pots"></div>
+                    </div>
+
+                    <!-- Player Seats -->
+                    <div class="player-seats" id="player-seats">
+                        <!-- Player seats will be dynamically generated -->
+                    </div>
+
+                    <!-- Dealer Button -->
+                    <div class="dealer-button" id="dealer-button">D</div>
+                </div>
+            </div>
+
+            <!-- Action Panel -->
+            <div class="action-panel" id="action-panel">
+                <div class="action-buttons" id="action-buttons">
+                    <!-- Action buttons will be dynamically generated -->
+                </div>
+                
+                <!-- Bet Sizing Controls -->
+                <div class="bet-controls" id="bet-controls" style="display: none;">
+                    <div class="bet-slider-container">
+                        <input type="range" id="bet-slider" class="bet-slider" min="0" max="100" value="0">
+                        <div class="bet-amount-display">
+                            <input type="number" id="bet-amount" class="bet-amount-input" min="0" step="1">
+                        </div>
+                    </div>
+                    <div class="quick-bet-buttons">
+                        <button class="quick-bet-btn" data-action="min">Min</button>
+                        <button class="quick-bet-btn" data-action="pot">Pot</button>
+                        <button class="quick-bet-btn" data-action="half-pot">1/2 Pot</button>
+                        <button class="quick-bet-btn" data-action="all-in">All-In</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Side Panel -->
+        <aside class="side-panel" id="side-panel">
+            <!-- Chat -->
+            <div class="chat-section" id="chat-section">
+                <div class="chat-header">
+                    <h3>Table Chat</h3>
+                    <button id="chat-toggle" class="chat-toggle" title="Toggle Chat">💬</button>
+                </div>
+                <div class="chat-messages" id="chat-messages">
+                    <!-- Chat messages will be displayed here -->
+                </div>
+                <div class="chat-input-container">
+                    <input type="text" id="chat-input" class="chat-input" placeholder="Type a message..." maxlength="200">
+                    <button id="send-chat" class="send-chat-btn">Send</button>
+                </div>
+            </div>
+
+            <!-- Game Info -->
+            <div class="game-info-section">
+                <div class="info-header">
+                    <h3>Game Info</h3>
+                </div>
+                <div class="game-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Hand #</span>
+                        <span class="stat-value" id="hand-number">1</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Players</span>
+                        <span class="stat-value" id="player-count">0/{{ table.max_players }}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Time Bank</span>
+                        <span class="stat-value" id="time-bank">30s</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Mobile Action Bar -->
+        <div class="mobile-action-bar" id="mobile-action-bar">
+            <button id="mobile-chat-toggle" class="mobile-btn">💬</button>
+            <button id="mobile-info-toggle" class="mobile-btn">ℹ️</button>
+            <button id="mobile-settings-toggle" class="mobile-btn">⚙️</button>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- Leave Table Confirmation -->
+    <div id="leave-table-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Leave Table</h3>
+                <button class="modal-close" onclick="closeModal('leave-table-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to leave the table?</p>
+                <p>Your remaining chips will be returned to your bankroll.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('leave-table-modal')">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirm-leave-btn">Leave Table</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hand History Modal -->
+    <div id="hand-history-modal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>Hand History</h3>
+                <button class="modal-close" onclick="closeModal('hand-history-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="hand-history-content">
+                    <!-- Hand history will be loaded here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('hand-history-modal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notification-container" class="notification-container"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Connecting to table...</div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/table.js') }}"></script>
+</body>
+</html>

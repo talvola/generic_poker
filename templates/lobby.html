@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poker Lobby - Generic Poker Platform</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/lobby.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="container">
+                <h1 class="logo">Generic Poker Platform</h1>
+                <div class="user-info">
+                    <span class="username">{{ current_user.username if current_user.is_authenticated else 'Guest' }}</span>
+                    <span class="bankroll">${{ current_user.bankroll if current_user.is_authenticated else '0' }}</span>
+                    {% if current_user.is_authenticated %}
+                        <a href="{{ url_for('auth.logout') }}" class="btn btn-secondary">Logout</a>
+                    {% else %}
+                        <a href="{{ url_for('auth.login') }}" class="btn btn-primary">Login</a>
+                    {% endif %}
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="container">
+                <!-- Lobby Actions -->
+                <section class="lobby-actions">
+                    <div class="action-buttons">
+                        <button id="create-table-btn" class="btn btn-primary btn-large">
+                            <i class="icon-plus"></i>
+                            Create Table
+                        </button>
+                        <button id="join-private-btn" class="btn btn-secondary btn-large">
+                            <i class="icon-key"></i>
+                            Join Private Table
+                        </button>
+                        <button id="refresh-tables-btn" class="btn btn-outline">
+                            <i class="icon-refresh"></i>
+                            Refresh
+                        </button>
+                    </div>
+                </section>
+
+                <!-- Table Filters -->
+                <section class="table-filters">
+                    <div class="filter-group">
+                        <label for="variant-filter">Game Variant:</label>
+                        <select id="variant-filter" class="filter-select">
+                            <option value="">All Variants</option>
+                            <option value="hold_em">Texas Hold'em</option>
+                            <option value="omaha">Omaha</option>
+                            <option value="omaha_8">Omaha Hi-Lo</option>
+                            <option value="7_card_stud">7-Card Stud</option>
+                            <option value="razz">Razz</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="stakes-filter">Stakes:</label>
+                        <select id="stakes-filter" class="filter-select">
+                            <option value="">All Stakes</option>
+                            <option value="micro">Micro ($0.01/$0.02 - $0.05/$0.10)</option>
+                            <option value="low">Low ($0.25/$0.50 - $1/$2)</option>
+                            <option value="mid">Mid ($2/$4 - $5/$10)</option>
+                            <option value="high">High ($10/$20+)</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="structure-filter">Structure:</label>
+                        <select id="structure-filter" class="filter-select">
+                            <option value="">All Structures</option>
+                            <option value="no-limit">No Limit</option>
+                            <option value="pot-limit">Pot Limit</option>
+                            <option value="limit">Limit</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="players-filter">Players:</label>
+                        <select id="players-filter" class="filter-select">
+                            <option value="">Any</option>
+                            <option value="has-seats">Has Open Seats</option>
+                            <option value="heads-up">Heads Up (2 players)</option>
+                            <option value="short-handed">Short Handed (3-6 players)</option>
+                            <option value="full-ring">Full Ring (7+ players)</option>
+                        </select>
+                    </div>
+                </section>
+
+                <!-- Table List -->
+                <section class="table-list">
+                    <div class="table-header">
+                        <h2>Active Tables</h2>
+                        <div class="table-count">
+                            <span id="table-count">0</span> tables found
+                        </div>
+                    </div>
+                    
+                    <div class="table-grid" id="table-grid">
+                        <!-- Tables will be populated here -->
+                        <div class="no-tables" id="no-tables">
+                            <div class="no-tables-icon">🎲</div>
+                            <h3>No tables found</h3>
+                            <p>Create a new table or adjust your filters to see available games.</p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Create Table Modal -->
+    <div id="create-table-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Create New Table</h3>
+                <button class="modal-close" onclick="closeModal('create-table-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="create-table-form">
+                    <div class="form-group">
+                        <label for="table-name">Table Name:</label>
+                        <input type="text" id="table-name" name="name" required maxlength="50" 
+                               placeholder="Enter table name">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="game-variant">Game Variant:</label>
+                        <select id="game-variant" name="variant" required>
+                            <option value="">Select a variant</option>
+                            <option value="hold_em">Texas Hold'em</option>
+                            <option value="omaha">Omaha</option>
+                            <option value="omaha_8">Omaha Hi-Lo</option>
+                            <option value="7_card_stud">7-Card Stud</option>
+                            <option value="7_card_stud_8">7-Card Stud Hi-Lo</option>
+                            <option value="razz">Razz</option>
+                            <option value="mexican_poker">Mexican Poker</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="betting-structure">Betting Structure:</label>
+                        <select id="betting-structure" name="betting_structure" required>
+                            <option value="">Select structure</option>
+                            <option value="no-limit">No Limit</option>
+                            <option value="pot-limit">Pot Limit</option>
+                            <option value="limit">Limit</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="max-players">Maximum Players:</label>
+                        <select id="max-players" name="max_players" required>
+                            <option value="2">2 (Heads Up)</option>
+                            <option value="6" selected>6 (Short Handed)</option>
+                            <option value="9">9 (Full Ring)</option>
+                        </select>
+                    </div>
+
+                    <div id="stakes-config" class="stakes-config">
+                        <h4>Stakes Configuration</h4>
+                        <div id="stakes-inputs">
+                            <!-- Stakes inputs will be populated based on betting structure -->
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="is-private" name="is_private">
+                            <span class="checkmark"></span>
+                            Private Table (invite only)
+                        </label>
+                    </div>
+
+                    <div id="private-options" class="private-options" style="display: none;">
+                        <div class="form-group">
+                            <label for="table-password">Password (optional):</label>
+                            <input type="password" id="table-password" name="password" 
+                                   placeholder="Leave blank for no password">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="allow-bots" name="allow_bots">
+                            <span class="checkmark"></span>
+                            Allow Bot Players
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('create-table-modal')">
+                    Cancel
+                </button>
+                <button type="submit" form="create-table-form" class="btn btn-primary">
+                    Create Table
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Join Private Table Modal -->
+    <div id="join-private-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Join Private Table</h3>
+                <button class="modal-close" onclick="closeModal('join-private-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="join-private-form">
+                    <div class="form-group">
+                        <label for="invite-code">Invite Code:</label>
+                        <input type="text" id="invite-code" name="invite_code" required 
+                               placeholder="Enter 8-character invite code" maxlength="8">
+                    </div>
+                    <div class="form-group">
+                        <label for="private-password">Password (if required):</label>
+                        <input type="password" id="private-password" name="password" 
+                               placeholder="Enter table password">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('join-private-modal')">
+                    Cancel
+                </button>
+                <button type="submit" form="join-private-form" class="btn btn-primary">
+                    Join Table
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table Details Modal -->
+    <div id="table-details-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="table-details-title">Table Details</h3>
+                <button class="modal-close" onclick="closeModal('table-details-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="table-details-content">
+                    <!-- Table details will be populated here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('table-details-modal')">
+                    Close
+                </button>
+                <button id="join-table-btn" class="btn btn-primary">
+                    Join Table
+                </button>
+                <button id="spectate-table-btn" class="btn btn-outline">
+                    Spectate
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notification-container" class="notification-container"></div>
+
+    <script src="{{ url_for('static', filename='js/lobby.js') }}"></script>
+</body>
+</html>

@@ -5,7 +5,16 @@ description = "A generic poker game engine supporting multiple variants"
 authors = []
 readme = "README.md"
 requires-python = ">=3.8"
-dependencies = []
+dependencies = [
+    "flask>=2.3.0",
+    "flask-socketio>=5.3.0",
+    "flask-login>=0.6.0",
+    "sqlalchemy>=2.0.0",
+    "flask-sqlalchemy>=3.0.0",
+    "flask-migrate>=4.0.0",
+    "bcrypt>=4.0.0",
+    "python-dotenv>=1.0.0",
+]
 
 [project.optional-dependencies]
 test = [
