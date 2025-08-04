@@ -76,7 +76,10 @@ class GameStateManager:
             # Get valid actions for the viewer (if they're a player and it's their turn)
             valid_actions = []
             if not is_spectator and current_player == viewer_id:
-                valid_actions = GameStateManager._get_valid_actions(session, viewer_id)
+                # Import here to avoid circular imports
+                from ..services.player_action_manager import player_action_manager
+                action_options = player_action_manager.get_available_actions(table_id, viewer_id)
+                valid_actions = [self._convert_action_option(opt) for opt in action_options]
             
             # Determine game phase
             game_phase = GameStateManager._get_game_phase(session)
@@ -240,32 +243,38 @@ class GameStateManager:
             return None
     
     @staticmethod
-    def _get_valid_actions(session: GameSession, user_id: str) -> List[ActionOption]:
-        """Get valid actions for a player."""
+    def _convert_action_option(action_option) -> ActionOption:
+        """Convert PlayerActionOption to ActionOption for the game state view.
+        
+        Args:
+            action_option: PlayerActionOption from the action manager
+            
+        Returns:
+            ActionOption for the game state view
+        """
         try:
-            if not session.game:
-                return []
+            # Map PlayerAction to ActionType
+            action_type_map = {
+                PlayerAction.FOLD: ActionType.FOLD,
+                PlayerAction.CHECK: ActionType.CHECK,
+                PlayerAction.CALL: ActionType.CALL,
+                PlayerAction.BET: ActionType.BET,
+                PlayerAction.RAISE: ActionType.RAISE
+            }
             
-            # Get valid actions from the game engine
-            valid_actions = []
+            action_type = action_type_map.get(action_option.action_type, ActionType.FOLD)
             
-            # This would typically come from the game engine's action validation
-            # For now, provide basic actions based on game state
-            if GameStateManager._is_current_player(session, user_id):
-                # Basic actions - this should be enhanced with actual game logic
-                valid_actions = [
-                    ActionOption(ActionType.FOLD, display_text="Fold"),
-                    ActionOption(ActionType.CHECK, display_text="Check"),
-                    ActionOption(ActionType.CALL, min_amount=0, max_amount=1000, display_text="Call"),
-                    ActionOption(ActionType.BET, min_amount=1, max_amount=1000, display_text="Bet"),
-                    ActionOption(ActionType.RAISE, min_amount=1, max_amount=1000, display_text="Raise")
-                ]
-            
-            return valid_actions
+            return ActionOption(
+                action_type=action_type,
+                min_amount=action_option.min_amount,
+                max_amount=action_option.max_amount,
+                default_amount=action_option.default_amount,
+                display_text=action_option.display_text
+            )
             
         except Exception as e:
-            logger.error(f"Failed to get valid actions for {user_id}: {e}")
-            return []
+            logger.error(f"Failed to convert action option: {e}")
+            return ActionOption(ActionType.FOLD, display_text="Fold")
     
     @staticmethod
     def _get_game_phase(session: GameSession) -> GamePhase:

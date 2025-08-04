@@ -158,6 +158,8 @@ body {
     align-items: center;
     justify-content: center;
     min-height: 600px;
+    padding: 120px 150px; /* Add padding to accommodate seats around perimeter */
+    position: relative;
 }
 
 .poker-table {
@@ -314,26 +316,78 @@ body {
     transform: translate(-50%, -50%);
 }
 
-/* Player seat positions (9-max table) */
-.player-seat[data-position="0"] { top: 85%; left: 50%; } /* Button/Dealer */
-.player-seat[data-position="1"] { top: 85%; left: 75%; } /* Small Blind */
-.player-seat[data-position="2"] { top: 70%; left: 90%; } /* Big Blind */
-.player-seat[data-position="3"] { top: 45%; left: 95%; } /* UTG */
-.player-seat[data-position="4"] { top: 20%; left: 85%; } /* UTG+1 */
-.player-seat[data-position="5"] { top: 10%; left: 50%; } /* Middle */
-.player-seat[data-position="6"] { top: 20%; left: 15%; } /* Hijack */
-.player-seat[data-position="7"] { top: 45%; left: 5%; } /* Cutoff */
-.player-seat[data-position="8"] { top: 70%; left: 10%; } /* Button-1 */
+/* Player seat positions - PokerStars-style seat numbering with optimal spacing */
+/* PokerStars convention: Start at seat 1 (upper right) and move clockwise */
+/* 6-max table positions following PokerStars standard layout with better spacing */
+
+.player-seat[data-position="0"] { 
+    top: 10%; 
+    left: 100%; 
+    transform: translate(-20px, -50%); 
+} /* SEAT 1 - Upper right (1:30 o'clock position) - PokerStars starting position with better spacing */
+
+.player-seat[data-position="1"] { 
+    top: 50%; 
+    left: 100%; 
+    transform: translate(-20px, -50%); 
+} /* SEAT 2 - Right side (3 o'clock position) - clockwise from seat 1 */
+
+.player-seat[data-position="2"] { 
+    top: 90%; 
+    left: 85%; 
+    transform: translate(-50%, -20px); 
+} /* SEAT 3 - Bottom right (5 o'clock position) - clockwise from seat 2 with better spacing */
+
+.player-seat[data-position="3"] { 
+    top: 90%; 
+    left: 15%; 
+    transform: translate(-50%, -20px); 
+} /* SEAT 4 - Bottom left (7 o'clock position) - clockwise from seat 3 with better spacing */
+
+.player-seat[data-position="4"] { 
+    top: 50%; 
+    left: 0%; 
+    transform: translate(-100px, -50%); 
+} /* SEAT 5 - Left side (9 o'clock position) - clockwise from seat 4 */
+
+.player-seat[data-position="5"] { 
+    top: 10%; 
+    left: 0%; 
+    transform: translate(-100px, -50%); 
+} /* SEAT 6 - Upper left (11 o'clock position) - clockwise from seat 5 with better spacing */
+
+/* 9-max table positions - PokerStars convention with optimal spacing */
+/* Additional seats inserted clockwise between the 6-max positions */
+
+.player-seat[data-position="6"] { 
+    top: 0%; 
+    left: 50%; 
+    transform: translate(-50%, -100px); 
+} /* SEAT 7 - Top center (12 o'clock position) - clockwise from seat 6 */
+
+.player-seat[data-position="7"] { 
+    top: 10%; 
+    left: 75%; 
+    transform: translate(-50%, -50%); 
+} /* SEAT 8 - Upper right-center (1 o'clock position) - between seats 6 and 1 */
+
+.player-seat[data-position="8"] { 
+    top: 90%; 
+    left: 50%; 
+    transform: translate(-50%, -20px); 
+} /* SEAT 9 - Bottom center (6 o'clock position) - between seats 3 and 4 */
 
 .player-info {
     background: rgba(0, 0, 0, 0.8);
     border-radius: var(--border-radius);
     padding: 0.75rem;
     text-align: center;
-    min-width: 100px;
+    min-width: 120px; /* Increased width for better card display */
     border: 2px solid transparent;
     transition: var(--transition);
     backdrop-filter: blur(10px);
+    position: relative;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 .player-info.active {
@@ -378,12 +432,32 @@ body {
     display: flex;
     gap: 0.25rem;
     margin-top: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 140px; /* Constrain width to prevent overflow */
 }
 
 .player-cards .card {
     width: 35px;
     height: 49px;
     font-size: 0.7rem;
+    flex-shrink: 0;
+}
+
+/* Special handling for games with many cards (like Seven Card Stud) */
+.player-cards.many-cards {
+    gap: 0.1rem; /* Tighter spacing for more cards */
+}
+
+.player-cards.many-cards .card {
+    width: 30px;
+    height: 42px;
+    font-size: 0.6rem;
+}
+
+/* Stack cards slightly when there are more than 5 */
+.player-cards .card:nth-child(n+6) {
+    margin-left: -8px;
 }
 
 .player-bet {
@@ -416,7 +490,19 @@ body {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     transition: var(--transition);
     z-index: 10;
+    transform: translate(-50%, -50%);
 }
+
+/* Dealer button positions relative to player seats - PokerStars-style with optimal spacing */
+.dealer-button[data-position="0"] { top: 20%; left: 90%; } /* Seat 1 - Upper right (1:30) */
+.dealer-button[data-position="1"] { top: 50%; left: 90%; } /* Seat 2 - Right side (3:00) */
+.dealer-button[data-position="2"] { top: 80%; left: 75%; } /* Seat 3 - Bottom right (5:00) */
+.dealer-button[data-position="3"] { top: 80%; left: 25%; } /* Seat 4 - Bottom left (7:00) */
+.dealer-button[data-position="4"] { top: 50%; left: 10%; } /* Seat 5 - Left side (9:00) */
+.dealer-button[data-position="5"] { top: 20%; left: 10%; } /* Seat 6 - Upper left (11:00) */
+.dealer-button[data-position="6"] { top: 10%; left: 50%; } /* Seat 7 - Top center (12:00) */
+.dealer-button[data-position="7"] { top: 20%; left: 75%; } /* Seat 8 - Upper right-center (1:00) */
+.dealer-button[data-position="8"] { top: 80%; left: 50%; } /* Seat 9 - Bottom center (6:00) */
 
 /* Action Panel */
 .action-panel {
@@ -736,6 +822,69 @@ body {
     align-items: center;
 }
 
+/* Debug Info Section */
+.debug-info-section {
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    border-radius: var(--border-radius);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 1rem;
+    margin-top: 1rem;
+}
+
+.debug-toggle {
+    background: none;
+    border: none;
+    color: var(--text-color);
+    cursor: pointer;
+    font-size: 1rem;
+    padding: 0.25rem;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+    float: right;
+}
+
+.debug-toggle:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.debug-content {
+    margin-top: 0.5rem;
+}
+
+.debug-item {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.debug-label {
+    color: var(--text-muted);
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.debug-value {
+    color: var(--text-color);
+    font-family: monospace;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    word-break: break-all;
+}
+
+.debug-actions {
+    color: var(--text-color);
+    font-family: monospace;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.5rem;
+    border-radius: 4px;
+    max-height: 150px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+}
+
 .stat-label {
     color: rgba(255, 255, 255, 0.8);
     font-size: 0.9rem;
@@ -912,7 +1061,7 @@ body {
 /* Notifications */
 .notification-container {
     position: fixed;
-    top: 20px;
+    top: 80px;
     right: 20px;
     z-index: 2000;
     max-width: 350px;
@@ -1056,6 +1205,35 @@ body {
     animation: chipMove 0.3s ease-out;
 }
 
+/* Empty Seat Styling */
+.empty-seat {
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px dashed rgba(255, 255, 255, 0.3);
+    border-radius: var(--border-radius);
+    padding: 0.75rem;
+    text-align: center;
+    min-width: 120px; /* Match player-info width */
+    min-height: 80px; /* Ensure consistent height */
+    transition: var(--transition);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+}
+
+.empty-seat:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: var(--gold);
+    transform: scale(1.02);
+}
+
+.seat-label {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
 /* Touch Support */
 @media (hover: none) and (pointer: coarse) {
     .action-btn {
@@ -1082,6 +1260,10 @@ body {
     .poker-table {
         width: 700px;
         height: 450px;
+    }
+    
+    .poker-table-container {
+        padding: 100px 120px;
     }
     
     .side-panel {
@@ -1113,6 +1295,10 @@ body {
         width: 600px;
         height: 400px;
     }
+    
+    .poker-table-container {
+        padding: 80px 100px;
+    }
 }
 
 @media (max-width: 768px) {
@@ -1139,6 +1325,10 @@ body {
         width: 100%;
         max-width: 500px;
         height: 350px;
+    }
+    
+    .poker-table-container {
+        padding: 60px 80px;
     }
     
     .side-panel {
@@ -1183,10 +1373,47 @@ body {
         min-width: 70px;
     }
     
-    /* Adjust player seat positions for mobile */
+    /* Adjust player seat positions for mobile - maintain perimeter positioning */
     .player-seat {
         width: 100px;
         height: 120px;
+    }
+    
+    /* Mobile-specific positioning adjustments to maintain perimeter layout */
+    .player-seat[data-position="0"] { 
+        transform: translate(-50%, -15px); 
+    }
+    
+    .player-seat[data-position="1"] { 
+        transform: translate(-15px, -50%); 
+    }
+    
+    .player-seat[data-position="2"] { 
+        transform: translate(-15px, -50%); 
+    }
+    
+    .player-seat[data-position="3"] { 
+        transform: translate(-50%, -80px); 
+    }
+    
+    .player-seat[data-position="4"] { 
+        transform: translate(-80px, -50%); 
+    }
+    
+    .player-seat[data-position="5"] { 
+        transform: translate(-80px, -50%); 
+    }
+    
+    .player-seat[data-position="6"] { 
+        transform: translate(-80px, -50%); 
+    }
+    
+    .player-seat[data-position="7"] { 
+        transform: translate(-15px, -50%); 
+    }
+    
+    .player-seat[data-position="8"] { 
+        transform: translate(-15px, -50%); 
     }
     
     .player-info {
@@ -1227,6 +1454,10 @@ body {
         height: 300px;
     }
     
+    .poker-table-container {
+        padding: 50px 60px;
+    }
+    
     .action-btn {
         min-width: 80px;
         padding: 0.5rem 0.75rem;
@@ -1236,6 +1467,43 @@ body {
     .player-seat {
         width: 80px;
         height: 100px;
+    }
+    
+    /* Extra small mobile positioning adjustments */
+    .player-seat[data-position="0"] { 
+        transform: translate(-50%, -10px); 
+    }
+    
+    .player-seat[data-position="1"] { 
+        transform: translate(-10px, -50%); 
+    }
+    
+    .player-seat[data-position="2"] { 
+        transform: translate(-10px, -50%); 
+    }
+    
+    .player-seat[data-position="3"] { 
+        transform: translate(-50%, -60px); 
+    }
+    
+    .player-seat[data-position="4"] { 
+        transform: translate(-60px, -50%); 
+    }
+    
+    .player-seat[data-position="5"] { 
+        transform: translate(-60px, -50%); 
+    }
+    
+    .player-seat[data-position="6"] { 
+        transform: translate(-60px, -50%); 
+    }
+    
+    .player-seat[data-position="7"] { 
+        transform: translate(-10px, -50%); 
+    }
+    
+    .player-seat[data-position="8"] { 
+        transform: translate(-10px, -50%); 
     }
     
     .player-info {
@@ -1831,4 +2099,185 @@ tional Card Animations and Visual Feedback */
 .error-state .error-details {
     font-size: 0.9rem;
     opacity: 0.8;
+}/* 
+Player indicator styles */
+.player-indicator {
+    background: var(--gold);
+    color: var(--dark-color);
+    padding: 0.2rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    margin-top: 0.25rem;
+}
+
+/* Join hint for empty seats */
+.join-hint {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.7rem;
+    margin-top: 0.25rem;
+    opacity: 0;
+    transition: var(--transition);
+}
+
+.empty-seat:hover .join-hint {
+    opacity: 1;
+}
+
+.empty-seat:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: var(--gold);
+}
+
+/* Seat assignment notification styles */
+.seat-assignment-notification {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 1rem 2rem;
+    border-radius: var(--border-radius);
+    border: 2px solid var(--gold);
+    z-index: 1000;
+    animation: fadeInOut 3s ease-in-out;
+}
+
+@keyframes fadeInOut {
+    0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
+    20%, 80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+/* Enhanced empty seat styling */
+.empty-seat {
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.empty-seat::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.2), transparent);
+    transition: left 0.5s ease;
+}
+
+.empty-seat:hover::before {
+    left: 100%;
+}
+
+/* Player info enhancements */
+.player-info {
+    position: relative;
+}
+
+.player-info.current-user {
+    border-color: var(--gold);
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
+}
+
+.player-info.current-user::after {
+    content: '';
+    position: absolute;
+    top: -3px;
+    left: -3px;
+    right: -3px;
+    bottom: -3px;
+    border: 2px solid var(--gold);
+    border-radius: var(--border-radius);
+    opacity: 0.5;
+    animation: pulse 2s infinite;
+}
+/* G
+ame Action Messages in Chat */
+.chat-message.game-action {
+    background: rgba(255, 255, 255, 0.05);
+    border-left: 3px solid var(--info-color);
+    margin: 4px 0;
+    padding: 6px 10px;
+    border-radius: 4px;
+}
+
+.game-action-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+}
+
+.action-message {
+    color: #e0e0e0;
+    font-weight: 500;
+}
+
+.action-timestamp {
+    color: #888;
+    font-size: 0.8rem;
+    margin-left: 10px;
+}
+
+/* Different action type styling */
+.game-action-content.forced-bet {
+    border-left-color: var(--warning-color);
+}
+
+.game-action-content.forced-bet .action-message {
+    color: #ffd700;
+}
+
+.game-action-content.player-action {
+    border-left-color: var(--primary-color);
+}
+
+.game-action-content.player-action .action-message {
+    color: #87ceeb;
+}
+
+.game-action-content.deal-action {
+    border-left-color: var(--success-color);
+}
+
+.game-action-content.deal-action .action-message {
+    color: #90ee90;
+    font-style: italic;
+}
+
+.game-action-content.phase-change {
+    border-left-color: var(--danger-color);
+    background: rgba(220, 53, 69, 0.1);
+}
+
+.game-action-content.phase-change .action-message {
+    color: #ff6b6b;
+    font-weight: bold;
+    text-align: center;
+    width: 100%;
+}
+
+.game-action-content.showdown-action {
+    border-left-color: var(--gold);
+    background: rgba(255, 215, 0, 0.1);
+}
+
+.game-action-content.showdown-action .action-message {
+    color: var(--gold);
+    font-weight: bold;
+}
+
+/* Mobile adjustments for game actions */
+@media (max-width: 768px) {
+    .game-action-content {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .action-timestamp {
+        margin-left: 0;
+        margin-top: 2px;
+    }
 }

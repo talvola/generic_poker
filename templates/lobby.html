@@ -17,9 +17,9 @@
                     <span class="username">{{ current_user.username if current_user.is_authenticated else 'Guest' }}</span>
                     <span class="bankroll">${{ current_user.bankroll if current_user.is_authenticated else '0' }}</span>
                     {% if current_user.is_authenticated %}
-                        <a href="{{ url_for('auth.logout') }}" class="btn btn-secondary">Logout</a>
+                        <a href="{{ url_for('logout') }}" class="btn btn-secondary">Logout</a>
                     {% else %}
-                        <a href="{{ url_for('auth.login') }}" class="btn btn-primary">Login</a>
+                        <a href="{{ url_for('login') }}" class="btn btn-primary">Login</a>
                     {% endif %}
                 </div>
             </div>

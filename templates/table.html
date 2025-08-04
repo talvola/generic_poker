@@ -12,7 +12,7 @@
         <!-- Header -->
         <header class="table-header">
             <div class="header-left">
-                <a href="{{ url_for('lobby') }}" class="back-btn">
+                <a href="{{ url_for('index') }}" class="back-btn">
                     <span class="back-icon">←</span>
                     Back to Lobby
                 </a>
@@ -20,7 +20,13 @@
                     <h1 class="table-name">{{ table.name }}</h1>
                     <div class="table-details">
                         <span class="variant">{{ table.variant | format_variant }}</span>
-                        <span class="stakes">${{ table.stakes.small_blind }}/{{ table.stakes.big_blind }}</span>
+                        <span class="stakes">
+                            {% if table.betting_structure.lower() == 'limit' %}
+                                ${{ table.stakes.small_bet if table.stakes.small_bet else table.stakes.get('small_bet', 10) }}/{{ table.stakes.big_bet if table.stakes.big_bet else table.stakes.get('big_bet', 20) }}
+                            {% else %}
+                                ${{ table.stakes.small_blind if table.stakes.small_blind else table.stakes.get('small_blind', 1) }}/{{ table.stakes.big_blind if table.stakes.big_blind else table.stakes.get('big_blind', 2) }}
+                            {% endif %}
+                        </span>
                         <span class="structure">{{ table.betting_structure | format_structure }}</span>
                     </div>
                 </div>
@@ -60,7 +66,26 @@
 
                     <!-- Player Seats -->
                     <div class="player-seats" id="player-seats">
-                        <!-- Player seats will be dynamically generated -->
+                        {% for i in range(table.max_players) %}
+                            <div class="player-seat seat-{{ i + 1 }}" data-position="{{ i }}" data-seat="{{ i + 1 }}">
+                                {% set seat_number = i + 1 %}
+                                {% if table.get('players') and seat_number in table.players %}
+                                    {% set player = table.players[seat_number] %}
+                                    <div class="player-info">
+                                        <div class="player-name">{{ player.username }}</div>
+                                        <div class="player-chips">${{ player.stack }}</div>
+                                        {% if player.user_id == current_user.id %}
+                                            <div class="player-indicator">You</div>
+                                        {% endif %}
+                                    </div>
+                                {% else %}
+                                    <div class="empty-seat" onclick="joinSeat({{ seat_number }})">
+                                        <div class="seat-label">Seat {{ seat_number }}</div>
+                                        <div class="join-hint">Click to join</div>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
                     </div>
 
                     <!-- Dealer Button -->
@@ -121,11 +146,39 @@
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Players</span>
-                        <span class="stat-value" id="player-count">0/{{ table.max_players }}</span>
+                        <span class="stat-value" id="player-count">
+                            {{ table.current_players }}/{{ table.max_players }}
+                        </span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-label">Time Bank</span>
                         <span class="stat-value" id="time-bank">30s</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Debug Info -->
+            <div class="debug-info-section" id="debug-info-section">
+                <div class="info-header">
+                    <h3>Debug Info</h3>
+                    <button id="debug-toggle" class="debug-toggle" title="Toggle Debug">🐛</button>
+                </div>
+                <div class="debug-content" id="debug-content">
+                    <div class="debug-item">
+                        <span class="debug-label">Current Player:</span>
+                        <span class="debug-value" id="debug-current-player">-</span>
+                    </div>
+                    <div class="debug-item">
+                        <span class="debug-label">My Turn:</span>
+                        <span class="debug-value" id="debug-my-turn">-</span>
+                    </div>
+                    <div class="debug-item">
+                        <span class="debug-label">Valid Actions:</span>
+                        <div class="debug-actions" id="debug-actions">-</div>
+                    </div>
+                    <div class="debug-item">
+                        <span class="debug-label">Game State:</span>
+                        <span class="debug-value" id="debug-game-state">-</span>
                     </div>
                 </div>
             </div>

@@ -180,7 +180,118 @@ class BotPlayer:
     def calculate_action_timing() -> float
 ```
 
-### 6. Database Layer
+### 6. UI Layout and Card Visibility System
+
+#### GameLayoutManager Class
+```python
+class GameLayoutManager:
+    def __init__(self):
+        self.layout_configs: Dict[str, GameLayoutConfig] = {}
+        
+    def get_layout_config(variant: str) -> GameLayoutConfig
+    def get_community_card_layout(variant: str) -> CommunityCardLayout
+    def get_player_card_layout(variant: str) -> PlayerCardLayout
+    def should_show_community_cards(variant: str) -> bool
+```
+
+#### GameLayoutConfig Class
+```python
+@dataclass
+class GameLayoutConfig:
+    variant: str
+    community_card_layout: CommunityCardLayout
+    player_card_layout: PlayerCardLayout
+    has_community_cards: bool
+    stud_style_display: bool
+```
+
+#### CommunityCardLayout Class
+```python
+@dataclass
+class CommunityCardLayout:
+    max_cards: int
+    layout_style: str  # "standard", "none", "custom"
+    positions: List[CardPosition]
+    
+@dataclass
+class CardPosition:
+    x: int
+    y: int
+    label: Optional[str] = None
+```
+
+#### PlayerCardLayout Class
+```python
+@dataclass
+class PlayerCardLayout:
+    display_style: str  # "single_row", "stud_two_row"
+    max_face_up: int
+    max_face_down: int
+    show_face_down_to_owner: bool
+```
+
+#### CardVisibilityManager Class
+```python
+class CardVisibilityManager:
+    def get_card_visibility(player_id: str, target_player_id: str, card: Card, card_state: str) -> CardVisibility
+    def should_show_card(viewer_id: str, owner_id: str, card: Card, is_community: bool, card_state: str) -> bool
+    def get_debug_visibility(admin_user_id: str) -> bool
+    def format_card_for_display(card: Card, visible: bool, is_wild: bool) -> DisplayCard
+
+@dataclass
+class CardVisibility:
+    visible: bool
+    show_rank: bool
+    show_suit: bool
+    is_wild: bool
+    wild_represents: Optional[str] = None
+
+@dataclass
+class DisplayCard:
+    card_id: str
+    display_rank: str
+    display_suit: str
+    is_face_up: bool
+    is_wild: bool
+    wild_represents: Optional[str]
+    css_classes: List[str]
+```
+
+#### PlayerActionManager Class
+```python
+class PlayerActionManager:
+    def __init__(self, game_engine):
+        self.game_engine = game_engine
+        self.timeout_manager = ActionTimeoutManager()
+        
+    def get_available_actions(player_id: str, game_state: GameState) -> List[PlayerActionOption]
+    def validate_action(player_id: str, action: PlayerAction, amount: Optional[int]) -> ActionValidation
+    def process_player_action(player_id: str, action: PlayerAction, amount: Optional[int]) -> ActionResult
+    def start_action_timer(player_id: str, timeout_seconds: int) -> None
+    def handle_action_timeout(player_id: str) -> ActionResult
+
+@dataclass
+class PlayerActionOption:
+    action_type: PlayerAction
+    min_amount: Optional[int]
+    max_amount: Optional[int]
+    default_amount: Optional[int]
+    display_text: str
+    button_style: str
+
+@dataclass
+class ActionValidation:
+    is_valid: bool
+    error_message: Optional[str]
+    suggested_amount: Optional[int]
+
+class ActionTimeoutManager:
+    def set_timeout(player_id: str, seconds: int, callback: Callable) -> None
+    def cancel_timeout(player_id: str) -> None
+    def get_remaining_time(player_id: str) -> int
+```
+
+### 7. Database Layer
 
 #### Database Schema
 

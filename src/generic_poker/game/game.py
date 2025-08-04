@@ -205,9 +205,9 @@ class Game:
         """String representation of the game."""
         return self.get_game_description()
     
-    def add_player(self, player_id: str, name: str, buyin: int) -> None:
+    def add_player(self, player_id: str, name: str, buyin: int, preferred_seat: Optional[int] = None) -> None:
         """Add a player to the game."""
-        self.table.add_player(player_id, name, buyin)
+        self.table.add_player(player_id, name, buyin, preferred_seat)
         
         # Check if we can start
         if len(self.table.players) >= self.rules.min_players:
@@ -390,6 +390,7 @@ class Game:
                 if step.action_config["type"] in ["antes", "blinds", "bring-in"]:
                     self.handle_forced_bets(step.action_config["type"])  # Use new method with bet_type
                     self.state = GameState.BETTING  # Set here for all forced bets
+                    logger.info(f"DEBUG: After forced bets, current_player: {self.current_player.name if self.current_player else None}")
                     if self.auto_progress:
                         self._next_step()
                 else:
@@ -411,6 +412,7 @@ class Game:
                     logger.debug(f"Starting betting round: {step.name} with new_round({preserve_bet})")
                     self.betting.new_round(preserve_bet)
                     self.current_player = self.next_player(round_start=True)
+                    logger.info(f"DEBUG: Set current player for betting round to: {self.current_player.name if self.current_player else None} ({self.current_player.id if self.current_player else None})")
 
             elif step.action_type == GameActionType.DEAL:
                 # Check conditional state for the deal step
@@ -1254,8 +1256,20 @@ class Game:
                            
         logger.debug(f"Starting betting round with new_round(True)")
         self.betting.new_round(preserve_current_bet=True)  # Reset bets, keep forced bets in pot
-        if bet_type != "bring-in":  # Only set current_player after bring-in if not already set
+        
+        if bet_type == "bring-in":
+            # For bring-in, the bring-in player continues to act
+            # current_player is already set above
+            pass
+        elif bet_type in ["antes", "blinds"]:
+            # For antes and blinds, no one acts after posting - game should advance to next step
+            self.current_player = None
+            logger.info(f"DEBUG: After forced bets ({bet_type}), set current_player to None - ready for next step")
+        else:
+            # For other bet types, set first player to act
+            logger.info(f"DEBUG: Before next_player call, current_player: {self.current_player.name if self.current_player else None}")
             self.current_player = self.next_player(round_start=True)
+            logger.info(f"DEBUG: After next_player call, current_player: {self.current_player.name if self.current_player else None}")
 
     def _set_next_player_after(self, player_id: str) -> None:
         """Set the current player to the player after the specified player."""
@@ -1366,12 +1380,17 @@ class Game:
                 
                 # Otherwise use standard first-after-blinds logic 
                 last_forced_bettor_id = forced_bettors[-1] if forced_bettors else None
+                logger.debug(f"  last_forced_bettor_id: {last_forced_bettor_id}")
                 if last_forced_bettor_id:
                     players = self.table.get_position_order()
+                    logger.debug(f"  position_order: {[p.name for p in players]}")
                     try:
                         forced_bettor_idx = next(i for i, p in enumerate(players) if p.id == last_forced_bettor_id)
+                        logger.debug(f"  forced_bettor_idx: {forced_bettor_idx}")
                         next_idx = (forced_bettor_idx + 1) % len(players)
+                        logger.debug(f"  next_idx (before active check): {next_idx}")
                         while not players[next_idx].is_active:
+                            logger.debug(f"  player {players[next_idx].name} is not active, skipping")
                             next_idx = (next_idx + 1) % len(players)
                             if next_idx == forced_bettor_idx:  # Full circle
                                 return None
@@ -1379,6 +1398,7 @@ class Game:
                         logger.debug(f"First voluntary betting round: Starting with {next_player.name}")
                         return next_player
                     except StopIteration:
+                        logger.debug(f"  StopIteration - using fallback")
                         return active_players[0]  # Fallback                                  
 
             else:
@@ -1445,10 +1465,15 @@ class Game:
         # Mid-round: Move to next active player
         if self.current_player:
             players = self.table.get_position_order()
+            logger.debug(f"Position order: {[p.name for p in players]}")
+            logger.debug(f"Current player: {self.current_player.name}")
             try:
                 current_idx = next(i for i, p in enumerate(players) if p.id == self.current_player.id)
+                logger.debug(f"Current player index: {current_idx}")
                 next_idx = (current_idx + 1) % len(players)
+                logger.debug(f"Next index (before active check): {next_idx}")
                 while not players[next_idx].is_active:
+                    logger.debug(f"Player {players[next_idx].name} is not active, skipping")
                     next_idx = (next_idx + 1) % len(players)
                     if next_idx == current_idx:  # Full circle
                         return None

@@ -271,19 +271,14 @@ def process_player_action(table_id: str):
         JSON response with action result
     """
     try:
+        from ..services.player_action_manager import player_action_manager
+        
         data = request.get_json()
         if not data or 'action' not in data:
             return jsonify({
                 'success': False,
                 'error': 'Action required'
             }), 400
-        
-        session = game_orchestrator.get_session(table_id)
-        if not session:
-            return jsonify({
-                'success': False,
-                'error': 'Game session not found'
-            }), 404
         
         # Parse action
         try:
@@ -294,11 +289,11 @@ def process_player_action(table_id: str):
                 'error': f'Invalid action: {data["action"]}'
             }), 400
         
-        amount = data.get('amount', 0)
+        amount = data.get('amount')
         
-        # Process the action
-        success, message, result = session.process_player_action(
-            current_user.id, action, amount
+        # Process the action through the player action manager
+        success, message, result = player_action_manager.process_player_action(
+            table_id, current_user.id, action, amount
         )
         
         if not success:
@@ -309,16 +304,14 @@ def process_player_action(table_id: str):
         
         response_data = {
             'success': True,
-            'message': message,
-            'session': session.get_session_info()
+            'message': message
         }
         
         # Include action result details if available
         if result:
             response_data['action_result'] = {
-                'success': result.success,
-                'message': result.message,
-                'game_state': session.game.state.value
+                'success': result.success if hasattr(result, 'success') else True,
+                'message': result.message if hasattr(result, 'message') else message
             }
         
         return jsonify(response_data)
@@ -554,6 +547,144 @@ def validate_buy_in(table_id: str):
         return jsonify({
             'success': False,
             'error': 'Failed to validate buy-in'
+        }), 500
+
+
+@game_bp.route('/sessions/<table_id>/actions', methods=['GET'])
+@login_required
+def get_available_actions(table_id: str):
+    """Get available actions for the current player.
+    
+    Args:
+        table_id: ID of the table
+        
+    Returns:
+        JSON response with available actions
+    """
+    try:
+        from ..services.player_action_manager import player_action_manager
+        
+        # Get available actions for the current user
+        action_options = player_action_manager.get_available_actions(table_id, current_user.id)
+        
+        # Convert to dictionary format
+        actions = [option.to_dict() for option in action_options]
+        
+        # Get timeout information
+        timeout_info = player_action_manager.get_timeout_info(current_user.id)
+        
+        return jsonify({
+            'success': True,
+            'actions': actions,
+            'timeout_info': timeout_info,
+            'count': len(actions)
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Failed to get available actions: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to get available actions'
+        }), 500
+
+
+@game_bp.route('/sessions/<table_id>/actions/validate', methods=['POST'])
+@login_required
+def validate_action(table_id: str):
+    """Validate a player action before processing.
+    
+    Args:
+        table_id: ID of the table
+        
+    Expected JSON payload:
+    {
+        "action": "CALL",
+        "amount": 100
+    }
+    
+    Returns:
+        JSON response with validation result
+    """
+    try:
+        from ..services.player_action_manager import player_action_manager
+        
+        data = request.get_json()
+        if not data or 'action' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'Action required'
+            }), 400
+        
+        # Parse action
+        try:
+            action = PlayerAction(data['action'])
+        except ValueError:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid action: {data["action"]}'
+            }), 400
+        
+        amount = data.get('amount')
+        
+        # Validate the action
+        validation = player_action_manager.validate_action(
+            table_id, current_user.id, action, amount
+        )
+        
+        response_data = {
+            'success': True,
+            'valid': validation.is_valid
+        }
+        
+        if not validation.is_valid:
+            response_data['error'] = validation.error_message
+            
+        if validation.suggested_amount is not None:
+            response_data['suggested_amount'] = validation.suggested_amount
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        current_app.logger.error(f"Failed to validate action: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to validate action'
+        }), 500
+
+
+@game_bp.route('/sessions/<table_id>/actions/history', methods=['GET'])
+@login_required
+def get_action_history(table_id: str):
+    """Get action history for a table.
+    
+    Args:
+        table_id: ID of the table
+        
+    Query parameters:
+        limit: Maximum number of actions to return (default: 50)
+        
+    Returns:
+        JSON response with action history
+    """
+    try:
+        from ..services.player_action_manager import player_action_manager
+        
+        limit = int(request.args.get('limit', 50))
+        
+        # Get action history
+        history = player_action_manager.get_action_history(table_id, limit)
+        
+        return jsonify({
+            'success': True,
+            'history': history,
+            'count': len(history)
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f"Failed to get action history: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to get action history'
         }), 500
 
 

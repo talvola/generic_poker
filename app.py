@@ -39,6 +39,26 @@ def create_app(config_class=Config):
     # Initialize WebSocket manager
     websocket_manager = init_websocket_manager(socketio)
     
+    # Register template filters
+    @app.template_filter('format_variant')
+    def format_variant(variant):
+        """Format poker variant name for display."""
+        variants = {
+            'hold_em': "Texas Hold'em",
+            'omaha': 'Omaha',
+            'omaha_8': 'Omaha Hi-Lo',
+            '7_card_stud': '7-Card Stud',
+            '7_card_stud_8': '7-Card Stud Hi-Lo',
+            'razz': 'Razz',
+            'mexican_poker': 'Mexican Poker'
+        }
+        return variants.get(variant, variant.replace('_', ' ').title())
+
+    @app.template_filter('format_structure')
+    def format_structure(structure):
+        """Format betting structure for display."""
+        return structure.replace('-', ' ').replace('_', ' ').title()
+    
     # Register WebSocket events
     register_lobby_socket_events(socketio)
     

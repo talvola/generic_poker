@@ -12,6 +12,7 @@ from ..services.game_state_manager import GameStateManager
 from ..services.websocket_manager import get_websocket_manager, GameEvent
 from ..database import db
 from generic_poker.game.game_state import PlayerAction
+from . import game_orchestrator
 
 
 logger = logging.getLogger(__name__)
@@ -45,30 +46,42 @@ class DisconnectedPlayer:
         Args:
             disconnect_manager: Reference to the disconnect manager
         """
-        # Start auto-fold timer (30 seconds for current player, 5 seconds for others)
         if self.is_current_player_on_disconnect:
+            # Start auto-fold timer (30 seconds for current player)
             auto_fold_delay = 30  # 30 seconds for current player
+            self.auto_fold_timer = Timer(
+                auto_fold_delay,
+                disconnect_manager._handle_auto_fold,
+                args=[self.user_id, self.table_id]
+            )
+            self.auto_fold_timer.start()
+            
+            # Start removal timer
+            removal_delay = self.timeout_minutes * 60  # Convert to seconds
+            self.removal_timer = Timer(
+                removal_delay,
+                disconnect_manager._handle_auto_removal,
+                args=[self.user_id, self.table_id]
+            )
+            self.removal_timer.start()
+            
+            logger.info(f"Started timers for disconnected player {self.user_id}: "
+                       f"auto-fold in {auto_fold_delay}s, removal in {removal_delay}s")
         else:
-            auto_fold_delay = 5  # 5 seconds for non-current players (not immediate to avoid blocking)
-        
-        self.auto_fold_timer = Timer(
-            auto_fold_delay,
-            disconnect_manager._handle_auto_fold,
-            args=[self.user_id, self.table_id]
-        )
-        self.auto_fold_timer.start()
-        
-        # Start removal timer
-        removal_delay = self.timeout_minutes * 60  # Convert to seconds
-        self.removal_timer = Timer(
-            removal_delay,
-            disconnect_manager._handle_auto_removal,
-            args=[self.user_id, self.table_id]
-        )
-        self.removal_timer.start()
-        
-        logger.info(f"Started timers for disconnected player {self.user_id}: "
-                   f"auto-fold in {auto_fold_delay}s, removal in {removal_delay}s")
+            # For non-current players, auto-fold immediately and start removal timer
+            disconnect_manager._handle_auto_fold(self.user_id, self.table_id)
+            
+            # Start removal timer
+            removal_delay = self.timeout_minutes * 60  # Convert to seconds
+            self.removal_timer = Timer(
+                removal_delay,
+                disconnect_manager._handle_auto_removal,
+                args=[self.user_id, self.table_id]
+            )
+            self.removal_timer.start()
+            
+            logger.info(f"Started timer for disconnected player {self.user_id}: "
+                       f"auto-fold immediate, removal in {removal_delay}s")
     
     def cancel_timers(self):
         """Cancel all active timers."""
@@ -284,7 +297,6 @@ class DisconnectManager:
                     return
                 
                 # Get game session
-                from . import game_orchestrator
                 session = game_orchestrator.game_orchestrator.get_session(table_id)
                 if not session:
                     logger.warning(f"No game session found for auto-fold: table {table_id}")

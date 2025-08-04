@@ -576,6 +576,8 @@ def test_game_results_showdown_split():
 
     print("\nShowdown Results:")
     print(results)
+    print('\nShowdown Results (JSON):')
+    print(results.to_json())    
 
     # Check overall results
     expected_pot = 60  # SB + BB + BTN all put in $20   

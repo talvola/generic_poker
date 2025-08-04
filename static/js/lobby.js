@@ -503,7 +503,296 @@ class PokerLobby {
             return;
         }
         
-        this.socket.emit('join_table', { table_id: tableId });
+        // Show seat selection modal
+        this.showSeatSelectionModal(tableId);
+    }
+    
+    showSeatSelectionModal(tableId) {
+        const table = this.tables.find(t => t.id === tableId);
+        if (!table) return;
+        
+        // Show loading modal first
+        this.showLoadingSeatModal(table);
+        
+        // Fetch actual seat data
+        fetch(`/api/tables/${tableId}/seats`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    this.showSeatSelectionModalWithData(table, data);
+                } else {
+                    this.showNotification('Failed to load seat information', 'error');
+                    closeModal('seat-selection-modal');
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching seat data:', error);
+                this.showNotification('Failed to load seat information', 'error');
+                closeModal('seat-selection-modal');
+            });
+    }
+    
+    showLoadingSeatModal(table) {
+        const modalHtml = `
+            <div id="seat-selection-modal" class="modal show">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Join ${table.name}</h3>
+                        <button class="modal-close" onclick="closeModal('seat-selection-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="loading-seats">
+                            <div class="loading-spinner"></div>
+                            <p>Loading seat information...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    
+    showSeatSelectionModalWithData(table, seatData) {
+        // Remove loading modal
+        closeModal('seat-selection-modal');
+        
+        // Create seat selection modal HTML with real data
+        const modalHtml = `
+            <div id="seat-selection-modal" class="modal show">
+                <div class="modal-content modal-compact">
+                    <div class="modal-header">
+                        <h3>Join ${table.name}</h3>
+                        <button class="modal-close" onclick="closeModal('seat-selection-modal')">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="seat-modal-layout">
+                            <div class="seat-modal-left">
+                                <div class="table-info-compact">
+                                    <div class="info-row">
+                                        <span class="info-label">Game:</span>
+                                        <span class="info-value">${table.variant.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="info-label">Stakes:</span>
+                                        <span class="info-value">$${table.stakes.small_blind || table.stakes.small_bet}/${table.stakes.big_blind || table.stakes.big_bet}</span>
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="info-label">Players:</span>
+                                        <span class="info-value">${seatData.current_players}/${seatData.max_players}</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="buy-in-section-compact">
+                                    <label for="buy-in-amount">Buy-in Amount:</label>
+                                    <input type="number" id="buy-in-amount" min="${seatData.minimum_buyin}" max="${seatData.maximum_buyin}" value="${seatData.minimum_buyin * 2}" step="1">
+                                    <div class="buy-in-range">
+                                        <small>$${seatData.minimum_buyin} - $${seatData.maximum_buyin}</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="seat-options">
+                                    <label class="auto-assign-option" onclick="pokerLobby.selectAutoAssign()">
+                                        <input type="radio" name="seat-choice" value="auto" checked>
+                                        <span class="auto-assign-text">Auto-assign seat</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <div class="seat-modal-right">
+                                <div class="mini-poker-table">
+                                    ${this.generateMiniPokerTable(seatData.seats)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" onclick="closeModal('seat-selection-modal')">Cancel</button>
+                        <button type="button" class="btn btn-primary" onclick="pokerLobby.confirmJoinTable('${table.id}')">Join Table</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+    
+    generateSeatGridWithData(seats) {
+        let seatHtml = '';
+        
+        seats.forEach(seat => {
+            const isOccupied = !seat.is_available;
+            const seatClass = isOccupied ? 'seat-occupied' : 'seat-available';
+            const disabled = isOccupied ? 'disabled' : '';
+            
+            let seatContent;
+            if (isOccupied) {
+                seatContent = `
+                    <div class="seat-number">Seat ${seat.seat_number}</div>
+                    <div class="seat-player">${seat.player.username}</div>
+                    <div class="seat-stack">$${seat.player.stack}</div>
+                `;
+            } else {
+                seatContent = `
+                    <div class="seat-number">Seat ${seat.seat_number}</div>
+                    <div class="seat-empty">Available</div>
+                `;
+            }
+            
+            seatHtml += `
+                <div class="seat-option ${seatClass}">
+                    <label>
+                        <input type="radio" name="seat-choice" value="${seat.seat_number}" ${disabled}>
+                        <div class="seat-visual">
+                            ${seatContent}
+                        </div>
+                    </label>
+                </div>
+            `;
+        });
+        
+        return seatHtml;
+    }
+    
+    generateMiniPokerTable(seats) {
+        // Create a mini version of the poker table for seat selection
+        let tableHtml = `
+            <div class="mini-table-container">
+                <div class="mini-poker-table-felt">
+                    <div class="mini-table-center">
+                        <div class="mini-table-label">Select Your Seat</div>
+                    </div>
+                    <div class="mini-player-seats">
+        `;
+        
+        seats.forEach(seat => {
+            const isOccupied = !seat.is_available;
+            const seatClass = isOccupied ? 'mini-seat-occupied' : 'mini-seat-available';
+            
+            let seatContent;
+            if (isOccupied) {
+                seatContent = `
+                    <div class="mini-player-info occupied">
+                        <div class="mini-player-name">${seat.player.username}</div>
+                        <div class="mini-player-chips">$${seat.player.stack}</div>
+                    </div>
+                `;
+            } else {
+                seatContent = `
+                    <div class="mini-player-info available" onclick="pokerLobby.selectSeat(${seat.seat_number})">
+                        <div class="mini-seat-number">Seat ${seat.seat_number}</div>
+                        <div class="mini-seat-status">Click to join</div>
+                    </div>
+                `;
+            }
+            
+            tableHtml += `
+                <div class="mini-player-seat ${seatClass}" data-position="${seat.seat_number - 1}" data-seat="${seat.seat_number}">
+                    ${seatContent}
+                </div>
+            `;
+        });
+        
+        tableHtml += `
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        return tableHtml;
+    }
+    
+    selectSeat(seatNumber) {
+        // Uncheck auto-assign
+        const autoRadio = document.querySelector('input[name="seat-choice"][value="auto"]');
+        if (autoRadio) autoRadio.checked = false;
+        
+        // Clear any existing seat selection
+        document.querySelectorAll('.mini-player-seat.selected').forEach(seat => {
+            seat.classList.remove('selected');
+        });
+        
+        // Select the clicked seat
+        const seatElement = document.querySelector(`[data-seat="${seatNumber}"]`);
+        if (seatElement) {
+            seatElement.classList.add('selected');
+        }
+        
+        // Store the selection
+        this.selectedSeat = seatNumber;
+        
+        // Update the radio button selection (create hidden radio if needed)
+        let seatRadio = document.querySelector(`input[name="seat-choice"][value="${seatNumber}"]`);
+        if (!seatRadio) {
+            seatRadio = document.createElement('input');
+            seatRadio.type = 'radio';
+            seatRadio.name = 'seat-choice';
+            seatRadio.value = seatNumber;
+            seatRadio.style.display = 'none';
+            document.querySelector('.seat-options').appendChild(seatRadio);
+        }
+        seatRadio.checked = true;
+    }
+    
+    selectAutoAssign() {
+        // Clear any seat selection
+        document.querySelectorAll('.mini-player-seat.selected').forEach(seat => {
+            seat.classList.remove('selected');
+        });
+        
+        // Clear stored selection
+        this.selectedSeat = null;
+        
+        // Make sure auto-assign is checked
+        const autoRadio = document.querySelector('input[name="seat-choice"][value="auto"]');
+        if (autoRadio) autoRadio.checked = true;
+    }
+    
+    // Keep the old method for backward compatibility
+    generateSeatGrid(table) {
+        let seatHtml = '';
+        for (let i = 1; i <= table.max_players; i++) {
+            const isOccupied = false; // For demo, assume all seats are available
+            const seatClass = isOccupied ? 'seat-occupied' : 'seat-available';
+            const disabled = isOccupied ? 'disabled' : '';
+            
+            seatHtml += `
+                <div class="seat-option ${seatClass}">
+                    <label>
+                        <input type="radio" name="seat-choice" value="${i}" ${disabled}>
+                        <div class="seat-visual">
+                            <div class="seat-number">Seat ${i}</div>
+                            ${isOccupied ? '<div class="seat-player">Occupied</div>' : '<div class="seat-empty">Available</div>'}
+                        </div>
+                    </label>
+                </div>
+            `;
+        }
+        return seatHtml;
+    }
+    
+    confirmJoinTable(tableId) {
+        const buyInAmount = parseInt(document.getElementById('buy-in-amount').value);
+        const seatChoiceElement = document.querySelector('input[name="seat-choice"]:checked');
+        
+        if (!seatChoiceElement) {
+            this.showNotification('Please select a seat or choose auto-assign', 'error');
+            return;
+        }
+        
+        const seatChoice = seatChoiceElement.value;
+        
+        const joinData = {
+            table_id: tableId,
+            buy_in_amount: buyInAmount
+        };
+        
+        if (seatChoice !== 'auto') {
+            joinData.seat_number = parseInt(seatChoice);
+        }
+        
+        this.socket.emit('join_table', joinData);
+        closeModal('seat-selection-modal');
     }
     
     spectateTable(tableId) {
@@ -677,14 +966,24 @@ class PokerLobby {
 
 // Global functions for modal management (called from HTML)
 window.closeModal = function(modalId) {
-    if (window.lobby) {
+    if (modalId === 'seat-selection-modal') {
+        // Handle dynamically created modal
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.remove();
+        }
+    } else if (window.lobby) {
         window.lobby.closeModal(modalId);
     }
 };
 
+// Global reference for seat selection
+window.pokerLobby = null;
+
 // Initialize lobby when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.lobby = new PokerLobby();
+    window.pokerLobby = window.lobby; // For seat selection modal
 });
 
 // Add some CSS for table detail grid

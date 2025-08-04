@@ -7,6 +7,7 @@ from flask_socketio import emit, join_room, leave_room
 from ..models.table import PokerTable
 from ..models.user import User
 from ..services.table_manager import TableManager
+from ..services.table_access_manager import TableAccessManager
 from ..services.websocket_manager import get_websocket_manager
 from ..database import db
 
@@ -188,10 +189,10 @@ def join_table(table_id):
                 'error': f'Insufficient bankroll. Minimum buy-in: ${table.get_minimum_buyin()}'
             }), 400
         
-        # Join table using table manager
-        success, message = table_manager.join_table(
-            table_id=table_id,
+        # Join table using table access manager
+        success, message, access = TableAccessManager.join_table(
             user_id=current_user.id,
+            table_id=table_id,
             buy_in_amount=table.get_minimum_buyin()
         )
         
@@ -265,10 +266,10 @@ def join_private_table():
                 'error': f'Insufficient bankroll. Minimum buy-in: ${table.get_minimum_buyin()}'
             }), 400
         
-        # Join table using table manager
-        success, message = table_manager.join_table(
-            table_id=table.id,
+        # Join table using table access manager
+        success, message, access = TableAccessManager.join_table(
             user_id=current_user.id,
+            table_id=table.id,
             buy_in_amount=table.get_minimum_buyin()
         )
         
@@ -314,12 +315,12 @@ def spectate_table(table_id):
                 'error': 'Cannot spectate private table without invite code'
             }), 403
         
-        # Join as spectator using table manager
-        success, message = table_manager.join_table(
-            table_id=table_id,
+        # Join as spectator using table access manager
+        success, message, access = TableAccessManager.join_table(
             user_id=current_user.id,
+            table_id=table_id,
             buy_in_amount=0,
-            is_spectator=True
+            as_spectator=True
         )
         
         if success:
@@ -364,8 +365,15 @@ def table_view(table_id):
         # User doesn't have access, redirect to lobby
         return redirect(url_for('lobby.index'))
     
+    # Debug: Print table stakes and players
+    print(f"DEBUG: Table stakes: {table.stakes}")
+    print(f"DEBUG: Table betting structure: {table.betting_structure}")
+    print(f"DEBUG: Access records count: {len(table.access_records)}")
+    for i, access in enumerate(table.access_records):
+        print(f"DEBUG: Player {i}: {access.user.username}, active: {access.is_active}, spectator: {access.is_spectator}")
+    
     # Render the game interface
-    return render_template('game.html', table=table, user_access=user_access)
+    return render_template('table.html', table=table, user_access=user_access)
 
 
 # WebSocket events for lobby
@@ -463,10 +471,10 @@ def register_lobby_socket_events(socketio):
                 emit('error', {'message': 'Cannot join private table without invite code'})
                 return
             
-            # Join table using table manager
-            success, message = table_manager.join_table(
-                table_id=table_id,
+            # Join table using table access manager
+            success, message, access = TableAccessManager.join_table(
                 user_id=current_user.id,
+                table_id=table_id,
                 buy_in_amount=table.get_minimum_buyin()
             )
             
@@ -511,10 +519,10 @@ def register_lobby_socket_events(socketio):
                 emit('error', {'message': 'Incorrect password'})
                 return
             
-            # Join table using table manager
-            success, message = table_manager.join_table(
-                table_id=table.id,
+            # Join table using table access manager
+            success, message, access = TableAccessManager.join_table(
                 user_id=current_user.id,
+                table_id=table.id,
                 buy_in_amount=table.get_minimum_buyin()
             )
             
@@ -551,12 +559,12 @@ def register_lobby_socket_events(socketio):
                 emit('error', {'message': 'Table not found'})
                 return
             
-            # Join as spectator using table manager
-            success, message = table_manager.join_table(
-                table_id=table_id,
+            # Join as spectator using table access manager
+            success, message, access = TableAccessManager.join_table(
                 user_id=current_user.id,
+                table_id=table_id,
                 buy_in_amount=0,
-                is_spectator=True
+                as_spectator=True
             )
             
             if success:

@@ -5,11 +5,19 @@ import os
 import sys
 import logging
 from flask import Flask, render_template, redirect, url_for, request, jsonify
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 
 # Add src to path so we can import our modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
+from online_poker.services.game_manager import game_manager, GameConfig
+from online_poker.services.simple_bot import bot_manager
+from online_poker.services.game_action_logger import game_action_logger
+# from online_poker.routes.game_routes import game_bp  # Disabled for demo
+from online_poker.services.websocket_manager import init_websocket_manager
+from online_poker.database import db
+from generic_poker.game.game import GameState
 
 # Simple in-memory storage for demo
 users = {}
@@ -42,6 +50,8 @@ app = Flask(__name__,
            template_folder='templates',
            static_folder='static')
 app.config['SECRET_KEY'] = 'dev-secret-key-for-testing'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///demo_poker.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize SocketIO
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -50,6 +60,15 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# Register blueprints
+# app.register_blueprint(game_bp)  # Disabled for demo - using custom endpoints instead
+
+# Initialize WebSocket manager
+init_websocket_manager(socketio)
+
+# Initialize database
+db.init_app(app)
 
 # Template filters
 @app.template_filter('format_variant')
@@ -140,6 +159,10 @@ def table_view(table_id):
     if not table:
         return redirect(url_for('index'))
     
+    # Demo: Ensure current user is counted as a player
+    if table['current_players'] == 0:
+        table['current_players'] = 1
+    
     return render_template('table.html', table=table)
 
 @app.route('/lobby')
@@ -155,6 +178,53 @@ def get_tables():
     return jsonify({
         'success': True,
         'tables': tables
+    })
+
+@app.route('/api/tables/<table_id>/seats')
+def get_table_seats(table_id):
+    """Get seat information for a table."""
+    table = next((t for t in tables if t['id'] == table_id), None)
+    
+    if not table:
+        return jsonify({
+            'success': False,
+            'error': 'Table not found'
+        }), 404
+    
+    # Initialize players dict if it doesn't exist
+    if 'players' not in table:
+        table['players'] = {}
+    
+    # Build seat information
+    seats = []
+    for seat_num in range(1, table['max_players'] + 1):
+        if seat_num in table['players']:
+            player = table['players'][seat_num]
+            seat_info = {
+                'seat_number': seat_num,
+                'is_available': False,
+                'player': {
+                    'username': player['username'],
+                    'stack': player['stack']
+                }
+            }
+        else:
+            seat_info = {
+                'seat_number': seat_num,
+                'is_available': True,
+                'player': None
+            }
+        seats.append(seat_info)
+    
+    return jsonify({
+        'success': True,
+        'table_id': table_id,
+        'table_name': table['name'],
+        'max_players': table['max_players'],
+        'current_players': len(table['players']),
+        'seats': seats,
+        'minimum_buyin': table.get('minimum_buyin', 50),
+        'maximum_buyin': table.get('maximum_buyin', 500)
     })
 
 @app.route('/api/tables', methods=['POST'])
@@ -262,6 +332,9 @@ def handle_join_table(data):
         return
     
     table_id = data.get('table_id')
+    buy_in_amount = data.get('buy_in_amount', 100)  # Default buy-in
+    seat_number = data.get('seat_number')  # Optional seat preference
+    
     table = next((t for t in tables if t['id'] == table_id), None)
     
     if not table:
@@ -272,11 +345,196 @@ def handle_join_table(data):
         emit('error', {'message': 'Table is full'})
         return
     
-    # For demo, just show success message
+    # Check if user has sufficient bankroll
+    if current_user.bankroll < buy_in_amount:
+        emit('error', {'message': 'Insufficient bankroll'})
+        return
+    
+    # For demo, simulate joining with seat assignment
+    if 'players' not in table:
+        table['players'] = {}
+    
+    # Check if user is already seated at this table
+    for seat_num, player in table['players'].items():
+        if player['user_id'] == current_user.id:
+            emit('error', {'message': f'You are already seated at this table in seat {seat_num}'})
+            return
+    
+    # Find available seat
+    occupied_seats = set(table['players'].keys())
+    assigned_seat = None
+    
+    if seat_number and seat_number not in occupied_seats and 1 <= seat_number <= table['max_players']:
+        assigned_seat = seat_number
+    else:
+        # Auto-assign first available seat
+        for seat in range(1, table['max_players'] + 1):
+            if seat not in occupied_seats:
+                assigned_seat = seat
+                break
+    
+    if assigned_seat is None:
+        emit('error', {'message': 'No available seats'})
+        return
+    
+    # Add player to table
+    table['players'][assigned_seat] = {
+        'user_id': current_user.id,
+        'username': current_user.username,
+        'buy_in': buy_in_amount,
+        'stack': buy_in_amount,
+        'seat_number': assigned_seat
+    }
+    
+    # Update player count
+    table['current_players'] = len(table['players'])
+    
+    # Create or get game instance
+    game = game_manager.get_game(table_id)
+    if not game:
+        # Create game configuration from table
+        config = GameConfig(
+            variant=table['variant'],
+            betting_structure=table['betting_structure'],
+            small_blind=table['stakes']['small_blind'],
+            big_blind=table['stakes']['big_blind'],
+            min_buyin=table['minimum_buyin'],
+            max_buyin=table['maximum_buyin'],
+            max_players=table['max_players']
+        )
+        print(f"DEBUG: Creating game with max_players: {config.max_players}")
+        game = game_manager.create_game(table_id, config)
+        
+        # Add existing demo players to the game
+        for seat_num, player in table['players'].items():
+            if player['user_id'] != current_user.id:  # Don't add current user twice
+                game_manager.add_player_to_game(table_id, player['user_id'], player['username'], player['stack'], int(seat_num))
+                print(f"DEBUG: Added existing player {player['username']} to game in seat {seat_num}")
+    
+    # Add current player to game
+    game_manager.add_player_to_game(table_id, current_user.id, current_user.username, buy_in_amount, assigned_seat)
+    
+    # Check if we can start a hand
+    if game_manager.can_start_hand(table_id):
+        current_state = game.state.value if game.state else 'None'
+        print(f"DEBUG: Game state for table {table_id}: {current_state}")
+        if game.state is None or game.state == GameState.WAITING:
+            print(f"DEBUG: Starting hand for table {table_id}")
+            success = game_manager.start_hand_with_progression(table_id, process_game_progression)
+            print(f"DEBUG: Hand start with progression result: {success}")
+            if success:
+                new_state = game.state.value if game.state else 'None'
+                print(f"DEBUG: New game state: {new_state}")
+                
+                # Broadcast all actions that occurred during hand start and progression
+                broadcast_game_actions(table_id)
+        else:
+            print(f"DEBUG: Cannot start hand - game state is {current_state}")
+            # If the hand is already in progress, we might have missed the forced bets
+            # Let's try to reconstruct them from the current game state
+            if current_state in ['betting', 'dealing']:
+                print(f"DEBUG: Hand already started, trying to log missed forced bets")
+                game_manager.log_missed_forced_bets(table_id)
+                broadcast_game_actions(table_id)
+    else:
+        print(f"DEBUG: Cannot start hand for table {table_id} - insufficient players")
+    
+    # Debug: Print table state after joining
+    print(f"DEBUG: After {current_user.username} joined table {table_id}:")
+    for seat_num, player in table['players'].items():
+        print(f"  Seat {seat_num}: {player['username']} (user_id: {player['user_id']})")
+    
+    # Deduct buy-in from user bankroll (demo)
+    current_user.bankroll -= buy_in_amount
+    
+    # Success response
     emit('table_joined', {
         'table_id': table_id,
-        'message': 'Joined table successfully! (Demo mode - actual game not implemented yet)'
+        'seat_number': assigned_seat,
+        'buy_in_amount': buy_in_amount,
+        'message': f'Joined table in seat {assigned_seat} with ${buy_in_amount} buy-in'
     })
+    
+    # Broadcast to all clients that table state changed
+    socketio.emit('table_list', {'tables': tables})
+
+@socketio.on('connect_to_table')
+def handle_connect_to_table(data):
+    """Handle connecting to a table for gameplay (different from joining)."""
+    if not current_user.is_authenticated:
+        emit('error', {'message': 'Authentication required'})
+        return
+    
+    table_id = data.get('table_id')
+    table = next((t for t in tables if t['id'] == table_id), None)
+    
+    if not table:
+        emit('error', {'message': 'Table not found'})
+        return
+    
+    # Initialize players dict if it doesn't exist
+    if 'players' not in table:
+        table['players'] = {}
+    
+    # Debug: Print current table state
+    print(f"DEBUG: Table {table_id} players before sending game_state:")
+    for seat_num, player in table['players'].items():
+        print(f"  Seat {seat_num}: {player['username']} (user_id: {player['user_id']})")
+    
+    # Get game state from game manager
+    game_state = game_manager.get_game_state(table_id, table, current_user.id)
+    
+    if game_state:
+        # Debug: Print game state players
+        print(f"DEBUG: Game state players: {game_state.get('players', {})}")
+        
+        # Use actual game state
+        emit('game_state', {
+            **game_state,
+            'table_name': table['name'],
+            'variant': table['variant'],
+            'betting_structure': table['betting_structure'],
+            'stakes': table['stakes'],
+            'max_players': table['max_players'],
+            'current_players': len(table['players']),
+            'current_user': {'id': current_user.id, 'username': current_user.username}
+        })
+    else:
+        # Fallback to basic state if no game exists yet
+        emit('game_state', {
+            'table_id': table_id,
+            'table_name': table['name'],
+            'variant': table['variant'],
+            'betting_structure': table['betting_structure'],
+            'stakes': table['stakes'],
+            'max_players': table['max_players'],
+            'current_players': len(table['players']),
+            'players': table['players'],
+            'pot_amount': 0,
+            'community_cards': {},
+            'hand_number': 1,
+            'game_state': 'waiting',
+            'current_player': None,
+            'is_hand_active': False,
+            'dealer_position': None,
+            'valid_actions': {},
+            'current_user': {'id': current_user.id, 'username': current_user.username}
+        })
+    
+    # Join the table room for real-time updates
+    join_room(table_id)
+    print(f"DEBUG: User {current_user.username} joined room {table_id}")
+    
+    # Send recent game actions to the newly connected player
+    recent_actions = game_manager.get_recent_game_actions(table_id, limit=10)
+    print(f"DEBUG: Sending {len(recent_actions)} recent actions to {current_user.username}")
+    for action in recent_actions:
+        emit('chat_message', action)
+        print(f"DEBUG: Sent action: {action.get('message', 'No message')}")
+    
+
+    
+    print(f"User {current_user.username} connected to table {table_id}")
 
 @socketio.on('spectate_table')
 def handle_spectate_table(data):
@@ -297,6 +555,316 @@ def handle_spectate_table(data):
         'table_id': table_id,
         'message': 'Spectating table! (Demo mode - actual game not implemented yet)'
     })
+
+@socketio.on('leave_table')
+def handle_leave_table(data):
+    """Handle leaving a table."""
+    if not current_user.is_authenticated:
+        emit('error', {'message': 'Authentication required'})
+        return
+    
+    table_id = data.get('table_id')
+    table = next((t for t in tables if t['id'] == table_id), None)
+    
+    if not table:
+        emit('error', {'message': 'Table not found'})
+        return
+    
+    # Initialize players dict if it doesn't exist
+    if 'players' not in table:
+        table['players'] = {}
+    
+    # Find and remove the player
+    player_seat = None
+    for seat_num, player in table['players'].items():
+        if player['user_id'] == current_user.id:
+            player_seat = seat_num
+            break
+    
+    if player_seat is None:
+        emit('error', {'message': 'You are not seated at this table'})
+        return
+    
+    # Remove player from table
+    removed_player = table['players'].pop(player_seat)
+    
+    # Update player count
+    table['current_players'] = len(table['players'])
+    
+    # Return buy-in to user bankroll (demo)
+    current_user.bankroll += removed_player['stack']
+    
+    # Debug: Print table state after leaving
+    print(f"DEBUG: After {current_user.username} left table {table_id}:")
+    for seat_num, player in table['players'].items():
+        print(f"  Seat {seat_num}: {player['username']} (user_id: {player['user_id']})")
+    
+    # Leave the table room
+    leave_room(table_id)
+    
+    # Success response
+    emit('table_left', {
+        'table_id': table_id,
+        'message': f'Left table and returned ${removed_player["stack"]} to bankroll'
+    })
+    
+    # Broadcast to all clients that table state changed
+    socketio.emit('table_list', {'tables': tables})
+    
+    print(f"User {current_user.username} left table {table_id}")
+
+def broadcast_game_actions(table_id):
+    """Broadcast new game actions to all players at the table."""
+    try:
+        # Get only new actions that haven't been broadcast yet
+        actions = game_manager.get_new_game_actions_for_broadcast(table_id)
+        
+        # Broadcast each action as a chat message
+        for action in actions:
+            socketio.emit('chat_message', action, room=table_id)
+            print(f"DEBUG: Broadcasting game action: {action['message']}")
+            
+    except Exception as e:
+        print(f"Error broadcasting game actions for {table_id}: {e}")
+
+def process_game_progression(table_id):
+    """Process automatic game progression for bots and game state advancement."""
+    try:
+        game = game_manager.get_game(table_id)
+        if not game:
+            return
+        
+        # Process up to 10 automatic actions to prevent infinite loops
+        for _ in range(10):
+            # Check if we need to advance game state (dealing, etc.)
+            if game_manager.advance_game_state(table_id):
+                # Broadcast updated game state
+                game_state = game_manager.get_game_state(table_id)
+                if game_state:
+                    socketio.emit('game_state', game_state, room=table_id)
+                
+                # Broadcast any new game actions
+                broadcast_game_actions(table_id)
+                continue
+            
+            # Check if current player is a bot that needs to act
+            if game_manager.needs_bot_action(table_id):
+                if game_manager.process_bot_action(table_id):
+                    # Broadcast updated game state after bot action
+                    game_state = game_manager.get_game_state(table_id)
+                    if game_state:
+                        socketio.emit('game_state', game_state, room=table_id)
+                    
+                    # Broadcast any new game actions
+                    broadcast_game_actions(table_id)
+                    continue
+            
+            # No more automatic actions needed
+            break
+            
+    except Exception as e:
+        print(f"Error in game progression for {table_id}: {e}")
+
+@app.route('/api/games/sessions/<table_id>/action', methods=['POST'])
+@login_required
+def process_player_action_demo(table_id: str):
+    """Process a player action using the old game_manager (demo version)."""
+    try:
+        data = request.get_json()
+        if not data or 'action' not in data:
+            return jsonify({
+                'success': False,
+                'error': 'Action required'
+            }), 400
+        
+        # Parse action
+        try:
+            from generic_poker.game.game_state import PlayerAction
+            action = PlayerAction(data['action'])
+        except ValueError:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid action: {data["action"]}'
+            }), 400
+        
+        amount = data.get('amount', 0)
+        
+        # Get the game
+        game = game_manager.get_game(table_id)
+        if not game:
+            return jsonify({
+                'success': False,
+                'error': 'Game not found'
+            }), 404
+        
+        # Check if it's the player's turn
+        if not game.current_player or game.current_player.id != current_user.id:
+            return jsonify({
+                'success': False,
+                'error': 'Not your turn to act'
+            }), 400
+        
+        # Process the action
+        try:
+            print(f"DEBUG: Processing action {action.value} with amount {amount} for player {current_user.id}")
+            result = game.player_action(current_user.id, action, amount)
+            print(f"DEBUG: Action result: success={result.success}, error={result.error}, advance_step={result.advance_step}")
+            if result.success:
+                # For call actions, use the amount that was validated by the game engine
+                # The amount parameter already represents the total call amount
+                log_amount = amount
+                
+                # Log the player action
+                game_action_logger.log_player_action(
+                    table_id=table_id,
+                    step=game.current_step,
+                    game_state=game.state.name,
+                    player_id=current_user.id,
+                    player_name=current_user.username,
+                    action_type=action.value.lower(),
+                    amount=log_amount if log_amount and log_amount > 0 else None
+                )
+                
+                # Check if we need to advance to the next step
+                if result.advance_step:
+                    old_step = game.current_step
+                    old_state = game.state.name
+                    
+                    # Advance to the next step
+                    game._next_step()
+                    
+                    # Log the step transition for important phases only
+                    step_name = "Unknown Step"
+                    if hasattr(game.rules, 'gameplay') and game.current_step < len(game.rules.gameplay):
+                        step_name = game.rules.gameplay[game.current_step].name
+                    
+                    # Only log betting and showdown phases, not dealing phases
+                    if 'bet' in step_name.lower() or 'showdown' in step_name.lower():
+                        game_action_logger.log_phase_change(
+                            table_id=table_id,
+                            step=game.current_step,
+                            old_state=old_state,
+                            new_state=game.state.name,
+                            phase_name=step_name
+                        )
+                
+                # Broadcast updated game state
+                game_state = game_manager.get_game_state(table_id)
+                if game_state:
+                    socketio.emit('game_state', game_state, room=table_id)
+                
+                # Broadcast the player action
+                broadcast_game_actions(table_id)
+                
+                # Process any automatic progression
+                process_game_progression(table_id)
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Action processed successfully'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': result.error or 'Action failed'
+                }), 400
+                
+        except Exception as e:
+            return jsonify({
+                'success': False,
+                'error': f'Action processing error: {str(e)}'
+            }), 400
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Server error: {str(e)}'
+        }), 500
+
+@app.route('/api/games/sessions/<table_id>/test', methods=['GET'])
+def test_demo_endpoint(table_id: str):
+    """Test endpoint to verify demo endpoints are working."""
+    return jsonify({
+        'success': True,
+        'message': f'Demo endpoint working for table {table_id}',
+        'endpoint': 'demo'
+    })
+
+@app.route('/api/games/sessions/<table_id>/actions', methods=['GET'])
+@login_required
+def get_available_actions_demo(table_id: str):
+    """Get available actions using the old game_manager (demo version)."""
+    try:
+        game = game_manager.get_game(table_id)
+        if not game:
+            return jsonify({
+                'success': True,
+                'actions': [],
+                'timeout_info': {'user_id': current_user.id, 'has_active_timeout': False, 'remaining_seconds': 0},
+                'count': 0
+            })
+        
+        # Check if it's the player's turn
+        if not game.current_player or game.current_player.id != current_user.id:
+            return jsonify({
+                'success': True,
+                'actions': [],
+                'timeout_info': {'user_id': current_user.id, 'has_active_timeout': False, 'remaining_seconds': 0},
+                'count': 0
+            })
+        
+        # Get valid actions
+        try:
+            actions = game.get_valid_actions(current_user.id)
+            formatted_actions = game_manager._format_valid_actions_for_ui(actions)
+            
+            print(f"DEBUG: Found {len(actions)} valid actions for {current_user.username}: {[a[0].value for a in actions]}")
+            print(f"DEBUG: Formatted actions: {formatted_actions}")
+            
+            return jsonify({
+                'success': True,
+                'actions': formatted_actions,
+                'timeout_info': {'user_id': current_user.id, 'has_active_timeout': False, 'remaining_seconds': 0},
+                'count': len(formatted_actions)
+            })
+            
+        except Exception as e:
+            print(f"DEBUG: Error getting valid actions: {e}")
+            return jsonify({
+                'success': True,
+                'actions': [],
+                'timeout_info': {'user_id': current_user.id, 'has_active_timeout': False, 'remaining_seconds': 0},
+                'count': 0
+            })
+        
+    except Exception as e:
+        print(f"DEBUG: Server error in get_available_actions_demo: {e}")
+        return jsonify({
+            'success': True,
+            'actions': [],
+            'timeout_info': {'user_id': current_user.id, 'has_active_timeout': False, 'remaining_seconds': 0},
+            'count': 0
+        })
+
+@socketio.on('request_game_update')
+def handle_request_game_update(data):
+    """Handle request for game state update and process any pending bot actions."""
+    if not current_user.is_authenticated:
+        emit('error', {'message': 'Authentication required'})
+        return
+    
+    table_id = data.get('table_id')
+    if not table_id:
+        emit('error', {'message': 'Table ID required'})
+        return
+    
+    # Process any pending game progression
+    process_game_progression(table_id)
+    
+    # Send updated game state
+    game_state = game_manager.get_game_state(table_id, current_user_id=current_user.id)
+    if game_state:
+        emit('game_state', game_state)
 
 if __name__ == '__main__':
     # Setup logging
@@ -323,7 +891,23 @@ if __name__ == '__main__':
             'creator_id': 'demo_user',
             'created_at': '2024-01-01T00:00:00',
             'minimum_buyin': 50,
-            'maximum_buyin': 500
+            'maximum_buyin': 500,
+            'players': {
+                2: {
+                    'user_id': 'demo_player_1',
+                    'username': 'Alice',
+                    'buy_in': 200,
+                    'stack': 180,
+                    'seat_number': 2
+                },
+                5: {
+                    'user_id': 'demo_player_2',
+                    'username': 'Bob',
+                    'buy_in': 150,
+                    'stack': 220,
+                    'seat_number': 5
+                }
+            }
         },
         {
             'id': 'demo_table_2',
@@ -338,7 +922,16 @@ if __name__ == '__main__':
             'creator_id': 'demo_user',
             'created_at': '2024-01-01T00:00:00',
             'minimum_buyin': 200,
-            'maximum_buyin': 2000
+            'maximum_buyin': 2000,
+            'players': {
+                1: {'user_id': 'demo_p1', 'username': 'Charlie', 'buy_in': 500, 'stack': 450, 'seat_number': 1},
+                3: {'user_id': 'demo_p2', 'username': 'Diana', 'buy_in': 400, 'stack': 600, 'seat_number': 3},
+                4: {'user_id': 'demo_p3', 'username': 'Eve', 'buy_in': 300, 'stack': 280, 'seat_number': 4},
+                6: {'user_id': 'demo_p4', 'username': 'Frank', 'buy_in': 600, 'stack': 750, 'seat_number': 6},
+                7: {'user_id': 'demo_p5', 'username': 'Grace', 'buy_in': 350, 'stack': 320, 'seat_number': 7},
+                8: {'user_id': 'demo_p6', 'username': 'Henry', 'buy_in': 500, 'stack': 480, 'seat_number': 8},
+                9: {'user_id': 'demo_p7', 'username': 'Ivy', 'buy_in': 400, 'stack': 520, 'seat_number': 9}
+            }
         },
         {
             'id': 'demo_table_3',
@@ -354,7 +947,16 @@ if __name__ == '__main__':
             'creator_id': 'demo_user',
             'created_at': '2024-01-01T00:00:00',
             'minimum_buyin': 100,
-            'maximum_buyin': 1000
+            'maximum_buyin': 1000,
+            'players': {
+                3: {
+                    'user_id': 'demo_private_1',
+                    'username': 'Jack',
+                    'buy_in': 300,
+                    'stack': 280,
+                    'seat_number': 3
+                }
+            }
         }
     ])
     
