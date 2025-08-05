@@ -918,19 +918,19 @@ if __name__ == '__main__':
             'max_players': 9,
             'current_players': 7,
             'is_private': False,
-            'allow_bots': False,
+            'allow_bots': True,
             'creator_id': 'demo_user',
             'created_at': '2024-01-01T00:00:00',
             'minimum_buyin': 200,
             'maximum_buyin': 2000,
             'players': {
-                1: {'user_id': 'demo_p1', 'username': 'Charlie', 'buy_in': 500, 'stack': 450, 'seat_number': 1},
-                3: {'user_id': 'demo_p2', 'username': 'Diana', 'buy_in': 400, 'stack': 600, 'seat_number': 3},
-                4: {'user_id': 'demo_p3', 'username': 'Eve', 'buy_in': 300, 'stack': 280, 'seat_number': 4},
-                6: {'user_id': 'demo_p4', 'username': 'Frank', 'buy_in': 600, 'stack': 750, 'seat_number': 6},
-                7: {'user_id': 'demo_p5', 'username': 'Grace', 'buy_in': 350, 'stack': 320, 'seat_number': 7},
-                8: {'user_id': 'demo_p6', 'username': 'Henry', 'buy_in': 500, 'stack': 480, 'seat_number': 8},
-                9: {'user_id': 'demo_p7', 'username': 'Ivy', 'buy_in': 400, 'stack': 520, 'seat_number': 9}
+                1: {'user_id': 'demo_player_3', 'username': 'Charlie', 'buy_in': 500, 'stack': 450, 'seat_number': 1},
+                3: {'user_id': 'demo_player_4', 'username': 'Diana', 'buy_in': 400, 'stack': 600, 'seat_number': 3},
+                4: {'user_id': 'demo_player_5', 'username': 'Eve', 'buy_in': 300, 'stack': 280, 'seat_number': 4},
+                6: {'user_id': 'demo_player_6', 'username': 'Frank', 'buy_in': 600, 'stack': 750, 'seat_number': 6},
+                7: {'user_id': 'demo_player_7', 'username': 'Grace', 'buy_in': 350, 'stack': 320, 'seat_number': 7},
+                8: {'user_id': 'demo_player_8', 'username': 'Henry', 'buy_in': 500, 'stack': 480, 'seat_number': 8},
+                9: {'user_id': 'demo_player_9', 'username': 'Ivy', 'buy_in': 400, 'stack': 520, 'seat_number': 9}
             }
         },
         {
@@ -943,14 +943,14 @@ if __name__ == '__main__':
             'current_players': 1,
             'is_private': True,
             'invite_code': 'DEMO0001',
-            'allow_bots': False,
+            'allow_bots': True,
             'creator_id': 'demo_user',
             'created_at': '2024-01-01T00:00:00',
             'minimum_buyin': 100,
             'maximum_buyin': 1000,
             'players': {
                 3: {
-                    'user_id': 'demo_private_1',
+                    'user_id': 'demo_player_10',
                     'username': 'Jack',
                     'buy_in': 300,
                     'stack': 280,

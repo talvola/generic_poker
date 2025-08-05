@@ -1,6 +1,5 @@
 """Game management service for online poker platform."""
 
-import json
 import logging
 import re
 from typing import Dict, List, Optional, Tuple
@@ -11,6 +10,7 @@ from generic_poker.game.game import Game, GameState, PlayerAction
 from generic_poker.game.betting import BettingStructure
 from .simple_bot import bot_manager, SimpleBot
 from .game_action_logger import game_action_logger, GameAction
+from .table_manager import TableManager
 
 logger = logging.getLogger(__name__)
 
@@ -81,9 +81,10 @@ class GameManager:
     def create_game(self, table_id: str, config: GameConfig) -> Game:
         """Create a new poker game instance."""
         try:
-            # Create game rules based on variant
-            rules_json = self._get_game_rules_json(config.variant)
-            rules = GameRules.from_json(rules_json)
+            # Create game rules based on variant using TableManager
+            rules = TableManager.get_variant_rules(config.variant)
+            if rules is None:
+                raise ValueError(f"Unsupported poker variant: {config.variant}")
             
             # Map betting structure string to enum
             betting_structure = self._get_betting_structure(config.betting_structure)
@@ -286,41 +287,7 @@ class GameManager:
             logger.error(f"Failed to get game state for table {table_id}: {e}")
             return None
     
-    def _get_game_rules_json(self, variant: str) -> str:
-        """Get game rules JSON for a poker variant."""
-        # Texas Hold'em rules
-        if variant.lower() in ['hold_em', 'holdem', 'texas_holdem']:
-            rules = {
-                "game": "Hold'em",
-                "players": {"min": 2, "max": 9},
-                "deck": {"type": "standard", "cards": 52},
-                "bettingStructures": ["No Limit", "Limit", "Pot Limit"],
-                "forcedBets": {"style": "blinds"},
-                "bettingOrder": {"initial": "after_big_blind", "subsequent": "dealer"},
-                "gamePlay": [
-                    {"name": "Post Blinds", "bet": {"type": "blinds"}},
-                    {"name": "Deal Hole Cards", "deal": {"location": "player", "cards": [{"number": 2, "state": "face down"}]}},
-                    {"name": "Pre-Flop Bet", "bet": {"type": "small"}},
-                    {"name": "Deal Flop", "deal": {"location": "community", "cards": [{"number": 3, "state": "face up"}]}},
-                    {"name": "Post-Flop Bet", "bet": {"type": "small"}},
-                    {"name": "Deal Turn", "deal": {"location": "community", "cards": [{"number": 1, "state": "face up"}]}},
-                    {"name": "Turn Bet", "bet": {"type": "big"}},
-                    {"name": "Deal River", "deal": {"location": "community", "cards": [{"number": 1, "state": "face up"}]}},
-                    {"name": "River Bet", "bet": {"type": "big"}},
-                    {"name": "Showdown", "showdown": {"type": "final"}}
-                ],
-                "showdown": {
-                    "order": "clockwise",
-                    "startingFrom": "dealer",
-                    "cardsRequired": "any combination of hole and community cards",
-                    "bestHand": [{"evaluationType": "high", "anyCards": 5}]
-                }
-            }
-            return json.dumps(rules)
-        
-        # Add other variants as needed
-        raise ValueError(f"Unsupported poker variant: {variant}")
-    
+
     def _get_betting_structure(self, structure: str) -> BettingStructure:
         """Convert betting structure string to enum."""
         structure_map = {
