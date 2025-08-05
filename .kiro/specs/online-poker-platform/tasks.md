@@ -245,6 +245,18 @@
     - Create visual feedback for player actions in the game interface
     - _Requirements: 24.1, 24.2, 24.3, 24.4, 24.5, 24.6, 24.7, 24.8, 24.9, 24.10, 24.11, 24.12_
 
+  - [x] 8.3.1 Implement basic player card visibility for immediate playability
+
+
+
+    - Show a player's own hole cards face-up to them in the game interface
+    - Keep other players' hole cards displayed as face-down card backs
+    - Implement basic card rendering with rank and suit display
+    - Integrate card visibility with existing game state management
+    - Ensure cards are visible when it's the player's turn to act
+    - Create simple card display that works for Hold'em style games
+    - _Requirements: 19.1, 19.2 (basic implementation for immediate playability)_
+
   - [ ] 8.4 Build advanced player action system for all poker variants
     - Build card discarding interface for draw poker games
     - Implement card exposure interface for stud and other games

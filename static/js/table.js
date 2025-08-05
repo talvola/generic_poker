@@ -338,7 +338,7 @@ class PokerTable {
         seat.dataset.position = position;
         seat.dataset.playerId = player.id;
 
-        const isCurrentPlayer = player.id === this.currentUser?.id;
+        const isCurrentPlayer = player.user_id === this.currentUser?.id;
         const isCurrentTurn = this.gameState?.current_player === player.id;
         const isActive = player.is_active;
         const isDisconnected = player.is_disconnected;
@@ -403,13 +403,17 @@ class PokerTable {
         }
 
         const suitSymbols = {
+            'h': '♥',
             'hearts': '♥',
+            'd': '♦', 
             'diamonds': '♦',
+            'c': '♣',
             'clubs': '♣',
+            's': '♠',
             'spades': '♠'
         };
 
-        const isRed = card.suit === 'hearts' || card.suit === 'diamonds';
+        const isRed = card.suit === 'h' || card.suit === 'hearts' || card.suit === 'd' || card.suit === 'diamonds';
         const colorClass = isRed ? 'red' : 'black';
 
         return `

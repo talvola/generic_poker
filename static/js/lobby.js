@@ -600,7 +600,7 @@ class PokerLobby {
                             
                             <div class="seat-modal-right">
                                 <div class="mini-poker-table">
-                                    ${this.generateMiniPokerTable(seatData.seats)}
+                                    ${this.generateMiniPokerTable(seatData.seats, seatData.max_players)}
                                 </div>
                             </div>
                         </div>
@@ -654,10 +654,10 @@ class PokerLobby {
         return seatHtml;
     }
     
-    generateMiniPokerTable(seats) {
+    generateMiniPokerTable(seats, maxPlayers) {
         // Create a mini version of the poker table for seat selection
         let tableHtml = `
-            <div class="mini-table-container">
+            <div class="mini-table-container" data-max-players="${maxPlayers}">
                 <div class="mini-poker-table-felt">
                     <div class="mini-table-center">
                         <div class="mini-table-label">Select Your Seat</div>

@@ -104,7 +104,9 @@ body {
     color: rgba(255, 255, 255, 0.8);
 }
 
-.variant, .stakes, .structure {
+.variant,
+.stakes,
+.structure {
     padding: 0.25rem 0.75rem;
     background: rgba(255, 255, 255, 0.1);
     border-radius: 12px;
@@ -158,7 +160,8 @@ body {
     align-items: center;
     justify-content: center;
     min-height: 600px;
-    padding: 120px 150px; /* Add padding to accommodate seats around perimeter */
+    padding: 120px 150px;
+    /* Add padding to accommodate seats around perimeter */
     position: relative;
 }
 
@@ -169,7 +172,7 @@ body {
     background: radial-gradient(ellipse at center, var(--felt-green) 0%, var(--felt-dark) 100%);
     border: 8px solid #8b4513;
     border-radius: 50%;
-    box-shadow: 
+    box-shadow:
         inset 0 0 50px rgba(0, 0, 0, 0.3),
         0 10px 30px rgba(0, 0, 0, 0.5);
     overflow: visible;
@@ -316,73 +319,138 @@ body {
     transform: translate(-50%, -50%);
 }
 
-/* Player seat positions - PokerStars-style seat numbering with optimal spacing */
-/* PokerStars convention: Start at seat 1 (upper right) and move clockwise */
-/* 6-max table positions following PokerStars standard layout with better spacing */
+/* Player seat positions - PokerStars-style layout */
+/* Separate positioning for 6-max and 9-max tables to match PokerStars exactly */
 
-.player-seat[data-position="0"] { 
-    top: 10%; 
-    left: 100%; 
-    transform: translate(-20px, -50%); 
-} /* SEAT 1 - Upper right (1:30 o'clock position) - PokerStars starting position with better spacing */
+/* 6-max table seat positions - PokerStars style */
+.poker-table[data-max-players="6"] .player-seat[data-position="0"] {
+    top: 20%;
+    left: 80%;
+    transform: translate(-20px, -50%);
+}
 
-.player-seat[data-position="1"] { 
-    top: 50%; 
-    left: 100%; 
-    transform: translate(-20px, -50%); 
-} /* SEAT 2 - Right side (3 o'clock position) - clockwise from seat 1 */
+/* SEAT 1 - Upper right (1:30 o'clock) */
 
-.player-seat[data-position="2"] { 
-    top: 90%; 
-    left: 85%; 
-    transform: translate(-50%, -20px); 
-} /* SEAT 3 - Bottom right (5 o'clock position) - clockwise from seat 2 with better spacing */
+.poker-table[data-max-players="6"] .player-seat[data-position="1"] {
+    top: 50%;
+    left: 95%;
+    transform: translate(-20px, -50%);
+}
 
-.player-seat[data-position="3"] { 
-    top: 90%; 
-    left: 15%; 
-    transform: translate(-50%, -20px); 
-} /* SEAT 4 - Bottom left (7 o'clock position) - clockwise from seat 3 with better spacing */
+/* SEAT 2 - Right side (3:00 o'clock) */
 
-.player-seat[data-position="4"] { 
-    top: 50%; 
-    left: 0%; 
-    transform: translate(-100px, -50%); 
-} /* SEAT 5 - Left side (9 o'clock position) - clockwise from seat 4 */
+.poker-table[data-max-players="6"] .player-seat[data-position="2"] {
+    top: 75%;
+    left: 80%;
+    transform: translate(-50%, -20px);
+}
 
-.player-seat[data-position="5"] { 
-    top: 10%; 
-    left: 0%; 
-    transform: translate(-100px, -50%); 
-} /* SEAT 6 - Upper left (11 o'clock position) - clockwise from seat 5 with better spacing */
+/* SEAT 3 - Bottom right (4:30 o'clock) */
 
-/* 9-max table positions - PokerStars convention with optimal spacing */
-/* Additional seats inserted clockwise between the 6-max positions */
+.poker-table[data-max-players="6"] .player-seat[data-position="3"] {
+    top: 75%;
+    left: 20%;
+    transform: translate(-50%, -20px);
+}
 
-.player-seat[data-position="6"] { 
-    top: 0%; 
-    left: 50%; 
-    transform: translate(-50%, -100px); 
-} /* SEAT 7 - Top center (12 o'clock position) - clockwise from seat 6 */
+/* SEAT 4 - Bottom left (7:30 o'clock) */
 
-.player-seat[data-position="7"] { 
-    top: 10%; 
-    left: 75%; 
-    transform: translate(-50%, -50%); 
-} /* SEAT 8 - Upper right-center (1 o'clock position) - between seats 6 and 1 */
+.poker-table[data-max-players="6"] .player-seat[data-position="4"] {
+    top: 50%;
+    left: 5%;
+    transform: translate(-100px, -50%);
+}
 
-.player-seat[data-position="8"] { 
-    top: 90%; 
-    left: 50%; 
-    transform: translate(-50%, -20px); 
-} /* SEAT 9 - Bottom center (6 o'clock position) - between seats 3 and 4 */
+/* SEAT 5 - Left side (9:00 o'clock) */
+
+.poker-table[data-max-players="6"] .player-seat[data-position="5"] {
+    top: 20%;
+    left: 20%;
+    transform: translate(-100px, -50%);
+}
+
+/* SEAT 6 - Upper left (10:30 o'clock) */
+
+/* 9-max table seat positions - PokerStars style */
+.poker-table[data-max-players="9"] .player-seat[data-position="0"] {
+    top: 8%;
+    left: 70%;
+    transform: translate(-50%, -100px);
+}
+
+/* SEAT 1 - Upper right (1:00 o'clock) */
+
+.poker-table[data-max-players="9"] .player-seat[data-position="1"] {
+    top: 15%;
+    left: 90%;
+    transform: translate(-20px, -50%);
+}
+
+/* SEAT 2 - Right side (2:30 o'clock) */
+
+.poker-table[data-max-players="9"] .player-seat[data-position="2"] {
+    top: 50%;
+    left: 100%;
+    transform: translate(-20px, -50%);
+}
+
+/* SEAT 3 - Right side (3:30 o'clock) */
+
+.poker-table[data-max-players="9"] .player-seat[data-position="3"] {
+    top: 75%;
+    left: 85%;
+    transform: translate(-50%, -20px);
+}
+
+/* SEAT 4 - Bottom right (5:00 o'clock) */
+
+.poker-table[data-max-players="9"] .player-seat[data-position="4"] {
+    top: 85%;
+    left: 50%;
+    transform: translate(-50%, -20px);
+}
+
+/* SEAT 5 - Bottom center (6:00 o'clock) */
+
+.poker-table[data-max-players="9"] .player-seat[data-position="5"] {
+    top: 75%;
+    left: 15%;
+    transform: translate(-50%, -20px);
+}
+
+/* SEAT 6 - Bottom left (7:00 o'clock) */
+
+.poker-table[data-max-players="9"] .player-seat[data-position="6"] {
+    top: 50%;
+    left: 0%;
+    transform: translate(-100px, -50%);
+}
+
+/* SEAT 7 - Left side (8:30 o'clock) */
+
+.poker-table[data-max-players="9"] .player-seat[data-position="7"] {
+    top: 15%;
+    left: 10%;
+    transform: translate(-100px, -50%);
+}
+
+/* SEAT 8 - Upper left (10:30 o'clock) */
+
+.poker-table[data-max-players="9"] .player-seat[data-position="8"] {
+    top: 8%;
+    left: 30%;
+    transform: translate(-50%, -100px);
+}
+
+/* SEAT 9 - Upper center (12:00 o'clock) */
 
 .player-info {
     background: rgba(0, 0, 0, 0.8);
     border-radius: var(--border-radius);
     padding: 0.75rem;
     text-align: center;
-    min-width: 120px; /* Increased width for better card display */
+    min-width: 120px;
+    /* Increased width for better card display */
     border: 2px solid transparent;
     transition: var(--transition);
     backdrop-filter: blur(10px);
@@ -434,7 +502,8 @@ body {
     margin-top: 0.5rem;
     flex-wrap: wrap;
     justify-content: center;
-    max-width: 140px; /* Constrain width to prevent overflow */
+    max-width: 140px;
+    /* Constrain width to prevent overflow */
 }
 
 .player-cards .card {
@@ -446,7 +515,8 @@ body {
 
 /* Special handling for games with many cards (like Seven Card Stud) */
 .player-cards.many-cards {
-    gap: 0.1rem; /* Tighter spacing for more cards */
+    gap: 0.1rem;
+    /* Tighter spacing for more cards */
 }
 
 .player-cards.many-cards .card {
@@ -493,16 +563,100 @@ body {
     transform: translate(-50%, -50%);
 }
 
-/* Dealer button positions relative to player seats - PokerStars-style with optimal spacing */
-.dealer-button[data-position="0"] { top: 20%; left: 90%; } /* Seat 1 - Upper right (1:30) */
-.dealer-button[data-position="1"] { top: 50%; left: 90%; } /* Seat 2 - Right side (3:00) */
-.dealer-button[data-position="2"] { top: 80%; left: 75%; } /* Seat 3 - Bottom right (5:00) */
-.dealer-button[data-position="3"] { top: 80%; left: 25%; } /* Seat 4 - Bottom left (7:00) */
-.dealer-button[data-position="4"] { top: 50%; left: 10%; } /* Seat 5 - Left side (9:00) */
-.dealer-button[data-position="5"] { top: 20%; left: 10%; } /* Seat 6 - Upper left (11:00) */
-.dealer-button[data-position="6"] { top: 10%; left: 50%; } /* Seat 7 - Top center (12:00) */
-.dealer-button[data-position="7"] { top: 20%; left: 75%; } /* Seat 8 - Upper right-center (1:00) */
-.dealer-button[data-position="8"] { top: 80%; left: 50%; } /* Seat 9 - Bottom center (6:00) */
+/* Dealer button positions relative to player seats - PokerStars-style */
+/* 6-max table dealer button positions */
+.poker-table[data-max-players="6"] .dealer-button[data-position="0"] {
+    top: 30%;
+    left: 70%;
+}
+
+/* Seat 1 */
+.poker-table[data-max-players="6"] .dealer-button[data-position="1"] {
+    top: 50%;
+    left: 80%;
+}
+
+/* Seat 2 */
+.poker-table[data-max-players="6"] .dealer-button[data-position="2"] {
+    top: 65%;
+    left: 65%;
+}
+
+/* Seat 3 */
+.poker-table[data-max-players="6"] .dealer-button[data-position="3"] {
+    top: 65%;
+    left: 35%;
+}
+
+/* Seat 4 */
+.poker-table[data-max-players="6"] .dealer-button[data-position="4"] {
+    top: 50%;
+    left: 20%;
+}
+
+/* Seat 5 */
+.poker-table[data-max-players="6"] .dealer-button[data-position="5"] {
+    top: 30%;
+    left: 30%;
+}
+
+/* Seat 6 */
+
+/* 9-max table dealer button positions */
+.poker-table[data-max-players="9"] .dealer-button[data-position="0"] {
+    top: 18%;
+    left: 60%;
+}
+
+/* Seat 1 */
+.poker-table[data-max-players="9"] .dealer-button[data-position="1"] {
+    top: 25%;
+    left: 75%;
+}
+
+/* Seat 2 */
+.poker-table[data-max-players="9"] .dealer-button[data-position="2"] {
+    top: 50%;
+    left: 85%;
+}
+
+/* Seat 3 */
+.poker-table[data-max-players="9"] .dealer-button[data-position="3"] {
+    top: 65%;
+    left: 75%;
+}
+
+/* Seat 4 */
+.poker-table[data-max-players="9"] .dealer-button[data-position="4"] {
+    top: 75%;
+    left: 50%;
+}
+
+/* Seat 5 */
+.poker-table[data-max-players="9"] .dealer-button[data-position="5"] {
+    top: 65%;
+    left: 25%;
+}
+
+/* Seat 6 */
+.poker-table[data-max-players="9"] .dealer-button[data-position="6"] {
+    top: 50%;
+    left: 15%;
+}
+
+/* Seat 7 */
+.poker-table[data-max-players="9"] .dealer-button[data-position="7"] {
+    top: 25%;
+    left: 15%;
+}
+
+/* Seat 8 */
+.poker-table[data-max-players="9"] .dealer-button[data-position="8"] {
+    top: 18%;
+    left: 40%;
+}
+
+/* Seat 9 */
 
 /* Action Panel */
 .action-panel {
@@ -550,22 +704,26 @@ body {
     transform: translateY(-2px);
 }
 
-.action-btn.check, .action-btn.call {
+.action-btn.check,
+.action-btn.call {
     background: var(--info-color);
     color: white;
 }
 
-.action-btn.check:hover:not(:disabled), .action-btn.call:hover:not(:disabled) {
+.action-btn.check:hover:not(:disabled),
+.action-btn.call:hover:not(:disabled) {
     background: #138496;
     transform: translateY(-2px);
 }
 
-.action-btn.bet, .action-btn.raise {
+.action-btn.bet,
+.action-btn.raise {
     background: var(--success-color);
     color: white;
 }
 
-.action-btn.bet:hover:not(:disabled), .action-btn.raise:hover:not(:disabled) {
+.action-btn.bet:hover:not(:disabled),
+.action-btn.raise:hover:not(:disabled) {
     background: #218838;
     transform: translateY(-2px);
 }
@@ -602,6 +760,7 @@ body {
     background: rgba(255, 255, 255, 0.2);
     outline: none;
     -webkit-appearance: none;
+    appearance: none;
 }
 
 .bet-slider::-webkit-slider-thumb {
@@ -1147,8 +1306,13 @@ body {
 
 /* Animations */
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 @keyframes slideIn {
@@ -1156,6 +1320,7 @@ body {
         opacity: 0;
         transform: translateY(-20px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -1163,14 +1328,19 @@ body {
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 @keyframes pulse {
-    0%, 100% { 
+
+    0%,
+    100% {
         box-shadow: 0 0 15px rgba(40, 167, 69, 0.5);
     }
-    50% { 
+
+    50% {
         box-shadow: 0 0 25px rgba(40, 167, 69, 0.8);
     }
 }
@@ -1180,6 +1350,7 @@ body {
         transform: translateY(-100px) rotate(180deg);
         opacity: 0;
     }
+
     to {
         transform: translateY(0) rotate(0deg);
         opacity: 1;
@@ -1191,6 +1362,7 @@ body {
         transform: scale(0.8);
         opacity: 0.8;
     }
+
     to {
         transform: scale(1);
         opacity: 1;
@@ -1212,8 +1384,10 @@ body {
     border-radius: var(--border-radius);
     padding: 0.75rem;
     text-align: center;
-    min-width: 120px; /* Match player-info width */
-    min-height: 80px; /* Ensure consistent height */
+    min-width: 120px;
+    /* Match player-info width */
+    min-height: 80px;
+    /* Ensure consistent height */
     transition: var(--transition);
     cursor: pointer;
     display: flex;
@@ -1240,16 +1414,16 @@ body {
         min-height: 60px;
         font-size: 1.1rem;
     }
-    
+
     .quick-bet-btn {
         min-height: 50px;
         padding: 0.75rem 1.25rem;
     }
-    
+
     .card:hover {
         transform: none;
     }
-    
+
     .card:active {
         transform: scale(0.95);
     }
@@ -1261,11 +1435,11 @@ body {
         width: 700px;
         height: 450px;
     }
-    
+
     .poker-table-container {
         padding: 100px 120px;
     }
-    
+
     .side-panel {
         width: 250px;
     }
@@ -1275,27 +1449,27 @@ body {
     .game-container {
         flex-direction: column;
     }
-    
+
     .side-panel {
         width: 100%;
         flex-direction: row;
         height: 200px;
     }
-    
+
     .chat-section {
         flex: 1;
         height: 100%;
     }
-    
+
     .game-info-section {
         width: 200px;
     }
-    
+
     .poker-table {
         width: 600px;
         height: 400px;
     }
-    
+
     .poker-table-container {
         padding: 80px 100px;
     }
@@ -1308,142 +1482,143 @@ body {
         gap: 1rem;
         text-align: center;
     }
-    
-    .header-left, .header-right {
+
+    .header-left,
+    .header-right {
         justify-content: center;
     }
-    
+
     .table-details {
         justify-content: center;
     }
-    
+
     .game-container {
         padding: 0.5rem;
     }
-    
+
     .poker-table {
         width: 100%;
         max-width: 500px;
         height: 350px;
     }
-    
+
     .poker-table-container {
         padding: 60px 80px;
     }
-    
+
     .side-panel {
         display: none;
     }
-    
+
     .mobile-action-bar {
         display: flex;
     }
-    
+
     .action-panel {
         margin-bottom: 80px;
     }
-    
+
     .action-buttons {
         gap: 0.5rem;
     }
-    
+
     .action-btn {
         min-width: 100px;
         padding: 0.75rem 1rem;
         font-size: 0.9rem;
     }
-    
+
     .bet-slider-container {
         flex-direction: column;
         gap: 0.5rem;
     }
-    
+
     .bet-amount-display {
         min-width: auto;
         width: 100%;
     }
-    
+
     .quick-bet-buttons {
         flex-wrap: wrap;
         gap: 0.25rem;
     }
-    
+
     .quick-bet-btn {
         flex: 1;
         min-width: 70px;
     }
-    
+
     /* Adjust player seat positions for mobile - maintain perimeter positioning */
     .player-seat {
         width: 100px;
         height: 120px;
     }
-    
+
     /* Mobile-specific positioning adjustments to maintain perimeter layout */
-    .player-seat[data-position="0"] { 
-        transform: translate(-50%, -15px); 
+    .player-seat[data-position="0"] {
+        transform: translate(-50%, -15px);
     }
-    
-    .player-seat[data-position="1"] { 
-        transform: translate(-15px, -50%); 
+
+    .player-seat[data-position="1"] {
+        transform: translate(-15px, -50%);
     }
-    
-    .player-seat[data-position="2"] { 
-        transform: translate(-15px, -50%); 
+
+    .player-seat[data-position="2"] {
+        transform: translate(-15px, -50%);
     }
-    
-    .player-seat[data-position="3"] { 
-        transform: translate(-50%, -80px); 
+
+    .player-seat[data-position="3"] {
+        transform: translate(-50%, -80px);
     }
-    
-    .player-seat[data-position="4"] { 
-        transform: translate(-80px, -50%); 
+
+    .player-seat[data-position="4"] {
+        transform: translate(-80px, -50%);
     }
-    
-    .player-seat[data-position="5"] { 
-        transform: translate(-80px, -50%); 
+
+    .player-seat[data-position="5"] {
+        transform: translate(-80px, -50%);
     }
-    
-    .player-seat[data-position="6"] { 
-        transform: translate(-80px, -50%); 
+
+    .player-seat[data-position="6"] {
+        transform: translate(-80px, -50%);
     }
-    
-    .player-seat[data-position="7"] { 
-        transform: translate(-15px, -50%); 
+
+    .player-seat[data-position="7"] {
+        transform: translate(-15px, -50%);
     }
-    
-    .player-seat[data-position="8"] { 
-        transform: translate(-15px, -50%); 
+
+    .player-seat[data-position="8"] {
+        transform: translate(-15px, -50%);
     }
-    
+
     .player-info {
         padding: 0.5rem;
         min-width: 80px;
     }
-    
+
     .player-name {
         font-size: 0.8rem;
     }
-    
+
     .player-chips {
         font-size: 0.7rem;
     }
-    
+
     .player-cards .card {
         width: 30px;
         height: 42px;
         font-size: 0.6rem;
     }
-    
+
     .community-cards .card {
         width: 45px;
         height: 63px;
     }
-    
+
     .pot-info {
         padding: 0.75rem 1rem;
     }
-    
+
     .pot-amount {
         font-size: 1.2rem;
     }
@@ -1453,77 +1628,77 @@ body {
     .poker-table {
         height: 300px;
     }
-    
+
     .poker-table-container {
         padding: 50px 60px;
     }
-    
+
     .action-btn {
         min-width: 80px;
         padding: 0.5rem 0.75rem;
         font-size: 0.8rem;
     }
-    
+
     .player-seat {
         width: 80px;
         height: 100px;
     }
-    
+
     /* Extra small mobile positioning adjustments */
-    .player-seat[data-position="0"] { 
-        transform: translate(-50%, -10px); 
+    .player-seat[data-position="0"] {
+        transform: translate(-50%, -10px);
     }
-    
-    .player-seat[data-position="1"] { 
-        transform: translate(-10px, -50%); 
+
+    .player-seat[data-position="1"] {
+        transform: translate(-10px, -50%);
     }
-    
-    .player-seat[data-position="2"] { 
-        transform: translate(-10px, -50%); 
+
+    .player-seat[data-position="2"] {
+        transform: translate(-10px, -50%);
     }
-    
-    .player-seat[data-position="3"] { 
-        transform: translate(-50%, -60px); 
+
+    .player-seat[data-position="3"] {
+        transform: translate(-50%, -60px);
     }
-    
-    .player-seat[data-position="4"] { 
-        transform: translate(-60px, -50%); 
+
+    .player-seat[data-position="4"] {
+        transform: translate(-60px, -50%);
     }
-    
-    .player-seat[data-position="5"] { 
-        transform: translate(-60px, -50%); 
+
+    .player-seat[data-position="5"] {
+        transform: translate(-60px, -50%);
     }
-    
-    .player-seat[data-position="6"] { 
-        transform: translate(-60px, -50%); 
+
+    .player-seat[data-position="6"] {
+        transform: translate(-60px, -50%);
     }
-    
-    .player-seat[data-position="7"] { 
-        transform: translate(-10px, -50%); 
+
+    .player-seat[data-position="7"] {
+        transform: translate(-10px, -50%);
     }
-    
-    .player-seat[data-position="8"] { 
-        transform: translate(-10px, -50%); 
+
+    .player-seat[data-position="8"] {
+        transform: translate(-10px, -50%);
     }
-    
+
     .player-info {
         padding: 0.25rem;
         min-width: 60px;
     }
-    
+
     .player-name {
         font-size: 0.7rem;
     }
-    
+
     .player-chips {
         font-size: 0.6rem;
     }
-    
+
     .community-cards .card {
         width: 35px;
         height: 49px;
     }
-    
+
     .pot-amount {
         font-size: 1rem;
     }
@@ -1534,32 +1709,32 @@ body {
     .table-header {
         padding: 0.5rem 1rem;
     }
-    
+
     .table-name {
         font-size: 1.2rem;
     }
-    
+
     .table-details {
         font-size: 0.8rem;
     }
-    
+
     .game-container {
         padding: 0.5rem;
     }
-    
+
     .poker-table {
         height: 250px;
     }
-    
+
     .action-panel {
         padding: 1rem;
         margin-bottom: 60px;
     }
-    
+
     .mobile-action-bar {
         padding: 0.5rem;
     }
-    
+
     .mobile-btn {
         width: 40px;
         height: 40px;
@@ -1572,11 +1747,11 @@ body {
     .poker-table {
         border-color: white;
     }
-    
+
     .card {
         border: 2px solid black;
     }
-    
+
     .player-info {
         border-width: 3px;
     }
@@ -1589,11 +1764,11 @@ body {
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
     }
-    
+
     .card.dealing {
         animation: none;
     }
-    
+
     .player-bet.new {
         animation: none;
     }
@@ -1620,6 +1795,7 @@ body {
     white-space: nowrap;
     border: 0;
 }
+
 /* Addi
 tional Card Animations and Visual Feedback */
 .card.flip-in {
@@ -1635,10 +1811,12 @@ tional Card Animations and Visual Feedback */
         transform: rotateY(-90deg) scale(0.8);
         opacity: 0;
     }
+
     50% {
         transform: rotateY(0deg) scale(1.1);
         opacity: 0.8;
     }
+
     100% {
         transform: rotateY(0deg) scale(1);
         opacity: 1;
@@ -1650,6 +1828,7 @@ tional Card Animations and Visual Feedback */
         transform: rotateY(0deg) scale(1);
         opacity: 1;
     }
+
     100% {
         transform: rotateY(90deg) scale(0.8);
         opacity: 0;
@@ -1673,10 +1852,12 @@ tional Card Animations and Visual Feedback */
         transform: scale(0.5);
         opacity: 0.8;
     }
+
     50% {
         transform: scale(1.2);
         opacity: 1;
     }
+
     100% {
         transform: scale(0) translateY(-20px);
         opacity: 0;
@@ -1690,9 +1871,12 @@ tional Card Animations and Visual Feedback */
 }
 
 @keyframes winnerGlow {
-    0%, 100% {
+
+    0%,
+    100% {
         box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
     }
+
     50% {
         box-shadow: 0 0 30px rgba(255, 215, 0, 0.8);
         transform: scale(1.05);
@@ -1728,10 +1912,12 @@ tional Card Animations and Visual Feedback */
     0% {
         transform: scale(1);
     }
+
     50% {
         transform: scale(1.2);
         color: var(--success-color);
     }
+
     100% {
         transform: scale(1);
         color: var(--gold);
@@ -1753,10 +1939,13 @@ tional Card Animations and Visual Feedback */
 }
 
 @keyframes turnPulse {
-    0%, 100% {
+
+    0%,
+    100% {
         opacity: 0.3;
         transform: scale(1);
     }
+
     50% {
         opacity: 0.8;
         transform: scale(1.02);
@@ -1770,7 +1959,7 @@ tional Card Animations and Visual Feedback */
         box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
         z-index: 10;
     }
-    
+
     .player-cards .card:hover {
         transform: translateY(-3px) scale(1.1);
     }
@@ -1790,9 +1979,11 @@ tional Card Animations and Visual Feedback */
         width: 0;
         opacity: 0;
     }
+
     50% {
         opacity: 1;
     }
+
     100% {
         width: 100px;
         opacity: 0;
@@ -1805,13 +1996,18 @@ tional Card Animations and Visual Feedback */
 }
 
 @keyframes allInFlash {
-    0%, 100% {
+
+    0%,
+    100% {
         background: rgba(0, 0, 0, 0.8);
     }
-    25%, 75% {
+
+    25%,
+    75% {
         background: rgba(220, 53, 69, 0.3);
         border-color: var(--danger-color);
     }
+
     50% {
         background: rgba(220, 53, 69, 0.5);
         transform: scale(1.05);
@@ -1908,24 +2104,25 @@ tional Card Animations and Visual Feedback */
 
 /* Print Styles (for hand history) */
 @media print {
+
     .table-header,
     .side-panel,
     .action-panel,
     .mobile-action-bar {
         display: none !important;
     }
-    
+
     .poker-table {
         background: white !important;
         border-color: black !important;
         color: black !important;
     }
-    
+
     .card {
         border: 1px solid black !important;
         background: white !important;
     }
-    
+
     .player-info {
         background: white !important;
         border: 1px solid black !important;
@@ -1959,6 +2156,7 @@ tional Card Animations and Visual Feedback */
 
 /* Accessibility Improvements */
 @media (prefers-reduced-motion: reduce) {
+
     .card.dealing,
     .card.flip-in,
     .card.flip-out,
@@ -1969,7 +2167,7 @@ tional Card Animations and Visual Feedback */
     .player-info.all-in {
         animation: none !important;
     }
-    
+
     .card:hover,
     .action-btn:hover {
         transform: none !important;
@@ -1981,17 +2179,17 @@ tional Card Animations and Visual Feedback */
     .poker-table {
         border: 4px solid white;
     }
-    
+
     .card {
         border: 2px solid black;
         background: white;
     }
-    
+
     .player-info {
         border: 2px solid white;
         background: black;
     }
-    
+
     .action-btn {
         border: 2px solid white;
     }
@@ -2043,18 +2241,19 @@ tional Card Animations and Visual Feedback */
 
 /* Improved Mobile Touch Targets */
 @media (max-width: 768px) {
+
     .action-btn,
     .quick-bet-btn,
     .mobile-btn {
         min-height: 44px;
         min-width: 44px;
     }
-    
+
     .chat-input,
     .bet-amount-input {
         min-height: 44px;
     }
-    
+
     .bet-slider {
         min-height: 44px;
         padding: 10px 0;
@@ -2099,7 +2298,9 @@ tional Card Animations and Visual Feedback */
 .error-state .error-details {
     font-size: 0.9rem;
     opacity: 0.8;
-}/* 
+}
+
+/* 
 Player indicator styles */
 .player-indicator {
     background: var(--gold);
@@ -2145,8 +2346,18 @@ Player indicator styles */
 }
 
 @keyframes fadeInOut {
-    0%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-    20%, 80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+    0%,
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.8);
+    }
+
+    20%,
+    80% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
 }
 
 /* Enhanced empty seat styling */
@@ -2193,6 +2404,7 @@ Player indicator styles */
     opacity: 0.5;
     animation: pulse 2s infinite;
 }
+
 /* G
 ame Action Messages in Chat */
 .chat-message.game-action {
@@ -2275,7 +2487,7 @@ ame Action Messages in Chat */
         flex-direction: column;
         align-items: flex-start;
     }
-    
+
     .action-timestamp {
         margin-left: 0;
         margin-top: 2px;
