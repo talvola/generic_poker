@@ -804,8 +804,6 @@ def get_hand_result(table_id: str):
         JSON response with hand result
     """
     try:
-        from ..services.game_state_manager import GameStateManager
-        
         # Get game session
         session = game_orchestrator.get_session(table_id)
         if not session:
@@ -814,18 +812,79 @@ def get_hand_result(table_id: str):
                 'error': 'Game session not found'
             }), 404
         
-        # Process hand completion (this would typically be called when a hand ends)
-        hand_result = GameStateManager.process_hand_completion(session)
+        # Check if the game is in COMPLETE state (showdown finished)
+        if not session.game or session.game.state.name != 'COMPLETE':
+            return jsonify({
+                'success': False,
+                'error': 'Hand not complete yet'
+            }), 400
         
-        if not hand_result:
+        # Get hand results from the game engine
+        hand_results = session.game.get_hand_results()
+        
+        if not hand_results:
             return jsonify({
                 'success': False,
                 'error': 'No hand result available'
             }), 404
         
+        # Convert to JSON format for frontend
+        results_dict = {
+            'is_complete': hand_results.is_complete,
+            'total_pot': hand_results.total_pot,
+            'pots': [],
+            'hands': {},
+            'winning_hands': []
+        }
+        
+        # Convert pots
+        for pot in hand_results.pots:
+            pot_dict = {
+                'amount': pot.amount,
+                'winners': pot.winners,
+                'split': pot.split,
+                'pot_type': pot.pot_type,
+                'side_pot_index': pot.side_pot_index,
+                'eligible_players': list(pot.eligible_players) if pot.eligible_players else [],
+                'amount_per_player': pot.amount_per_player if hasattr(pot, 'amount_per_player') else pot.amount // len(pot.winners) if pot.winners else 0
+            }
+            results_dict['pots'].append(pot_dict)
+        
+        # Convert hands
+        for player_id, player_hands in hand_results.hands.items():
+            results_dict['hands'][player_id] = []
+            for hand in player_hands:
+                hand_dict = {
+                    'player_id': hand.player_id,
+                    'cards': [str(card) for card in hand.cards] if hand.cards else [],
+                    'hand_name': hand.hand_name,
+                    'hand_description': hand.hand_description,
+                    'evaluation_type': hand.evaluation_type,
+                    'hand_type': hand.hand_type,
+                    'community_cards': hand.community_cards if hasattr(hand, 'community_cards') else [],
+                    'used_hole_cards': [str(card) for card in hand.used_hole_cards] if hand.used_hole_cards else [],
+                    'rank': hand.rank if hasattr(hand, 'rank') else 0,
+                    'ordered_rank': hand.ordered_rank if hasattr(hand, 'ordered_rank') else 0
+                }
+                results_dict['hands'][player_id].append(hand_dict)
+        
+        # Convert winning hands
+        for winning_hand in hand_results.winning_hands:
+            winning_dict = {
+                'player_id': winning_hand.player_id,
+                'cards': [str(card) for card in winning_hand.cards] if winning_hand.cards else [],
+                'hand_name': winning_hand.hand_name,
+                'hand_description': winning_hand.hand_description,
+                'evaluation_type': winning_hand.evaluation_type,
+                'hand_type': winning_hand.hand_type,
+                'community_cards': winning_hand.community_cards if hasattr(winning_hand, 'community_cards') else [],
+                'used_hole_cards': [str(card) for card in winning_hand.used_hole_cards] if winning_hand.used_hole_cards else []
+            }
+            results_dict['winning_hands'].append(winning_dict)
+        
         return jsonify({
             'success': True,
-            'hand_result': hand_result.to_dict()
+            'hand_result': results_dict
         })
         
     except Exception as e:

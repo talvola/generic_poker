@@ -676,6 +676,26 @@ class WebSocketManager:
             
         except Exception as e:
             logger.error(f"Failed to broadcast game state update: {e}")
+
+    def broadcast_hand_complete(self, table_id: str, hand_results: Dict[str, Any]) -> None:
+        """Broadcast hand completion with showdown results to all table participants.
+        
+        Args:
+            table_id: ID of the table
+            hand_results: Hand results from the game engine
+        """
+        try:
+            hand_complete_data = {
+                'table_id': table_id,
+                'hand_results': hand_results,
+                'timestamp': datetime.utcnow().isoformat()
+            }
+            
+            self.broadcast_to_table(table_id, GameEvent.HAND_COMPLETE, hand_complete_data)
+            logger.info(f"Broadcasted hand completion to table {table_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to broadcast hand completion: {e}")
     
     def send_notification(self, user_id: str, message: str, notification_type: str = "info") -> bool:
         """Send a notification to a user.

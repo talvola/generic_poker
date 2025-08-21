@@ -149,6 +149,10 @@ class PokerTable {
             this.animateCardDealing(data);
         });
 
+        this.socket.on('hand_complete', (data) => {
+            this.handleHandComplete(data);
+        });
+
         this.socket.on('pot_update', (data) => {
             this.updatePotDisplay(data);
         });
@@ -285,6 +289,9 @@ class PokerTable {
 
     updateGameState(data) {
         console.log('DEBUG: updateGameState called with data:', data);
+        console.log('DEBUG: Game state value:', data.game_state);
+        console.log('DEBUG: Has hand_results:', !!data.hand_results);
+        
         this.gameState = data;
         this.currentUser = data.current_user;
         this.players = data.players || {};
@@ -296,6 +303,21 @@ class PokerTable {
         console.log('DEBUG: currentUser:', this.currentUser);
         console.log('DEBUG: current_player:', data.current_player);
         console.log('DEBUG: isMyTurn:', this.isMyTurn);
+        
+        // Check if hand is complete (showdown finished)
+        if (data.game_state === 'complete') {
+            console.log('DEBUG: Game state is complete');
+            if (data.hand_results) {
+                console.log('DEBUG: Hand complete detected with results in game state');
+                console.log('DEBUG: Hand results data:', data.hand_results);
+                console.log('DEBUG: Current players data:', this.players);
+                this.displayShowdownResults(data.hand_results);
+            } else {
+                console.log('DEBUG: Game state is complete but no hand_results found');
+            }
+        } else {
+            console.log('DEBUG: Game state is not complete, it is:', data.game_state);
+        }
         
         // Update debug panel
         this.updateDebugPanel();
@@ -316,6 +338,25 @@ class PokerTable {
             this.loadAvailableActions();
         } else {
             this.stopTurnTimer();
+        }
+    }
+
+    async fetchAndDisplayHandResults() {
+        try {
+            console.log('DEBUG: Fetching hand results for table:', this.tableId);
+            const response = await fetch(`/api/games/sessions/${this.tableId}/hand-result`);
+            const result = await response.json();
+            
+            console.log('DEBUG: Hand result response:', result);
+
+            if (result.success && result.hand_result) {
+                // Display the showdown results
+                this.displayShowdownResults(result.hand_result);
+            } else {
+                console.log('DEBUG: No hand results available:', result.error);
+            }
+        } catch (error) {
+            console.error('Failed to fetch hand results:', error);
         }
     }
 
@@ -612,8 +653,7 @@ class PokerTable {
                 });
             } else {
                 this.showNotification('Action processed', 'success');
-                // Request updated game state
-                this.requestGameState();
+                // Game state will be updated via WebSocket events
             }
         } catch (error) {
             console.error('Failed to send player action:', error);
@@ -1072,6 +1112,309 @@ class PokerTable {
         const debugContent = document.getElementById('debug-content');
         const isVisible = debugContent.style.display !== 'none';
         debugContent.style.display = isVisible ? 'none' : 'block';
+    }
+
+    handleHandComplete(data) {
+        this.showNotification('Hand complete', 'success');
+
+        // Show detailed hand results if available
+        if (data.hand_results) {
+            this.displayShowdownResults(data.hand_results);
+        } else if (data.winners && data.winners.length > 0) {
+            // Fallback to simple winner display
+            const winnerNames = data.winners.map(w => w.username).join(', ');
+            this.displayChatMessage({
+                type: 'system',
+                message: `${winnerNames} won ${data.pot_amount}`,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        // Reset action buttons
+        setTimeout(() => {
+            this.updateActionButtons();
+        }, 2000);
+    }
+
+    displayShowdownResults(handResults) {
+        console.log('DEBUG: displayShowdownResults called');
+        console.log('DEBUG: handResults parameter:', handResults);
+        
+        try {
+            // Display in chat log with detailed information
+            console.log('DEBUG: Calling displayShowdownInChat');
+            this.displayShowdownInChat(handResults);
+            
+            // Show visual showdown overlay (optional)
+            console.log('DEBUG: Calling showShowdownOverlay');
+            this.showShowdownOverlay(handResults);
+            
+            console.log('DEBUG: Showdown display completed successfully');
+        } catch (error) {
+            console.error('DEBUG: Error in displayShowdownResults:', error);
+        }
+    }
+
+    displayShowdownInChat(handResults) {
+        // Display pot information
+        if (handResults.total_pot) {
+            this.displayChatMessage({
+                type: 'game_action',
+                action_type: 'showdown',
+                message: `*** SHOW DOWN *** Total pot: $${handResults.total_pot}`,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        // Display each player's hand
+        if (handResults.hands) {
+            Object.entries(handResults.hands).forEach(([playerId, playerHands]) => {
+                const player = this.players[Object.keys(this.players).find(key => 
+                    this.players[key].user_id === playerId
+                )];
+                const playerName = player ? player.username : playerId;
+
+                if (playerHands && playerHands.length > 0) {
+                    const hand = playerHands[0]; // Use first hand for display
+                    const cardsDisplay = this.formatCardsForDisplay(hand.cards);
+                    const holeCardsDisplay = this.formatHoleCardsForDisplay(hand.used_hole_cards);
+                    
+                    let handMessage = `${playerName}: shows [${holeCardsDisplay}] (${hand.hand_description})`;
+                    
+                    this.displayChatMessage({
+                        type: 'game_action',
+                        action_type: 'showdown',
+                        message: handMessage,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            });
+        }
+
+        // Display pot distribution
+        if (handResults.pots) {
+            handResults.pots.forEach((pot, index) => {
+                const potType = pot.pot_type === 'main' ? 'Main pot' : `Side pot-${pot.side_pot_index + 1}`;
+                const winnerNames = pot.winners.map(winnerId => {
+                    const player = this.players[Object.keys(this.players).find(key => 
+                        this.players[key].user_id === winnerId
+                    )];
+                    return player ? player.username : winnerId;
+                });
+
+                let potMessage;
+                if (pot.split) {
+                    const amountPerPlayer = Math.floor(pot.amount / pot.winners.length);
+                    potMessage = `${winnerNames.join(' and ')} split the ${potType.toLowerCase()} ($${pot.amount}) - $${amountPerPlayer} each`;
+                } else {
+                    potMessage = `${winnerNames.join(' and ')} collected $${pot.amount} from ${potType.toLowerCase()}`;
+                }
+
+                this.displayChatMessage({
+                    type: 'game_action',
+                    action_type: 'showdown',
+                    message: potMessage,
+                    timestamp: new Date().toISOString()
+                });
+            });
+        }
+
+        // Display summary
+        if (handResults.winning_hands && handResults.winning_hands.length > 0) {
+            const winningHand = handResults.winning_hands[0];
+            const player = this.players[Object.keys(this.players).find(key => 
+                this.players[key].user_id === winningHand.player_id
+            )];
+            const playerName = player ? player.username : winningHand.player_id;
+
+            this.displayChatMessage({
+                type: 'game_action',
+                action_type: 'showdown',
+                message: `*** SUMMARY *** ${playerName} wins with ${winningHand.hand_description}`,
+                timestamp: new Date().toISOString()
+            });
+        }
+    }
+
+    formatCardsForDisplay(cards) {
+        if (!cards || cards.length === 0) return '';
+        return cards.map(card => this.formatSingleCard(card)).join(' ');
+    }
+
+    formatHoleCardsForDisplay(holeCards) {
+        if (!holeCards || holeCards.length === 0) return '';
+        return holeCards.map(card => this.formatSingleCard(card)).join(' ');
+    }
+
+    formatSingleCard(card) {
+        if (typeof card === 'string') {
+            // Handle string format like "As" or "Kh"
+            return card;
+        } else if (card && card.rank && card.suit) {
+            // Handle object format
+            const suitMap = {
+                'hearts': 'h', 'h': 'h',
+                'diamonds': 'd', 'd': 'd', 
+                'clubs': 'c', 'c': 'c',
+                'spades': 's', 's': 's'
+            };
+            return `${card.rank}${suitMap[card.suit] || card.suit}`;
+        }
+        return String(card);
+    }
+
+    showShowdownOverlay(handResults) {
+        // Show showdown results in the container below the table instead of modal overlay
+        const container = document.getElementById('showdown-results-container');
+        const content = document.getElementById('showdown-results-content');
+        
+        if (!container || !content) {
+            console.error('Showdown results container not found');
+            return;
+        }
+        
+        // Create the showdown content
+        content.innerHTML = this.createShowdownContainerContent(handResults);
+        
+        // Show the container
+        container.style.display = 'block';
+        
+        // Auto-hide after 10 seconds
+        setTimeout(() => {
+            container.style.display = 'none';
+        }, 10000);
+        
+        // Add close button functionality
+        const closeBtn = content.querySelector('.showdown-close-btn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', () => {
+                container.style.display = 'none';
+            });
+        }
+    }
+
+    createShowdownContainerContent(handResults) {
+        let content = `
+            <button class="showdown-close-btn" title="Close">&times;</button>
+            <div class="showdown-results-header">Showdown Results</div>
+            <div class="showdown-results-body">
+        `;
+        
+        // Show winning hands
+        if (handResults.winning_hands && handResults.winning_hands.length > 0) {
+            handResults.winning_hands.forEach(winningHand => {
+                const player = this.players[Object.keys(this.players).find(key => 
+                    this.players[key].user_id === winningHand.player_id
+                )];
+                const playerName = player ? player.username : winningHand.player_id;
+                
+                content += `
+                    <div class="showdown-hand-result showdown-winner">
+                        <strong>${this.escapeHtml(playerName)}</strong> wins with <strong>${this.escapeHtml(winningHand.hand_description)}</strong>
+                        <br>
+                        <span style="font-family: monospace;">${this.formatCardsForDisplay(winningHand.cards)}</span>
+                    </div>
+                `;
+            });
+        }
+        
+        // Show all player hands
+        if (handResults.hands) {
+            Object.entries(handResults.hands).forEach(([playerId, playerHands]) => {
+                const player = this.players[Object.keys(this.players).find(key => 
+                    this.players[key].user_id === playerId
+                )];
+                const playerName = player ? player.username : playerId;
+                
+                // Skip if this player already shown as winner
+                const isWinner = handResults.winning_hands && handResults.winning_hands.some(w => w.player_id === playerId);
+                if (!isWinner && playerHands && playerHands.length > 0) {
+                    const hand = playerHands[0];
+                    content += `
+                        <div class="showdown-hand-result">
+                            <strong>${this.escapeHtml(playerName)}</strong>: ${this.escapeHtml(hand.hand_description)}
+                            <br>
+                            <span style="font-family: monospace;">${this.formatCardsForDisplay(hand.cards)}</span>
+                        </div>
+                    `;
+                }
+            });
+        }
+        
+        // Show pot distribution
+        if (handResults.pots && handResults.pots.length > 0) {
+            content += '<div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.3);">';
+            handResults.pots.forEach(pot => {
+                const winnerNames = pot.winners.map(winnerId => {
+                    const player = this.players[Object.keys(this.players).find(key => 
+                        this.players[key].user_id === winnerId
+                    )];
+                    return player ? player.username : winnerId;
+                });
+                
+                const potType = pot.pot_type === 'main' ? 'Main pot' : `Side pot`;
+                content += `
+                    <div style="margin-bottom: 0.5rem;">
+                        <strong>${potType}: $${pot.amount}</strong> → ${winnerNames.join(', ')}
+                    </div>
+                `;
+            });
+            content += '</div>';
+        }
+        
+        content += '</div>';
+        return content;
+    }
+
+    createShowdownOverlayContent(handResults) {
+        let content = '<div class="showdown-content">';
+        content += '<div class="showdown-header">Showdown Results</div>';
+        
+        // Show winning hands
+        if (handResults.winning_hands && handResults.winning_hands.length > 0) {
+            content += '<div class="winning-hands">';
+            handResults.winning_hands.forEach(winningHand => {
+                const player = this.players[Object.keys(this.players).find(key => 
+                    this.players[key].user_id === winningHand.player_id
+                )];
+                const playerName = player ? player.username : winningHand.player_id;
+                
+                content += `
+                    <div class="winning-hand">
+                        <div class="winner-name">${this.escapeHtml(playerName)}</div>
+                        <div class="winner-hand">${this.escapeHtml(winningHand.hand_description)}</div>
+                        <div class="winner-cards">${this.formatCardsForDisplay(winningHand.cards)}</div>
+                    </div>
+                `;
+            });
+            content += '</div>';
+        }
+        
+        // Show pot distribution
+        if (handResults.pots && handResults.pots.length > 0) {
+            content += '<div class="pot-distribution">';
+            handResults.pots.forEach(pot => {
+                const winnerNames = pot.winners.map(winnerId => {
+                    const player = this.players[Object.keys(this.players).find(key => 
+                        this.players[key].user_id === winnerId
+                    )];
+                    return player ? player.username : winnerId;
+                });
+                
+                content += `
+                    <div class="pot-award">
+                        <span class="pot-winners">${this.escapeHtml(winnerNames.join(', '))}</span>
+                        <span class="pot-amount">$${pot.amount}</span>
+                    </div>
+                `;
+            });
+            content += '</div>';
+        }
+        
+        content += '<div class="showdown-close">Click to close</div>';
+        content += '</div>';
+        
+        return content;
     }
 }
 

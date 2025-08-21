@@ -479,6 +479,10 @@ class PlayerActionManager:
                 # Notify other players via WebSocket
                 self._broadcast_player_action(table_id, user_id, action, amount, result)
                 
+                # Check if hand is complete (showdown finished)
+                if session.game and session.game.state.name == 'COMPLETE':
+                    self._handle_hand_completion(table_id, session)
+                
                 # Start timeout for next player if needed
                 self._start_next_player_timeout(session)
                 
@@ -757,4 +761,85 @@ class PlayerActionManager:
 
 
 # Global player action manager instance
-player_action_manager = PlayerActionManager()
+player_action_manager = PlayerActionManager()    
+def _handle_hand_completion(self, table_id: str, session: GameSession) -> None:
+        """Handle hand completion and broadcast showdown results.
+        
+        Args:
+            table_id: ID of the table
+            session: Game session that completed
+        """
+        try:
+            logger.info(f"Hand completed for table {table_id}, processing showdown results")
+            
+            # Get hand results from the game engine
+            hand_results = session.game.get_hand_results()
+            
+            if not hand_results:
+                logger.warning(f"No hand results available for completed hand at table {table_id}")
+                return
+            
+            # Convert to JSON format for frontend
+            results_dict = {
+                'is_complete': hand_results.is_complete,
+                'total_pot': hand_results.total_pot,
+                'pots': [],
+                'hands': {},
+                'winning_hands': []
+            }
+            
+            # Convert pots
+            for pot in hand_results.pots:
+                pot_dict = {
+                    'amount': pot.amount,
+                    'winners': pot.winners,
+                    'split': pot.split,
+                    'pot_type': pot.pot_type,
+                    'side_pot_index': pot.side_pot_index,
+                    'eligible_players': list(pot.eligible_players) if pot.eligible_players else [],
+                    'amount_per_player': pot.amount // len(pot.winners) if pot.winners else 0
+                }
+                results_dict['pots'].append(pot_dict)
+            
+            # Convert hands
+            for player_id, player_hands in hand_results.hands.items():
+                results_dict['hands'][player_id] = []
+                for hand in player_hands:
+                    hand_dict = {
+                        'player_id': hand.player_id,
+                        'cards': [str(card) for card in hand.cards] if hand.cards else [],
+                        'hand_name': hand.hand_name,
+                        'hand_description': hand.hand_description,
+                        'evaluation_type': hand.evaluation_type,
+                        'hand_type': hand.hand_type,
+                        'community_cards': hand.community_cards if hasattr(hand, 'community_cards') else [],
+                        'used_hole_cards': [str(card) for card in hand.used_hole_cards] if hand.used_hole_cards else [],
+                        'rank': hand.rank if hasattr(hand, 'rank') else 0,
+                        'ordered_rank': hand.ordered_rank if hasattr(hand, 'ordered_rank') else 0
+                    }
+                    results_dict['hands'][player_id].append(hand_dict)
+            
+            # Convert winning hands
+            for winning_hand in hand_results.winning_hands:
+                winning_dict = {
+                    'player_id': winning_hand.player_id,
+                    'cards': [str(card) for card in winning_hand.cards] if winning_hand.cards else [],
+                    'hand_name': winning_hand.hand_name,
+                    'hand_description': winning_hand.hand_description,
+                    'evaluation_type': winning_hand.evaluation_type,
+                    'hand_type': winning_hand.hand_type,
+                    'community_cards': winning_hand.community_cards if hasattr(winning_hand, 'community_cards') else [],
+                    'used_hole_cards': [str(card) for card in winning_hand.used_hole_cards] if winning_hand.used_hole_cards else []
+                }
+                results_dict['winning_hands'].append(winning_dict)
+            
+            # Broadcast hand completion to all table participants
+            websocket_manager = get_websocket_manager()
+            if websocket_manager:
+                websocket_manager.broadcast_hand_complete(table_id, results_dict)
+                logger.info(f"Broadcasted hand completion results for table {table_id}")
+            else:
+                logger.warning("WebSocket manager not available for broadcasting hand completion")
+                
+        except Exception as e:
+            logger.error(f"Failed to handle hand completion for table {table_id}: {e}")

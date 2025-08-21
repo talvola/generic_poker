@@ -835,8 +835,12 @@ def handle_action(data):
                     state = get_game_state_for_player(pid)
                     socketio.emit('game_state', state, room=s)
                 
-                # Check if we need to advance to the next step
-                if result.advance_step:
+                # Check if hand is complete (all but one folded or other completion condition)
+                if game.state == GameState.COMPLETE:
+                    print(f"Hand completed after {player_id}'s action - not advancing to next step")
+                    # Hand is complete, don't advance further
+                    # The game state broadcast above will show the complete state
+                elif result.advance_step:
                     print(f"Advancing to next step after {player_id}'s action")
                     game._next_step()
 

@@ -124,6 +124,32 @@ class GameSession:
     def remove_player(user_id: str) -> int
     def process_action(user_id: str, action: PlayerAction) -> ActionResult
     def get_game_state_for_player(user_id: str) -> GameStateView
+    def check_hand_completion() -> bool
+    def start_next_hand() -> None
+    def handle_all_but_one_folded() -> None
+```
+
+#### Hand Progression Design
+
+The system implements automatic hand progression to ensure continuous gameplay:
+
+**Hand Completion Detection:**
+- Monitor game state for `GameState.COMPLETE` 
+- Detect when all but one player has folded during any betting round
+- Trigger immediate hand ending and pot distribution
+
+**Next Hand Initialization:**
+- Reset game state to step 0 after brief result display period (3-5 seconds)
+- Advance dealer button to next active player
+- Include all seated players with sufficient chips for forced bets
+- Exclude players who left during previous hand
+- Start new hand automatically without manual intervention
+
+**Continuous Play Flow:**
+```
+Hand Complete → Display Results → Advance Dealer → Reset State → Start Next Hand
+     ↑                                                                    ↓
+     └────────────────── Continuous Loop ──────────────────────────────────┘
 ```
 
 ### 4. Real-Time Communication System
@@ -291,7 +317,208 @@ class ActionTimeoutManager:
     def get_remaining_time(player_id: str) -> int
 ```
 
-### 7. Database Layer
+### 7. Rules Management System
+
+#### RulesManager Class
+```python
+class RulesManager:
+    def __init__(self):
+        self.rules_cache: Dict[str, GeneratedRules] = {}
+        self.manual_rules: Dict[str, str] = {}
+        
+    def get_rules_for_variant(variant: str) -> RulesPresentation
+    def generate_rules_from_config(config_path: str) -> GeneratedRules
+    def cache_generated_rules(variant: str, rules: GeneratedRules) -> None
+    def get_manual_rules(variant: str) -> Optional[str]
+    def set_manual_rules(variant: str, rules_text: str) -> None
+    def clear_rules_cache() -> None
+```
+
+#### RulesGenerator Class
+```python
+class RulesGenerator:
+    def __init__(self):
+        self.config_parser = GameConfigParser()
+        self.markdown_formatter = MarkdownFormatter()
+        
+    def generate_from_json(config: Dict) -> GeneratedRules
+    def parse_game_flow(gameplay: List[Dict]) -> List[GameStep]
+    def format_betting_structure(betting_info: Dict) -> str
+    def format_showdown_rules(showdown: Dict) -> str
+    def generate_statistics_table(config: Dict) -> str
+    def format_dealing_sequence(deal_steps: List[Dict]) -> List[str]
+```
+
+#### GameConfigParser Class
+```python
+class GameConfigParser:
+    def parse_config_file(file_path: str) -> Dict
+    def extract_game_metadata(config: Dict) -> GameMetadata
+    def extract_gameplay_steps(config: Dict) -> List[GameplayStep]
+    def extract_showdown_rules(config: Dict) -> ShowdownRules
+    def validate_config_structure(config: Dict) -> ConfigValidation
+
+@dataclass
+class GameMetadata:
+    name: str
+    references: List[str]
+    min_players: int
+    max_players: int
+    deck_type: str
+    deck_size: int
+    betting_structures: List[str]
+
+@dataclass
+class GameplayStep:
+    step_type: str  # "bet", "deal", "showdown", "discard", etc.
+    name: str
+    details: Dict
+    description: str
+
+@dataclass
+class ShowdownRules:
+    order: str
+    starting_from: str
+    cards_required: str
+    best_hand: List[Dict]
+    evaluation_type: str
+```
+
+#### MarkdownFormatter Class
+```python
+class MarkdownFormatter:
+    def format_rules_document(rules: GeneratedRules) -> str
+    def format_game_overview(metadata: GameMetadata) -> str
+    def format_statistics_table(metadata: GameMetadata) -> str
+    def format_gameplay_steps(steps: List[GameplayStep]) -> str
+    def format_showdown_section(showdown: ShowdownRules) -> str
+    def format_betting_rounds(betting_steps: List[GameplayStep]) -> str
+    def format_dealing_sequence(dealing_steps: List[GameplayStep]) -> str
+```
+
+#### Data Models for Rules
+
+```python
+@dataclass
+class GeneratedRules:
+    variant: str
+    metadata: GameMetadata
+    overview: str
+    statistics_table: str
+    gameplay_steps: List[str]
+    showdown_rules: str
+    generated_at: datetime
+    markdown_content: str
+
+@dataclass
+class RulesPresentation:
+    variant: str
+    title: str
+    content: str
+    content_type: str  # "generated", "manual", "fallback"
+    last_updated: datetime
+    has_visual_aids: bool = False
+
+@dataclass
+class ConfigValidation:
+    is_valid: bool
+    errors: List[str]
+    warnings: List[str]
+    missing_fields: List[str]
+```
+
+#### RulesAPI Class
+```python
+class RulesAPI:
+    def __init__(self, rules_manager: RulesManager):
+        self.rules_manager = rules_manager
+        
+    def get_variant_rules(variant: str) -> RulesPresentation
+    def get_rules_list() -> List[VariantSummary]
+    def search_rules(query: str) -> List[VariantSummary]
+    def regenerate_rules(variant: str) -> GeneratedRules
+    def update_manual_rules(variant: str, content: str) -> bool
+
+@dataclass
+class VariantSummary:
+    variant: str
+    display_name: str
+    players: str
+    cards: int
+    betting_rounds: int
+    complexity: str  # "Simple", "Moderate", "Complex"
+    has_rules: bool
+```
+
+### 8. Future Enhancement: Visual Rules System
+
+#### VisualRulesGenerator Class (Future Implementation)
+```python
+class VisualRulesGenerator:
+    def __init__(self):
+        self.diagram_generator = DiagramGenerator()
+        self.layout_analyzer = GameLayoutAnalyzer()
+        
+    def generate_visual_rules(variant: str, config: Dict) -> VisualRules
+    def create_dealing_diagram(dealing_steps: List[Dict]) -> DiagramSVG
+    def create_betting_flow_diagram(betting_steps: List[Dict]) -> DiagramSVG
+    def create_table_layout_diagram(player_count: int, variant: str) -> DiagramSVG
+    def create_card_visibility_diagram(variant: str) -> DiagramSVG
+
+@dataclass
+class VisualRules:
+    variant: str
+    diagrams: List[DiagramSVG]
+    interactive_elements: List[InteractiveElement]
+    accessibility_text: str
+
+@dataclass
+class DiagramSVG:
+    diagram_type: str
+    svg_content: str
+    alt_text: str
+    caption: str
+```
+
+### 9. Future Enhancement: External Database Integration
+
+#### ExternalGameImporter Class (Future Implementation)
+```python
+class ExternalGameImporter:
+    def __init__(self):
+        self.github_client = GitHubClient()
+        self.converter = GameDefinitionConverter()
+        
+    def import_from_poker_db(repo_url: str) -> ImportResult
+    def analyze_game_compatibility(external_game: Dict) -> CompatibilityReport
+    def convert_external_game(external_game: Dict) -> Optional[Dict]
+    def validate_converted_game(converted_config: Dict) -> ValidationResult
+
+@dataclass
+class ImportResult:
+    total_games: int
+    successfully_imported: int
+    failed_imports: int
+    compatibility_report: CompatibilityReport
+    imported_games: List[str]
+    failed_games: List[FailedImport]
+
+@dataclass
+class CompatibilityReport:
+    supported_features: List[str]
+    unsupported_features: List[str]
+    coverage_percentage: float
+    missing_capabilities: List[str]
+
+@dataclass
+class FailedImport:
+    game_name: str
+    reason: str
+    missing_features: List[str]
+    raw_definition: Dict
+```
+
+### 10. Database Layer
 
 #### Database Schema
 
@@ -349,6 +576,32 @@ CREATE TABLE transactions (
     table_id TEXT,
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+**Game Rules Table**
+```sql
+CREATE TABLE game_rules (
+    id TEXT PRIMARY KEY,
+    variant TEXT UNIQUE NOT NULL,
+    rules_type TEXT NOT NULL,  -- 'generated', 'manual', 'fallback'
+    content TEXT NOT NULL,
+    markdown_content TEXT,
+    generated_at TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE
+);
+```
+
+**Rules Generation Cache Table**
+```sql
+CREATE TABLE rules_cache (
+    variant TEXT PRIMARY KEY,
+    config_hash TEXT NOT NULL,
+    generated_rules TEXT NOT NULL,
+    metadata TEXT,  -- JSON
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP
 );
 ```
 
@@ -427,6 +680,67 @@ class ErrorResponse:
 - **Transaction Rollback**: Atomic operations for chip transfers
 - **Graceful Degradation**: Continue game with disconnected players
 
+## API Endpoints
+
+### Rules Management Endpoints
+
+```python
+# Get rules for a specific variant
+GET /api/rules/{variant}
+Response: RulesPresentation
+
+# Get list of all variants with rule availability
+GET /api/rules/
+Response: List[VariantSummary]
+
+# Search rules by game name or features
+GET /api/rules/search?q={query}
+Response: List[VariantSummary]
+
+# Regenerate rules for a variant (admin only)
+POST /api/rules/{variant}/regenerate
+Response: GeneratedRules
+
+# Update manual rules for a variant (admin only)
+PUT /api/rules/{variant}/manual
+Body: {"content": "markdown content"}
+Response: {"success": bool, "message": str}
+
+# Get raw game configuration (debug/admin)
+GET /api/rules/{variant}/config
+Response: Dict (raw JSON config)
+```
+
+### Integration with Existing Endpoints
+
+The rules system integrates with existing table and lobby endpoints:
+
+```python
+# Enhanced table creation with rules preview
+POST /api/tables/create
+Body: {
+    "variant": str,
+    "show_rules_preview": bool,  # New optional field
+    ...existing fields
+}
+Response: {
+    "table": TableInfo,
+    "rules_preview": Optional[str]  # First 200 chars of rules
+}
+
+# Enhanced lobby with rules availability
+GET /api/lobby
+Response: {
+    "tables": List[TableInfo],
+    "variants": List[{
+        "name": str,
+        "display_name": str,
+        "has_rules": bool,
+        "complexity": str
+    }]
+}
+```
+
 ## Testing Strategy
 
 ### Unit Testing
@@ -434,12 +748,18 @@ class ErrorResponse:
 - **User Management**: Authentication, bankroll operations
 - **Table Management**: Creation, joining, leaving operations
 - **Bot Behavior**: Decision-making algorithms and timing
+- **Rules Generation**: Test automatic rule generation from JSON configs
+- **Rules Formatting**: Validate markdown output and content structure
+- **Config Parsing**: Test parsing of all 192+ game configuration files
 
 ### Integration Testing
 - **WebSocket Communication**: Real-time event handling
 - **Database Operations**: CRUD operations and transactions
 - **Multi-table Scenarios**: Concurrent game management
 - **Cross-browser Compatibility**: Desktop and mobile browsers
+- **Rules API Integration**: Test rules endpoints with frontend components
+- **Rules Cache Performance**: Validate caching behavior and cache invalidation
+- **Config File Processing**: Test bulk processing of all game configuration files
 
 ### End-to-End Testing
 - **Complete Game Flows**: Full hands from start to finish
@@ -451,6 +771,9 @@ class ErrorResponse:
 - **Mock Decks**: Predetermined card sequences for consistent testing
 - **Test Users**: Pre-created accounts with various bankroll levels
 - **Test Tables**: Various configurations for different scenarios
+- **Sample Configs**: Representative game configurations for rules testing
+- **Expected Rules**: Golden master files for rules generation validation
+- **Edge Case Configs**: Unusual or complex game configurations for robustness testing
 
 ## Security Considerations
 

@@ -2493,3 +2493,261 @@ ame Action Messages in Chat */
         margin-top: 2px;
     }
 }
+/* Showdown Results Container (below table) */
+.showdown-results-container {
+    width: 100%;
+    max-width: 800px;
+    margin: 1rem auto;
+    padding: 0 1rem;
+    animation: slideDown 0.5s ease-out;
+}
+
+.showdown-results-content {
+    background: linear-gradient(135deg, #2c5aa0 0%, #1e3f73 100%);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    border: 2px solid var(--gold);
+    position: relative;
+}
+
+.showdown-results-header {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: var(--gold);
+    text-align: center;
+    margin-bottom: 1rem;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.showdown-results-body {
+    color: white;
+}
+
+.showdown-hand-result {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    border-left: 4px solid var(--gold);
+}
+
+.showdown-winner {
+    background: rgba(255, 215, 0, 0.2);
+    border-left-color: var(--gold);
+}
+
+.showdown-close-btn {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.showdown-close-btn:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Sh
+owdown Overlay Styles */
+.showdown-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    animation: fadeIn 0.3s ease;
+}
+
+.showdown-content {
+    background: linear-gradient(135deg, #2c5aa0 0%, #1e3f73 100%);
+    border-radius: var(--border-radius);
+    padding: 2rem;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-hover);
+    border: 2px solid var(--gold);
+    text-align: center;
+}
+
+.showdown-header {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: var(--gold);
+    margin-bottom: 1.5rem;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.winning-hands {
+    margin-bottom: 1.5rem;
+}
+
+.winning-hand {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: var(--border-radius);
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.winner-name {
+    font-size: 1.3rem;
+    font-weight: bold;
+    color: var(--gold);
+    margin-bottom: 0.5rem;
+}
+
+.winner-hand {
+    font-size: 1.1rem;
+    color: white;
+    margin-bottom: 0.5rem;
+}
+
+.winner-cards {
+    font-family: 'Courier New', monospace;
+    font-size: 1rem;
+    color: var(--light-color);
+    background: rgba(0, 0, 0, 0.3);
+    padding: 0.5rem;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.pot-distribution {
+    margin-bottom: 1.5rem;
+}
+
+.pot-award {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(40, 167, 69, 0.2);
+    border: 1px solid var(--success-color);
+    border-radius: var(--border-radius);
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.pot-winners {
+    font-weight: bold;
+    color: white;
+}
+
+.pot-amount {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: var(--gold);
+}
+
+.showdown-close {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
+    margin-top: 1rem;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.showdown-close:hover {
+    color: white;
+}
+
+/* Enhanced chat styling for showdown messages */
+.chat-message.game-action .showdown-action {
+    background: linear-gradient(90deg, rgba(255, 215, 0, 0.2) 0%, rgba(255, 215, 0, 0.1) 100%);
+    border-left: 4px solid var(--gold);
+    padding: 0.5rem;
+    margin: 0.25rem 0;
+    border-radius: 4px;
+}
+
+.chat-message.game-action .showdown-action .action-message {
+    color: var(--gold);
+    font-weight: bold;
+}
+
+/* Animation for showdown overlay */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* Mobile responsive adjustments for showdown */
+@media (max-width: 768px) {
+    .showdown-results-container {
+        margin: 0.5rem auto;
+        padding: 0 0.5rem;
+    }
+    
+    .showdown-results-content {
+        padding: 1rem;
+    }
+    
+    .showdown-results-header {
+        font-size: 1.3rem;
+    }
+    
+    .showdown-hand-result {
+        padding: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .showdown-content {
+        padding: 1.5rem;
+        margin: 1rem;
+        max-height: 90vh;
+    }
+    
+    .showdown-header {
+        font-size: 1.5rem;
+    }
+    
+    .winner-name {
+        font-size: 1.1rem;
+    }
+    
+    .winner-hand {
+        font-size: 1rem;
+    }
+    
+    .pot-award {
+        flex-direction: column;
+        text-align: center;
+        gap: 0.5rem;
+    }
+}

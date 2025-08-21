@@ -252,6 +252,8 @@ This document outlines the requirements for evolving the existing generic poker 
 6. WHEN a betting round is complete THEN the system SHALL automatically progress to the next step in the game sequence
 7. WHEN a hand reaches showdown THEN the system SHALL use the game engine's get_hand_results() method to determine winners and distribute chips
 8. WHEN a hand is complete THEN the system SHALL prepare for the next hand with updated chip stacks and dealer button position
+9. WHEN all players except one have folded during any betting round THEN the system SHALL immediately end the hand and award the pot to the remaining player
+10. WHEN a hand ends (by showdown or all but one folding) THEN the system SHALL automatically start the next hand after a brief display period
 
 ### Requirement 17: Comprehensive Player Actions and Betting Systems
 
@@ -391,7 +393,62 @@ This document outlines the requirements for evolving the existing generic poker 
 6. WHEN a player wants to remove chips during play THEN the system SHALL prevent the action except when leaving the table
 7. WHEN a player goes all-in THEN the system SHALL handle their remaining chips according to poker all-in rules and side pot creation
 
-### Requirement 22: Administrative User Management
+### Requirement 22: Poker Rules Presentation
+
+**User Story:** As a poker player, I want to understand the rules of unfamiliar poker variants so that I can play confidently and make informed decisions.
+
+#### Acceptance Criteria
+
+1. WHEN viewing a poker variant in the lobby or table creation THEN the system SHALL provide a "View Rules" option that displays human-readable game rules
+2. WHEN displaying rules THEN the system SHALL present the information in clear, structured English rather than raw JSON configuration
+3. WHEN showing game rules THEN the system SHALL include game overview, dealing sequence, betting rounds, and winning conditions
+4. WHEN a player requests rules for a variant THEN the system SHALL display the information in an easily digestible format similar to poker reference materials
+5. WHEN rules are displayed THEN the system SHALL include key statistics like number of cards, players, betting rounds, and hand types
+6. WHEN viewing rules THEN the system SHALL organize information logically with sections for setup, gameplay flow, and showdown rules
+7. WHEN rules presentation is unavailable for a variant THEN the system SHALL gracefully fall back to showing the basic game configuration in a user-friendly format
+
+### Requirement 23: Automated Rules Generation
+
+**User Story:** As a platform operator, I want to automatically generate readable rules from game configurations so that all 192+ poker variants have accessible rule explanations without manual effort.
+
+#### Acceptance Criteria
+
+1. WHEN the system processes a game configuration JSON THEN it SHALL automatically generate a structured rules explanation in markdown format
+2. WHEN generating rules THEN the system SHALL convert dealing sequences into step-by-step instructions (e.g., "Deal 2 cards face down to each player")
+3. WHEN processing betting rounds THEN the system SHALL describe the betting structure and sequence clearly (e.g., "Normal betting round starting with player to dealer's left")
+4. WHEN interpreting showdown rules THEN the system SHALL explain hand evaluation and winning conditions in plain English
+5. WHEN generating rules THEN the system SHALL include a summary table with key game statistics (cards, players, betting rounds, etc.)
+6. WHEN rules are auto-generated THEN the system SHALL format them consistently across all variants for easy comparison
+7. WHEN the auto-generation encounters unknown or complex rule elements THEN the system SHALL include the raw configuration details with explanatory context
+
+### Requirement 24: Enhanced Rules Presentation (Future)
+
+**User Story:** As a poker player, I want visually enhanced rule explanations so that I can quickly understand complex poker variants through diagrams and visual aids.
+
+#### Acceptance Criteria
+
+1. WHEN viewing rules for complex variants THEN the system SHALL optionally provide visual diagrams showing card layouts and dealing patterns
+2. WHEN displaying multi-board games THEN the system SHALL include visual representations of board layouts and relationships
+3. WHEN showing stud games THEN the system SHALL provide diagrams illustrating face-up and face-down card positions
+4. WHEN rules include visual elements THEN the system SHALL maintain accessibility with alt-text and text-based alternatives
+5. WHEN visual rules are displayed THEN the system SHALL use consistent iconography and styling across all variants
+6. WHEN creating visual aids THEN the system SHALL prioritize clarity and simplicity over complex graphics
+
+### Requirement 25: External Game Database Integration (Future)
+
+**User Story:** As a platform operator, I want to import poker variants from external databases so that I can expand the available games and validate our rule coverage.
+
+#### Acceptance Criteria
+
+1. WHEN importing from poker databases THEN the system SHALL analyze external game definitions for compatibility with our JSON schema
+2. WHEN processing external games THEN the system SHALL convert compatible variants to our internal JSON format automatically
+3. WHEN conversion is successful THEN the system SHALL add the new variants to the available game list with proper attribution
+4. WHEN games cannot be converted THEN the system SHALL report missing features or unsupported rule elements
+5. WHEN analyzing coverage THEN the system SHALL provide reports on what percentage of external games can be supported
+6. WHEN importing games THEN the system SHALL preserve original source attribution and references
+7. WHEN conflicts arise THEN the system SHALL allow manual review and adjustment of converted game definitions
+
+### Requirement 26: Administrative User Management
 
 **User Story:** As a platform administrator, I want to manage user accounts and monitor player activity so that I can maintain platform integrity and provide user support.
 

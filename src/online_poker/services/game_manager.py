@@ -261,6 +261,18 @@ class GameManager:
                 'current_user': {'id': current_user_id} if current_user_id else None
             }
             
+            # Check if hand is complete and add showdown results
+            if game.state == GameState.COMPLETE:
+                try:
+                    hand_results = game.get_hand_results()
+                    if hand_results:
+                        formatted_results = self._format_hand_results_for_ui(hand_results)
+                        state['hand_results'] = formatted_results
+                        logger.info(f"Added hand results to game state for table {table_id}")
+                        logger.debug(f"Hand results data: {formatted_results}")
+                except Exception as e:
+                    logger.error(f"Failed to get hand results for table {table_id}: {e}")
+            
             # Add valid actions for current player using PlayerActionManager
             if game.current_player and game.state == GameState.BETTING:
                 try:
@@ -515,8 +527,11 @@ class GameManager:
                     log_amount
                 )
                 
-                # Check if we need to advance to the next step
-                if result.advance_step:
+                # Check if hand is complete (all but one folded or other completion condition)
+                if game.state == GameState.COMPLETE:
+                    logger.info(f"Hand completed after bot {current_player_id} action - not advancing to next step")
+                    # Hand is complete, don't advance further
+                elif result.advance_step:
                     old_step = game.current_step
                     old_state = game.state.name
                     
@@ -805,5 +820,67 @@ class GameManager:
         
         logger.info(f"Cleaned up game for table {table_id}")
 
+    def _format_hand_results_for_ui(self, hand_results) -> Dict:
+        """Format hand results for UI display."""
+        try:
+            results_dict = {
+                'is_complete': hand_results.is_complete,
+                'total_pot': hand_results.total_pot,
+                'pots': [],
+                'hands': {},
+                'winning_hands': []
+            }
+            
+            # Convert pots
+            for pot in hand_results.pots:
+                pot_dict = {
+                    'amount': pot.amount,
+                    'winners': pot.winners,
+                    'split': pot.split,
+                    'pot_type': getattr(pot, 'pot_type', 'main'),
+                    'side_pot_index': getattr(pot, 'side_pot_index', None),
+                    'eligible_players': list(getattr(pot, 'eligible_players', [])),
+                    'amount_per_player': pot.amount // len(pot.winners) if pot.winners else 0
+                }
+                results_dict['pots'].append(pot_dict)
+            
+            # Convert hands
+            for player_id, player_hands in hand_results.hands.items():
+                results_dict['hands'][player_id] = []
+                for hand in player_hands:
+                    hand_dict = {
+                        'player_id': hand.player_id,
+                        'cards': [str(card) for card in hand.cards] if hand.cards else [],
+                        'hand_name': hand.hand_name,
+                        'hand_description': hand.hand_description,
+                        'evaluation_type': hand.evaluation_type,
+                        'hand_type': getattr(hand, 'hand_type', None),
+                        'community_cards': [str(card) for card in getattr(hand, 'community_cards', [])] if getattr(hand, 'community_cards', []) else [],
+                        'used_hole_cards': [str(card) for card in hand.used_hole_cards] if hand.used_hole_cards else [],
+                        'rank': getattr(hand, 'rank', 0),
+                        'ordered_rank': getattr(hand, 'ordered_rank', 0)
+                    }
+                    results_dict['hands'][player_id].append(hand_dict)
+            
+            # Convert winning hands
+            for winning_hand in hand_results.winning_hands:
+                winning_dict = {
+                    'player_id': winning_hand.player_id,
+                    'cards': [str(card) for card in winning_hand.cards] if winning_hand.cards else [],
+                    'hand_name': winning_hand.hand_name,
+                    'hand_description': winning_hand.hand_description,
+                    'evaluation_type': winning_hand.evaluation_type,
+                    'hand_type': getattr(winning_hand, 'hand_type', None),
+                    'community_cards': [str(card) for card in getattr(winning_hand, 'community_cards', [])] if getattr(winning_hand, 'community_cards', []) else [],
+                    'used_hole_cards': [str(card) for card in winning_hand.used_hole_cards] if winning_hand.used_hole_cards else []
+                }
+                results_dict['winning_hands'].append(winning_dict)
+            
+            return results_dict
+            
+        except Exception as e:
+            logger.error(f"Failed to format hand results for UI: {e}")
+            return {}
+
 # Global game manager instance
-game_manager = GameManager()
+game_manager = GameManager()    

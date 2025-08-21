@@ -307,7 +307,7 @@ class Game:
     def player_action(self, player_id: str, action: PlayerAction, amount: int = 0, cards: Optional[List[Card]] = None, declaration_data: Optional[List[Dict]] = None) -> ActionResult:
         """Delegate to PlayerActionHandler and handle step advancement."""
         result = self.action_handler.handle_action(player_id, action, amount, cards, declaration_data)
-        if result.advance_step and self.auto_progress:
+        if result.advance_step and self.auto_progress and self.state != GameState.COMPLETE:
             self._next_step()
             # Clean up temporary attributes
             for attr in ["current_discard_config", "current_draw_config", "current_separate_config", 
