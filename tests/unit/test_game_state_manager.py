@@ -282,7 +282,7 @@ class TestGameStateManager:
         mock_game_session.game.table.current_player = mock_player
         
         # Mock the player action manager
-        with patch('online_poker.services.game_state_manager.player_action_manager') as mock_action_manager:
+        with patch('online_poker.services.player_action_manager.player_action_manager') as mock_action_manager:
             mock_action_options = [
                 MagicMock(action_type=MagicMock(), min_amount=0, max_amount=500, default_amount=0, display_text="Fold"),
                 MagicMock(action_type=MagicMock(), min_amount=0, max_amount=500, default_amount=0, display_text="Check"),

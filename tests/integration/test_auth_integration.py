@@ -4,11 +4,11 @@ import pytest
 from flask import Flask
 from flask_login import LoginManager
 
-from src.online_poker.database import db, init_database
-from src.online_poker.auth import init_login_manager
-from src.online_poker.routes.auth_routes import auth_bp
-from src.online_poker.services.user_manager import UserManager
-from src.online_poker.services.auth_service import SessionManager
+from online_poker.database import db, init_database
+from online_poker.auth import init_login_manager
+from online_poker.routes.auth_routes import auth_bp
+from online_poker.services.user_manager import UserManager
+from online_poker.services.auth_service import SessionManager
 
 
 @pytest.fixture

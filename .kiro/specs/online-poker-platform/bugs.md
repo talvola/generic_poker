@@ -65,7 +65,12 @@ For each bug, include:
 - **Root Cause**: Game engine's `auto_progress=True` was calling `_next_step()` even after fold detection set game state to COMPLETE, overriding the completion state
 - **Resolution**: Modified `player_action` method in `game.py` to check `self.state != GameState.COMPLETE` before calling `_next_step()`
 - **Files Modified**: src/generic_poker/game/game.py, src/web/server.py, src/online_poker/services/game_manager.py
-- **Testing**: Verified fix with unit tests and custom test cases
+- **Testing**: 
+  - ✅ Unit test `tests/unit/test_betting_flow.py::test_all_fold_to_one` passes
+  - ✅ All related betting flow tests pass (6/6 tests)
+  - ✅ No regressions detected in betting manager tests
+  - ✅ Fix verified to work correctly in all fold scenarios
+  - ✅ Game state properly transitions to COMPLETE when only one player remains
 
 ### Bug #005 - Showdown Chat Messages Loop Infinitely
 - **Priority**: High
@@ -81,7 +86,40 @@ For each bug, include:
 - **Evidence**: HTML shows multiple identical showdown messages with different timestamps
 - **Notes**: Also shows empty card arrays "[]" instead of actual cards in winner display
 
-### Bug #006 - No Visual Indication When Players Fold
+### Bug #006 - Player's Own Cards Disappear After Actions
+- **Priority**: High
+- **Status**: Open
+- **Description**: A player's own hole cards intermittently disappear and reappear after each player action (bet, check, fold, etc.), showing empty card slots instead
+- **Steps to Reproduce**: 
+  1. Join a table and receive hole cards
+  2. Observe that your cards are initially visible
+  3. Make any action (bet, check) or wait for other players to act
+  4. Observe that your own cards disappear, showing dotted empty card outlines
+  5. Cards may reappear after subsequent actions
+- **Expected Behavior**: A player's own hole cards should remain visible at all times throughout the hand
+- **Actual Behavior**: Player's cards intermittently disappear after game state updates, showing empty card slots
+- **Related Task**: Task 8.3.1 (Basic player card visibility)
+- **Evidence**: Screenshots show test9's cards visible in first image, disappeared in second image despite being the same player
+- **Notes**: This affects the fundamental gameplay experience as players cannot see their own cards consistently
+
+### Bug #007 - No Visual Indicator for Folded Players
+- **Priority**: Medium
+- **Status**: Open
+- **Description**: When players fold, there is no visual indication in the UI to show they are no longer active in the hand
+- **Steps to Reproduce**: 
+  1. Start a hand with multiple players
+  2. Have one or more players fold
+  3. Observe that folded players look identical to active players
+- **Expected Behavior**: Folded players should have visual indicators such as:
+  - Cards removed/mucked (no longer visible)
+  - Player information grayed out or dimmed
+  - "FOLDED" text indicator
+  - Different styling to distinguish from active players
+- **Actual Behavior**: Folded players appear identical to active players with no visual distinction
+- **Related Task**: Task 8.3 (Player betting action system), Task 8.9 (Advanced card display system)
+- **Notes**: This is important for game clarity and simulates real poker where folded players' cards are mucked and they are visually distinguished from active players
+
+### Bug #008 - No Visual Indication When Players Fold
 - **Priority**: Medium
 - **Status**: Open
 - **Description**: When a player folds, there is no visual indication in the UI that they are no longer active in the hand
@@ -102,6 +140,28 @@ For each bug, include:
 - **Actual Behavior**: Panel resizes horizontally, causing table display to move and reposition
 - **Related Task**: Task 8.3 (Display player betting choices)
 - **Notes**: Likely caused by centering behavior and lack of fixed width on action panel. Affects user experience with jarring layout shifts. 
+
+### Bug #009 - Unit Test Failure in GameStateManager
+- **Priority**: Medium
+- **Status**: Resolved
+- **Description**: Unit test `test_get_valid_actions_current_player` was failing due to incorrect patching path and `self` reference in static method
+- **Steps to Reproduce**: 
+  1. Run `pytest tests/unit/test_game_state_manager.py::TestGameStateManager::test_get_valid_actions_current_player`
+  2. Test fails with AttributeError about missing `player_action_manager` attribute
+  3. After fixing patch, test fails with NameError about `self` not being defined
+- **Expected Behavior**: Unit test should pass successfully
+- **Actual Behavior**: Test failed with patching and static method reference errors
+- **Related Task**: General code quality and testing
+- **Root Cause**: 
+  1. Test was patching `online_poker.services.game_state_manager.player_action_manager` but the import is done locally inside the method
+  2. Static method `generate_game_state_view` was calling `self._convert_action_option` instead of `GameStateManager._convert_action_option`
+- **Resolution**: 
+  1. Fixed test patch path to `online_poker.services.player_action_manager.player_action_manager`
+  2. Changed `self._convert_action_option` to `GameStateManager._convert_action_option` in static method
+- **Files Modified**: 
+  - tests/unit/test_game_state_manager.py (fixed patch path)
+  - src/online_poker/services/game_state_manager.py (fixed static method reference)
+- **Testing**: All 27 tests in test_game_state_manager.py now pass
 
 ---
 

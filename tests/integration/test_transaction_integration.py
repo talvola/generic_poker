@@ -3,10 +3,10 @@
 import pytest
 from flask import Flask
 
-from src.online_poker.database import db, init_database
-from src.online_poker.services.user_manager import UserManager
-from src.online_poker.services.transaction_manager import TransactionManager, InsufficientFundsError
-from src.online_poker.models.transaction import Transaction
+from online_poker.database import db, init_database
+from online_poker.services.user_manager import UserManager
+from online_poker.services.transaction_manager import TransactionManager, InsufficientFundsError
+from online_poker.models.transaction import Transaction
 
 
 @pytest.fixture

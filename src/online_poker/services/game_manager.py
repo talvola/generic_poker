@@ -566,6 +566,11 @@ class GameManager:
             return False
         
         try:
+            # Check if game is already complete (e.g., from fold win)
+            if game.state == GameState.COMPLETE:
+                logger.info(f"Game {table_id} is already complete, not advancing")
+                return False
+            
             # If we're in a dealing state or betting is complete, advance to next step
             if game.state == GameState.DEALING:
                 old_step = game.current_step

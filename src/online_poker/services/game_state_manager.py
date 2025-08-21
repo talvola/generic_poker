@@ -79,7 +79,7 @@ class GameStateManager:
                 # Import here to avoid circular imports
                 from ..services.player_action_manager import player_action_manager
                 action_options = player_action_manager.get_available_actions(table_id, viewer_id)
-                valid_actions = [self._convert_action_option(opt) for opt in action_options]
+                valid_actions = [GameStateManager._convert_action_option(opt) for opt in action_options]
             
             # Determine game phase
             game_phase = GameStateManager._get_game_phase(session)
