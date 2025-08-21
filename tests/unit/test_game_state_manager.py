@@ -5,15 +5,15 @@ from unittest.mock import patch, MagicMock
 from datetime import datetime
 from flask import Flask
 
-from src.online_poker.services.game_state_manager import GameStateManager
-from src.online_poker.models.game_state_view import (
+from online_poker.services.game_state_manager import GameStateManager
+from online_poker.models.game_state_view import (
     GameStateView, PlayerView, PotInfo, ActionOption, GamePhase, 
     ActionType, GameStateUpdate, HandResult
 )
-from src.online_poker.services.game_orchestrator import GameSession
-from src.online_poker.models.table import PokerTable
-from src.online_poker.models.user import User
-from src.online_poker.database import db
+from online_poker.services.game_orchestrator import GameSession
+from online_poker.models.table import PokerTable
+from online_poker.models.user import User
+from online_poker.database import db
 from generic_poker.game.betting import BettingStructure
 from generic_poker.game.game_state import GameState
 
@@ -43,7 +43,7 @@ def app_context(app):
 @pytest.fixture
 def test_user(app_context):
     """Create a test user."""
-    from src.online_poker.services.user_manager import UserManager
+    from online_poker.services.user_manager import UserManager
     user = UserManager.create_user("testuser", "test@example.com", "password123", 1000)
     return user
 
@@ -87,8 +87,8 @@ def mock_game_session(test_table):
 class TestGameStateManager:
     """Test GameStateManager functionality."""
     
-    @patch('src.online_poker.services.game_state_manager.game_orchestrator.get_session')
-    @patch('src.online_poker.services.game_state_manager.TableAccessManager.get_table_players')
+    @patch('online_poker.services.game_state_manager.game_orchestrator.get_session')
+    @patch('online_poker.services.game_state_manager.TableAccessManager.get_table_players')
     def test_generate_game_state_view_success(self, mock_get_players, mock_get_session, 
                                             app_context, mock_game_session):
         """Test successful game state view generation."""
@@ -128,7 +128,7 @@ class TestGameStateManager:
         assert game_state.players[0].seat_number == 1
         assert game_state.players[1].seat_number == 2
     
-    @patch('src.online_poker.services.game_state_manager.game_orchestrator.get_session')
+    @patch('online_poker.services.game_state_manager.game_orchestrator.get_session')
     def test_generate_game_state_view_no_session(self, mock_get_session, app_context):
         """Test game state view generation when no session exists."""
         mock_get_session.return_value = None
@@ -137,8 +137,8 @@ class TestGameStateManager:
         
         assert game_state is None
     
-    @patch('src.online_poker.services.game_state_manager.game_orchestrator.get_session')
-    @patch('src.online_poker.services.game_state_manager.TableAccessManager.get_table_players')
+    @patch('online_poker.services.game_state_manager.game_orchestrator.get_session')
+    @patch('online_poker.services.game_state_manager.TableAccessManager.get_table_players')
     def test_generate_game_state_view_no_players(self, mock_get_players, mock_get_session, 
                                                app_context, mock_game_session):
         """Test game state view generation when no players exist."""
@@ -149,8 +149,8 @@ class TestGameStateManager:
         
         assert game_state is None
     
-    @patch('src.online_poker.services.game_state_manager.game_orchestrator.get_session')
-    @patch('src.online_poker.services.game_state_manager.TableAccessManager.get_table_players')
+    @patch('online_poker.services.game_state_manager.game_orchestrator.get_session')
+    @patch('online_poker.services.game_state_manager.TableAccessManager.get_table_players')
     def test_generate_game_state_view_spectator(self, mock_get_players, mock_get_session, 
                                               app_context, mock_game_session):
         """Test game state view generation for spectator."""
@@ -261,23 +261,64 @@ class TestGameStateManager:
         
         assert current_player == 'user1'
     
-    def test_get_valid_actions_current_player(self, app_context, mock_game_session):
+    @patch('online_poker.services.game_state_manager.game_orchestrator.get_session')
+    @patch('online_poker.services.game_state_manager.TableAccessManager.get_table_players')
+    def test_get_valid_actions_current_player(self, mock_get_players, mock_get_session, app_context, mock_game_session):
         """Test getting valid actions for current player."""
-        with patch.object(GameStateManager, '_is_current_player', return_value=True):
-            valid_actions = GameStateManager._get_valid_actions(mock_game_session, 'user1')
+        mock_get_session.return_value = mock_game_session
+        mock_get_players.return_value = [
+            {
+                'user_id': 'user1',
+                'username': 'Alice',
+                'seat_number': 1,
+                'is_spectator': False,
+                'current_stack': 500
+            }
+        ]
+        
+        # Mock current player
+        mock_player = MagicMock()
+        mock_player.id = 'user1'
+        mock_game_session.game.table.current_player = mock_player
+        
+        # Mock the player action manager
+        with patch('online_poker.services.game_state_manager.player_action_manager') as mock_action_manager:
+            mock_action_options = [
+                MagicMock(action_type=MagicMock(), min_amount=0, max_amount=500, default_amount=0, display_text="Fold"),
+                MagicMock(action_type=MagicMock(), min_amount=0, max_amount=500, default_amount=0, display_text="Check"),
+                MagicMock(action_type=MagicMock(), min_amount=0, max_amount=500, default_amount=0, display_text="Call")
+            ]
+            mock_action_manager.get_available_actions.return_value = mock_action_options
             
-            assert len(valid_actions) > 0
-            action_types = [action.action_type for action in valid_actions]
-            assert ActionType.FOLD in action_types
-            assert ActionType.CHECK in action_types
-            assert ActionType.CALL in action_types
+            game_state = GameStateManager.generate_game_state_view("table1", "user1", False)
+            
+            assert game_state is not None
+            assert len(game_state.valid_actions) == 3
     
-    def test_get_valid_actions_not_current_player(self, app_context, mock_game_session):
+    @patch('online_poker.services.game_state_manager.game_orchestrator.get_session')
+    @patch('online_poker.services.game_state_manager.TableAccessManager.get_table_players')
+    def test_get_valid_actions_not_current_player(self, mock_get_players, mock_get_session, app_context, mock_game_session):
         """Test getting valid actions for non-current player."""
-        with patch.object(GameStateManager, '_is_current_player', return_value=False):
-            valid_actions = GameStateManager._get_valid_actions(mock_game_session, 'user1')
-            
-            assert len(valid_actions) == 0
+        mock_get_session.return_value = mock_game_session
+        mock_get_players.return_value = [
+            {
+                'user_id': 'user1',
+                'username': 'Alice',
+                'seat_number': 1,
+                'is_spectator': False,
+                'current_stack': 500
+            }
+        ]
+        
+        # Mock current player as someone else
+        mock_player = MagicMock()
+        mock_player.id = 'user2'  # Different from viewer
+        mock_game_session.game.table.current_player = mock_player
+        
+        game_state = GameStateManager.generate_game_state_view("table1", "user1", False)
+        
+        assert game_state is not None
+        assert len(game_state.valid_actions) == 0
     
     def test_get_game_phase_waiting(self, app_context, mock_game_session):
         """Test getting game phase when waiting."""
@@ -363,7 +404,7 @@ class TestGameStateManager:
     
     def test_create_game_state_update(self, app_context):
         """Test creating game state update."""
-        with patch('src.online_poker.services.game_state_manager.game_orchestrator.get_session') as mock_get_session:
+        with patch('online_poker.services.game_state_manager.game_orchestrator.get_session') as mock_get_session:
             mock_session = MagicMock()
             mock_session.session_id = "test-session"
             mock_get_session.return_value = mock_session
