@@ -34,6 +34,15 @@ For each bug, include:
 ### Bug #002 - Action Panel Width Changes Cause Layout Shift
 - **Priority**: Medium
 - **Status**: Open
+- **Description**: Action panel changes width when switching between waiting message and action buttons, causing table layout to shift
+- **Steps to Reproduce**: 
+  1. Observe action panel with "Waiting for your turn..." message
+  2. Player's turn arrives and action buttons appear
+  3. Panel width changes and table shifts left
+- **Expected Behavior**: Action panel should maintain consistent width regardless of content
+- **Actual Behavior**: Panel resizes horizontally, causing table display to move and reposition
+- **Related Task**: Task 8.3 (Display player betting choices)
+- **Notes**: Likely caused by centering behavior and lack of fixed width on action panel. Affects user experience with jarring layout shifts.
 
 ### Bug #003 - Showdown Modal Blocks Table View
 - **Priority**: Medium
@@ -102,44 +111,8 @@ For each bug, include:
 - **Evidence**: Screenshots show test9's cards visible in first image, disappeared in second image despite being the same player
 - **Notes**: This affects the fundamental gameplay experience as players cannot see their own cards consistently
 
-### Bug #007 - No Visual Indicator for Folded Players
-- **Priority**: Medium
-- **Status**: Open
-- **Description**: When players fold, there is no visual indication in the UI to show they are no longer active in the hand
-- **Steps to Reproduce**: 
-  1. Start a hand with multiple players
-  2. Have one or more players fold
-  3. Observe that folded players look identical to active players
-- **Expected Behavior**: Folded players should have visual indicators such as:
-  - Cards removed/mucked (no longer visible)
-  - Player information grayed out or dimmed
-  - "FOLDED" text indicator
-  - Different styling to distinguish from active players
-- **Actual Behavior**: Folded players appear identical to active players with no visual distinction
-- **Related Task**: Task 8.3 (Player betting action system), Task 8.9 (Advanced card display system)
-- **Notes**: This is important for game clarity and simulates real poker where folded players' cards are mucked and they are visually distinguished from active players
 
-### Bug #008 - No Visual Indication When Players Fold
-- **Priority**: Medium
-- **Status**: Open
-- **Description**: When a player folds, there is no visual indication in the UI that they are no longer active in the hand
-- **Steps to Reproduce**: 
-  1. Start a hand with multiple players
-  2. Have a player fold during any betting round
-  3. Observe that folded player's seat looks identical to active players
-- **Expected Behavior**: Folded players should have visual indicators such as mucked (removed) cards and grayed-out player information
-- **Actual Behavior**: No visual distinction between active and folded players during hand
-- **Related Task**: Task 8.3 (Player betting action system), Task 8.9 (Advanced card display system)
-- **Notes**: Should implement card mucking (removal) and player seat styling changes (graying out, "FOLDED" indicator, etc.)
-- **Description**: Action panel changes width when switching between waiting message and action buttons, causing table layout to shift
-- **Steps to Reproduce**: 
-  1. Observe action panel with "Waiting for your turn..." message
-  2. Player's turn arrives and action buttons appear
-  3. Panel width changes and table shifts left
-- **Expected Behavior**: Action panel should maintain consistent width regardless of content
-- **Actual Behavior**: Panel resizes horizontally, causing table display to move and reposition
-- **Related Task**: Task 8.3 (Display player betting choices)
-- **Notes**: Likely caused by centering behavior and lack of fixed width on action panel. Affects user experience with jarring layout shifts. 
+ 
 
 ### Bug #009 - Unit Test Failure in GameStateManager
 - **Priority**: Medium
@@ -163,11 +136,42 @@ For each bug, include:
   - src/online_poker/services/game_state_manager.py (fixed static method reference)
 - **Testing**: All 27 tests in test_game_state_manager.py now pass
 
+### Bug #010 - Hanging Unit Test in WebSocketManager
+- **Priority**: Medium
+- **Status**: Resolved
+- **Description**: Unit test `test_handle_table_disconnect` was hanging indefinitely and never completing
+- **Steps to Reproduce**: 
+  1. Run `pytest tests/unit/test_websocket_manager.py::TestWebSocketManager::test_handle_table_disconnect`
+  2. Test hangs and never finishes
+- **Expected Behavior**: Unit test should complete quickly and pass
+- **Actual Behavior**: Test hangs indefinitely, requiring manual termination
+- **Related Task**: General code quality and testing
+- **Root Cause**: Test was patching incorrect import paths - it was trying to patch `PlayerSessionManager.handle_player_disconnect` but the actual code imports and calls `disconnect_manager.handle_player_disconnect`
+- **Resolution**: Fixed all patch paths in websocket manager tests to match the actual imports:
+  1. Changed `PlayerSessionManager.handle_player_disconnect` to `disconnect_manager.handle_player_disconnect`
+  2. Updated patch paths to target the actual modules rather than non-existent nested imports
+  3. Added proper mocking for all dependencies (game_orchestrator, GameStateManager)
+- **Files Modified**: 
+  - tests/unit/test_websocket_manager.py (fixed patch paths for disconnect and reconnect tests)
+- **Testing**: All 19 tests in test_websocket_manager.py now pass quickly
+
 ---
 
 ## Resolved Bugs
 
-(Bugs will be moved here when fixed)
+### Bug #007 - No Visual Indicator for Folded Players
+- **Priority**: Medium
+- **Status**: Resolved
+- **Description**: When players fold, there is no visual indication in the UI to show they are no longer active in the hand
+- **Resolution**: Implemented comprehensive folded player visual indicators including card mucking, visual styling, folded indicator badge, and improved game state detection
+- **Files Modified**: static/js/table.js, static/css/table.css, src/online_poker/services/game_state_manager.py
+
+### Bug #010 - Hanging Unit Test in WebSocketManager
+- **Priority**: Medium
+- **Status**: Resolved
+- **Description**: Unit test `test_handle_table_disconnect` was hanging indefinitely and never completing
+- **Resolution**: Fixed incorrect patch paths in websocket manager tests to match actual imports and dependencies
+- **Files Modified**: tests/unit/test_websocket_manager.py
 
 ---
 
