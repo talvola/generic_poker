@@ -451,8 +451,18 @@ class GameStateManager:
             # Check if player has folded
             if hasattr(session.game.table, 'players') and user_id in session.game.table.players:
                 player = session.game.table.players[user_id]
+                
+                # First check if there's an explicit has_folded attribute
                 if hasattr(player, 'has_folded'):
                     return player.has_folded
+                
+                # If no explicit has_folded, use is_active as proxy
+                # A player who is not active during a hand has likely folded
+                # (unless they're all-in)
+                if hasattr(player, 'is_active') and not player.is_active:
+                    # If they're not all-in, they must have folded
+                    if not GameStateManager._is_all_in(session, user_id):
+                        return True
             
             return False
             

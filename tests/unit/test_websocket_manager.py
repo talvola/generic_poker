@@ -189,18 +189,26 @@ class TestWebSocketManager:
         assert success is False
         mock_socketio.emit.assert_not_called()
     
-    @patch('src.online_poker.services.websocket_manager.PlayerSessionManager.handle_player_disconnect')
-    def test_handle_table_disconnect(self, mock_handle_disconnect, websocket_manager):
+    @patch('src.online_poker.services.disconnect_manager.disconnect_manager.handle_player_disconnect')
+    @patch('src.online_poker.services.game_orchestrator.game_orchestrator.get_session')
+    @patch('src.online_poker.services.game_state_manager.GameStateManager._get_current_player')
+    def test_handle_table_disconnect(self, mock_get_current_player, mock_get_session, mock_handle_disconnect, websocket_manager):
         """Test handling table disconnection."""
         user_id = "user123"
         table_id = "table456"
         
+        # Mock the session and current player check
+        mock_session = MagicMock()
+        mock_get_session.return_value = mock_session
+        mock_get_current_player.return_value = "other_user"  # Not the disconnecting user
+        mock_handle_disconnect.return_value = (True, "Disconnect handled")
+        
         websocket_manager.handle_table_disconnect(user_id, table_id)
         
-        mock_handle_disconnect.assert_called_once_with(user_id, table_id)
+        mock_handle_disconnect.assert_called_once_with(user_id, table_id, False)
     
-    @patch('src.online_poker.services.websocket_manager.PlayerSessionManager.handle_player_reconnect')
-    @patch('src.online_poker.services.websocket_manager.GameStateManager.generate_game_state_view')
+    @patch('src.online_poker.services.disconnect_manager.disconnect_manager.handle_player_reconnect')
+    @patch('src.online_poker.services.game_state_manager.GameStateManager.generate_game_state_view')
     def test_handle_table_reconnect_success(self, mock_generate_state, mock_handle_reconnect, websocket_manager):
         """Test successful table reconnection."""
         user_id = "user123"
@@ -216,7 +224,7 @@ class TestWebSocketManager:
         assert success is True
         mock_handle_reconnect.assert_called_once_with(user_id, table_id)
     
-    @patch('src.online_poker.services.websocket_manager.PlayerSessionManager.handle_player_reconnect')
+    @patch('src.online_poker.services.disconnect_manager.disconnect_manager.handle_player_reconnect')
     def test_handle_table_reconnect_failure(self, mock_handle_reconnect, websocket_manager):
         """Test failed table reconnection."""
         user_id = "user123"

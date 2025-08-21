@@ -383,28 +383,36 @@ class PokerTable {
         const isCurrentTurn = this.gameState?.current_player === player.id;
         const isActive = player.is_active;
         const isDisconnected = player.is_disconnected;
+        const hasFolded = player.has_folded;
 
         let playerInfoClass = 'player-info';
         if (isActive) playerInfoClass += ' active';
         if (isCurrentTurn) playerInfoClass += ' current-turn';
         if (isDisconnected) playerInfoClass += ' disconnected';
+        if (hasFolded) playerInfoClass += ' folded';
 
         seat.innerHTML = `
             <div class=\"${playerInfoClass}\">
                 <div class=\"player-name\">${this.escapeHtml(player.username)}</div>
                 <div class=\"player-chips\">$${player.stack || 0}</div>
                 <div class=\"player-action\">${player.last_action || ''}</div>
+                ${hasFolded ? '<div class="folded-indicator">FOLDED</div>' : ''}
                 ${player.current_bet > 0 ? `<div class=\"player-bet\">$${player.current_bet}</div>` : ''}
             </div>
             <div class=\"player-cards\">
-                ${this.renderPlayerCards(player, isCurrentPlayer)}
+                ${this.renderPlayerCards(player, isCurrentPlayer, hasFolded)}
             </div>
         `;
 
         return seat;
     }
 
-    renderPlayerCards(player, isCurrentPlayer) {
+    renderPlayerCards(player, isCurrentPlayer, hasFolded = false) {
+        // If player has folded, don't show any cards (mucked)
+        if (hasFolded) {
+            return '';
+        }
+
         if (!player.cards || player.cards.length === 0) {
             return '';
         }

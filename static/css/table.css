@@ -474,6 +474,31 @@ body {
     border-color: var(--danger-color);
 }
 
+.player-info.folded {
+    opacity: 0.6;
+    background: rgba(0, 0, 0, 0.5);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.player-info.folded .player-name,
+.player-info.folded .player-chips,
+.player-info.folded .player-action {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.folded-indicator {
+    background: rgba(220, 53, 69, 0.8);
+    color: white;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: bold;
+    text-align: center;
+    margin-top: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 .player-name {
     font-weight: 600;
     font-size: 0.9rem;
