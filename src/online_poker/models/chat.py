@@ -31,18 +31,32 @@ class ChatMessage(db.Model):
     
     def to_dict(self, include_original: bool = False) -> Dict[str, Any]:
         """Convert to dictionary representation.
-        
+
         Args:
             include_original: Whether to include original unfiltered message
-            
+
         Returns:
             Dictionary representation
         """
+        # Get username - try relationship first, then fall back to query
+        username = 'Unknown'
+        if self.user:
+            username = self.user.username
+        elif self.user_id:
+            # Lazy-load user if relationship not loaded
+            # Convert UUID to string for query comparison
+            from ..database import db
+            from .user import User
+            user_id_str = str(self.user_id)
+            user = db.session.query(User).filter(User.id == user_id_str).first()
+            if user:
+                username = user.username
+
         result = {
             'id': str(self.id),
             'table_id': str(self.table_id),
             'user_id': str(self.user_id),
-            'username': self.user.username if self.user else 'Unknown',
+            'username': username,
             'message': self.filtered_message if self.is_filtered else self.message,
             'message_type': self.message_type,
             'is_filtered': self.is_filtered,

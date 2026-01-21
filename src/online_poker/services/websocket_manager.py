@@ -1,6 +1,7 @@
 """WebSocket manager for real-time communication."""
 
 import logging
+import uuid
 from typing import Dict, List, Optional, Set, Any
 from datetime import datetime
 from flask import current_app
@@ -29,6 +30,8 @@ class GameEvent:
     TABLE_UPDATE = "table_update"
     ERROR = "error"
     NOTIFICATION = "notification"
+    READY_STATUS_UPDATE = "ready_status_update"
+    HAND_STARTING = "hand_starting"
 
 
 class WebSocketManager:
@@ -59,30 +62,37 @@ class WebSocketManager:
             """Handle client connection."""
             try:
                 from flask import request
-                
-                if not current_user.is_authenticated:
-                    logger.warning("Unauthenticated connection attempt")
-                    disconnect()
-                    return False
-                
+
                 session_id = request.sid
-                user_id = current_user.id
-                
-                # Store session mapping
-                self.user_sessions[user_id] = session_id
-                self.session_users[session_id] = user_id
-                
-                logger.info(f"User {current_user.username} ({user_id}) connected with session {session_id}")
-                
-                # Send connection confirmation
-                emit('connected', {
-                    'user_id': user_id,
-                    'username': current_user.username,
-                    'timestamp': datetime.utcnow().isoformat()
-                })
-                
+
+                # Allow unauthenticated connections for lobby browsing
+                if current_user.is_authenticated:
+                    user_id = current_user.id
+
+                    # Store session mapping
+                    self.user_sessions[user_id] = session_id
+                    self.session_users[session_id] = user_id
+
+                    logger.info(f"User {current_user.username} ({user_id}) connected with session {session_id}")
+
+                    # Send connection confirmation
+                    emit('connected', {
+                        'user_id': user_id,
+                        'username': current_user.username,
+                        'timestamp': datetime.utcnow().isoformat()
+                    })
+                else:
+                    # Guest user (not authenticated)
+                    logger.info(f"Guest user connected with session {session_id}")
+
+                    emit('connected', {
+                        'user_id': None,
+                        'username': 'Guest',
+                        'timestamp': datetime.utcnow().isoformat()
+                    })
+
                 return True
-                
+
             except Exception as e:
                 logger.error(f"Connection error: {e}")
                 disconnect()
@@ -113,9 +123,9 @@ class WebSocketManager:
             except Exception as e:
                 logger.error(f"Disconnect error: {e}")
         
-        @self.socketio.on('join_table')
-        def handle_join_table(data):
-            """Handle joining a table room."""
+        @self.socketio.on('connect_to_table_room')
+        def handle_connect_to_table_room(data):
+            """Handle connecting to a table's socket room (for players already seated)."""
             try:
                 table_id = data.get('table_id')
                 if not table_id:
@@ -133,7 +143,7 @@ class WebSocketManager:
                     if game_state:
                         emit('game_state_update', game_state.to_dict())
                     
-                    emit('joined_table', {
+                    emit('table_joined', {
                         'table_id': table_id,
                         'timestamp': datetime.utcnow().isoformat()
                     })
@@ -165,7 +175,7 @@ class WebSocketManager:
                 logger.error(f"Leave table error: {e}")
                 emit('error', {'message': 'Failed to leave table'})
         
-        @self.socketio.on('send_chat')
+        @self.socketio.on('chat_message')
         def handle_chat_message(data):
             """Handle chat message."""
             try:
@@ -187,9 +197,12 @@ class WebSocketManager:
                 # Process message through chat service
                 from ..services.chat_service import ChatService
                 chat_service = ChatService()
+                # Convert string IDs to UUID objects for ChatService
+                table_uuid = uuid.UUID(table_id) if isinstance(table_id, str) else table_id
+                user_uuid = uuid.UUID(user_id) if isinstance(user_id, str) else user_id
                 chat_message = chat_service.send_message(
-                    table_id=table_id,
-                    user_id=user_id,
+                    table_id=table_uuid,
+                    user_id=user_uuid,
                     message=message
                 )
                 
@@ -293,8 +306,7 @@ class WebSocketManager:
                 
                 if game_state:
                     emit('game_state_update', game_state.to_dict())
-                else:
-                    emit('error', {'message': 'Game state not available'})
+                # If no game state, silently skip - game may not have started yet
                 
             except Exception as e:
                 logger.error(f"Game state request error: {e}")
@@ -424,13 +436,13 @@ class WebSocketManager:
             try:
                 table_id = data.get('table_id')
                 enabled = data.get('enabled', True)
-                
+
                 if not table_id:
                     emit('error', {'message': 'Table ID required'})
                     return
-                
+
                 user_id = current_user.id
-                
+
                 # Store user's chat preference (could be stored in session or database)
                 # For now, just acknowledge the toggle
                 emit('chat_toggled', {
@@ -438,10 +450,72 @@ class WebSocketManager:
                     'enabled': enabled,
                     'timestamp': datetime.utcnow().isoformat()
                 })
-                
+
             except Exception as e:
                 logger.error(f"Chat toggle error: {e}")
                 emit('error', {'message': 'Failed to toggle chat'})
+
+        @self.socketio.on('set_ready')
+        def handle_set_ready(data):
+            """Handle player ready status change."""
+            try:
+                table_id = data.get('table_id')
+                ready = data.get('ready', True)
+
+                if not table_id:
+                    emit('error', {'message': 'Table ID required'})
+                    return
+
+                user_id = current_user.id
+
+                # Update ready status in database
+                from ..services.table_access_manager import TableAccessManager
+                success, message = TableAccessManager.set_player_ready(user_id, table_id, ready)
+
+                if not success:
+                    emit('error', {'message': message})
+                    return
+
+                # Get updated ready status for all players
+                ready_status = TableAccessManager.get_ready_status(table_id)
+
+                # Broadcast ready status to all table participants
+                self.broadcast_to_table(table_id, GameEvent.READY_STATUS_UPDATE, {
+                    'table_id': table_id,
+                    'ready_status': ready_status,
+                    'timestamp': datetime.utcnow().isoformat()
+                })
+
+                # If all players are ready, start the hand
+                if ready_status['all_ready']:
+                    self._start_hand_when_ready(table_id, ready_status)
+
+            except Exception as e:
+                logger.error(f"Set ready error: {e}")
+                emit('error', {'message': 'Failed to update ready status'})
+
+        @self.socketio.on('request_ready_status')
+        def handle_request_ready_status(data):
+            """Handle request for current ready status."""
+            try:
+                table_id = data.get('table_id')
+
+                if not table_id:
+                    emit('error', {'message': 'Table ID required'})
+                    return
+
+                from ..services.table_access_manager import TableAccessManager
+                ready_status = TableAccessManager.get_ready_status(table_id)
+
+                emit(GameEvent.READY_STATUS_UPDATE, {
+                    'table_id': table_id,
+                    'ready_status': ready_status,
+                    'timestamp': datetime.utcnow().isoformat()
+                })
+
+            except Exception as e:
+                logger.error(f"Request ready status error: {e}")
+                emit('error', {'message': 'Failed to get ready status'})
     
     def join_table_room(self, user_id: str, table_id: str) -> bool:
         """Join a user to a table room.
@@ -766,7 +840,7 @@ class WebSocketManager:
     
     def get_connection_stats(self) -> Dict[str, Any]:
         """Get connection statistics.
-        
+
         Returns:
             Dictionary with connection statistics
         """
@@ -775,6 +849,111 @@ class WebSocketManager:
             'active_tables': len(self.table_rooms),
             'total_room_participants': sum(len(sessions) for sessions in self.table_rooms.values())
         }
+
+    def _start_hand_when_ready(self, table_id: str, ready_status: Dict[str, Any]) -> None:
+        """Start a new hand when all players are ready.
+
+        Args:
+            table_id: ID of the table
+            ready_status: Ready status info from TableAccessManager
+        """
+        try:
+            from ..services.game_orchestrator import game_orchestrator
+            from ..services.table_access_manager import TableAccessManager
+            from ..services.user_manager import UserManager
+
+            # Notify that hand is starting
+            self.broadcast_to_table(table_id, GameEvent.HAND_STARTING, {
+                'table_id': table_id,
+                'message': 'All players ready - starting hand...',
+                'timestamp': datetime.utcnow().isoformat()
+            })
+
+            # Get or create game session
+            session = game_orchestrator.get_session(table_id)
+            if not session:
+                # Create a new session - returns tuple (success, message, session)
+                success, message, session = game_orchestrator.create_session(table_id)
+                if not success or not session:
+                    logger.error(f"Failed to create game session for table {table_id}: {message}")
+                    self.broadcast_to_table(table_id, GameEvent.ERROR, {
+                        'message': f'Failed to create game session: {message}'
+                    })
+                    return
+
+            # Get user info for adding players
+            user_manager = UserManager()
+
+            # Ensure all ready players are in the game session
+            for player in ready_status['players']:
+                if player['is_ready']:
+                    user = user_manager.get_user_by_id(player['user_id'])
+                    username = user.username if user else 'Unknown'
+                    # Get their stack from table access
+                    access = TableAccessManager.get_user_access(player['user_id'], table_id)
+                    buy_in = access.current_stack if access else 100
+                    session.add_player(player['user_id'], username, buy_in)
+
+            # Check if we can start a hand - use session.game directly
+            game = session.game
+            if game and len(game.table.players) >= 2:
+                # Start the hand
+                game.start_hand()
+                logger.info(f"Started new hand at table {table_id}")
+
+                # For online games with auto_progress=False, we need to manually
+                # advance through dealing steps until player input is needed
+                # Note: _next_step() already calls process_current_step() internally
+                while game.current_player is None and game.state != game.state.COMPLETE:
+                    game._next_step()
+                    if game.current_step >= len(game.rules.gameplay):
+                        break
+                logger.info(f"Game advanced to current_player: {game.current_player.name if game.current_player else None}")
+
+                # Reset ready status for next hand
+                TableAccessManager.reset_all_ready(table_id)
+
+                # Broadcast updated game state
+                self.broadcast_game_state_update(table_id)
+
+                # Broadcast that ready status has been reset
+                new_ready_status = TableAccessManager.get_ready_status(table_id)
+                self.broadcast_to_table(table_id, GameEvent.READY_STATUS_UPDATE, {
+                    'table_id': table_id,
+                    'ready_status': new_ready_status,
+                    'timestamp': datetime.utcnow().isoformat()
+                })
+            else:
+                player_count = len(game.table.players) if game else 0
+                logger.warning(f"Cannot start hand at table {table_id} - only {player_count} players")
+                self.broadcast_to_table(table_id, GameEvent.ERROR, {
+                    'message': 'Cannot start hand - not enough players with chips'
+                })
+
+        except Exception as e:
+            logger.error(f"Failed to start hand when ready: {e}", exc_info=True)
+            self.broadcast_to_table(table_id, GameEvent.ERROR, {
+                'message': 'Failed to start hand'
+            })
+
+    def broadcast_ready_status(self, table_id: str) -> None:
+        """Broadcast current ready status to all table participants.
+
+        Args:
+            table_id: ID of the table
+        """
+        try:
+            from ..services.table_access_manager import TableAccessManager
+            ready_status = TableAccessManager.get_ready_status(table_id)
+
+            self.broadcast_to_table(table_id, GameEvent.READY_STATUS_UPDATE, {
+                'table_id': table_id,
+                'ready_status': ready_status,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+
+        except Exception as e:
+            logger.error(f"Failed to broadcast ready status: {e}")
 
 
 # Global WebSocket manager instance (will be initialized in app factory)

@@ -81,25 +81,13 @@ For each bug, include:
   - ✅ Fix verified to work correctly in all fold scenarios
   - ✅ Game state properly transitions to COMPLETE when only one player remains
 
-### Bug #005 - Showdown Chat Messages Loop Infinitely
-- **Priority**: High
-- **Status**: Open
-- **Description**: After showdown, the same winner messages are repeatedly added to chat every 5 seconds in an infinite loop
-- **Steps to Reproduce**: 
-  1. Complete a hand to showdown
-  2. Observe chat messages showing winner information
-  3. Wait and observe the same messages being added repeatedly
-- **Expected Behavior**: Showdown results should be displayed once in chat when hand completes
-- **Actual Behavior**: Same showdown messages (winner, pot collection, summary) are added to chat repeatedly every few seconds
-- **Related Task**: Task 8.5 (Showdown display system)
-- **Evidence**: HTML shows multiple identical showdown messages with different timestamps
-- **Notes**: Also shows empty card arrays "[]" instead of actual cards in winner display
+
 
 ### Bug #006 - Player's Own Cards Disappear After Actions
 - **Priority**: High
-- **Status**: Open
+- **Status**: Resolved
 - **Description**: A player's own hole cards intermittently disappear and reappear after each player action (bet, check, fold, etc.), showing empty card slots instead
-- **Steps to Reproduce**: 
+- **Steps to Reproduce**:
   1. Join a table and receive hole cards
   2. Observe that your cards are initially visible
   3. Make any action (bet, check) or wait for other players to act
@@ -109,7 +97,17 @@ For each bug, include:
 - **Actual Behavior**: Player's cards intermittently disappear after game state updates, showing empty card slots
 - **Related Task**: Task 8.3.1 (Basic player card visibility)
 - **Evidence**: Screenshots show test9's cards visible in first image, disappeared in second image despite being the same player
-- **Notes**: This affects the fundamental gameplay experience as players cannot see their own cards consistently
+- **Root Cause**: Multiple issues in game state management and JavaScript:
+  1. `_get_current_player` was checking wrong path (`session.game.table.current_player` instead of `session.game.current_player`)
+  2. `_get_player_cards` was checking `player.cards` instead of `player.hand.cards`
+  3. JavaScript was using `player.stack` but server sends `chip_stack`
+  4. JavaScript expected seat-indexed player object but received array
+  5. `current_user` was not being sent from server to client
+- **Resolution**: Fixed all path references and data format mismatches between server and client
+- **Files Modified**:
+  - src/online_poker/services/game_state_manager.py (fixed `_get_current_player`, `_get_player_cards`)
+  - src/online_poker/models/game_state_view.py (added `current_user` to output)
+  - static/js/table.js (fixed property names, array-to-object conversion)
 
 
  
@@ -159,6 +157,95 @@ For each bug, include:
 
 ## Resolved Bugs
 
+### Bug #T001 - Private Table Join With Invite Code Fails
+- **Priority**: High
+- **Status**: Resolved
+- **Description**: When joining a private table using an invite code, the join request failed with "Invalid table" error
+- **Steps to Reproduce**:
+  1. Create a private table
+  2. Copy the invite code
+  3. Click "Join Private Table" in lobby
+  4. Enter the invite code
+  5. Observe error "Invalid table"
+- **Expected Behavior**: Should successfully join the private table
+- **Actual Behavior**: Join failed with "Invalid table" error
+- **Root Cause**: The `get_table_by_invite_code` method in TableManager was missing - it was referenced but never implemented
+- **Resolution**: Implemented the `get_table_by_invite_code` method in TableManager to query tables by their invite code
+- **Files Modified**: src/online_poker/services/table_manager.py
+
+### Bug #T002 - Buy-in Amount Ignored, Always Uses Minimum
+- **Priority**: High
+- **Status**: Resolved
+- **Description**: When joining a table and selecting a custom buy-in amount, the server always used the minimum buy-in instead
+- **Steps to Reproduce**:
+  1. Join a table with buy-in range $40-$200
+  2. Set buy-in slider to $100
+  3. Click Join Table
+  4. Observe that player joins with $40 (minimum) instead of $100
+- **Expected Behavior**: Player should join with the selected buy-in amount ($100)
+- **Actual Behavior**: Player always joins with minimum buy-in ($40)
+- **Root Cause**: The lobby.js was sending `buyin_amount` but the server expected `buy_in`. Additionally, the route handler was using `min_buy_in` as a fallback default
+- **Resolution**: Fixed the parameter name in table_routes.py to accept `buyin_amount` from the client
+- **Files Modified**: src/online_poker/routes/table_routes.py
+
+### Bug #T003 - Seat Selection Ignored During Join
+- **Priority**: Medium
+- **Status**: Resolved
+- **Description**: When selecting a specific seat to join at a table, the selection was ignored and player was auto-assigned
+- **Steps to Reproduce**:
+  1. Open join dialog for a table
+  2. Click on a specific seat (e.g., Seat 5)
+  3. Click Join Table
+  4. Observe that player is placed in a different seat
+- **Expected Behavior**: Player should be seated at the selected seat
+- **Actual Behavior**: Player was auto-assigned to first available seat
+- **Root Cause**: The seat selection click handler was updating the UI but not setting the form value correctly. The radio button for seat selection wasn't being properly toggled.
+- **Resolution**: Fixed the seat click handler to properly set the selectedSeat value and update the radio button state
+- **Files Modified**: static/js/lobby.js
+
+### Bug #T004 - Chat Messages Not Displaying
+- **Priority**: Medium
+- **Status**: Resolved
+- **Description**: Chat messages sent by players were not appearing in the chat area. Messages were sent but never displayed.
+- **Steps to Reproduce**:
+  1. Join a table
+  2. Type a message in the chat input
+  3. Click Send
+  4. Observe that no message appears in the chat area
+- **Expected Behavior**: Chat messages should appear in the chat area with username and timestamp
+- **Actual Behavior**: Messages were not displayed at all
+- **Root Cause**: Multiple issues found:
+  1. WebSocket event name mismatch - server listened for `'send_chat'` but client emitted `'chat_message'`
+  2. UUID type mismatch - ChatService expected UUID objects but received strings
+  3. Spam filter pattern `^[A-Z\s!]+$` with `re.IGNORECASE` was blocking all messages
+  4. JavaScript expected `data.timestamp` but server sent `created_at`
+  5. User relationship not loading - UUID to string conversion needed for query
+- **Resolution**: Fixed all five issues:
+  1. Changed server event handler from `'send_chat'` to `'chat_message'`
+  2. Added UUID conversion before calling ChatService
+  3. Removed `re.IGNORECASE` from spam pattern matching
+  4. Fixed JavaScript to handle both `timestamp` and `created_at` field names
+  5. Fixed `to_dict()` in ChatMessage model to convert UUID to string before querying User
+- **Files Modified**:
+  - src/online_poker/services/websocket_manager.py (event name, UUID conversion)
+  - src/online_poker/services/chat_service.py (spam filter)
+  - static/js/table.js (timestamp field handling)
+  - src/online_poker/models/chat.py (username lookup)
+
+### Bug #011 - Double Card Dealing (4 Cards Instead of 2)
+- **Priority**: High
+- **Status**: Resolved
+- **Description**: Texas Hold'em was dealing 4 cards instead of 2 to each player when starting a hand
+- **Resolution**: Removed redundant `process_current_step()` call from websocket_manager.py - `_next_step()` already calls it internally
+- **Files Modified**: src/online_poker/services/websocket_manager.py
+
+### Bug #006 - Player's Own Cards Disappear After Actions
+- **Priority**: High
+- **Status**: Resolved
+- **Description**: Player's hole cards intermittently disappeared after game state updates
+- **Resolution**: Fixed multiple path reference issues in game_state_manager.py and data format mismatches in table.js
+- **Files Modified**: src/online_poker/services/game_state_manager.py, src/online_poker/models/game_state_view.py, static/js/table.js
+
 ### Bug #007 - No Visual Indicator for Folded Players
 - **Priority**: Medium
 - **Status**: Resolved
@@ -172,6 +259,42 @@ For each bug, include:
 - **Description**: Unit test `test_handle_table_disconnect` was hanging indefinitely and never completing
 - **Resolution**: Fixed incorrect patch paths in websocket manager tests to match actual imports and dependencies
 - **Files Modified**: tests/unit/test_websocket_manager.py
+
+### Bug #011 - Double Card Dealing (4 Cards Instead of 2)
+- **Priority**: High
+- **Status**: Resolved
+- **Description**: Texas Hold'em was dealing 4 cards instead of 2 to each player when starting a hand
+- **Steps to Reproduce**:
+  1. Create a Texas Hold'em table
+  2. Have two players join and click Ready
+  3. Observe that each player receives 4 hole cards instead of 2
+- **Expected Behavior**: Each player should receive exactly 2 hole cards for Texas Hold'em
+- **Actual Behavior**: Each player receives 4 cards (the deal step was being executed twice)
+- **Root Cause**: In `websocket_manager.py`'s `_start_hand_when_ready` method, both `game._next_step()` and `game.process_current_step()` were being called in the advancement loop. However, `_next_step()` already calls `process_current_step()` internally, resulting in each step being processed twice.
+- **Resolution**: Removed the redundant `game.process_current_step()` call from the while loop
+- **Files Modified**: src/online_poker/services/websocket_manager.py (line ~906)
+- **Related Code**:
+  ```python
+  # Before (buggy):
+  while game.current_player is None and game.state != game.state.COMPLETE:
+      game._next_step()
+      if game.current_step >= len(game.rules.gameplay):
+          break
+      game.process_current_step()  # DUPLICATE - _next_step already calls this
+
+  # After (fixed):
+  while game.current_player is None and game.state != game.state.COMPLETE:
+      game._next_step()  # This already calls process_current_step() internally
+      if game.current_step >= len(game.rules.gameplay):
+          break
+  ```
+
+### Bug #005 - Showdown Chat Messages Loop Infinitely
+- **Priority**: High
+- **Status**: Resolved
+- **Description**: After showdown, the same winner messages are repeatedly added to chat every 5 seconds in an infinite loop
+- **Resolution**: Added hand number tracking to prevent displaying showdown results multiple times for the same hand, and removed duplicate event handlers
+- **Files Modified**: static/js/table.js
 
 ---
 

@@ -17,6 +17,7 @@ class PokerTable {
         this.timerInterval = null;
         this.isMobile = window.innerWidth <= 768;
         this.isLandscape = window.innerHeight < window.innerWidth;
+        this.lastDisplayedHandNumber = null; // Track last hand number for showdown display
 
         this.init();
     }
@@ -94,6 +95,14 @@ class PokerTable {
             this.toggleDebugPanel();
         });
 
+        // Ready button
+        const readyBtn = document.getElementById('ready-btn');
+        if (readyBtn) {
+            readyBtn.addEventListener('click', () => {
+                this.toggleReady();
+            });
+        }
+
         // Modal close on background click
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
@@ -149,10 +158,6 @@ class PokerTable {
             this.animateCardDealing(data);
         });
 
-        this.socket.on('hand_complete', (data) => {
-            this.handleHandComplete(data);
-        });
-
         this.socket.on('pot_update', (data) => {
             this.updatePotDisplay(data);
         });
@@ -178,6 +183,12 @@ class PokerTable {
             this.showNotification(data.message || 'An error occurred', 'error');
         });
 
+        this.socket.on('table_joined', (data) => {
+            console.log('DEBUG: Successfully joined table room:', data);
+            this.hideLoadingOverlay();
+            this.showNotification('Connected to table', 'success');
+        });
+
         this.socket.on('table_closed', (data) => {
             this.showNotification('Table has been closed', 'warning');
             setTimeout(() => {
@@ -191,6 +202,24 @@ class PokerTable {
             setTimeout(() => {
                 window.location.href = '/lobby';
             }, 1000);
+        });
+
+        // Ready status events
+        this.socket.on('ready_status_update', (data) => {
+            console.log('DEBUG: Received ready status update:', data);
+            this.updateReadyStatus(data.ready_status);
+        });
+
+        this.socket.on('hand_starting', (data) => {
+            console.log('DEBUG: Hand starting:', data);
+            this.showNotification(data.message || 'Hand starting...', 'success');
+            // Hide ready panel, show action panel
+            this.showReadyPanel(false);
+        });
+
+        this.socket.on('game_state_update', (data) => {
+            console.log('DEBUG: Game state update received:', data);
+            this.updateGameState(data);
         });
     }
 
@@ -267,16 +296,113 @@ class PokerTable {
     }
 
     connectToTable() {
-        this.socket.emit('connect_to_table', { table_id: this.tableId });
-        
+        this.socket.emit('connect_to_table_room', { table_id: this.tableId });
+
         // Start periodic game state updates
         this.startGameUpdateTimer();
+
+        // Request initial ready status
+        this.requestReadyStatus();
     }
-    
+
+    // Ready system methods
+    requestReadyStatus() {
+        this.socket.emit('request_ready_status', { table_id: this.tableId });
+    }
+
+    toggleReady() {
+        const readyBtn = document.getElementById('ready-btn');
+        const isCurrentlyReady = readyBtn.classList.contains('is-ready');
+
+        // Toggle ready state
+        this.socket.emit('set_ready', {
+            table_id: this.tableId,
+            ready: !isCurrentlyReady
+        });
+
+        // Disable button temporarily to prevent double-clicking
+        readyBtn.disabled = true;
+        setTimeout(() => {
+            readyBtn.disabled = false;
+        }, 500);
+    }
+
+    updateReadyStatus(readyStatus) {
+        console.log('DEBUG: Updating ready status:', readyStatus);
+
+        const readyPanel = document.getElementById('ready-panel');
+        const actionPanel = document.getElementById('action-panel');
+        const readyBtn = document.getElementById('ready-btn');
+        const readyCount = document.getElementById('ready-count');
+        const readyPlayers = document.getElementById('ready-players');
+        const readyHint = readyPanel.querySelector('.ready-hint');
+
+        if (!readyStatus || !readyStatus.players) {
+            return;
+        }
+
+        // Update ready count
+        if (readyCount) {
+            readyCount.textContent = `${readyStatus.ready_count}/${readyStatus.player_count} players ready`;
+        }
+
+        // Update hint text
+        if (readyHint) {
+            if (readyStatus.player_count < readyStatus.min_players) {
+                readyHint.textContent = `Need at least ${readyStatus.min_players} players to start`;
+            } else if (!readyStatus.all_ready) {
+                readyHint.textContent = 'Waiting for all players to be ready';
+            } else {
+                readyHint.textContent = 'All players ready - starting hand...';
+            }
+        }
+
+        // Update player indicators
+        if (readyPlayers) {
+            readyPlayers.innerHTML = '';
+            readyStatus.players.forEach(player => {
+                const indicator = document.createElement('div');
+                indicator.className = `ready-player-indicator ${player.is_ready ? 'ready' : 'not-ready'}`;
+                indicator.innerHTML = `
+                    <span class="ready-player-name">${this.escapeHtml(player.username)}</span>
+                    <span class="ready-status-icon">${player.is_ready ? '✓' : '○'}</span>
+                `;
+                readyPlayers.appendChild(indicator);
+            });
+        }
+
+        // Update ready button state for current user
+        if (readyBtn && this.currentUser) {
+            const myStatus = readyStatus.players.find(p => p.user_id === this.currentUser.id);
+            if (myStatus) {
+                if (myStatus.is_ready) {
+                    readyBtn.classList.add('is-ready');
+                    readyBtn.textContent = 'Cancel Ready';
+                } else {
+                    readyBtn.classList.remove('is-ready');
+                    readyBtn.textContent = 'Ready';
+                }
+            }
+        }
+    }
+
+    showReadyPanel(show) {
+        const readyPanel = document.getElementById('ready-panel');
+        const actionPanel = document.getElementById('action-panel');
+
+        if (show) {
+            readyPanel.classList.remove('hidden');
+            actionPanel.style.display = 'none';
+        } else {
+            readyPanel.classList.add('hidden');
+            actionPanel.style.display = 'block';
+        }
+    }
+
     startGameUpdateTimer() {
         // Request game updates every 5 seconds to handle bot actions
         this.gameUpdateInterval = setInterval(() => {
-            this.socket.emit('request_game_update', { table_id: this.tableId });
+            this.socket.emit('request_game_state', { table_id: this.tableId });
         }, 5000);
     }
     
@@ -291,27 +417,52 @@ class PokerTable {
         console.log('DEBUG: updateGameState called with data:', data);
         console.log('DEBUG: Game state value:', data.game_state);
         console.log('DEBUG: Has hand_results:', !!data.hand_results);
-        
+
         this.gameState = data;
         this.currentUser = data.current_user;
-        this.players = data.players || {};
+        // Convert players array to seat-indexed object for proper rendering
+        if (Array.isArray(data.players)) {
+            this.players = {};
+            data.players.forEach(player => {
+                this.players[player.seat_number] = player;
+            });
+        } else {
+            this.players = data.players || {};
+        }
         this.isMyTurn = data.current_player === this.currentUser?.id;
         this.validActions = data.valid_actions || [];
         this.potAmount = data.pot_amount || 0;
         this.handNumber = data.hand_number || 1;
-        
+
         console.log('DEBUG: currentUser:', this.currentUser);
         console.log('DEBUG: current_player:', data.current_player);
         console.log('DEBUG: isMyTurn:', this.isMyTurn);
+
+        // Show/hide ready panel based on game state
+        // If no game state or game is complete, show ready panel
+        if (!data.game_state || data.game_state === 'complete' || data.game_state === 'waiting') {
+            this.showReadyPanel(true);
+            // Request ready status update
+            this.requestReadyStatus();
+        } else {
+            this.showReadyPanel(false);
+        }
         
         // Check if hand is complete (showdown finished)
         if (data.game_state === 'complete') {
             console.log('DEBUG: Game state is complete');
             if (data.hand_results) {
-                console.log('DEBUG: Hand complete detected with results in game state');
-                console.log('DEBUG: Hand results data:', data.hand_results);
-                console.log('DEBUG: Current players data:', this.players);
-                this.displayShowdownResults(data.hand_results);
+                // Only display showdown results once per hand
+                const currentHandNumber = data.hand_number || this.handNumber;
+                if (!this.lastDisplayedHandNumber || this.lastDisplayedHandNumber !== currentHandNumber) {
+                    console.log('DEBUG: Hand complete detected with results in game state');
+                    console.log('DEBUG: Hand results data:', data.hand_results);
+                    console.log('DEBUG: Current players data:', this.players);
+                    this.displayShowdownResults(data.hand_results);
+                    this.lastDisplayedHandNumber = currentHandNumber;
+                } else {
+                    console.log('DEBUG: Showdown results already displayed for hand', currentHandNumber);
+                }
             } else {
                 console.log('DEBUG: Game state is complete but no hand_results found');
             }
@@ -394,7 +545,7 @@ class PokerTable {
         seat.innerHTML = `
             <div class=\"${playerInfoClass}\">
                 <div class=\"player-name\">${this.escapeHtml(player.username)}</div>
-                <div class=\"player-chips\">$${player.stack || 0}</div>
+                <div class=\"player-chips\">$${player.chip_stack || player.stack || 0}</div>
                 <div class=\"player-action\">${player.last_action || ''}</div>
                 ${hasFolded ? '<div class="folded-indicator">FOLDED</div>' : ''}
                 ${player.current_bet > 0 ? `<div class=\"player-bet\">$${player.current_bet}</div>` : ''}
@@ -893,10 +1044,12 @@ class PokerTable {
             `;
         } else {
             messageElement.className = 'chat-message player';
-            const timestamp = new Date(data.timestamp).toLocaleTimeString();
+            // Handle both timestamp and created_at fields for compatibility
+            const timeValue = data.timestamp || data.created_at;
+            const timestamp = timeValue ? new Date(timeValue).toLocaleTimeString() : '';
             messageElement.innerHTML = `
                 <div class=\"message-header\">
-                    <span class=\"chat-username\">${this.escapeHtml(data.username)}</span>
+                    <span class=\"chat-username\">${this.escapeHtml(data.username || 'Unknown')}</span>
                     <span class=\"chat-timestamp\">${timestamp}</span>
                 </div>
                 <div class=\"message-text\">${this.escapeHtml(data.message)}</div>
@@ -1127,7 +1280,14 @@ class PokerTable {
 
         // Show detailed hand results if available
         if (data.hand_results) {
-            this.displayShowdownResults(data.hand_results);
+            // Only display showdown results once per hand
+            const currentHandNumber = data.hand_number || this.handNumber;
+            if (!this.lastDisplayedHandNumber || this.lastDisplayedHandNumber !== currentHandNumber) {
+                this.displayShowdownResults(data.hand_results);
+                this.lastDisplayedHandNumber = currentHandNumber;
+            } else {
+                console.log('DEBUG: Showdown results already displayed for hand', currentHandNumber);
+            }
         } else if (data.winners && data.winners.length > 0) {
             // Fallback to simple winner display
             const winnerNames = data.winners.map(w => w.username).join(', ');

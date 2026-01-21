@@ -24,7 +24,7 @@ class ChatService:
         ]
         self._spam_patterns = [
             r'(.)\1{4,}',  # Repeated characters (5+ same chars in a row)
-            r'^[A-Z\s!]{20,}$',  # All caps messages (20+ chars, all uppercase)
+            r'^[A-Z\s!]+$',  # All caps messages (no lowercase letters allowed)
             r'(http|www\.)',  # URLs
         ]
         
@@ -61,10 +61,13 @@ class ChatService:
             message_type=message_type,
             is_filtered=is_filtered
         )
-        
+
         db.session.add(chat_message)
         db.session.commit()
-        
+
+        # Refresh to load relationships (user, table)
+        db.session.refresh(chat_message)
+
         return chat_message
     
     def get_table_messages(self, table_id: uuid.UUID, limit: int = 50, 
@@ -239,8 +242,9 @@ class ChatService:
         is_filtered = False
         
         # Check for spam patterns first (these block the message)
+        # Note: Don't use IGNORECASE here - the all-caps pattern needs case-sensitivity
         for pattern in self._spam_patterns:
-            if re.search(pattern, message, re.IGNORECASE):
+            if re.search(pattern, message):
                 # Block spam messages entirely
                 return None, True
                 
