@@ -9,6 +9,7 @@ from flask import Blueprint, jsonify, current_app
 from ..database import db
 from ..models.table import PokerTable
 from ..models.table_access import TableAccess
+from ..models.user import User
 
 test_bp = Blueprint('test', __name__, url_prefix='/api/test')
 
@@ -51,6 +52,18 @@ def cleanup_test_data():
             PokerTable.id.in_(test_table_ids)
         ).delete(synchronize_session='fetch')
 
+        # Reset test user bankrolls to their seeded values
+        seed_bankrolls = {
+            'testuser': 800, 'alice': 1000, 'bob': 1500,
+            'charlie': 500, 'diana': 2000
+        }
+        bankrolls_reset = 0
+        for username, bankroll in seed_bankrolls.items():
+            updated = db.session.query(User).filter(
+                User.username == username
+            ).update({'bankroll': bankroll})
+            bankrolls_reset += updated
+
         db.session.commit()
 
         return jsonify({
@@ -58,6 +71,7 @@ def cleanup_test_data():
             'tables_deleted': tables_deleted,
             'access_records_deleted': access_deleted,
             'sessions_cleared': sessions_cleared,
+            'bankrolls_reset': bankrolls_reset,
             'message': f'Cleaned up {tables_deleted} test tables'
         })
 

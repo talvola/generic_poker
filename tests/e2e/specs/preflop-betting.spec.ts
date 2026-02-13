@@ -77,9 +77,7 @@ test.describe('Preflop Betting Flow', () => {
     expect(pot).toBeGreaterThanOrEqual(3);
   });
 
-  // TODO: This test has an issue with flop dealing after BB checks - needs investigation
-  // The multi-user infrastructure works (verified by other passing tests)
-  test.skip('SB calls and BB checks advances to flop', async ({ alicePage, bobPage }) => {
+  test('SB calls and BB checks advances to flop', async ({ alicePage, bobPage }) => {
     // Alice creates a new table
     const tableName = await createTable(alicePage, { name: `Test Hold'em ${Date.now()}` });
 
