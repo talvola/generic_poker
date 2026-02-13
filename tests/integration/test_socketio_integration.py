@@ -948,3 +948,493 @@ class TestLeaveAndRejoin:
 
         sio1_new.disconnect()
         sio2.disconnect()
+
+
+# ── Helpers for edge case tests ──────────────────────────────────────────────
+
+def _setup_two_player_game_custom(app, socketio, player1, player2, holdem_table,
+                                   buy_in1=100, buy_in2=100):
+    """Like _setup_two_player_game but with custom buy-in amounts.
+
+    Returns (http1, sio1, http2, sio2, table_id).
+    """
+    table_id = str(holdem_table.id)
+
+    http1, sio1 = _login_and_connect(app, socketio, player1)
+    http1.post(f'/api/tables/{table_id}/join', json={
+        'buy_in_amount': buy_in1, 'seat_number': 1
+    })
+
+    http2, sio2 = _login_and_connect(app, socketio, player2)
+    http2.post(f'/api/tables/{table_id}/join', json={
+        'buy_in_amount': buy_in2, 'seat_number': 2
+    })
+
+    sio1.get_received()
+    sio2.get_received()
+    sio1.emit('connect_to_table_room', {'table_id': table_id})
+    sio2.emit('connect_to_table_room', {'table_id': table_id})
+    sio1.get_received()
+    sio2.get_received()
+
+    sio1.emit('set_ready', {'table_id': table_id, 'ready': True})
+    sio1.get_received()
+    sio2.get_received()
+
+    sio2.emit('set_ready', {'table_id': table_id, 'ready': True})
+    sio1.get_received()
+    sio2.get_received()
+
+    return http1, sio1, http2, sio2, table_id
+
+
+def _collect_events_through_hand(game, sio1, sio2, player1_id, table_id, max_actions=50):
+    """Play a hand to completion via SocketIO using check/call/all-in.
+
+    Handles all-in players (who have no actions) by only acting for
+    players who have valid actions.
+
+    Returns all collected events.
+    """
+    all_events = []
+    action_count = 0
+
+    while game.state not in [GameState.COMPLETE, GameState.SHOWDOWN] and action_count < max_actions:
+        cp = game.current_player
+        if not cp:
+            break
+
+        actions = game.get_valid_actions(cp.id)
+        if not actions:
+            break
+
+        names = _action_names(actions)
+        cp_sio = sio1 if cp.id == player1_id else sio2
+
+        if 'check' in names:
+            cp_sio.emit('player_action', {
+                'table_id': table_id, 'action': 'check', 'amount': 0
+            })
+        elif 'call' in names:
+            call_info = _find_action(actions, 'call')
+            cp_sio.emit('player_action', {
+                'table_id': table_id, 'action': 'call', 'amount': call_info[1]
+            })
+        else:
+            cp_sio.emit('player_action', {
+                'table_id': table_id, 'action': 'fold', 'amount': 0
+            })
+
+        all_events.extend(sio1.get_received())
+        all_events.extend(sio2.get_received())
+        action_count += 1
+
+    all_events.extend(sio1.get_received())
+    all_events.extend(sio2.get_received())
+    return all_events
+
+
+# ── Edge Case SocketIO Tests ────────────────────────────────────────────────
+
+class TestAllInViaSocketIO:
+    """Test all-in scenarios through the SocketIO layer."""
+
+    def test_all_in_preflop_completes_hand(self, app, socketio, player1, player2, holdem_table):
+        """Short stack goes all-in pre-flop via SocketIO, hand completes."""
+        # Min buy-in is 40 (20 * BB), max is 400 (200 * BB)
+        _, sio1, _, sio2, table_id = _setup_two_player_game_custom(
+            app, socketio, player1, player2, holdem_table,
+            buy_in1=40, buy_in2=200
+        )
+
+        session = game_orchestrator.get_session(table_id)
+        game = session.game
+
+        # p1 (SB) should be current player pre-flop
+        assert game.current_player is not None
+        cp = game.current_player
+        cp_sio = sio1 if cp.id == player1.id else sio2
+        other_sio = sio2 if cp.id == player1.id else sio1
+        other_id = player2.id if cp.id == player1.id else player1.id
+
+        # Current player goes all-in
+        cp_stack = game.table.players[cp.id].stack
+        cp_sio.get_received()
+        other_sio.get_received()
+        cp_sio.emit('player_action', {
+            'table_id': table_id, 'action': 'raise', 'amount': cp_stack + game.betting.current_bets.get(cp.id, type('', (), {'amount': 0})).amount
+        })
+        all_events = list(sio1.get_received()) + list(sio2.get_received())
+
+        # Other player calls
+        other_sio.emit('player_action', {
+            'table_id': table_id, 'action': 'call',
+            'amount': game.betting.current_bet
+        })
+        all_events.extend(sio1.get_received())
+        all_events.extend(sio2.get_received())
+
+        # Play through remaining streets (game should handle all-in progression)
+        remaining_events = _collect_events_through_hand(
+            game, sio1, sio2, player1.id, table_id
+        )
+        all_events.extend(remaining_events)
+
+        # Hand should be complete
+        assert game.state in [GameState.COMPLETE, GameState.SHOWDOWN], \
+            f"Expected hand complete, got state: {game.state}"
+
+        # Should have hand_complete event
+        hc_events = [e for e in all_events if e['name'] == 'hand_complete']
+        assert len(hc_events) >= 1, \
+            f"No hand_complete event. Events: {set(e['name'] for e in all_events)}"
+
+        hc_data = hc_events[0]['args'][0]
+        results = hc_data.get('hand_results', {})
+        assert results.get('total_pot', 0) > 0
+
+        # Chip conservation
+        p1_stack = game.table.players[player1.id].stack
+        p2_stack = game.table.players[player2.id].stack
+        assert p1_stack + p2_stack == 240, \
+            f"Expected 240 total chips, got {p1_stack + p2_stack}"
+
+        sio1.disconnect()
+        sio2.disconnect()
+
+    def test_all_in_shows_zero_stack_in_game_state(self, app, socketio, player1, player2, holdem_table):
+        """After going all-in, game_state_update shows chip_stack=0."""
+        _, sio1, _, sio2, table_id = _setup_two_player_game_custom(
+            app, socketio, player1, player2, holdem_table,
+            buy_in1=40, buy_in2=200
+        )
+
+        session = game_orchestrator.get_session(table_id)
+        game = session.game
+
+        cp = game.current_player
+        cp_sio = sio1 if cp.id == player1.id else sio2
+        other_sio = sio2 if cp.id == player1.id else sio1
+        cp_id = cp.id
+
+        # Go all-in
+        cp_total = game.table.players[cp_id].stack + game.betting.current_bets.get(cp_id, type('', (), {'amount': 0})).amount
+        sio1.get_received()
+        sio2.get_received()
+        cp_sio.emit('player_action', {
+            'table_id': table_id, 'action': 'raise', 'amount': cp_total
+        })
+        sio1.get_received()
+        sio2.get_received()
+
+        # Request game state to check the all-in player's stack
+        cp_sio.emit('request_game_state', {'table_id': table_id})
+        state = _get_last_game_state(cp_sio)
+        assert state is not None, "Should receive game state"
+
+        # Find the all-in player in state
+        player_states = {p['user_id']: p for p in state['players']}
+        assert player_states[cp_id]['chip_stack'] == 0, \
+            f"Expected 0 chips after all-in, got {player_states[cp_id]['chip_stack']}"
+
+        sio1.disconnect()
+        sio2.disconnect()
+
+    def test_both_all_in_game_completes(self, app, socketio, player1, player2, holdem_table):
+        """Both players all-in pre-flop, hand runs to showdown automatically."""
+        sio1, sio2, table_id = _setup_two_player_game(
+            app, socketio, player1, player2, holdem_table
+        )
+
+        session = game_orchestrator.get_session(table_id)
+        game = session.game
+
+        cp = game.current_player
+        cp_sio = sio1 if cp.id == player1.id else sio2
+        other_id = player2.id if cp.id == player1.id else player1.id
+        other_sio = sio2 if cp.id == player1.id else sio1
+
+        sio1.get_received()
+        sio2.get_received()
+
+        # Current player raises all-in (100 total)
+        cp_sio.emit('player_action', {
+            'table_id': table_id, 'action': 'raise', 'amount': 100
+        })
+        sio1.get_received()
+        sio2.get_received()
+
+        # Other player calls all-in
+        other_sio.emit('player_action', {
+            'table_id': table_id, 'action': 'call', 'amount': 100
+        })
+        all_events = list(sio1.get_received()) + list(sio2.get_received())
+
+        # Both are all-in, hand should auto-complete through remaining streets
+        remaining = _collect_events_through_hand(
+            game, sio1, sio2, player1.id, table_id
+        )
+        all_events.extend(remaining)
+
+        assert game.state in [GameState.COMPLETE, GameState.SHOWDOWN], \
+            f"Expected complete, got {game.state}"
+
+        hc_events = [e for e in all_events if e['name'] == 'hand_complete']
+        assert len(hc_events) >= 1, "Should have hand_complete event"
+
+        results = hc_events[0]['args'][0].get('hand_results', {})
+        assert results.get('total_pot') == 200, \
+            f"Expected pot of 200, got {results.get('total_pot')}"
+
+        # Chip conservation
+        total = game.table.players[player1.id].stack + game.table.players[player2.id].stack
+        assert total == 200
+
+        sio1.disconnect()
+        sio2.disconnect()
+
+
+class TestSplitPotViaSocketIO:
+    """Test split pot scenarios through the SocketIO layer."""
+
+    def test_split_pot_hand_complete_event(self, app, socketio, player1, player2, holdem_table):
+        """When the board plays (both players tie), hand_complete shows split."""
+        sio1, sio2, table_id = _setup_two_player_game(
+            app, socketio, player1, player2, holdem_table
+        )
+
+        session = game_orchestrator.get_session(table_id)
+        game = session.game
+
+        # Inject a board that guarantees a split: a straight on board
+        # that both players will play regardless of hole cards.
+        # First, find what cards are already dealt to avoid duplicates.
+        from generic_poker.core.card import Card, Rank, Suit
+        dealt = set()
+        for p in game.table.players.values():
+            for c in p.hand.cards:
+                dealt.add((c.rank, c.suit))
+
+        # Pick 5 board cards forming a straight (AKQJT) using suits not in dealt
+        target = [
+            (Rank.ACE, [Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS, Suit.SPADES]),
+            (Rank.KING, [Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS, Suit.SPADES]),
+            (Rank.QUEEN, [Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS, Suit.SPADES]),
+            (Rank.JACK, [Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS, Suit.SPADES]),
+            (Rank.TEN, [Suit.HEARTS, Suit.DIAMONDS, Suit.CLUBS, Suit.SPADES]),
+        ]
+        board_cards = []
+        suits_used = set()
+        for rank, suit_options in target:
+            for suit in suit_options:
+                if (rank, suit) not in dealt and suit not in suits_used:
+                    board_cards.append(Card(rank, suit))
+                    suits_used.add(suit)  # Different suit per card to avoid flush
+                    break
+            else:
+                # Fallback: use any non-dealt suit
+                for suit in suit_options:
+                    if (rank, suit) not in dealt:
+                        board_cards.append(Card(rank, suit))
+                        break
+
+        assert len(board_cards) == 5, f"Could not build board, got {len(board_cards)}"
+
+        # Replace the top 5 cards of the remaining deck
+        remaining = game.table.deck.cards
+        for i in range(5):
+            remaining[-(i+1)] = board_cards[i]
+
+        # Play the hand check/call through to showdown
+        all_events = _collect_events_through_hand(
+            game, sio1, sio2, player1.id, table_id
+        )
+
+        assert game.state in [GameState.COMPLETE, GameState.SHOWDOWN]
+
+        hc_events = [e for e in all_events if e['name'] == 'hand_complete']
+        assert len(hc_events) >= 1, "Should have hand_complete event"
+
+        results = hc_events[0]['args'][0].get('hand_results', {})
+        pots = results.get('pots', [])
+        assert len(pots) >= 1, f"Expected at least 1 pot, got {pots}"
+
+        # The pot should be split between both players
+        main_pot = pots[0]
+        winners = main_pot.get('winners', [])
+        assert len(winners) == 2, \
+            f"Expected 2 winners (split), got {len(winners)}: {winners}"
+
+        # Chip conservation
+        total = game.table.players[player1.id].stack + game.table.players[player2.id].stack
+        assert total == 200, f"Expected 200 total, got {total}"
+
+        sio1.disconnect()
+        sio2.disconnect()
+
+
+class TestRaiseViaSocketIO:
+    """Test raise/re-raise sequences through the SocketIO layer."""
+
+    def test_raise_and_call_via_socketio(self, app, socketio, player1, player2, holdem_table):
+        """Raise then call via SocketIO events, verify pot and stacks."""
+        sio1, sio2, table_id = _setup_two_player_game(
+            app, socketio, player1, player2, holdem_table
+        )
+
+        session = game_orchestrator.get_session(table_id)
+        game = session.game
+
+        cp = game.current_player
+        cp_sio = sio1 if cp.id == player1.id else sio2
+        other_id = player2.id if cp.id == player1.id else player1.id
+        other_sio = sio2 if cp.id == player1.id else sio1
+
+        sio1.get_received()
+        sio2.get_received()
+
+        # Current player raises to 10
+        cp_sio.emit('player_action', {
+            'table_id': table_id, 'action': 'raise', 'amount': 10
+        })
+        sio1.get_received()
+        sio2.get_received()
+
+        # Other player calls
+        other_sio.emit('player_action', {
+            'table_id': table_id, 'action': 'call', 'amount': 10
+        })
+        sio1.get_received()
+        sio2.get_received()
+
+        # Verify pot via game state
+        cp_sio.emit('request_game_state', {'table_id': table_id})
+        state = _get_last_game_state(cp_sio)
+        assert state is not None
+
+        pot = state.get('pot_info', {}).get('total_pot', 0)
+        assert pot == 20, f"Expected pot of 20 after raise + call, got {pot}"
+
+        # Stacks: each put in 10
+        player_stacks = {p['user_id']: p['chip_stack'] for p in state['players']}
+        for uid, stack in player_stacks.items():
+            assert stack == 90, f"Expected 90 chips for {uid}, got {stack}"
+
+        sio1.disconnect()
+        sio2.disconnect()
+
+    def test_raise_reraise_call_via_socketio(self, app, socketio, player1, player2, holdem_table):
+        """Raise, re-raise, call sequence via SocketIO."""
+        sio1, sio2, table_id = _setup_two_player_game(
+            app, socketio, player1, player2, holdem_table
+        )
+
+        session = game_orchestrator.get_session(table_id)
+        game = session.game
+
+        cp = game.current_player
+        cp_sio = sio1 if cp.id == player1.id else sio2
+        other_id = player2.id if cp.id == player1.id else player1.id
+        other_sio = sio2 if cp.id == player1.id else sio1
+
+        sio1.get_received()
+        sio2.get_received()
+
+        # p1 raises to 6
+        cp_sio.emit('player_action', {
+            'table_id': table_id, 'action': 'raise', 'amount': 6
+        })
+        sio1.get_received()
+        sio2.get_received()
+
+        # p2 3-bets to 18
+        other_sio.emit('player_action', {
+            'table_id': table_id, 'action': 'raise', 'amount': 18
+        })
+        sio1.get_received()
+        sio2.get_received()
+
+        # p1 calls the 3-bet
+        cp_sio.emit('player_action', {
+            'table_id': table_id, 'action': 'call', 'amount': 18
+        })
+        sio1.get_received()
+        sio2.get_received()
+
+        # Verify pot = 36
+        cp_sio.emit('request_game_state', {'table_id': table_id})
+        state = _get_last_game_state(cp_sio)
+        pot = state.get('pot_info', {}).get('total_pot', 0)
+        assert pot == 36, f"Expected pot of 36 after raise/3-bet/call, got {pot}"
+
+        sio1.disconnect()
+        sio2.disconnect()
+
+    def test_post_flop_bet_raise_via_socketio(self, app, socketio, player1, player2, holdem_table):
+        """Post-flop bet and raise via SocketIO."""
+        sio1, sio2, table_id = _setup_two_player_game(
+            app, socketio, player1, player2, holdem_table
+        )
+
+        session = game_orchestrator.get_session(table_id)
+        game = session.game
+
+        # Play through pre-flop: SB calls, BB checks
+        cp = game.current_player
+        cp_sio = sio1 if cp.id == player1.id else sio2
+        other_sio = sio2 if cp.id == player1.id else sio1
+
+        sio1.get_received()
+        sio2.get_received()
+
+        # SB calls
+        cp_sio.emit('player_action', {
+            'table_id': table_id, 'action': 'call', 'amount': 2
+        })
+        sio1.get_received()
+        sio2.get_received()
+
+        # BB checks
+        other_sio.emit('player_action', {
+            'table_id': table_id, 'action': 'check', 'amount': 0
+        })
+        sio1.get_received()
+        sio2.get_received()
+
+        # Now on flop - find who acts first (BB acts first post-flop in heads up)
+        assert game.state == GameState.BETTING, f"Expected BETTING, got {game.state}"
+        flop_cp = game.current_player
+        assert flop_cp is not None, "Should have a current player on flop"
+
+        flop_cp_sio = sio1 if flop_cp.id == player1.id else sio2
+        flop_other_sio = sio2 if flop_cp.id == player1.id else sio1
+
+        # First player bets 10
+        flop_cp_sio.emit('player_action', {
+            'table_id': table_id, 'action': 'bet', 'amount': 10
+        })
+        sio1.get_received()
+        sio2.get_received()
+
+        # Other player raises to 30
+        flop_other_sio.emit('player_action', {
+            'table_id': table_id, 'action': 'raise', 'amount': 30
+        })
+        sio1.get_received()
+        sio2.get_received()
+
+        # First player calls
+        flop_cp_sio.emit('player_action', {
+            'table_id': table_id, 'action': 'call', 'amount': 30
+        })
+        sio1.get_received()
+        sio2.get_received()
+
+        # Pot should be 4 (preflop) + 60 (flop: 30 each) = 64
+        flop_cp_sio.emit('request_game_state', {'table_id': table_id})
+        state = _get_last_game_state(flop_cp_sio)
+        pot = state.get('pot_info', {}).get('total_pot', 0)
+        assert pot == 64, f"Expected pot of 64, got {pot}"
+
+        sio1.disconnect()
+        sio2.disconnect()
