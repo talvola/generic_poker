@@ -141,13 +141,14 @@ class ActionTimeoutManager:
 
 class PlayerActionManager:
     """Manages player actions, validation, and timeouts."""
-    
+
     def __init__(self):
         """Initialize the player action manager."""
         self.timeout_manager = ActionTimeoutManager()
         self.action_history: Dict[str, List[Dict[str, Any]]] = {}  # table_id -> action history
         self.lock = Lock()
-        
+        self.action_timeout_enabled = False  # Set to True to enable auto-fold on timeout
+
         logger.info("Player action manager initialized")
     
     def get_available_actions(self, table_id: str, user_id: str) -> List[PlayerActionOption]:
@@ -390,13 +391,17 @@ class PlayerActionManager:
             # Check if game is active
             if not session.is_active or session.is_paused:
                 return ActionValidation(False, "Game is not active")
-            
-            # Check if player is in the game
-            if user_id not in session.connected_players:
+
+            # Check if player is in the game (check game engine, not WebSocket connection)
+            # The player should be in the game's table.players dict
+            if not session.game or user_id not in session.game.table.players:
                 return ActionValidation(False, "Player not in game")
-            
+
             # Check if it's the player's turn
+            current_player_id = self._get_current_player(session)
+            logger.info(f"Action validation: user_id={user_id}, current_player_id={current_player_id}")
             if not self._is_current_player(session, user_id):
+                logger.warning(f"Turn check failed: user_id={user_id} != current_player={current_player_id}")
                 return ActionValidation(False, "Not your turn to act")
             
             # Get valid actions from game engine
@@ -471,21 +476,43 @@ class PlayerActionManager:
             
             # Process the action through the game session
             success, message, result = session.process_player_action(user_id, action, amount or 0)
-            
+
             if success:
+                # Check if we need to advance to the next step (betting round complete)
+                game = session.game
+                if result and hasattr(result, 'advance_step') and result.advance_step:
+                    if game and game.state != GameState.COMPLETE:
+                        logger.info(f"Betting round complete, advancing to next step")
+                        game._next_step()
+                        # Continue advancing through dealing/non-player-input steps
+                        # Check for DEALING state (doesn't require player input) OR no current player
+                        while game.state != GameState.COMPLETE:
+                            if game.current_step >= len(game.rules.gameplay):
+                                break
+                            # DEALING state doesn't require player input - auto advance
+                            if game.state == GameState.DEALING:
+                                game._next_step()
+                            # BETTING state with no current player - round complete, advance
+                            elif game.state == GameState.BETTING and game.current_player is None:
+                                game._next_step()
+                            else:
+                                # Player input required
+                                break
+                        logger.info(f"Game advanced to step {game.current_step}, state {game.state}, current_player: {game.current_player.name if game.current_player else None}")
+
                 # Record the action in history
                 self._record_action(table_id, user_id, action, amount, datetime.utcnow())
-                
+
                 # Notify other players via WebSocket
                 self._broadcast_player_action(table_id, user_id, action, amount, result)
-                
+
                 # Check if hand is complete (showdown finished)
                 if session.game and session.game.state.name == 'COMPLETE':
                     self._handle_hand_completion(table_id, session)
-                
+
                 # Start timeout for next player if needed
                 self._start_next_player_timeout(session)
-                
+
                 logger.info(f"Processed action {action.value} for player {user_id} at table {table_id}")
             
             return success, message, result
@@ -496,16 +523,21 @@ class PlayerActionManager:
     
     def start_action_timer(self, table_id: str, user_id: str, timeout_seconds: int = 30) -> None:
         """Start an action timer for a player.
-        
+
         Args:
             table_id: ID of the table
             user_id: ID of the player
             timeout_seconds: Timeout in seconds
         """
         try:
+            # Skip if action timeout is disabled (useful for debugging)
+            if not self.action_timeout_enabled:
+                logger.debug(f"Action timeout disabled, skipping timer for player {user_id}")
+                return
+
             def timeout_callback(timed_out_user_id: str):
                 self._handle_action_timeout(table_id, timed_out_user_id)
-            
+
             self.timeout_manager.set_timeout(user_id, timeout_seconds, timeout_callback)
             
             # Notify player of timeout via WebSocket
@@ -515,7 +547,7 @@ class PlayerActionManager:
                     'user_id': user_id,
                     'table_id': table_id,
                     'timeout_seconds': timeout_seconds,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
                 }
                 ws_manager.send_to_user(user_id, GameEvent.ACTION_TIMEOUT_STARTED, timeout_data)
             
@@ -553,7 +585,7 @@ class PlayerActionManager:
                         'table_id': table_id,
                         'action': 'fold',
                         'reason': 'timeout',
-                        'timestamp': datetime.utcnow().isoformat()
+                        'timestamp': datetime.utcnow().isoformat() + 'Z'
                     }
                     ws_manager.broadcast_to_table(table_id, GameEvent.PLAYER_ACTION_TIMEOUT, timeout_data)
                 
@@ -612,10 +644,10 @@ class PlayerActionManager:
         except Exception as e:
             logger.error(f"Failed to record action: {e}")
     
-    def _broadcast_player_action(self, table_id: str, user_id: str, action: PlayerAction, 
+    def _broadcast_player_action(self, table_id: str, user_id: str, action: PlayerAction,
                                amount: Optional[int], result: Any) -> None:
         """Broadcast a player action to all table participants.
-        
+
         Args:
             table_id: ID of the table
             user_id: ID of the player
@@ -627,26 +659,53 @@ class PlayerActionManager:
             ws_manager = get_websocket_manager()
             if not ws_manager:
                 return
-            
+
             action_data = {
                 'user_id': user_id,
                 'table_id': table_id,
                 'action': action.value,
                 'amount': amount,
-                'timestamp': datetime.utcnow().isoformat(),
+                'timestamp': datetime.utcnow().isoformat() + 'Z',
                 'success': True
             }
-            
+
             # Add result data if available
             if result and hasattr(result, 'to_dict'):
                 action_data['result'] = result.to_dict()
-            
+
             # Broadcast to all table participants
             ws_manager.broadcast_to_table(table_id, GameEvent.PLAYER_ACTION, action_data)
-            
+
+            # Also broadcast the action to chat/hand history
+            from ..services.user_manager import UserManager
+            user_manager = UserManager()
+            user = user_manager.get_user_by_id(user_id)
+            username = user.username if user else 'Unknown'
+
+            # Format action message for hand history
+            action_name = action.value.lower()
+            if action == PlayerAction.FOLD:
+                action_msg = f"{username} folds"
+            elif action == PlayerAction.CHECK:
+                action_msg = f"{username} checks"
+            elif action == PlayerAction.CALL:
+                action_msg = f"{username} calls${amount}" if amount else f"{username} calls"
+            elif action == PlayerAction.BET:
+                action_msg = f"{username} bets ${amount}"
+            elif action == PlayerAction.RAISE:
+                action_msg = f"{username} raises to ${amount}"
+            elif action == PlayerAction.ALL_IN:
+                action_msg = f"{username} is all-in for ${amount}"
+            else:
+                action_msg = f"{username} {action_name}"
+                if amount:
+                    action_msg += f" ${amount}"
+
+            ws_manager.broadcast_game_action_chat(table_id, action_msg, 'player_action')
+
             # Also broadcast updated game state
             ws_manager.broadcast_game_state_update(table_id)
-            
+
         except Exception as e:
             logger.error(f"Failed to broadcast player action: {e}")
     
@@ -759,35 +818,39 @@ class PlayerActionManager:
         except Exception as e:
             logger.error(f"Failed to cancel timeout for player {user_id}: {e}")
 
-
-# Global player action manager instance
-player_action_manager = PlayerActionManager()    
-def _handle_hand_completion(self, table_id: str, session: GameSession) -> None:
+    def _handle_hand_completion(self, table_id: str, session: GameSession) -> None:
         """Handle hand completion and broadcast showdown results.
-        
+
         Args:
             table_id: ID of the table
             session: Game session that completed
         """
         try:
             logger.info(f"Hand completed for table {table_id}, processing showdown results")
-            
+
             # Get hand results from the game engine
             hand_results = session.game.get_hand_results()
-            
+
             if not hand_results:
                 logger.warning(f"No hand results available for completed hand at table {table_id}")
                 return
-            
+
             # Convert to JSON format for frontend
             results_dict = {
                 'is_complete': hand_results.is_complete,
                 'total_pot': hand_results.total_pot,
                 'pots': [],
                 'hands': {},
-                'winning_hands': []
+                'winning_hands': [],
+                'player_hole_cards': {}  # All players' hole cards for showdown display
             }
-            
+
+            # Get all players' hole cards for showdown display
+            if session.game and hasattr(session.game, 'table'):
+                for player_id, player in session.game.table.players.items():
+                    if hasattr(player, 'hand') and hasattr(player.hand, 'cards') and player.hand.cards:
+                        results_dict['player_hole_cards'][player_id] = [str(card) for card in player.hand.cards]
+
             # Convert pots
             for pot in hand_results.pots:
                 pot_dict = {
@@ -800,7 +863,7 @@ def _handle_hand_completion(self, table_id: str, session: GameSession) -> None:
                     'amount_per_player': pot.amount // len(pot.winners) if pot.winners else 0
                 }
                 results_dict['pots'].append(pot_dict)
-            
+
             # Convert hands
             for player_id, player_hands in hand_results.hands.items():
                 results_dict['hands'][player_id] = []
@@ -812,13 +875,13 @@ def _handle_hand_completion(self, table_id: str, session: GameSession) -> None:
                         'hand_description': hand.hand_description,
                         'evaluation_type': hand.evaluation_type,
                         'hand_type': hand.hand_type,
-                        'community_cards': hand.community_cards if hasattr(hand, 'community_cards') else [],
+                        'community_cards': [str(card) for card in hand.community_cards] if hasattr(hand, 'community_cards') and hand.community_cards else [],
                         'used_hole_cards': [str(card) for card in hand.used_hole_cards] if hand.used_hole_cards else [],
                         'rank': hand.rank if hasattr(hand, 'rank') else 0,
                         'ordered_rank': hand.ordered_rank if hasattr(hand, 'ordered_rank') else 0
                     }
                     results_dict['hands'][player_id].append(hand_dict)
-            
+
             # Convert winning hands
             for winning_hand in hand_results.winning_hands:
                 winning_dict = {
@@ -828,11 +891,11 @@ def _handle_hand_completion(self, table_id: str, session: GameSession) -> None:
                     'hand_description': winning_hand.hand_description,
                     'evaluation_type': winning_hand.evaluation_type,
                     'hand_type': winning_hand.hand_type,
-                    'community_cards': winning_hand.community_cards if hasattr(winning_hand, 'community_cards') else [],
+                    'community_cards': [str(card) for card in winning_hand.community_cards] if hasattr(winning_hand, 'community_cards') and winning_hand.community_cards else [],
                     'used_hole_cards': [str(card) for card in winning_hand.used_hole_cards] if winning_hand.used_hole_cards else []
                 }
                 results_dict['winning_hands'].append(winning_dict)
-            
+
             # Broadcast hand completion to all table participants
             websocket_manager = get_websocket_manager()
             if websocket_manager:
@@ -840,6 +903,10 @@ def _handle_hand_completion(self, table_id: str, session: GameSession) -> None:
                 logger.info(f"Broadcasted hand completion results for table {table_id}")
             else:
                 logger.warning("WebSocket manager not available for broadcasting hand completion")
-                
+
         except Exception as e:
             logger.error(f"Failed to handle hand completion for table {table_id}: {e}")
+
+
+# Global player action manager instance
+player_action_manager = PlayerActionManager()

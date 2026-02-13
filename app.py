@@ -14,6 +14,7 @@ from src.online_poker.routes.auth_routes import auth_bp
 from src.online_poker.routes.lobby_routes import lobby_bp, register_lobby_socket_events
 from src.online_poker.routes.table_routes import table_bp
 from src.online_poker.routes.game_routes import game_bp
+from src.online_poker.routes.test_routes import test_bp
 from src.online_poker.services.websocket_manager import init_websocket_manager
 
 def create_app(config_class=Config):
@@ -24,8 +25,16 @@ def create_app(config_class=Config):
     # Initialize extensions
     db.init_app(app)
     
-    # Initialize SocketIO
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+    # Initialize SocketIO (use default async_mode for better compatibility)
+    socketio = SocketIO(
+        app,
+        cors_allowed_origins="*",
+        async_mode=None,  # Let SocketIO choose the best async mode
+        logger=True,
+        engineio_logger=True,
+        ping_timeout=60,
+        ping_interval=25
+    )
     
     # Initialize authentication
     login_manager = init_login_manager(app)
@@ -35,6 +44,7 @@ def create_app(config_class=Config):
     app.register_blueprint(lobby_bp, url_prefix='/')
     app.register_blueprint(table_bp, url_prefix='/table')
     app.register_blueprint(game_bp, url_prefix='/game')
+    app.register_blueprint(test_bp)  # Test-only routes for E2E testing
     
     # Initialize WebSocket manager
     websocket_manager = init_websocket_manager(socketio)
@@ -98,9 +108,10 @@ if __name__ == '__main__':
     print("🔧 Debug mode: ON")
     
     socketio.run(
-        app, 
-        debug=True, 
-        host='0.0.0.0', 
+        app,
+        debug=True,
+        use_reloader=False,  # Disable reloader to fix WebSocket issues
+        host='0.0.0.0',
         port=5000,
         allow_unsafe_werkzeug=True
     )

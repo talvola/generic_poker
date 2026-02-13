@@ -80,6 +80,7 @@ class PlayerView:
     chip_stack: int
     current_bet: int
     cards: List[str] = field(default_factory=list)  # Hidden for other players
+    card_count: int = 0  # Number of cards player has (for showing card backs)
     is_active: bool = True
     is_current_player: bool = False
     is_bot: bool = False
@@ -88,7 +89,7 @@ class PlayerView:
     has_folded: bool = False
     last_action: Optional[str] = None
     time_to_act: Optional[int] = None  # Seconds remaining to act
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
         return {
@@ -99,6 +100,7 @@ class PlayerView:
             'chip_stack': self.chip_stack,
             'current_bet': self.current_bet,
             'cards': self.cards,
+            'card_count': self.card_count,
             'is_active': self.is_active,
             'is_current_player': self.is_current_player,
             'is_bot': self.is_bot,
@@ -135,10 +137,21 @@ class GameStateView:
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
+        # Find the viewer's username from players list
+        viewer_username = None
+        for player in self.players:
+            if player.user_id == self.viewer_id:
+                viewer_username = player.username
+                break
+
         return {
             'table_id': self.table_id,
             'session_id': self.session_id,
             'viewer_id': self.viewer_id,
+            'current_user': {
+                'id': self.viewer_id,
+                'username': viewer_username
+            },
             'players': [player.to_dict() for player in self.players],
             'community_cards': self.community_cards,
             'pot_info': self.pot_info.to_dict(),

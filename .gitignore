@@ -172,3 +172,31 @@ cython_debug/
 
 # Some directories I use for development
 backup/
+
+# E2E test artifacts
+tests/e2e/auth/*.json
+tests/e2e/playwright-report/
+tests/e2e/test-results/
+
+# Local tool configs
+.mcp.json
+.playwright-mcp/
+
+# Node
+node_modules/
+
+# Database files
+*.db
+data/hand_rankings/*.db
+
+# Temp/scratch output
+*.out
+typescript
+test-results/
+hand_evaluations.json
+hand_rank_mapping.csv
+
+# Large generated ranking data
+tools/generate_rankings/poker_hands/
+tools/generate_rankings/all_card_hands_ranked_one_card_low_*.csv
+data/hand_rankings/all_card_hands_ranked_ne_seven_card_high.csv.gz

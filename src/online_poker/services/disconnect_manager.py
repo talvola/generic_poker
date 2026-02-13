@@ -254,7 +254,7 @@ class DisconnectManager:
                     reconnect_data = {
                         'user_id': user_id,
                         'table_id': table_id,
-                        'reconnect_time': datetime.utcnow().isoformat(),
+                        'reconnect_time': datetime.utcnow().isoformat() + 'Z',
                         'disconnect_duration': disconnect_duration.total_seconds()
                     }
                     ws_manager.broadcast_to_table(
@@ -324,7 +324,7 @@ class DisconnectManager:
                             'table_id': table_id,
                             'action': 'fold',
                             'reason': 'auto_fold_disconnect',
-                            'timestamp': datetime.utcnow().isoformat()
+                            'timestamp': datetime.utcnow().isoformat() + 'Z'
                         }
                         ws_manager.broadcast_to_table(
                             table_id, 
@@ -369,7 +369,7 @@ class DisconnectManager:
                             'table_id': table_id,
                             'reason': 'disconnect_timeout',
                             'cashout_info': cashout_info,
-                            'timestamp': datetime.utcnow().isoformat()
+                            'timestamp': datetime.utcnow().isoformat() + 'Z'
                         }
                         ws_manager.broadcast_to_table(
                             table_id, 

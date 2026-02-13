@@ -152,6 +152,42 @@ Hand Complete → Display Results → Advance Dealer → Reset State → Start N
      └────────────────── Continuous Loop ──────────────────────────────────┘
 ```
 
+#### Ready System (Implemented)
+
+The platform uses a "ready" mechanism to coordinate hand starts among players:
+
+**Ready Status Tracking:**
+- Each player at a table has an `is_ready` boolean status stored in `TableAccess` model
+- Players toggle their ready status via a "Ready" button in the UI
+- Ready status is broadcast to all table participants via WebSocket
+
+**Hand Start Trigger:**
+- When all seated players (minimum 2) have `is_ready = True`, hand automatically starts
+- `_start_hand_when_ready()` in WebSocketManager coordinates the game start
+- Ready status is reset after hand starts to prepare for next hand
+
+**Implementation Details:**
+```python
+# TableAccess model includes:
+is_ready: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+# TableAccessManager provides:
+set_player_ready(user_id, table_id, ready) -> (success, message)
+get_ready_status(table_id) -> {players, all_ready, ready_count, min_players}
+reset_all_ready(table_id) -> bool
+
+# WebSocket events:
+'set_ready' - Player toggles their ready status
+'request_ready_status' - Request current ready status
+'ready_status_update' - Broadcast ready status to all
+'hand_starting' - Notify that hand is about to start
+```
+
+**UI Components:**
+- Ready panel with player indicators showing who is/isn't ready
+- Ready button that toggles between "Ready" and "Cancel Ready" states
+- Visual feedback with checkmarks for ready players
+
 ### 4. Real-Time Communication System
 
 #### WebSocketManager Class
@@ -179,6 +215,11 @@ class GameEvent:
     CHAT_MESSAGE = "chat_message"
     PLAYER_DISCONNECTED = "player_disconnected"
     PLAYER_RECONNECTED = "player_reconnected"
+    TABLE_UPDATE = "table_update"
+    ERROR = "error"
+    NOTIFICATION = "notification"
+    READY_STATUS_UPDATE = "ready_status_update"  # Ready system events
+    HAND_STARTING = "hand_starting"              # Hand start notification
 ```
 
 ### 5. Bot Player System

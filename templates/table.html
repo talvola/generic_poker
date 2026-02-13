@@ -21,10 +21,11 @@
                     <div class="table-details">
                         <span class="variant">{{ table.variant | format_variant }}</span>
                         <span class="stakes">
+                            {% set stakes_dict = table.get_stakes() %}
                             {% if table.betting_structure.lower() == 'limit' %}
-                                ${{ table.stakes.small_bet if table.stakes.small_bet else table.stakes.get('small_bet', 10) }}/{{ table.stakes.big_bet if table.stakes.big_bet else table.stakes.get('big_bet', 20) }}
+                                ${{ stakes_dict.get('small_bet', 10) }}/{{ stakes_dict.get('big_bet', 20) }}
                             {% else %}
-                                ${{ table.stakes.small_blind if table.stakes.small_blind else table.stakes.get('small_blind', 1) }}/{{ table.stakes.big_blind if table.stakes.big_blind else table.stakes.get('big_blind', 2) }}
+                                ${{ stakes_dict.get('small_blind', 1) }}/{{ stakes_dict.get('big_blind', 2) }}
                             {% endif %}
                         </span>
                         <span class="structure">{{ table.betting_structure | format_structure }}</span>
@@ -69,7 +70,7 @@
                         {% for i in range(table.max_players) %}
                             <div class="player-seat seat-{{ i + 1 }}" data-position="{{ i }}" data-seat="{{ i + 1 }}">
                                 {% set seat_number = i + 1 %}
-                                {% if table.get('players') and seat_number in table.players %}
+                                {% if table.players and seat_number in table.players %}
                                     {% set player = table.players[seat_number] %}
                                     <div class="player-info">
                                         <div class="player-name">{{ player.username }}</div>
@@ -98,6 +99,20 @@
                 <div class="showdown-results-content" id="showdown-results-content">
                     <!-- Showdown results will be displayed here -->
                 </div>
+            </div>
+
+            <!-- Ready Panel (shown when no game is active) -->
+            <div class="ready-panel" id="ready-panel">
+                <div class="ready-status" id="ready-status">
+                    <div class="ready-info">
+                        <span class="ready-count" id="ready-count">0/0 players ready</span>
+                        <span class="ready-hint">Need at least 2 players to start</span>
+                    </div>
+                    <div class="ready-players" id="ready-players">
+                        <!-- Player ready indicators will be shown here -->
+                    </div>
+                </div>
+                <button class="btn btn-primary ready-btn" id="ready-btn">Ready</button>
             </div>
 
             <!-- Action Panel -->

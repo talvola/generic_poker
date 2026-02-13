@@ -723,6 +723,7 @@ class Table:
         """Clear all player hands, community cards, and reset the deck."""
         for player in self.players.values():
             player.hand.clear()
+            player.is_active = True  # Reset fold status for new hand
         self.community_cards.clear()
         self.discard_pile.clear()
         self.deck = Deck(deck_type=self.deck_type)

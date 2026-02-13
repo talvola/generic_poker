@@ -781,7 +781,7 @@ def get_state_updates(table_id: str):
         return jsonify({
             'success': True,
             'updates': [update.to_dict()],
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.utcnow().isoformat() + 'Z'
         })
         
     except Exception as e:

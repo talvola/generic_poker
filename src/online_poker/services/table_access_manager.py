@@ -22,9 +22,9 @@ class TableAccessManager:
     @staticmethod
     def join_table(user_id: str, table_id: str, buy_in_amount: int,
                    invite_code: Optional[str] = None, password: Optional[str] = None,
-                   as_spectator: bool = False) -> Tuple[bool, str, Optional[TableAccess]]:
+                   as_spectator: bool = False, seat_number: Optional[int] = None) -> Tuple[bool, str, Optional[TableAccess]]:
         """Join a table as player or spectator.
-        
+
         Args:
             user_id: ID of user joining
             table_id: ID of table to join
@@ -32,7 +32,8 @@ class TableAccessManager:
             invite_code: Invite code for private tables
             password: Password for password-protected tables
             as_spectator: Whether to join as spectator
-            
+            seat_number: Specific seat to occupy (auto-assigned if None)
+
         Returns:
             Tuple of (success, error_message, access_record)
         """
@@ -113,15 +114,29 @@ class TableAccessManager:
                 TableAccess.seat_number.isnot(None)
             ).all():
                 occupied_seats.add(access.seat_number)
-            
-            seat_number = None
-            for seat in range(1, table.max_players + 1):
-                if seat not in occupied_seats:
-                    seat_number = seat
-                    break
-            
-            if seat_number is None:
-                return False, "No available seats", None
+
+            # Use requested seat if specified and available
+            if seat_number is not None:
+                # Validate seat number is in valid range
+                if seat_number < 1 or seat_number > table.max_players:
+                    return False, f"Invalid seat number. Must be between 1 and {table.max_players}", None
+                # Check if requested seat is available
+                if seat_number in occupied_seats:
+                    return False, f"Seat {seat_number} is already occupied", None
+                # Use the requested seat
+                final_seat = seat_number
+            else:
+                # Auto-assign first available seat
+                final_seat = None
+                for seat in range(1, table.max_players + 1):
+                    if seat not in occupied_seats:
+                        final_seat = seat
+                        break
+
+                if final_seat is None:
+                    return False, "No available seats", None
+
+            seat_number = final_seat
             
             # Deduct buy-in from user bankroll
             if not user.update_bankroll(-buy_in_amount):
@@ -274,6 +289,142 @@ class TableAccessManager:
             current_app.logger.error(f"Failed to update player stack: {e}")
             return False
     
+    @staticmethod
+    def set_player_ready(user_id: str, table_id: str, ready: bool = True) -> Tuple[bool, str]:
+        """Set a player's ready status.
+
+        Args:
+            user_id: ID of user to update
+            table_id: ID of table
+            ready: Ready status to set
+
+        Returns:
+            Tuple of (success, message)
+        """
+        try:
+            access_record = db.session.query(TableAccess).filter(
+                TableAccess.table_id == table_id,
+                TableAccess.user_id == user_id,
+                TableAccess.is_active == True,
+                TableAccess.is_spectator == False
+            ).first()
+
+            if not access_record:
+                return False, "Not at this table"
+
+            access_record.set_ready(ready)
+            db.session.commit()
+
+            current_app.logger.info(f"User {user_id} set ready={ready} at table {table_id}")
+            return True, "Ready status updated"
+
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Failed to set player ready: {e}")
+            return False, "Failed to update ready status"
+
+    @staticmethod
+    def get_user_access(user_id: str, table_id: str) -> Optional[TableAccess]:
+        """Get a user's table access record.
+
+        Args:
+            user_id: ID of user
+            table_id: ID of table
+
+        Returns:
+            TableAccess record if found, None otherwise
+        """
+        try:
+            return db.session.query(TableAccess).filter(
+                TableAccess.table_id == table_id,
+                TableAccess.user_id == user_id,
+                TableAccess.is_active == True,
+                TableAccess.is_spectator == False
+            ).first()
+        except Exception as e:
+            current_app.logger.error(f"Failed to get user access: {e}")
+            return None
+
+    @staticmethod
+    def get_ready_status(table_id: str) -> Dict[str, Any]:
+        """Get ready status of all players at a table.
+
+        Args:
+            table_id: ID of table
+
+        Returns:
+            Dictionary with player ready statuses and whether all are ready
+        """
+        try:
+            access_records = db.session.query(TableAccess).filter(
+                TableAccess.table_id == table_id,
+                TableAccess.is_active == True,
+                TableAccess.is_spectator == False
+            ).all()
+
+            players = []
+            all_ready = len(access_records) >= 2  # Need at least 2 players
+
+            for access in access_records:
+                user_manager = UserManager()
+                user = user_manager.get_user_by_id(access.user_id)
+                player_info = {
+                    'user_id': access.user_id,
+                    'username': user.username if user else 'Unknown',
+                    'seat_number': access.seat_number,
+                    'is_ready': access.is_ready
+                }
+                players.append(player_info)
+
+                if not access.is_ready:
+                    all_ready = False
+
+            return {
+                'players': players,
+                'player_count': len(access_records),
+                'all_ready': all_ready,
+                'ready_count': sum(1 for p in players if p['is_ready']),
+                'min_players': 2
+            }
+
+        except Exception as e:
+            current_app.logger.error(f"Failed to get ready status: {e}")
+            return {
+                'players': [],
+                'player_count': 0,
+                'all_ready': False,
+                'ready_count': 0,
+                'min_players': 2
+            }
+
+    @staticmethod
+    def reset_all_ready(table_id: str) -> bool:
+        """Reset all players' ready status at a table (e.g., after hand starts).
+
+        Args:
+            table_id: ID of table
+
+        Returns:
+            True if successful
+        """
+        try:
+            access_records = db.session.query(TableAccess).filter(
+                TableAccess.table_id == table_id,
+                TableAccess.is_active == True,
+                TableAccess.is_spectator == False
+            ).all()
+
+            for access in access_records:
+                access.is_ready = False
+
+            db.session.commit()
+            return True
+
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Failed to reset ready status: {e}")
+            return False
+
     @staticmethod
     def _cleanup_table_access(table_id: str) -> int:
         """Clean up all access records for a specific table.

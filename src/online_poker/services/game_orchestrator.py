@@ -235,7 +235,8 @@ class GameSession:
                 
                 logger.info(f"Player {user_id} action {action} processed in session {self.session_id}")
             
-            return result.success, result.message, result
+            message = getattr(result, 'message', '') or ''
+            return result.success, message, result
             
         except Exception as e:
             logger.error(f"Failed to process action for player {user_id} in session {self.session_id}: {e}")
@@ -401,11 +402,34 @@ class GameOrchestrator:
     
     def get_session_count(self) -> int:
         """Get the number of active sessions.
-        
+
         Returns:
             Number of active sessions
         """
         return len(self.sessions)
+
+    def clear_session(self, table_id: str) -> bool:
+        """Clear/reset a game session for a table.
+
+        Alias for remove_session, used by test cleanup.
+
+        Args:
+            table_id: ID of the table
+
+        Returns:
+            True if session was cleared, False if not found
+        """
+        return self.remove_session(table_id)
+
+    def get_active_session_count(self) -> int:
+        """Get the number of active game sessions.
+
+        Alias for get_session_count, used by test status endpoint.
+
+        Returns:
+            Number of active sessions
+        """
+        return self.get_session_count()
     
     def cleanup_inactive_sessions(self, timeout_minutes: int = 30) -> int:
         """Clean up inactive game sessions.

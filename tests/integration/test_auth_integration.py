@@ -26,9 +26,9 @@ def app():
     
     # Initialize Flask-Login
     init_login_manager(app)
-    
-    # Register auth routes
-    app.register_blueprint(auth_bp)
+
+    # Register auth routes (matches production: /auth prefix)
+    app.register_blueprint(auth_bp, url_prefix='/auth')
     
     with app.app_context():
         db.create_all()
@@ -55,7 +55,7 @@ class TestAuthenticationIntegration:
     
     def test_user_registration_endpoint(self, client):
         """Test user registration through API endpoint."""
-        response = client.post('/api/auth/register', json={
+        response = client.post('/auth/api/register', json={
             'username': 'newuser',
             'email': 'newuser@example.com',
             'password': 'password123',
@@ -70,7 +70,7 @@ class TestAuthenticationIntegration:
     
     def test_user_registration_validation(self, client):
         """Test user registration validation."""
-        response = client.post('/api/auth/register', json={
+        response = client.post('/auth/api/register', json={
             'username': 'ab',  # Too short
             'email': 'invalid-email',
             'password': 'weak'  # Too weak
@@ -82,7 +82,7 @@ class TestAuthenticationIntegration:
     
     def test_user_login_endpoint(self, client, test_user):
         """Test user login through API endpoint."""
-        response = client.post('/api/auth/login', json={
+        response = client.post('/auth/api/login', json={
             'username': 'testuser',
             'password': 'password123',
             'remember_me': False
@@ -96,7 +96,7 @@ class TestAuthenticationIntegration:
     
     def test_user_login_invalid_credentials(self, client, test_user):
         """Test login with invalid credentials."""
-        response = client.post('/api/auth/login', json={
+        response = client.post('/auth/api/login', json={
             'username': 'testuser',
             'password': 'wrongpassword'
         })
@@ -108,14 +108,14 @@ class TestAuthenticationIntegration:
     def test_user_logout_endpoint(self, client, test_user):
         """Test user logout through API endpoint."""
         # First login
-        login_response = client.post('/api/auth/login', json={
+        login_response = client.post('/auth/api/login', json={
             'username': 'testuser',
             'password': 'password123'
         })
         assert login_response.status_code == 200
         
         # Then logout
-        logout_response = client.post('/api/auth/logout')
+        logout_response = client.post('/auth/api/logout')
         assert logout_response.status_code == 200
         
         data = logout_response.get_json()
@@ -124,14 +124,14 @@ class TestAuthenticationIntegration:
     def test_get_current_user_authenticated(self, client, test_user):
         """Test getting current user when authenticated."""
         # First login
-        login_response = client.post('/api/auth/login', json={
+        login_response = client.post('/auth/api/login', json={
             'username': 'testuser',
             'password': 'password123'
         })
         assert login_response.status_code == 200
         
         # Get current user
-        response = client.get('/api/auth/me')
+        response = client.get('/auth/me')
         assert response.status_code == 200
         
         data = response.get_json()
@@ -140,7 +140,7 @@ class TestAuthenticationIntegration:
     
     def test_get_current_user_not_authenticated(self, client):
         """Test getting current user when not authenticated."""
-        response = client.get('/api/auth/me')
+        response = client.get('/auth/me')
         assert response.status_code == 401
         
         data = response.get_json()
@@ -149,19 +149,19 @@ class TestAuthenticationIntegration:
     def test_check_authentication_endpoint(self, client, test_user):
         """Test authentication check endpoint."""
         # Check when not authenticated
-        response = client.get('/api/auth/check-auth')
+        response = client.get('/auth/check-auth')
         assert response.status_code == 200
         
         data = response.get_json()
         assert data['is_authenticated'] is False
         
         # Login and check again
-        client.post('/api/auth/login', json={
+        client.post('/auth/api/login', json={
             'username': 'testuser',
             'password': 'password123'
         })
         
-        response = client.get('/api/auth/check-auth')
+        response = client.get('/auth/check-auth')
         assert response.status_code == 200
         
         data = response.get_json()
@@ -171,7 +171,7 @@ class TestAuthenticationIntegration:
     def test_password_reset_flow(self, client, test_user):
         """Test password reset flow."""
         # Request reset token
-        response = client.post('/api/auth/forgot-password', json={
+        response = client.post('/auth/forgot-password', json={
             'email': 'test@example.com'
         })
         
@@ -185,7 +185,7 @@ class TestAuthenticationIntegration:
             reset_token = data['reset_token']
             
             # Reset password
-            reset_response = client.post('/api/auth/reset-password', json={
+            reset_response = client.post('/auth/reset-password', json={
                 'reset_token': reset_token,
                 'new_password': 'newpassword123'
             })
@@ -195,14 +195,14 @@ class TestAuthenticationIntegration:
             assert reset_data['success'] is True
             
             # Verify old password no longer works
-            old_login = client.post('/api/auth/login', json={
+            old_login = client.post('/auth/api/login', json={
                 'username': 'testuser',
                 'password': 'password123'
             })
             assert old_login.status_code == 401
             
             # Verify new password works
-            new_login = client.post('/api/auth/login', json={
+            new_login = client.post('/auth/api/login', json={
                 'username': 'testuser',
                 'password': 'newpassword123'
             })
@@ -211,7 +211,7 @@ class TestAuthenticationIntegration:
     def test_session_persistence(self, client, test_user):
         """Test that sessions persist across requests."""
         # Login
-        login_response = client.post('/api/auth/login', json={
+        login_response = client.post('/auth/api/login', json={
             'username': 'testuser',
             'password': 'password123'
         })
@@ -219,7 +219,7 @@ class TestAuthenticationIntegration:
         
         # Make multiple requests to verify session persists
         for _ in range(3):
-            response = client.get('/api/auth/me')
+            response = client.get('/auth/me')
             assert response.status_code == 200
             
             data = response.get_json()
@@ -229,7 +229,7 @@ class TestAuthenticationIntegration:
     def test_duplicate_registration_prevention(self, client, test_user):
         """Test that duplicate usernames/emails are prevented."""
         # Try to register with existing username
-        response = client.post('/api/auth/register', json={
+        response = client.post('/auth/api/register', json={
             'username': 'testuser',  # Already exists
             'email': 'different@example.com',
             'password': 'password123'
@@ -241,7 +241,7 @@ class TestAuthenticationIntegration:
         assert 'already exists' in data['message'].lower()
         
         # Try to register with existing email
-        response = client.post('/api/auth/register', json={
+        response = client.post('/auth/api/register', json={
             'username': 'differentuser',
             'email': 'test@example.com',  # Already exists
             'password': 'password123'

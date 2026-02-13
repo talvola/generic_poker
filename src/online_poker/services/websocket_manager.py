@@ -79,7 +79,7 @@ class WebSocketManager:
                     emit('connected', {
                         'user_id': user_id,
                         'username': current_user.username,
-                        'timestamp': datetime.utcnow().isoformat()
+                        'timestamp': datetime.utcnow().isoformat() + 'Z'
                     })
                 else:
                     # Guest user (not authenticated)
@@ -88,7 +88,7 @@ class WebSocketManager:
                     emit('connected', {
                         'user_id': None,
                         'username': 'Guest',
-                        'timestamp': datetime.utcnow().isoformat()
+                        'timestamp': datetime.utcnow().isoformat() + 'Z'
                     })
 
                 return True
@@ -145,7 +145,7 @@ class WebSocketManager:
                     
                     emit('table_joined', {
                         'table_id': table_id,
-                        'timestamp': datetime.utcnow().isoformat()
+                        'timestamp': datetime.utcnow().isoformat() + 'Z'
                     })
                 else:
                     emit('error', {'message': 'Failed to join table room'})
@@ -162,15 +162,34 @@ class WebSocketManager:
                 if not table_id:
                     emit('error', {'message': 'Table ID required'})
                     return
-                
+
                 user_id = current_user.id
+
+                # Leave the WebSocket room
                 self.leave_table_room(user_id, table_id)
-                
+
+                # Actually remove player from the table in the database
+                from ..services.table_access_manager import TableAccessManager
+                from ..services.table_manager import TableManager
+                success, message = TableAccessManager.leave_table(user_id, table_id)
+                if not success:
+                    logger.warning(f"Failed to leave table in database: {message}")
+                else:
+                    logger.info(f"User {user_id} left table {table_id}")
+
+                    # Broadcast table update to all lobby users so they see updated player count
+                    table = TableManager.get_table_by_id(table_id)
+                    if table:
+                        self.socketio.emit('table_updated', {
+                            'table': table.to_dict(),
+                            'action': 'player_left'
+                        })
+
                 emit('left_table', {
                     'table_id': table_id,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
                 })
-                
+
             except Exception as e:
                 logger.error(f"Leave table error: {e}")
                 emit('error', {'message': 'Failed to leave table'})
@@ -257,22 +276,83 @@ class WebSocketManager:
                 success, message, result = session.process_player_action(
                     user_id, player_action, amount
                 )
-                
+
                 if success:
+                    # Check if we need to advance to the next step (betting round complete)
+                    game = session.game
+                    if result and hasattr(result, 'advance_step') and result.advance_step:
+                        from generic_poker.game.game_state import GameState
+                        if game and game.state != GameState.COMPLETE:
+                            logger.info(f"Betting round complete, advancing to next step")
+
+                            # Track community cards for phase change detection
+                            prev_community_count = len(game.table.community_cards) if hasattr(game.table, 'community_cards') else 0
+
+                            game._next_step()
+                            # Continue advancing through dealing/non-player-input steps
+                            # Check for DEALING state (doesn't require player input) OR no current player
+                            while game.state != GameState.COMPLETE:
+                                if game.current_step >= len(game.rules.gameplay):
+                                    break
+
+                                # Check for new community cards and emit phase change
+                                curr_community_count = len(game.table.community_cards) if hasattr(game.table, 'community_cards') else 0
+                                if curr_community_count > prev_community_count:
+                                    community_cards = game.table.community_cards
+                                    cards_str = ' '.join(str(c) for c in community_cards)
+                                    if curr_community_count == 3:
+                                        self.broadcast_game_action_chat(table_id, f"*** FLOP *** [{cards_str}]", 'deal')
+                                    elif curr_community_count == 4:
+                                        turn_card = community_cards[-1]
+                                        self.broadcast_game_action_chat(table_id, f"*** TURN *** [{cards_str}]", 'deal')
+                                    elif curr_community_count == 5:
+                                        river_card = community_cards[-1]
+                                        self.broadcast_game_action_chat(table_id, f"*** RIVER *** [{cards_str}]", 'deal')
+                                    prev_community_count = curr_community_count
+
+                                # DEALING state doesn't require player input - auto advance
+                                if game.state == GameState.DEALING:
+                                    game._next_step()
+                                # BETTING state with no current player - round complete, advance
+                                elif game.state == GameState.BETTING and game.current_player is None:
+                                    game._next_step()
+                                else:
+                                    # Player input required
+                                    break
+                            logger.info(f"Game advanced to step {game.current_step}, state {game.state}, current_player: {game.current_player.name if game.current_player else None}")
+
                     # Broadcast action to all table participants
                     action_data = {
                         'user_id': user_id,
                         'username': current_user.username,
                         'action': action,
                         'amount': amount,
-                        'timestamp': datetime.utcnow().isoformat()
+                        'timestamp': datetime.utcnow().isoformat() + 'Z'
                     }
-                    
+
                     self.broadcast_to_table(table_id, GameEvent.PLAYER_ACTION, action_data)
-                    
+
+                    # Broadcast game action to chat
+                    action_lower = action.lower()
+                    if action_lower == 'fold':
+                        action_message = f"{current_user.username} folds"
+                    elif action_lower == 'check':
+                        action_message = f"{current_user.username} checks"
+                    elif action_lower == 'call':
+                        action_message = f"{current_user.username} calls ${amount}" if amount else f"{current_user.username} calls"
+                    elif action_lower == 'bet':
+                        action_message = f"{current_user.username} bets ${amount}"
+                    elif action_lower == 'raise':
+                        action_message = f"{current_user.username} raises to ${amount}"
+                    elif action_lower == 'all_in' or action_lower == 'all-in':
+                        action_message = f"{current_user.username} is all-in for ${amount}"
+                    else:
+                        action_message = f"{current_user.username}: {action} ${amount}" if amount else f"{current_user.username}: {action}"
+                    self.broadcast_game_action_chat(table_id, action_message, 'player_action')
+
                     # Send updated game state to all participants
                     self.broadcast_game_state_update(table_id)
-                    
+
                     emit('action_result', {
                         'success': True,
                         'message': message
@@ -412,7 +492,7 @@ class WebSocketManager:
                     self.send_to_user(target_user_id, GameEvent.NOTIFICATION, {
                         'message': f'You have been {action_type}d in table {table.name}. Reason: {reason}',
                         'type': 'warning',
-                        'timestamp': datetime.utcnow().isoformat()
+                        'timestamp': datetime.utcnow().isoformat() + 'Z'
                     })
                     
                     # Broadcast moderation action to table (optional)
@@ -421,7 +501,7 @@ class WebSocketManager:
                             'target_user_id': target_user_id,
                             'action_type': action_type,
                             'reason': reason,
-                            'timestamp': datetime.utcnow().isoformat()
+                            'timestamp': datetime.utcnow().isoformat() + 'Z'
                         })
                 else:
                     emit('error', {'message': message})
@@ -448,7 +528,7 @@ class WebSocketManager:
                 emit('chat_toggled', {
                     'table_id': table_id,
                     'enabled': enabled,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
                 })
 
             except Exception as e:
@@ -483,7 +563,7 @@ class WebSocketManager:
                 self.broadcast_to_table(table_id, GameEvent.READY_STATUS_UPDATE, {
                     'table_id': table_id,
                     'ready_status': ready_status,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
                 })
 
                 # If all players are ready, start the hand
@@ -505,13 +585,22 @@ class WebSocketManager:
                     return
 
                 from ..services.table_access_manager import TableAccessManager
+                from ..services.game_orchestrator import game_orchestrator
                 ready_status = TableAccessManager.get_ready_status(table_id)
 
                 emit(GameEvent.READY_STATUS_UPDATE, {
                     'table_id': table_id,
                     'ready_status': ready_status,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
                 })
+
+                # If all players are ready but no game session exists (e.g., after server restart),
+                # start the hand
+                if ready_status['all_ready']:
+                    session = game_orchestrator.get_session(table_id)
+                    if not session or not session.game:
+                        logger.info(f"All players ready at table {table_id} with no active game - starting hand")
+                        self._start_hand_when_ready(table_id, ready_status)
 
             except Exception as e:
                 logger.error(f"Request ready status error: {e}")
@@ -543,11 +632,23 @@ class WebSocketManager:
             self.user_tables[user_id] = table_id
             
             logger.info(f"User {user_id} joined table room {table_id}")
-            
+
+            # Get username for the notification
+            username = 'A player'
+            try:
+                from ..services.user_manager import UserManager
+                user_manager = UserManager()
+                user = user_manager.get_user_by_id(user_id)
+                if user:
+                    username = user.username
+            except Exception as e:
+                logger.warning(f"Could not get username for player_joined event: {e}")
+
             # Notify other participants
             self.broadcast_to_table(table_id, GameEvent.PLAYER_JOINED, {
                 'user_id': user_id,
-                'timestamp': datetime.utcnow().isoformat()
+                'username': username,
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
             }, exclude_user=user_id)
             
             return True
@@ -583,11 +684,23 @@ class WebSocketManager:
             self.user_tables.pop(user_id, None)
             
             logger.info(f"User {user_id} left table room {table_id}")
-            
+
+            # Get username for the notification
+            username = 'A player'
+            try:
+                from ..services.user_manager import UserManager
+                user_manager = UserManager()
+                user = user_manager.get_user_by_id(user_id)
+                if user:
+                    username = user.username
+            except Exception as e:
+                logger.warning(f"Could not get username for player_left event: {e}")
+
             # Notify other participants
             self.broadcast_to_table(table_id, GameEvent.PLAYER_LEFT, {
                 'user_id': user_id,
-                'timestamp': datetime.utcnow().isoformat()
+                'username': username,
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
             })
             
             return True
@@ -762,7 +875,7 @@ class WebSocketManager:
             hand_complete_data = {
                 'table_id': table_id,
                 'hand_results': hand_results,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
             }
             
             self.broadcast_to_table(table_id, GameEvent.HAND_COMPLETE, hand_complete_data)
@@ -786,7 +899,7 @@ class WebSocketManager:
             notification_data = {
                 'message': message,
                 'type': notification_type,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
             }
             
             return self.send_to_user(user_id, GameEvent.NOTIFICATION, notification_data)
@@ -794,7 +907,27 @@ class WebSocketManager:
         except Exception as e:
             logger.error(f"Failed to send notification: {e}")
             return False
-    
+
+    def broadcast_game_action_chat(self, table_id: str, message: str, action_type: str = "player_action") -> None:
+        """Broadcast a game action message to the table chat.
+
+        Args:
+            table_id: ID of the table
+            message: The action message to display
+            action_type: Type of action (forced_bet, player_action, deal, phase_change, showdown)
+        """
+        try:
+            chat_data = {
+                'type': 'game_action',
+                'action_type': action_type,
+                'message': message,
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
+            }
+            self.broadcast_to_table(table_id, GameEvent.CHAT_MESSAGE, chat_data)
+        except Exception as e:
+            logger.error(f"Failed to broadcast game action chat: {e}")
+
+
     def get_connected_users(self) -> List[str]:
         """Get list of connected user IDs.
         
@@ -866,7 +999,7 @@ class WebSocketManager:
             self.broadcast_to_table(table_id, GameEvent.HAND_STARTING, {
                 'table_id': table_id,
                 'message': 'All players ready - starting hand...',
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
             })
 
             # Get or create game session
@@ -897,9 +1030,30 @@ class WebSocketManager:
             # Check if we can start a hand - use session.game directly
             game = session.game
             if game and len(game.table.players) >= 2:
+                # Move the dealer button before starting new hand (rotates clockwise)
+                game.table.move_button()
+                logger.info(f"Moved dealer button to seat {game.table.button_seat}")
+
                 # Start the hand
                 game.start_hand()
                 logger.info(f"Started new hand at table {table_id}")
+
+                # Broadcast hand start and blinds to chat
+                hand_number = session.hands_played + 1
+                self.broadcast_game_action_chat(table_id, f"*** HAND #{hand_number} ***", 'phase_change')
+
+                # Get blind information and broadcast to chat
+                from generic_poker.game.table import Position
+                for player in game.table.players.values():
+                    if player.position and player.position.has_position(Position.SMALL_BLIND):
+                        sb_amount = game.small_blind
+                        self.broadcast_game_action_chat(table_id, f"{player.name} posts small blind ${sb_amount}", 'forced_bet')
+                    elif player.position and player.position.has_position(Position.BIG_BLIND):
+                        bb_amount = game.big_blind
+                        self.broadcast_game_action_chat(table_id, f"{player.name} posts big blind ${bb_amount}", 'forced_bet')
+
+                # Note: "*** HOLE CARDS ***" is announced by the frontend when it receives
+                # the game state update with the player's cards (see announceHoleCards in table.js)
 
                 # For online games with auto_progress=False, we need to manually
                 # advance through dealing steps until player input is needed
@@ -921,7 +1075,7 @@ class WebSocketManager:
                 self.broadcast_to_table(table_id, GameEvent.READY_STATUS_UPDATE, {
                     'table_id': table_id,
                     'ready_status': new_ready_status,
-                    'timestamp': datetime.utcnow().isoformat()
+                    'timestamp': datetime.utcnow().isoformat() + 'Z'
                 })
             else:
                 player_count = len(game.table.players) if game else 0
@@ -949,7 +1103,7 @@ class WebSocketManager:
             self.broadcast_to_table(table_id, GameEvent.READY_STATUS_UPDATE, {
                 'table_id': table_id,
                 'ready_status': ready_status,
-                'timestamp': datetime.utcnow().isoformat()
+                'timestamp': datetime.utcnow().isoformat() + 'Z'
             })
 
         except Exception as e:

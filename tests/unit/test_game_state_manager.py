@@ -75,12 +75,19 @@ def mock_game_session(test_table):
     session.connected_players = {"user1", "user2"}
     session.disconnected_players = {}
     session.spectators = {"spectator1"}
-    
+
     # Mock game object
     mock_game = MagicMock()
     mock_game.state = GameState.BETTING
+
+    # Mock betting manager with default values
+    mock_betting = MagicMock()
+    mock_betting.get_total_pot.return_value = 0
+    mock_betting.current_bet = 0
+    mock_game.betting = mock_betting
+
     session.game = mock_game
-    
+
     return session
 
 
@@ -129,13 +136,37 @@ class TestGameStateManager:
         assert game_state.players[1].seat_number == 2
     
     @patch('online_poker.services.game_state_manager.game_orchestrator.get_session')
-    def test_generate_game_state_view_no_session(self, mock_get_session, app_context):
-        """Test game state view generation when no session exists."""
+    @patch('online_poker.services.game_state_manager.TableAccessManager.get_table_players')
+    def test_generate_game_state_view_no_session_no_players(self, mock_get_players, mock_get_session, app_context):
+        """Test game state view generation when no session and no players exist."""
         mock_get_session.return_value = None
-        
+        mock_get_players.return_value = []
+
         game_state = GameStateManager.generate_game_state_view("table1", "user1", False)
-        
+
         assert game_state is None
+
+    @patch('online_poker.services.table_manager.TableManager.get_table_by_id')
+    @patch('online_poker.services.game_state_manager.game_orchestrator.get_session')
+    @patch('online_poker.services.game_state_manager.TableAccessManager.get_table_players')
+    def test_generate_game_state_view_no_session_with_players(self, mock_get_players, mock_get_session,
+                                                              mock_get_table, app_context):
+        """Test game state view generation returns waiting state when no session but players exist."""
+        mock_get_session.return_value = None
+        mock_get_players.return_value = [
+            {'user_id': 'user1', 'username': 'Alice', 'seat_number': 1, 'current_stack': 100, 'is_spectator': False},
+            {'user_id': 'user2', 'username': 'Bob', 'seat_number': 2, 'current_stack': 100, 'is_spectator': False}
+        ]
+        mock_get_table.return_value = None
+
+        game_state = GameStateManager.generate_game_state_view("table1", "user1", False)
+
+        assert game_state is not None
+        assert game_state.game_phase.value == 'waiting'
+        assert len(game_state.players) == 2
+        assert game_state.players[0].username == 'Alice'
+        assert game_state.players[1].username == 'Bob'
+        assert game_state.session_id == ''
     
     @patch('online_poker.services.game_state_manager.game_orchestrator.get_session')
     @patch('online_poker.services.game_state_manager.TableAccessManager.get_table_players')
@@ -237,28 +268,27 @@ class TestGameStateManager:
     
     def test_get_pot_info(self, app_context, mock_game_session):
         """Test getting pot information."""
-        # Mock pot
-        mock_pot = MagicMock()
-        mock_pot.total = 150
-        mock_pot.side_pots = []
-        mock_game_session.game.table.pot = mock_pot
-        mock_game_session.game.table.current_bet = 50
-        
+        # Mock betting manager with pot info
+        mock_betting = MagicMock()
+        mock_betting.get_total_pot.return_value = 150
+        mock_betting.current_bet = 50
+        mock_game_session.game.betting = mock_betting
+
         pot_info = GameStateManager._get_pot_info(mock_game_session)
-        
+
         assert pot_info.main_pot == 150
         assert pot_info.current_bet == 50
         assert pot_info.total_pot == 150
     
     def test_get_current_player(self, app_context, mock_game_session):
         """Test getting current player."""
-        # Mock current player
+        # Mock current player - current_player is on game, not game.table
         mock_player = MagicMock()
         mock_player.id = 'user1'
-        mock_game_session.game.table.current_player = mock_player
-        
+        mock_game_session.game.current_player = mock_player
+
         current_player = GameStateManager._get_current_player(mock_game_session)
-        
+
         assert current_player == 'user1'
     
     @patch('online_poker.services.game_state_manager.game_orchestrator.get_session')
@@ -275,12 +305,18 @@ class TestGameStateManager:
                 'current_stack': 500
             }
         ]
-        
-        # Mock current player
+
+        # Mock current player - current_player is on game, not game.table
         mock_player = MagicMock()
         mock_player.id = 'user1'
-        mock_game_session.game.table.current_player = mock_player
-        
+        mock_game_session.game.current_player = mock_player
+
+        # Mock betting manager for pot info
+        mock_betting = MagicMock()
+        mock_betting.get_total_pot.return_value = 0
+        mock_betting.current_bet = 0
+        mock_game_session.game.betting = mock_betting
+
         # Mock the player action manager
         with patch('online_poker.services.player_action_manager.player_action_manager') as mock_action_manager:
             mock_action_options = [
@@ -289,9 +325,9 @@ class TestGameStateManager:
                 MagicMock(action_type=MagicMock(), min_amount=0, max_amount=500, default_amount=0, display_text="Call")
             ]
             mock_action_manager.get_available_actions.return_value = mock_action_options
-            
+
             game_state = GameStateManager.generate_game_state_view("table1", "user1", False)
-            
+
             assert game_state is not None
             assert len(game_state.valid_actions) == 3
     
@@ -309,12 +345,18 @@ class TestGameStateManager:
                 'current_stack': 500
             }
         ]
-        
-        # Mock current player as someone else
+
+        # Mock current player as someone else - current_player is on game, not game.table
         mock_player = MagicMock()
         mock_player.id = 'user2'  # Different from viewer
-        mock_game_session.game.table.current_player = mock_player
-        
+        mock_game_session.game.current_player = mock_player
+
+        # Mock betting manager for pot info
+        mock_betting = MagicMock()
+        mock_betting.get_total_pot.return_value = 0
+        mock_betting.current_bet = 0
+        mock_game_session.game.betting = mock_betting
+
         game_state = GameStateManager.generate_game_state_view("table1", "user1", False)
         
         assert game_state is not None
@@ -370,13 +412,15 @@ class TestGameStateManager:
     
     def test_get_player_cards(self, app_context, mock_game_session):
         """Test getting player cards."""
-        # Mock player with cards
+        # Mock player with cards - cards are in player.hand.cards
         mock_player = MagicMock()
-        mock_player.cards = ['As', 'Ks']
+        mock_hand = MagicMock()
+        mock_hand.cards = ['As', 'Ks']
+        mock_player.hand = mock_hand
         mock_game_session.game.table.players = {'user1': mock_player}
-        
+
         cards = GameStateManager._get_player_cards(mock_game_session, 'user1')
-        
+
         assert cards == ['As', 'Ks']
     
     def test_get_player_cards_no_player(self, app_context, mock_game_session):

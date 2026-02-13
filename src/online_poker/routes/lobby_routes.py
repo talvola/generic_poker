@@ -6,6 +6,7 @@ from flask_socketio import emit, join_room, leave_room
 
 from ..models.table import PokerTable
 from ..models.user import User
+from ..models.table_access import TableAccess
 from ..services.table_manager import TableManager
 from ..services.table_access_manager import TableAccessManager
 from ..services.websocket_manager import get_websocket_manager
@@ -29,17 +30,28 @@ def get_tables():
         tables = db.session.query(PokerTable).filter(
             PokerTable.is_private == False
         ).all()
-        
+
         table_list = []
         for table in tables:
             table_data = table.to_dict()
             table_list.append(table_data)
-        
+
+        # Get list of table IDs where current user is seated (for "Rejoin" button)
+        user_tables = []
+        if current_user.is_authenticated:
+            user_access_records = db.session.query(TableAccess).filter(
+                TableAccess.user_id == current_user.id,
+                TableAccess.is_active == True,
+                TableAccess.is_spectator == False
+            ).all()
+            user_tables = [str(access.table_id) for access in user_access_records]
+
         return jsonify({
             'success': True,
-            'tables': table_list
+            'tables': table_list,
+            'user_tables': user_tables  # Tables where user is already seated
         })
-        
+
     except Exception as e:
         return jsonify({
             'success': False,
@@ -149,53 +161,150 @@ def create_table():
         }), 500
 
 
-@lobby_bp.route('/api/tables/<table_id>/join', methods=['POST'])
-@login_required
-def join_table(table_id):
-    """Join a poker table."""
+@lobby_bp.route('/api/tables/<table_id>/seats')
+def get_table_seats(table_id):
+    """Get seat information for a table."""
     try:
+        import traceback
+
         # Get table
         table = db.session.query(PokerTable).filter(
             PokerTable.id == table_id
         ).first()
-        
+
         if not table:
             return jsonify({
                 'success': False,
                 'error': 'Table not found'
             }), 404
-        
+
+        # Get all access records for this table (active players)
+        access_records = db.session.query(TableAccess).filter(
+            TableAccess.table_id == table_id,
+            TableAccess.is_active == True,
+            TableAccess.is_spectator == False
+        ).all()
+
+        # Create a map of seat_number -> access record
+        occupied_seats = {}
+        for access in access_records:
+            if access.seat_number is not None:
+                occupied_seats[access.seat_number] = access
+
+        # Build seats array
+        seats = []
+        for seat_num in range(1, table.max_players + 1):
+            if seat_num in occupied_seats:
+                access = occupied_seats[seat_num]
+                seats.append({
+                    'seat_number': seat_num,
+                    'is_available': False,
+                    'player': {
+                        'username': access.user.username,
+                        'stack': access.current_stack
+                    }
+                })
+            else:
+                seats.append({
+                    'seat_number': seat_num,
+                    'is_available': True,
+                    'player': None
+                })
+
+        # Count active players
+        current_players = len(access_records)
+
+        return jsonify({
+            'success': True,
+            'current_players': current_players,
+            'max_players': table.max_players,
+            'minimum_buyin': table.get_minimum_buyin(),
+            'maximum_buyin': table.get_maximum_buyin(),
+            'seats': seats
+        })
+
+    except Exception as e:
+        import traceback
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in get_table_seats: {str(e)}")
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@lobby_bp.route('/api/tables/<table_id>/join', methods=['POST'])
+@login_required
+def join_table(table_id):
+    """Join a poker table."""
+    try:
+        # Get request data
+        data = request.get_json() or {}
+
+        # Get table
+        table = db.session.query(PokerTable).filter(
+            PokerTable.id == table_id
+        ).first()
+
+        if not table:
+            return jsonify({
+                'success': False,
+                'error': 'Table not found'
+            }), 404
+
         # Check if table is private
         if table.is_private:
             return jsonify({
                 'success': False,
                 'error': 'Cannot join private table without invite code'
             }), 403
-        
+
         # Check if table is full
-        active_players = sum(1 for access in table.access_records 
+        active_players = sum(1 for access in table.access_records
                            if access.is_active and not access.is_spectator)
-        
+
         if active_players >= table.max_players:
             return jsonify({
                 'success': False,
                 'error': 'Table is full'
             }), 400
-        
-        # Check if user has sufficient bankroll
-        if current_user.bankroll < table.get_minimum_buyin():
+
+        # Get buy-in amount (default to minimum if not specified)
+        buy_in_amount = data.get('buy_in_amount', table.get_minimum_buyin())
+
+        # Get seat number if specified (None for auto-assign)
+        seat_number = data.get('seat_number')
+
+        # Validate buy-in amount
+        if buy_in_amount < table.get_minimum_buyin():
             return jsonify({
                 'success': False,
-                'error': f'Insufficient bankroll. Minimum buy-in: ${table.get_minimum_buyin()}'
+                'error': f'Buy-in must be at least ${table.get_minimum_buyin()}'
             }), 400
-        
+
+        if buy_in_amount > table.get_maximum_buyin():
+            return jsonify({
+                'success': False,
+                'error': f'Buy-in cannot exceed ${table.get_maximum_buyin()}'
+            }), 400
+
+        # Check if user has sufficient bankroll
+        if current_user.bankroll < buy_in_amount:
+            return jsonify({
+                'success': False,
+                'error': f'Insufficient bankroll. You have ${current_user.bankroll}'
+            }), 400
+
         # Join table using table access manager
         success, message, access = TableAccessManager.join_table(
             user_id=current_user.id,
             table_id=table_id,
-            buy_in_amount=table.get_minimum_buyin()
+            buy_in_amount=buy_in_amount,
+            seat_number=seat_number
         )
-        
+
         if success:
             return jsonify({
                 'success': True,
@@ -259,20 +368,42 @@ def join_private_table():
                 'error': 'Table is full'
             }), 400
         
-        # Check if user has sufficient bankroll
-        if current_user.bankroll < table.get_minimum_buyin():
+        # Get buy-in amount (default to minimum if not specified)
+        buy_in_amount = data.get('buy_in_amount', table.get_minimum_buyin())
+
+        # Get seat number if specified (None for auto-assign)
+        seat_number = data.get('seat_number')
+
+        # Validate buy-in amount
+        if buy_in_amount < table.get_minimum_buyin():
             return jsonify({
                 'success': False,
-                'error': f'Insufficient bankroll. Minimum buy-in: ${table.get_minimum_buyin()}'
+                'error': f'Buy-in must be at least ${table.get_minimum_buyin()}'
             }), 400
-        
+
+        if buy_in_amount > table.get_maximum_buyin():
+            return jsonify({
+                'success': False,
+                'error': f'Buy-in cannot exceed ${table.get_maximum_buyin()}'
+            }), 400
+
+        # Check if user has sufficient bankroll
+        if current_user.bankroll < buy_in_amount:
+            return jsonify({
+                'success': False,
+                'error': f'Insufficient bankroll. You have ${current_user.bankroll}'
+            }), 400
+
         # Join table using table access manager
         success, message, access = TableAccessManager.join_table(
             user_id=current_user.id,
             table_id=table.id,
-            buy_in_amount=table.get_minimum_buyin()
+            buy_in_amount=buy_in_amount,
+            invite_code=invite_code,
+            password=password,
+            seat_number=seat_number
         )
-        
+
         if success:
             return jsonify({
                 'success': True,
@@ -365,15 +496,35 @@ def table_view(table_id):
         # User doesn't have access, redirect to lobby
         return redirect(url_for('lobby.index'))
     
-    # Debug: Print table stakes and players
-    print(f"DEBUG: Table stakes: {table.stakes}")
-    print(f"DEBUG: Table betting structure: {table.betting_structure}")
-    print(f"DEBUG: Access records count: {len(table.access_records)}")
-    for i, access in enumerate(table.access_records):
-        print(f"DEBUG: Player {i}: {access.user.username}, active: {access.is_active}, spectator: {access.is_spectator}")
-    
+    # Build table data dict for template
+    # Count active players
+    active_players = sum(1 for access in table.access_records
+                        if access.is_active and not access.is_spectator)
+
+    # Build players dict keyed by seat number
+    players = {}
+    for access in table.access_records:
+        if access.is_active and not access.is_spectator and access.seat_number:
+            players[access.seat_number] = {
+                'user_id': access.user_id,
+                'username': access.user.username,
+                'stack': access.current_stack,
+                'seat_number': access.seat_number
+            }
+
+    table_data = {
+        'id': table.id,
+        'name': table.name,
+        'variant': table.variant,
+        'betting_structure': table.betting_structure,
+        'max_players': table.max_players,
+        'current_players': active_players,
+        'players': players,
+        'get_stakes': table.get_stakes  # Pass the method for template to call
+    }
+
     # Render the game interface
-    return render_template('table.html', table=table, user_access=user_access)
+    return render_template('table.html', table=table_data, user_access=user_access)
 
 
 # WebSocket events for lobby
@@ -388,14 +539,24 @@ def register_lobby_socket_events(socketio):
             tables = db.session.query(PokerTable).filter(
                 PokerTable.is_private == False
             ).all()
-            
+
             table_list = []
             for table in tables:
                 table_data = table.to_dict()
                 table_list.append(table_data)
-            
-            emit('table_list', {'tables': table_list})
-            
+
+            # Get list of table IDs where current user is seated (for "Rejoin" button)
+            user_tables = []
+            if current_user.is_authenticated:
+                user_access_records = db.session.query(TableAccess).filter(
+                    TableAccess.user_id == current_user.id,
+                    TableAccess.is_active == True,
+                    TableAccess.is_spectator == False
+                ).all()
+                user_tables = [str(access.table_id) for access in user_access_records]
+
+            emit('table_list', {'tables': table_list, 'user_tables': user_tables})
+
         except Exception as e:
             emit('error', {'message': f'Failed to get table list: {str(e)}'})
     
@@ -483,9 +644,20 @@ def register_lobby_socket_events(socketio):
                     'table_id': table_id,
                     'message': 'Joined table successfully'
                 })
+
+                # Broadcast table update to all lobby users so they see updated player count
+                # Refresh table data to get updated player count
+                table = db.session.query(PokerTable).filter(
+                    PokerTable.id == table_id
+                ).first()
+                if table:
+                    socketio.emit('table_updated', {
+                        'table': table.to_dict(),
+                        'action': 'player_joined'
+                    })
             else:
                 emit('error', {'message': message})
-                
+
         except Exception as e:
             emit('error', {'message': f'Failed to join table: {str(e)}'})
     

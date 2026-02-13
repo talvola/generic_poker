@@ -564,3 +564,43 @@ This document outlines the requirements for evolving the existing generic poker 
 5. WHEN an admin schedules reports THEN the system SHALL allow automated report generation and delivery via email or dashboard notifications
 6. WHEN an admin shares reports THEN the system SHALL provide export functionality in multiple formats (PDF, CSV, Excel) with appropriate data privacy controls
 7. WHEN an admin analyzes trends THEN the system SHALL provide graphical representations, trend analysis, and comparative reporting across time periods
+
+### Requirement 27: Traditional Poker Table Visual Design
+
+**User Story:** As a poker player, I want the table interface to look like a traditional online poker table so that the experience feels familiar and professional.
+
+#### Acceptance Criteria
+
+**Table Shape and Layout:**
+1. WHEN displaying the poker table during gameplay THEN the system SHALL render the table as a traditional pill-shaped/racetrack oval (like 888poker, PokerStars) rather than a simple ellipse
+2. WHEN displaying the table THEN the system SHALL use a felt-green playing surface with a distinct border/rail around the edge
+3. WHEN positioning players around the table THEN the system SHALL place them around the perimeter of the pill shape in traditional positions
+4. WHEN displaying the seat selection modal THEN the layout MAY use a simplified shape, but SHOULD be visually consistent with the gameplay table
+
+**Player Card Display:**
+5. WHEN displaying other players at the table THEN the system SHALL show their cards as face-down (card backs) next to their player avatar/info
+6. WHEN a player folds THEN the system SHALL remove their face-down cards (muck them) to indicate they are out of the hand
+7. WHEN displaying card backs THEN the system SHALL use a consistent card back design that is clearly distinguishable from face-up cards
+8. WHEN games have varying card counts (e.g., Omaha has 4, Hold'em has 2) THEN the system SHALL display the appropriate number of face-down cards for each player
+
+**Visual Reference:**
+- Reference design: https://www.888poker.com/content/dam/holdings888/888poker/com/en/poker-software/how-to-join-a-table/4_-_TS-48089_CTV_Mapping_Project_Poker_Software_Lobby-manual_seat-1633428392953_tcm1488-532296.jpg
+
+### Requirement 28: Position Indicators (Dealer, SB, BB)
+
+**User Story:** As a poker player, I want to clearly see which player is the dealer, small blind, and big blind so that I understand the betting order and positions at the table.
+
+#### Acceptance Criteria
+
+1. WHEN a hand is in progress THEN the system SHALL display a dealer button ("D" or chip icon) next to the player in the dealer position
+2. WHEN blinds are posted THEN the system SHALL display a "SB" indicator next to the small blind player
+3. WHEN blinds are posted THEN the system SHALL display a "BB" indicator next to the big blind player
+4. WHEN playing heads-up (2 players) THEN the system SHALL correctly show the dealer as the small blind position (dealer posts SB, other player posts BB)
+5. WHEN the hand completes and a new hand starts THEN the system SHALL update position indicators to reflect the new dealer button position
+6. WHEN displaying position indicators THEN the system SHALL use clear, readable badges or icons that don't obscure player information
+7. WHEN ante-only games are played (no blinds) THEN the system SHALL only show the dealer button, not SB/BB indicators
+
+**Notes:**
+- In heads-up play: Dealer = Small Blind, acts first preflop but last post-flop
+- In 3+ player games: Dealer, SB (to dealer's left), BB (to SB's left)
+- Position indicators should be visible but not intrusive

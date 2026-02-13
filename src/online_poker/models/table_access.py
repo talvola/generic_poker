@@ -34,6 +34,7 @@ class TableAccess(db.Model):
     seat_number: Mapped[Optional[int]] = mapped_column()  # None for spectators
     buy_in_amount: Mapped[Optional[int]] = mapped_column()  # Chips bought in with
     current_stack: Mapped[Optional[int]] = mapped_column()  # Current chip count
+    is_ready: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)  # Ready to start hand
     
     # Relationships
     table: Mapped["PokerTable"] = relationship("PokerTable", back_populates="access_records")
@@ -64,6 +65,12 @@ class TableAccess(db.Model):
         """Mark player as having left the table."""
         self.is_active = False
         self.seat_number = None
+        self.is_ready = False
+
+    def set_ready(self, ready: bool = True) -> None:
+        """Set player's ready status."""
+        self.is_ready = ready
+        self.update_activity()
     
     def update_stack(self, new_stack: int) -> None:
         """Update player's current chip stack."""
@@ -82,7 +89,8 @@ class TableAccess(db.Model):
             'is_active': self.is_active,
             'seat_number': self.seat_number,
             'buy_in_amount': self.buy_in_amount,
-            'current_stack': self.current_stack
+            'current_stack': self.current_stack,
+            'is_ready': self.is_ready
         }
     
     def __repr__(self) -> str:

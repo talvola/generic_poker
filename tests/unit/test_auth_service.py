@@ -89,9 +89,12 @@ class TestSessionManager:
         """Test successful user logout."""
         mock_current_user.is_authenticated = True
         mock_current_user.username = "testuser"
-        
+
+        # Ensure clear() is a non-async mock
+        mock_session.clear = MagicMock()
+
         result = SessionManager.logout_user_session()
-        
+
         assert result['success'] is True
         assert result['message'] == 'Logout successful'
         mock_logout_user.assert_called_once()

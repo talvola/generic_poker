@@ -260,6 +260,87 @@ For each bug, include:
 - **Resolution**: Fixed incorrect patch paths in websocket manager tests to match actual imports and dependencies
 - **Files Modified**: tests/unit/test_websocket_manager.py
 
+### Bug #012 - Other Players' Cards Not Displayed (Face-Down)
+- **Priority**: Medium
+- **Status**: Open
+- **Description**: Other players' hole cards are not displayed at all. In traditional online poker, you should see other players' cards as face-down (card backs) next to their player icon. This helps track who is still in the hand vs who has folded, and supports games where players have varying numbers of cards or mix of face-up/face-down cards.
+- **Steps to Reproduce**:
+  1. Join a Texas Hold'em table with another player
+  2. Start a hand so both players receive hole cards
+  3. Observe that your own cards are visible (face-up)
+  4. Observe that other players have NO cards displayed at all
+- **Expected Behavior**: Other players should show their cards as face-down (card backs) - 2 card backs for Hold'em, more for other variants
+- **Actual Behavior**: No cards are shown for other players, only their player info and chip stack
+- **Related Requirement**: Requirement 19, criterion #2: "WHEN other players have hole cards THEN the system SHALL display them as face-down cards to me unless revealed during showdown"
+- **Notes**: This is important for visual feedback and essential for stud games where some cards are face-up and others face-down. Reference: Traditional online poker interfaces like 888poker, PokerStars always show card backs for opponents.
+
+### Bug #013 - Blinds Not Deducted From Player Stacks / Pot Amount Incorrect
+- **Priority**: High
+- **Status**: Open
+- **Description**: When a hand starts, the pot amount and player chip stacks do not correctly reflect the posted blinds. In a $1/$2 Limit game, the pot should show $3 (SB $1 + BB $2) and player stacks should be reduced accordingly.
+- **Steps to Reproduce**:
+  1. Create a Texas Hold'em table with $1/$2 Limit stakes
+  2. Have two players join with $20 buy-in each
+  3. Both players click Ready to start the hand
+  4. Observe the pot amount and player chip stacks
+- **Expected Behavior**:
+  - Pot should show $3 ($1 SB + $2 BB)
+  - Small blind player stack should show $19 ($20 - $1)
+  - Big blind player stack should show $18 ($20 - $2)
+- **Actual Behavior**:
+  - Pot shows $1 (incorrect)
+  - Both players show $20 (blinds not deducted)
+- **Related Requirement**: Requirement 5 (Game Interface), Requirement 16 (Game State Management)
+- **Notes**: This is a critical display bug that makes it impossible to track chip amounts accurately during play.
+- **Evidence**: Screenshot shows "Erik Test Micro" table with Pot: $1 and both Alice ($20) and Bob ($20) with full stacks.
+
+### Bug #015 - Cannot Rejoin Table After Leaving / Poor UX for Existing Table Access
+- **Priority**: Medium
+- **Status**: Open
+- **Description**: When a player leaves a table (e.g., clicks "Back to Lobby" during a hand) and tries to return, the lobby shows "Join" button but clicking it displays "Already at this table" error. The player has no way to actually rejoin the table they left.
+- **Steps to Reproduce**:
+  1. Join a table as a player (e.g., bob)
+  2. Start a hand with another player
+  3. Click "Back to Lobby" during the hand
+  4. In the lobby, observe the table shows "Join" button
+  5. Click "Join" - get error "Already at this table"
+  6. No way to actually return to the table
+- **Expected Behavior**:
+  - If player has an active seat at a table, lobby should show "Rejoin" or "Return to Table" button instead of "Join"
+  - Clicking "Rejoin" should take player directly back to the table view (skip seat selection)
+  - Alternatively, "Back to Lobby" should be disabled or show confirmation during an active hand
+- **Actual Behavior**:
+  - "Join" button shown even when player is already seated
+  - Clicking "Join" shows error with no way to return to table
+  - Player is stuck and cannot rejoin their seat
+- **Related Requirement**: Requirement 4 (Multi-Table Game Engine) criteria 4-5 about disconnect/reconnect
+- **Notes**:
+  - The table_access record exists (hence "Already at this table" error)
+  - Need to check if player has active table_access and show different UI
+  - Consider preventing "Back to Lobby" during active hand, or auto-fold the player
+
+### Bug #014 - Game Actions Not Displayed in Chat (Regression?)
+- **Priority**: Medium
+- **Status**: Open
+- **Description**: The Table Chat area should display game actions like blind posting, player bets, folds, and hand results as a running hand history. Currently only player join/leave messages appear. The client-side code has `game_action` message type support, but the server doesn't appear to be sending these events.
+- **Steps to Reproduce**:
+  1. Join a table and start a hand
+  2. Observe the Table Chat area
+  3. Note that only "Bob joined the table" type messages appear
+  4. No blind posting messages ("Alice posts small blind $1")
+  5. No action messages ("Bob calls", "Alice raises to $4")
+- **Expected Behavior**: Chat should show running hand history like PokerStars:
+  - "*** HOLE CARDS ***"
+  - "alice: posts small blind $1"
+  - "bob: posts big blind $2"
+  - "alice: calls $1"
+  - "bob: checks"
+  - "*** FLOP *** [Ah 7c 2d]"
+  - etc.
+- **Actual Behavior**: Only system messages like "Bob joined the table" appear
+- **Related Requirement**: Requirement 5, criteria 7-9 (game log/action feed)
+- **Notes**: The client-side infrastructure exists (`displayChatMessage` with `type: 'game_action'`) but server isn't emitting these events for blinds/actions. Showdown messages ARE working, so this may be a partial implementation. Reference: https://pokercopilot.com/userguide/6/en/topic/how-to-request-and-save-hand-history-files-from-pokerstars
+
 ### Bug #011 - Double Card Dealing (4 Cards Instead of 2)
 - **Priority**: High
 - **Status**: Resolved

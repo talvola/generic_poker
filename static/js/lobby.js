@@ -3,13 +3,14 @@ class PokerLobby {
     constructor() {
         this.socket = io();
         this.tables = [];
+        this.userTables = [];  // Table IDs where current user is seated
         this.filters = {
             variant: '',
             stakes: '',
             structure: '',
             players: ''
         };
-        
+
         this.init();
     }
     
@@ -107,6 +108,7 @@ class PokerLobby {
         
         this.socket.on('table_list', (data) => {
             this.tables = data.tables || [];
+            this.userTables = data.user_tables || [];  // Tables where user is seated
             this.renderTables();
         });
         
@@ -272,16 +274,23 @@ class PokerLobby {
                 </div>
                 
                 <div class="table-actions">
-                    <button class="btn btn-primary btn-small join-table-btn" 
-                            data-table-id="${table.id}" 
-                            ${isFull ? 'disabled' : ''}>
-                        ${isFull ? 'Full' : 'Join'}
-                    </button>
-                    <button class="btn btn-outline btn-small spectate-btn" 
+                    ${this.userTables.includes(table.id) ? `
+                        <button class="btn btn-success btn-small rejoin-table-btn"
+                                data-table-id="${table.id}">
+                            Rejoin
+                        </button>
+                    ` : `
+                        <button class="btn btn-primary btn-small join-table-btn"
+                                data-table-id="${table.id}"
+                                ${isFull ? 'disabled' : ''}>
+                            ${isFull ? 'Full' : 'Join'}
+                        </button>
+                    `}
+                    <button class="btn btn-outline btn-small spectate-btn"
                             data-table-id="${table.id}">
                         <i class="icon-eye"></i> Spectate
                     </button>
-                    <button class="btn btn-secondary btn-small details-btn" 
+                    <button class="btn btn-secondary btn-small details-btn"
                             data-table-id="${table.id}">
                         Details
                     </button>
@@ -299,7 +308,16 @@ class PokerLobby {
                 this.joinTable(tableId);
             });
         });
-        
+
+        // Rejoin table buttons (for users already at a table)
+        document.querySelectorAll('.rejoin-table-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const tableId = btn.dataset.tableId;
+                this.rejoinTable(tableId);
+            });
+        });
+
         // Spectate buttons
         document.querySelectorAll('.spectate-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -506,7 +524,12 @@ class PokerLobby {
         // Show seat selection modal
         this.showSeatSelectionModal(tableId);
     }
-    
+
+    rejoinTable(tableId) {
+        // Navigate directly to the table - user is already seated
+        window.location.href = `/table/${tableId}`;
+    }
+
     showSeatSelectionModal(tableId) {
         const table = this.tables.find(t => t.id === tableId);
         if (!table) return;

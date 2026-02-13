@@ -166,9 +166,20 @@ class PokerTable(db.Model):
             Game instance configured for this table
         """
         from generic_poker.game.betting import BettingStructure
-        
+
+        # Map database format to enum format
+        structure_mapping = {
+            'no-limit': 'No Limit',
+            'pot-limit': 'Pot Limit',
+            'limit': 'Limit',
+            'No Limit': 'No Limit',
+            'Pot Limit': 'Pot Limit',
+            'Limit': 'Limit'
+        }
+
         # Convert betting structure string to enum
-        betting_structure = BettingStructure(self.betting_structure)
+        structure_value = structure_mapping.get(self.betting_structure, self.betting_structure)
+        betting_structure = BettingStructure(structure_value)
         stakes_dict = self.get_stakes()
         
         # Prepare game parameters

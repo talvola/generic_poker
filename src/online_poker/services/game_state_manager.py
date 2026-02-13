@@ -27,12 +27,12 @@ class GameStateManager:
     @staticmethod
     def generate_game_state_view(table_id: str, viewer_id: str, is_spectator: bool = False) -> Optional[GameStateView]:
         """Generate a game state view for a specific player/spectator.
-        
+
         Args:
             table_id: ID of the table
             viewer_id: ID of the player/spectator viewing the state
             is_spectator: Whether the viewer is a spectator
-            
+
         Returns:
             GameStateView for the viewer or None if not found
         """
@@ -40,8 +40,9 @@ class GameStateManager:
             # Get game session
             session = game_orchestrator.get_session(table_id)
             if not session:
-                logger.warning(f"No game session found for table {table_id}")
-                return None
+                # No active game session - return waiting state with player list
+                logger.debug(f"No game session found for table {table_id}, returning waiting state")
+                return GameStateManager._generate_waiting_state(table_id, viewer_id, is_spectator)
             
             # Get table players
             table_players = TableAccessManager.get_table_players(table_id)
@@ -111,9 +112,94 @@ class GameStateManager:
         except Exception as e:
             logger.error(f"Failed to generate game state view for table {table_id}, viewer {viewer_id}: {e}")
             return None
-    
+
     @staticmethod
-    def _create_player_view(player_info: Dict[str, Any], session: GameSession, 
+    def _generate_waiting_state(table_id: str, viewer_id: str, is_spectator: bool) -> Optional[GameStateView]:
+        """Generate a game state view for when no active game session exists (waiting state).
+
+        Args:
+            table_id: ID of the table
+            viewer_id: ID of the player/spectator viewing the state
+            is_spectator: Whether the viewer is a spectator
+
+        Returns:
+            GameStateView with waiting state or None if table/players not found
+        """
+        try:
+            # Get table players from database
+            table_players = TableAccessManager.get_table_players(table_id)
+            if not table_players:
+                logger.debug(f"No players found for table {table_id} in waiting state")
+                return None
+
+            # Create simple player views (no game-specific state)
+            player_views = []
+            for player_info in table_players:
+                if player_info['is_spectator']:
+                    continue  # Skip spectators in player list
+
+                player_view = PlayerView(
+                    user_id=player_info['user_id'],
+                    username=player_info['username'],
+                    position=GameStateManager._get_position_name(player_info['seat_number']),
+                    seat_number=player_info['seat_number'],
+                    chip_stack=player_info['current_stack'] or 0,
+                    current_bet=0,
+                    cards=[],  # No cards in waiting state
+                    is_active=True,
+                    is_current_player=False,
+                    is_bot=False,
+                    is_connected=True,
+                    is_all_in=False,
+                    has_folded=False,
+                    last_action=None,
+                    time_to_act=None
+                )
+                player_views.append(player_view)
+
+            # Sort players by seat number
+            player_views.sort(key=lambda p: p.seat_number)
+
+            # Get table info from TableManager
+            from ..services.table_manager import TableManager
+            table = TableManager.get_table_by_id(table_id)
+            table_info = {}
+            if table:
+                table_info = {
+                    'table_name': table.name,
+                    'variant': table.variant,
+                    'betting_structure': table.betting_structure,
+                    'max_players': table.max_players,
+                    'stakes': table.get_stakes()
+                }
+
+            # Create waiting state game view
+            game_state_view = GameStateView(
+                table_id=table_id,
+                session_id='',  # No session yet
+                viewer_id=viewer_id,
+                players=player_views,
+                community_cards={},
+                pot_info=PotInfo(0),
+                current_player=None,
+                valid_actions=[],
+                game_phase=GamePhase.WAITING,
+                hand_number=0,
+                is_spectator=is_spectator,
+                dealer_position=0,
+                small_blind_position=0,
+                big_blind_position=0,
+                table_info=table_info
+            )
+
+            return game_state_view
+
+        except Exception as e:
+            logger.error(f"Failed to generate waiting state for table {table_id}: {e}")
+            return None
+
+    @staticmethod
+    def _create_player_view(player_info: Dict[str, Any], session: GameSession,
                            viewer_id: str, is_spectator: bool) -> Optional[PlayerView]:
         """Create a player view from player information."""
         try:
@@ -141,15 +227,26 @@ class GameStateManager:
             if is_current_player:
                 time_to_act = GameStateManager._get_time_to_act(session, user_id)
             
+            # Get chip stack from game session if available, otherwise from database
+            chip_stack = player_info['current_stack'] or 0
+            if session and session.game and hasattr(session.game, 'table'):
+                game_player = session.game.table.players.get(user_id)
+                if game_player and hasattr(game_player, 'stack'):
+                    chip_stack = game_player.stack
+
+            # Get card count for all players (used to show card backs for opponents)
+            card_count = GameStateManager._get_player_card_count(session, user_id)
+
             # Create player view
             player_view = PlayerView(
                 user_id=user_id,
                 username=player_info['username'],
                 position=GameStateManager._get_position_name(player_info['seat_number']),
                 seat_number=player_info['seat_number'],
-                chip_stack=player_info['current_stack'] or 0,
+                chip_stack=chip_stack,
                 current_bet=GameStateManager._get_current_bet(session, user_id),
                 cards=cards,
+                card_count=card_count,
                 is_active=GameStateManager._is_player_active(session, user_id),
                 is_current_player=is_current_player,
                 is_bot=False,  # TODO: Implement bot detection
@@ -167,21 +264,35 @@ class GameStateManager:
             return None
     
     @staticmethod
-    def _get_community_cards(session: GameSession) -> Dict[str, List[str]]:
-        """Get community cards from the game session."""
+    def _get_community_cards(session: GameSession) -> Dict[str, str]:
+        """Get community cards from the game session.
+
+        Returns cards in format expected by frontend:
+        {flop1: "Ts", flop2: "9s", flop3: "8s", turn: "Ah", river: "Kd"}
+        """
         try:
             if not session.game or not hasattr(session.game, 'table'):
                 return {}
-            
+
             # Get community cards from the game engine
             community_cards = {}
-            
+
             # Try to get community cards from the game table
+            # table.community_cards is a Dict[str, List[Card]] where key is subset name
             if hasattr(session.game.table, 'community_cards'):
-                cards = session.game.table.community_cards
-                if cards:
-                    community_cards['board'] = [str(card) for card in cards]
-            
+                cards_dict = session.game.table.community_cards
+                if cards_dict:
+                    # Combine all community card subsets into a flat list
+                    all_cards = []
+                    for subset_name, card_list in cards_dict.items():
+                        all_cards.extend([str(card) for card in card_list])
+
+                    # Map to frontend expected format: flop1, flop2, flop3, turn, river
+                    card_keys = ['flop1', 'flop2', 'flop3', 'turn', 'river']
+                    for i, card_str in enumerate(all_cards):
+                        if i < len(card_keys):
+                            community_cards[card_keys[i]] = card_str
+
             return community_cards
             
         except Exception as e:
@@ -192,33 +303,42 @@ class GameStateManager:
     def _get_pot_info(session: GameSession) -> PotInfo:
         """Get pot information from the game session."""
         try:
-            if not session.game or not hasattr(session.game, 'table'):
+            if not session.game or not hasattr(session.game, 'betting'):
                 return PotInfo(0)
-            
-            # Get pot information from the game engine
-            main_pot = 0
+
+            # Get pot information from the betting manager
+            betting = session.game.betting
+            total_pot = 0
             side_pots = []
             current_bet = 0
-            
-            # Try to get pot information from the game
-            if hasattr(session.game.table, 'pot'):
-                pot = session.game.table.pot
-                if hasattr(pot, 'total'):
-                    main_pot = pot.total
-                if hasattr(pot, 'side_pots'):
-                    side_pots = [{'amount': sp.total, 'eligible_players': list(sp.eligible_players)} 
-                               for sp in pot.side_pots]
-            
-            # Get current bet level
-            if hasattr(session.game.table, 'current_bet'):
-                current_bet = session.game.table.current_bet
-            
+
+            # Get total pot from betting manager
+            # Note: get_total_pot() returns pot.total which already includes
+            # all bets from the current round (blinds, etc.) since pot.add_bet()
+            # is called when bets are placed. No need to add current_round_bets.
+            if hasattr(betting, 'get_total_pot'):
+                total_pot = betting.get_total_pot()
+
+            # Get side pots if available
+            if hasattr(betting, 'pot') and hasattr(betting.pot, 'round_pots'):
+                round_pots = betting.pot.round_pots
+                if round_pots and len(round_pots) > 0:
+                    current_round = round_pots[-1]
+                    if hasattr(current_round, 'side_pots'):
+                        side_pots = [{'amount': sp.amount, 'eligible_players': list(sp.eligible_players) if hasattr(sp, 'eligible_players') else []}
+                                   for sp in current_round.side_pots]
+
+            # Get current bet level from betting manager
+            if hasattr(betting, 'current_bet'):
+                current_bet = betting.current_bet
+
             return PotInfo(
-                main_pot=main_pot,
+                main_pot=total_pot,
                 side_pots=side_pots,
+                total_pot=total_pot,
                 current_bet=current_bet
             )
-            
+
         except Exception as e:
             logger.error(f"Failed to get pot info: {e}")
             return PotInfo(0)
@@ -227,17 +347,16 @@ class GameStateManager:
     def _get_current_player(session: GameSession) -> Optional[str]:
         """Get the current player to act."""
         try:
-            if not session.game or not hasattr(session.game, 'table'):
+            if not session.game:
                 return None
-            
-            # Get current player from the game engine
-            if hasattr(session.game.table, 'current_player'):
-                current_player = session.game.table.current_player
-                if current_player and hasattr(current_player, 'id'):
-                    return current_player.id
-            
+
+            # current_player is on the Game object, not on game.table
+            current_player = session.game.current_player
+            if current_player and hasattr(current_player, 'id'):
+                return current_player.id
+
             return None
-            
+
         except Exception as e:
             logger.error(f"Failed to get current player: {e}")
             return None
@@ -268,7 +387,6 @@ class GameStateManager:
                 action_type=action_type,
                 min_amount=action_option.min_amount,
                 max_amount=action_option.max_amount,
-                default_amount=action_option.default_amount,
                 display_text=action_option.display_text
             )
             
@@ -351,19 +469,40 @@ class GameStateManager:
         try:
             if not session.game or not hasattr(session.game, 'table'):
                 return []
-            
+
             # Get player cards from the game engine
             if hasattr(session.game.table, 'players') and user_id in session.game.table.players:
                 player = session.game.table.players[user_id]
-                if hasattr(player, 'cards'):
-                    return [str(card) for card in player.cards]
-            
+                # Cards are stored in player.hand.cards, not player.cards
+                if hasattr(player, 'hand') and hasattr(player.hand, 'cards'):
+                    return [str(card) for card in player.hand.cards]
+
             return []
-            
+
         except Exception as e:
             logger.error(f"Failed to get player cards for {user_id}: {e}")
             return []
-    
+
+    @staticmethod
+    def _get_player_card_count(session: GameSession, user_id: str) -> int:
+        """Get the number of cards a player has (for showing card backs)."""
+        try:
+            if not session.game or not hasattr(session.game, 'table'):
+                return 0
+
+            # Get card count from the game engine
+            if hasattr(session.game.table, 'players') and user_id in session.game.table.players:
+                player = session.game.table.players[user_id]
+                # Cards are stored in player.hand.cards
+                if hasattr(player, 'hand') and hasattr(player.hand, 'cards'):
+                    return len(player.hand.cards)
+
+            return 0
+
+        except Exception as e:
+            logger.error(f"Failed to get player card count for {user_id}: {e}")
+            return 0
+
     @staticmethod
     def _is_current_player(session: GameSession, user_id: str) -> bool:
         """Check if a player is the current player to act."""
@@ -489,51 +628,63 @@ class GameStateManager:
     
     @staticmethod
     def _get_dealer_position(session: GameSession) -> int:
-        """Get dealer button position."""
+        """Get dealer button seat number."""
         try:
             if not session.game or not hasattr(session.game, 'table'):
                 return 0
-            
-            # Get dealer position from the game engine
-            if hasattr(session.game.table, 'dealer_position'):
-                return session.game.table.dealer_position
-            
+
+            # Get dealer position from button_seat
+            if hasattr(session.game.table, 'button_seat'):
+                return session.game.table.button_seat
+
             return 0
-            
+
         except Exception as e:
             logger.error(f"Failed to get dealer position: {e}")
             return 0
-    
+
     @staticmethod
     def _get_small_blind_position(session: GameSession) -> int:
-        """Get small blind position."""
+        """Get small blind seat number."""
         try:
             if not session.game or not hasattr(session.game, 'table'):
                 return 0
-            
-            # Get small blind position from the game engine
-            if hasattr(session.game.table, 'small_blind_position'):
-                return session.game.table.small_blind_position
-            
+
+            from generic_poker.game.table import Position
+
+            # Find player with small blind position
+            for player in session.game.table.players.values():
+                if player.position and player.position.has_position(Position.SMALL_BLIND):
+                    # Get seat number for this player
+                    seat_num = session.game.table.get_player_seat_number(player.id)
+                    if seat_num:
+                        return seat_num
+
             return 0
-            
+
         except Exception as e:
             logger.error(f"Failed to get small blind position: {e}")
             return 0
-    
+
     @staticmethod
     def _get_big_blind_position(session: GameSession) -> int:
-        """Get big blind position."""
+        """Get big blind seat number."""
         try:
             if not session.game or not hasattr(session.game, 'table'):
                 return 0
-            
-            # Get big blind position from the game engine
-            if hasattr(session.game.table, 'big_blind_position'):
-                return session.game.table.big_blind_position
-            
+
+            from generic_poker.game.table import Position
+
+            # Find player with big blind position
+            for player in session.game.table.players.values():
+                if player.position and player.position.has_position(Position.BIG_BLIND):
+                    # Get seat number for this player
+                    seat_num = session.game.table.get_player_seat_number(player.id)
+                    if seat_num:
+                        return seat_num
+
             return 0
-            
+
         except Exception as e:
             logger.error(f"Failed to get big blind position: {e}")
             return 0
