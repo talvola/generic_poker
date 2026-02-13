@@ -9,6 +9,8 @@ A generic poker engine with a configurable game rules system supporting 100+ pok
 1. **generic_poker** (`src/generic_poker/`) - Core poker engine: game logic, hand evaluation, betting management
 2. **online_poker** (`src/online_poker/`) - Flask/SocketIO web platform for multiplayer online poker
 
+**Current focus:** Get 2-player Texas Hold'em working end-to-end. See `docs/BACKLOG.md` for prioritized tasks.
+
 ## Quick Reference
 
 ### Essential Commands
@@ -20,7 +22,6 @@ pip install -e ".[test]"
 
 # Run application
 python app.py                    # Full web app at http://localhost:5000
-python run_server.py             # Demo server (lobby only)
 
 # Testing
 pytest                           # All tests
@@ -76,11 +77,10 @@ Flask/SocketIO multiplayer platform.
 |---------|---------|
 | GameOrchestrator | Coordinates game lifecycle and service interactions |
 | GameStateManager | Generates serialized game state views for clients |
-| GameManager | Manages active game instances per table |
-| PlayerSessionManager | Tracks player connections and sessions |
+| PlayerActionManager | Processes player actions, validates, advances game |
 | WebSocketManager | Real-time SocketIO communication |
 | DisconnectManager | Player disconnects/timeouts |
-| TableManager | Table creation and lifecycle |
+| TableManager / TableAccessManager | Table creation, joining, lifecycle |
 
 **Routes:** `auth_routes.py`, `lobby_routes.py`, `table_routes.py`, `game_routes.py`
 
@@ -90,7 +90,7 @@ Flask/SocketIO multiplayer platform.
 
 | File | Purpose |
 |------|---------|
-| `table.js` | Game UI: WebSocket events, card rendering, actions |
+| `table.js` | Game UI: WebSocket events, card rendering, actions (2,462 lines - monolithic) |
 | `table.css` | Table styling, seat layouts, cards |
 | `lobby.js` | Lobby: browsing, filtering, creating tables |
 
@@ -175,17 +175,38 @@ actions = game.get_valid_actions(player_id)  # [(action, min_amount, max_amount)
 result = game.player_action(player_id, action, amount)  # Returns ActionResult
 ```
 
-## Known Bugs
+## Testing Strategy
 
-See `.kiro/specs/online-poker-platform/bugs.md` for full tracking.
+All game logic lives server-side. The UI is a rendering layer. This means the entire game can be driven and tested without a browser.
 
-| Bug | Priority | Description |
-|-----|----------|-------------|
-| #001 | High | SimpleBot folds when check is available |
-| #002 | Medium | Action panel width changes cause layout shift |
-| #006 | High | Player's own cards intermittently disappear |
+### Test Layers
 
-## Testing Notes
+```
+Layer 1: Python Integration Tests (90% of testing)
+  - Drive game engine directly: game.start_hand(), game.player_action()
+  - No WebSocket, no browser. Fast (< 1 second per test)
+  - tests/integration/test_gameplay_integration.py
+
+Layer 2: Socket.IO Integration Tests (WebSocket validation)
+  - flask_socketio.test_client (Python, no browser)
+  - Tests WebSocket events produce correct state broadcasts
+  - Currently MISSING - needs to be built
+
+Layer 3: E2E Browser Tests (visual verification only)
+  - Playwright with multi-user fixtures
+  - Slow (~10-30 seconds per test)
+  - tests/e2e/specs/
+```
+
+### Bug Fix Workflow
+
+1. Reproduce with a Python integration test (Layer 1)
+2. Fix the server-side code
+3. Verify the test passes
+4. If UI rendering bug, also verify in browser
+5. If WebSocket event bug, add Socket.IO test (Layer 2)
+
+### Testing Notes
 
 - Fixtures in `tests/test_helpers.py`
 - **Integration tests do NOT require a running server** - use Flask test client
@@ -232,84 +253,15 @@ Auth blueprint registered with `/auth` prefix:
 | Database | `instance/poker_platform.db` |
 | Logs | `poker_platform.log` |
 
-## Development Workflow
-
-### Test-Driven (Recommended)
-
-```bash
-# Run tests during development
-pytest tests/unit/test_file.py -v -x  # Stop on first failure
-
-# Full suite before committing
-pytest
-```
-
-### Manual Testing
-
-```bash
-# Terminal 1: Server
-python app.py
-
-# Terminal 2: Watch logs
-tail -f poker_platform.log
-
-# Browser: Multiple tabs/incognito for multiplayer testing
-```
-
-### Debugging
-
-```bash
-# Enable debug logging in code
-logging.basicConfig(level=logging.DEBUG)
-
-# Search logs
-grep -i "error\|exception" poker_platform.log | tail -30
-
-# With context
-grep -A 5 -B 5 "KeyError" poker_platform.log
-```
-
-## Common Tasks
-
-### Adding a New Poker Variant
-
-1. Create JSON config in `data/game_configs/`
-2. Define gamePlay steps (bet/deal sequence)
-3. Specify showdown rules and evaluation type
-4. Test with unit tests
-
-### Debugging Game Flow
-
-1. Check `poker_platform.log`
-2. Use browser DevTools for WebSocket messages (Network tab → WS filter)
-3. Game state logged at each step transition
-
-## Project Status
-
-**Implemented:**
-- Core poker engine with 100+ variants
-- User authentication and session management
-- Table creation, joining, lobby
-- Real-time WebSocket gameplay
-- Basic betting actions (fold, check, call, bet, raise)
-- Showdown and pot distribution
-- Chat system
-
-**In Progress:**
-- Advanced actions (draw, expose, pass cards)
-- Bot player improvements
-- Hand history export
-- Admin interface
-
-**Full task list:** `.kiro/specs/online-poker-platform/tasks.md`
-
-## Additional Documentation
+## Project Status & Planning
 
 | Document | Purpose |
 |----------|---------|
-| `DEVELOPMENT.md` | Detailed development workflow, debugging tips |
+| `docs/STATUS.md` | **Current project status**, open bugs, service quality, testing state |
+| `docs/BACKLOG.md` | **Prioritized task backlog** organized in phases |
+| `docs/GAME_VALIDATION.md` | **Game config feature matrix**, variant testing strategy, new game workflow |
+| `DEVELOPMENT.md` | Development workflow, debugging tips |
 | `data/schemas/README.md` | Complete JSON config schema documentation |
-| `.kiro/specs/online-poker-platform/requirements.md` | Full requirements specification |
-| `.kiro/specs/online-poker-platform/design.md` | Architecture design document |
-| `.kiro/specs/online-poker-platform/bugs.md` | Bug tracking |
 | `src/generic_poker/*-readme.md` | Component-specific API documentation |
+
+> **Note:** `.kiro/specs/online-poker-platform/` contains historical planning docs from earlier development. The current source of truth for status and tasks is `docs/STATUS.md` and `docs/BACKLOG.md`.
