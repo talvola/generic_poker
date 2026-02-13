@@ -1,7 +1,7 @@
 # Backlog
 
 > Prioritized task list. Work top-to-bottom within each phase.
-> Phase 1 is the current focus: get 2-player Texas Hold'em working end-to-end.
+> Phase 2 is the current focus: UI refactoring.
 > Last updated: 2026-02-13
 
 ---
@@ -38,6 +38,8 @@ Goal: One complete hand works perfectly - deal, bet, flop, bet, turn, bet, river
 | 1.6 | Fix showdown display (reveal cards, announce winner, award pot) | `table.js`, `websocket_manager.py` | DONE |
 | 1.7 | Fix table rejoin after leaving | `websocket_manager.py` | DONE |
 | 1.8 | Verify full hand cycle end-to-end | All services | DONE |
+| 1.9 | Edge case tests (all-in, split pot, raise sequences) | `tests/game/`, `tests/integration/` | DONE |
+| 1.10 | Playwright regression suite for UI | `tests/e2e/specs/` | DONE |
 
 ### Task Details
 
