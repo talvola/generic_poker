@@ -190,7 +190,7 @@ Layer 1: Python Integration Tests (90% of testing)
 Layer 2: Socket.IO Integration Tests (WebSocket validation)
   - flask_socketio.test_client (Python, no browser)
   - Tests WebSocket events produce correct state broadcasts
-  - Currently MISSING - needs to be built
+  - tests/integration/test_socketio_integration.py
 
 Layer 3: E2E Browser Tests (visual verification only)
   - Playwright with multi-user fixtures
@@ -216,6 +216,49 @@ Layer 3: E2E Browser Tests (visual verification only)
 - Patch path must match actual import location (not class definition location)
 - Static methods: use `ClassName._method()` not `self._method()`
 - Mock session objects: explicitly set mock methods to avoid async warnings
+
+### Socket.IO Testing Patterns
+
+Flask-Login caches `current_user` in `flask.g._login_user`, which persists across SocketIO handlers
+within a shared app context. Without patching, all handlers see the most recently connected user.
+
+```python
+# Required patch for multi-user SocketIO tests (already in test_socketio_integration.py)
+def _patch_socketio_user_loading(socketio_instance):
+    original = socketio_instance._handle_event
+    def patched_handle_event(handler, message, namespace, sid, *args):
+        def clearing_handler(*a, **kw):
+            g.pop('_login_user', None)
+            return original_handler(*a, **kw)
+        original_handler = handler
+        return original(clearing_handler, message, namespace, sid, *args)
+    socketio_instance._handle_event = patched_handle_event
+```
+
+**Key test setup requirements:**
+- Use `StaticPool` for in-memory SQLite so HTTP and SocketIO handlers share same DB
+- Register `auth_bp` (with `/auth` prefix) and `lobby_bp` (contains `/api/tables/` join endpoints)
+- `table_bp` is NOT needed for tests — join/seat endpoints are in `lobby_bp`
+- The leave endpoint uses SocketIO event `leave_table`, not HTTP
+
+### Core Engine Data Structures
+
+These are commonly needed when working on GameStateManager or tests:
+
+```python
+# Community cards: dict with named keys, NOT a 'board' array
+game.table.community_cards  # {'default': [Card, Card, ...]}
+# GameStateManager._get_community_cards() returns {flop1: "Ts", flop2: "9s", ...}
+
+# Player bets: NOT on Player object, tracked in BettingManager
+game.betting.current_bets[player_id]  # PlayerBet(amount, has_acted, posted_blind, is_all_in)
+
+# Player class has: id, name, stack, position, hand, is_active
+# Player does NOT have: current_bet, has_folded
+
+# Hand results from engine
+game.get_hand_results()  # Returns GameResult with .pots, .hands, .winning_hands, .winners
+```
 
 ## Database
 

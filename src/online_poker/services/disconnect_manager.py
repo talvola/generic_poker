@@ -3,7 +3,7 @@
 import logging
 from typing import Dict, List, Optional, Set, Any, Tuple
 from datetime import datetime, timedelta
-from threading import Timer, Lock
+from threading import Timer, RLock
 from flask import current_app
 
 from ..models.table_access import TableAccess
@@ -122,7 +122,7 @@ class DisconnectManager:
         """Initialize the disconnect manager."""
         self.disconnected_players: Dict[str, DisconnectedPlayer] = {}  # user_id -> DisconnectedPlayer
         self.table_disconnects: Dict[str, Set[str]] = {}  # table_id -> set of user_ids
-        self.lock = Lock()
+        self.lock = RLock()
         
         logger.info("Disconnect manager initialized")
     

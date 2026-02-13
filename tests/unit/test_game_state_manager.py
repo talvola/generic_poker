@@ -212,13 +212,21 @@ class TestGameStateManager:
             'is_spectator': False,
             'current_stack': 500
         }
-        
+
+        # Set up game player with proper stack so the game engine value is used
+        mock_player = MagicMock()
+        mock_player.stack = 500
+        mock_player.hand.cards = []
+        mock_player.is_active = True
+        mock_player.has_folded = False
+        mock_game_session.game.table.players = {'user1': mock_player}
+
         with patch.object(GameStateManager, '_get_player_cards', return_value=['As', 'Ks']):
             with patch.object(GameStateManager, '_is_current_player', return_value=True):
                 player_view = GameStateManager._create_player_view(
                     player_info, mock_game_session, "user1", False
                 )
-                
+
                 assert player_view is not None
                 assert player_view.user_id == 'user1'
                 assert player_view.username == 'Alice'
@@ -248,14 +256,22 @@ class TestGameStateManager:
     
     def test_get_community_cards(self, app_context, mock_game_session):
         """Test getting community cards."""
-        # Mock community cards
-        mock_cards = ['As', 'Ks', 'Qs']
-        mock_game_session.game.table.community_cards = mock_cards
-        
+        # Community cards in the engine are Dict[str, List[Card]]
+        # where key is subset name (e.g., 'board') and value is list of Card objects
+        mock_card1 = MagicMock()
+        mock_card1.__str__ = lambda self: 'As'
+        mock_card2 = MagicMock()
+        mock_card2.__str__ = lambda self: 'Ks'
+        mock_card3 = MagicMock()
+        mock_card3.__str__ = lambda self: 'Qs'
+        mock_game_session.game.table.community_cards = {'board': [mock_card1, mock_card2, mock_card3]}
+
         community_cards = GameStateManager._get_community_cards(mock_game_session)
-        
-        assert 'board' in community_cards
-        assert community_cards['board'] == ['As', 'Ks', 'Qs']
+
+        # _get_community_cards maps to flop1/flop2/flop3/turn/river format
+        assert community_cards['flop1'] == 'As'
+        assert community_cards['flop2'] == 'Ks'
+        assert community_cards['flop3'] == 'Qs'
     
     def test_get_community_cards_no_game(self, app_context):
         """Test getting community cards when no game exists."""
@@ -373,19 +389,19 @@ class TestGameStateManager:
     def test_get_game_phase_betting_preflop(self, app_context, mock_game_session):
         """Test getting game phase during preflop betting."""
         mock_game_session.game.state = GameState.BETTING
-        
-        with patch.object(GameStateManager, '_get_community_cards', return_value={'board': []}):
+
+        with patch.object(GameStateManager, '_get_community_cards', return_value={}):
             phase = GameStateManager._get_game_phase(mock_game_session)
-            
+
             assert phase == GamePhase.PREFLOP
-    
+
     def test_get_game_phase_betting_flop(self, app_context, mock_game_session):
         """Test getting game phase during flop betting."""
         mock_game_session.game.state = GameState.BETTING
-        
-        with patch.object(GameStateManager, '_get_community_cards', return_value={'board': ['As', 'Ks', 'Qs']}):
+
+        with patch.object(GameStateManager, '_get_community_cards', return_value={'flop1': 'As', 'flop2': 'Ks', 'flop3': 'Qs'}):
             phase = GameStateManager._get_game_phase(mock_game_session)
-            
+
             assert phase == GamePhase.FLOP
     
     def test_get_game_phase_showdown(self, app_context, mock_game_session):
@@ -465,14 +481,31 @@ class TestGameStateManager:
     
     def test_process_hand_completion(self, app_context, mock_game_session):
         """Test processing hand completion."""
-        with patch.object(GameStateManager, '_get_community_cards', return_value={'board': ['As', 'Ks', 'Qs', 'Js', '10s']}):
-            with patch.object(GameStateManager, '_get_pot_info', return_value=PotInfo(150)):
-                hand_result = GameStateManager.process_hand_completion(mock_game_session)
-                
-                assert hand_result is not None
-                assert hand_result.table_id == mock_game_session.table.id
-                assert hand_result.session_id == mock_game_session.session_id
-                assert hand_result.final_board == ['As', 'Ks', 'Qs', 'Js', '10s']
+        from generic_poker.game.game_result import GameResult, PotResult
+        from generic_poker.game.game_result import HandResult as EngineHandResult
+        from generic_poker.core.card import Card
+
+        mock_pot = PotResult(amount=150, winners=['user1'], pot_type='main')
+        mock_hand = EngineHandResult(
+            player_id='user1', cards=[], hand_name='Pair',
+            hand_description='Pair of Aces', evaluation_type='high'
+        )
+        mock_result = GameResult(
+            pots=[mock_pot],
+            hands={'user1': [mock_hand]},
+            winning_hands=[mock_hand]
+        )
+        mock_game_session.game.get_hand_results = MagicMock(return_value=mock_result)
+
+        with patch.object(GameStateManager, '_get_community_cards', return_value={'flop1': 'As', 'flop2': 'Ks', 'flop3': 'Qs', 'turn': 'Js', 'river': '10s'}):
+            hand_result = GameStateManager.process_hand_completion(mock_game_session)
+
+            assert hand_result is not None
+            assert hand_result.table_id == mock_game_session.table.id
+            assert hand_result.session_id == mock_game_session.session_id
+            assert hand_result.final_board == ['As', 'Ks', 'Qs', 'Js', '10s']
+            assert hand_result.pot_distribution == {'user1': 150}
+            assert len(hand_result.winners) == 1
     
     def test_detect_state_changes_phase_change(self, app_context):
         """Test detecting phase changes."""

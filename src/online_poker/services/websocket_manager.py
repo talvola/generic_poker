@@ -168,7 +168,13 @@ class WebSocketManager:
                 # Leave the WebSocket room
                 self.leave_table_room(user_id, table_id)
 
-                # Actually remove player from the table in the database
+                # Remove player from game session (if active)
+                from ..services.game_orchestrator import game_orchestrator
+                session = game_orchestrator.get_session(table_id)
+                if session:
+                    session.remove_player(user_id, "Player left table")
+
+                # Remove player from the table in the database
                 from ..services.table_access_manager import TableAccessManager
                 from ..services.table_manager import TableManager
                 success, message = TableAccessManager.leave_table(user_id, table_id)
@@ -176,6 +182,10 @@ class WebSocketManager:
                     logger.warning(f"Failed to leave table in database: {message}")
                 else:
                     logger.info(f"User {user_id} left table {table_id}")
+
+                    # Broadcast updated game state to remaining players
+                    if session:
+                        self.broadcast_game_state_update(table_id)
 
                     # Broadcast table update to all lobby users so they see updated player count
                     table = TableManager.get_table_by_id(table_id)
@@ -268,7 +278,7 @@ class WebSocketManager:
                 
                 from generic_poker.game.game_state import PlayerAction
                 try:
-                    player_action = PlayerAction(action.upper())
+                    player_action = PlayerAction(action.lower())
                 except ValueError:
                     emit('error', {'message': f'Invalid action: {action}'})
                     return
@@ -352,6 +362,17 @@ class WebSocketManager:
 
                     # Send updated game state to all participants
                     self.broadcast_game_state_update(table_id)
+
+                    # Check if hand is complete and broadcast results
+                    from generic_poker.game.game_state import GameState as GS
+                    if game and game.state == GS.COMPLETE:
+                        try:
+                            hand_results = game.get_hand_results()
+                            if hand_results:
+                                from online_poker.services.player_action_manager import player_action_manager
+                                player_action_manager._handle_hand_completion(table_id, session)
+                        except Exception as hc_err:
+                            logger.error(f"Failed to broadcast hand completion: {hc_err}")
 
                     emit('action_result', {
                         'success': True,

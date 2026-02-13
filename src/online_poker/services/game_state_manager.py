@@ -411,15 +411,15 @@ class GameStateManager:
             elif game_state == GameState.BETTING:
                 # Determine betting round based on community cards
                 community_cards = GameStateManager._get_community_cards(session)
-                board_cards = community_cards.get('board', [])
-                
-                if len(board_cards) == 0:
+                num_cards = len(community_cards)  # Keys: flop1, flop2, flop3, turn, river
+
+                if num_cards == 0:
                     return GamePhase.PREFLOP
-                elif len(board_cards) == 3:
+                elif num_cards <= 3:
                     return GamePhase.FLOP
-                elif len(board_cards) == 4:
+                elif num_cards == 4:
                     return GamePhase.TURN
-                elif len(board_cards) == 5:
+                elif num_cards >= 5:
                     return GamePhase.RIVER
                 else:
                     return GamePhase.PREFLOP
@@ -525,17 +525,16 @@ class GameStateManager:
     
     @staticmethod
     def _get_current_bet(session: GameSession, user_id: str) -> int:
-        """Get a player's current bet amount."""
+        """Get a player's current bet amount in this betting round."""
         try:
-            if not session.game or not hasattr(session.game, 'table'):
+            if not session.game or not hasattr(session.game, 'betting'):
                 return 0
-            
-            # Get current bet from the game engine
-            if hasattr(session.game.table, 'players') and user_id in session.game.table.players:
-                player = session.game.table.players[user_id]
-                if hasattr(player, 'current_bet'):
-                    return player.current_bet
-            
+
+            # Bets are tracked in the betting manager, not on the Player object
+            current_bets = session.game.betting.current_bets
+            if user_id in current_bets:
+                return current_bets[user_id].amount
+
             return 0
             
         except Exception as e:
@@ -710,22 +709,40 @@ class GameStateManager:
         try:
             if not session.game:
                 return None
-            
+
             # Get hand results from the game engine
-            # This would typically come from the game's showdown manager
+            game_result = session.game.get_hand_results()
+            if not game_result:
+                return None
+
+            # Build winners list from pot results
             winners = []
             pot_distribution = {}
-            final_board = []
-            player_hands = {}
-            
-            # Get community cards
+            for pot in game_result.pots:
+                for winner_id in pot.winners:
+                    amount = pot.amount_per_player
+                    winners.append({'user_id': winner_id, 'amount': amount, 'pot_type': pot.pot_type})
+                    pot_distribution[winner_id] = pot_distribution.get(winner_id, 0) + amount
+
+            # Get community cards as flat list
             community_cards = GameStateManager._get_community_cards(session)
-            final_board = community_cards.get('board', [])
-            
-            # Get pot information
-            pot_info = GameStateManager._get_pot_info(session)
-            
-            # This is a simplified implementation - should be enhanced with actual game results
+            final_board = list(community_cards.values())
+
+            # Build player hands dict
+            player_hands = {}
+            for player_id, hands in game_result.hands.items():
+                if hands:
+                    hand = hands[0] if isinstance(hands, list) else hands
+                    player_hands[player_id] = {
+                        'cards': [str(c) for c in hand.cards],
+                        'hand_name': hand.hand_name,
+                        'hand_description': hand.hand_description,
+                    }
+
+            # Build summary
+            winner_names = ', '.join(pot_distribution.keys())
+            hand_summary = f"Won by {winner_names}" if winner_names else "Hand completed"
+
             hand_result = HandResult(
                 hand_number=session.hands_played + 1,
                 table_id=session.table.id,
@@ -734,11 +751,11 @@ class GameStateManager:
                 pot_distribution=pot_distribution,
                 final_board=final_board,
                 player_hands=player_hands,
-                hand_summary="Hand completed"
+                hand_summary=hand_summary
             )
-            
+
             return hand_result
-            
+
         except Exception as e:
             logger.error(f"Failed to process hand completion: {e}")
             return None
@@ -784,15 +801,15 @@ class GameStateManager:
                 ))
             
             # Check for community card changes
-            old_board = old_state.community_cards.get('board', [])
-            new_board = new_state.community_cards.get('board', [])
-            if old_board != new_board:
+            old_cards = list(old_state.community_cards.values())
+            new_cards = list(new_state.community_cards.values())
+            if old_cards != new_cards:
                 changes.append(GameStateManager.create_game_state_update(
                     new_state.table_id,
                     "community_cards_change",
                     {
-                        "old_cards": old_board,
-                        "new_cards": new_board
+                        "old_cards": old_cards,
+                        "new_cards": new_cards
                     }
                 ))
             
