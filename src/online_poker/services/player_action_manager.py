@@ -897,9 +897,10 @@ class PlayerActionManager:
                 results_dict['winning_hands'].append(winning_dict)
 
             # Broadcast hand completion to all table participants
+            hand_number = getattr(session, 'hands_played', 0) + 1
             websocket_manager = get_websocket_manager()
             if websocket_manager:
-                websocket_manager.broadcast_hand_complete(table_id, results_dict)
+                websocket_manager.broadcast_hand_complete(table_id, results_dict, hand_number=hand_number)
                 logger.info(f"Broadcasted hand completion results for table {table_id}")
             else:
                 logger.warning("WebSocket manager not available for broadcasting hand completion")

@@ -67,6 +67,10 @@ export async function createTable(page: Page, config: TableConfig = {}): Promise
     await page.selectOption('#game-variant', finalConfig.variant);
   }
 
+  if (finalConfig.maxPlayers) {
+    await page.selectOption('#max-players', finalConfig.maxPlayers.toString());
+  }
+
   if (finalConfig.bettingStructure) {
     // Map config value to actual option value
     const structureMap: Record<string, string> = {

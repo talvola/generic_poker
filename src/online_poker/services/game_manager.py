@@ -186,7 +186,7 @@ class GameManager:
             
             try:
                 # Start the hand - this will trigger forced bets and log messages
-                game.start_hand()
+                game.start_hand(shuffle_deck=True)
                 logger.info(f"Started hand for table {table_id}")
                 return True
             finally:
@@ -215,9 +215,9 @@ class GameManager:
             
             try:
                 # Start the hand - this will trigger forced bets and log messages
-                game.start_hand()
+                game.start_hand(shuffle_deck=True)
                 logger.info(f"Started hand for table {table_id}")
-                
+
                 # Process initial game progression while log handler is still active
                 # This will capture any additional forced bet related actions
                 progression_func(table_id)

@@ -948,7 +948,7 @@ async def game_loop():
     while True:
         try:
             # Start a new hand
-            game.start_hand()
+            game.start_hand(shuffle_deck=True)
             print(f"Starting new hand with state {game.state}")
             
             # Initial broadcast after hand starts

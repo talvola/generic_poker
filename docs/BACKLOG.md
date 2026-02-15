@@ -2,7 +2,7 @@
 
 > Prioritized task list. Work top-to-bottom within each phase.
 > Phase 2 is the current focus: UI refactoring.
-> Last updated: 2026-02-13
+> Last updated: 2026-02-14
 
 ---
 
@@ -59,10 +59,20 @@ After gameplay works, make the frontend maintainable.
 
 | # | Task | Key Files | Status |
 |---|------|-----------|--------|
-| 2.1 | Split table.js into modules (state, socket, renderer, actions) | `static/js/` | TODO |
-| 2.2 | Create centralized game state store | `static/js/state.js` | TODO |
-| 2.3 | Add error handling and user feedback | `static/js/`, `templates/` | TODO |
-| 2.4 | Fix action panel width stability | `table.css` | TODO |
+| 2.1 | Split table.js into modules (state, socket, renderer, actions) | `static/js/table/` | DONE |
+| 2.2 | Create centralized game state store | `static/js/table/game-state-store.js` | DONE |
+| 2.3 | Add error handling and user feedback | `static/js/table.js` | DONE |
+| 2.4 | Fix action panel width stability | `table.css` | DONE |
+
+### Task Details
+
+**2.1 result:** Split monolithic `table.js` (2,462 lines) into 7 modules + core (1,577 + 850 lines): `card-utils.js`, `modals.js`, `chat.js`, `timer.js`, `bet-controls.js`, `responsive.js`, `showdown.js`. Loaded via `<script>` tags in dependency order. Communication via dependency injection.
+
+**2.2 result:** Created `GameStateStore` class in `game-state-store.js` (~35 lines) that holds all game state (`gameState`, `currentUser`, `players`, `isMyTurn`, `validActions`, `potAmount`, `handNumber`, `tableId`). `update(data)` ingests server data and computes derived state. Modules receive store reference directly instead of closure-based getters. `findPlayerByUserId()` helper replaces repeated lookup patterns.
+
+**2.3 result:** Added `PokerModals.showNotification()` to 3 silent `catch` blocks in `requestGameState()`, `loadAvailableActions()`, and `fetchAndDisplayHandResults()`. Added `response.ok` guards before `.json()` calls on all 4 fetch endpoints.
+
+**2.4 result:** Added `min-height: 80px` to `.action-panel` and `min-height: 50px` + `align-items: center` to `.action-buttons`. Moved `.waiting-message` style from JS-injected `<style>` to `table.css`.
 
 ---
 
@@ -72,11 +82,25 @@ After gameplay works, make the frontend maintainable.
 |---|------|--------|
 | 3.1 | Fix bot decision logic (don't fold when check available) | TODO |
 | 3.2 | Support 3+ player games | TODO |
-| 3.3 | Add player timeout countdown UI | TODO |
-| 3.4 | Implement draw/discard actions | TODO |
-| 3.5 | Implement card passing | TODO |
-| 3.6 | Add hand history display | TODO |
-| 3.7 | Mobile optimization pass | TODO |
+| 3.3 | Omaha E2E support (many-cards CSS, 4 hole cards in browser) | DONE |
+| 3.4 | Proper table leave/rejoin lifecycle | TODO |
+| 3.5 | Add player timeout countdown UI | TODO |
+| 3.6 | Implement draw/discard actions | TODO |
+| 3.7 | Implement card passing | TODO |
+| 3.8 | Add hand history display | TODO |
+| 3.9 | Mobile optimization pass | TODO |
+
+### Task Details
+
+**3.3 result:** Added dynamic `many-cards` CSS class to `player-cards` div when card count > 2 (activates existing 30px card styling). Created `tests/e2e/specs/omaha.spec.ts` with 4 tests: 4 hole cards visible, opponent card backs, many-cards class applied, full hand to showdown. Also fixed lobby `formatStakes()` case-sensitivity bug (Limit tables showed $0/$0). Also fixed `hand_complete` event missing `hand_number` which caused showdown display dedup to skip hand 2+.
+
+**3.4 details:** Proper leave/rejoin lifecycle with these semantics:
+- **Leave mid-hand:** Player is auto-folded in the current hand, then removed from the table after the hand completes (not immediately). UI should show "Leaving after this hand..." state.
+- **Table drops to 1 player:** After the hand finishes and leaving player is removed, the remaining player waits. New hand doesn't start until min_players (from game config) are seated and ready.
+- **Everyone leaves:** Table has no active session/state. Next players to join start fresh — wait for min_players, ready up, deal.
+- **Rejoin:** A player who left can rejoin normally through the lobby (new buy-in, seat selection). No state carries over from the previous session.
+- **Server restart:** In-memory game sessions are lost. Players reconnecting should see a clean waiting state, not a stale hand. Sessions should not be reconstructable from DB — the hand is simply lost.
+- Key files: `game_orchestrator.py` (GameSession), `game.py` (remove_player), `websocket_manager.py` (leave handler), `game_state_manager.py` (suppress actions when paused), `player_action_manager.py` (post-hand cleanup)
 
 ---
 
@@ -126,10 +150,13 @@ These are bugs found during `.kiro` testing sessions that may or may not still b
 
 | Bug | Priority | Description | Status |
 |-----|----------|-------------|--------|
-| T001 | High | Private table join with invite code fails | Open (may be fixed) |
-| T002 | High | Buy-in amount not applied correctly (uses minimum) | Open |
-| T003 | Medium | Seat selection ignored during join | Open |
-| T004 | Medium | Chat messages area not visible | Open (may be fixed) |
-| T005 | Critical | Insufficient bankroll check not working | Open |
-| T006 | Medium | Lobby shows 0 tables after redirect | Open |
-| G006 | High | 404 for available-actions API endpoint | Open (may be fixed) |
+| T001 | High | Private table join with invite code fails | Fixed (buy-in/seat now passed in WS handler) |
+| T002 | High | Buy-in amount not applied correctly (uses minimum) | Fixed (WS handlers now read buy_in_amount from client) |
+| T003 | Medium | Seat selection ignored during join | Fixed (WS handlers now pass seat_number) |
+| T004 | Medium | Chat messages area not visible | Fixed (added .collapsed CSS, fixed mobile panel toggle) |
+| T005 | Critical | Insufficient bankroll check not working | Fixed (WS handlers now validate bankroll before join) |
+| T006 | Medium | Lobby shows 0 tables after redirect | Fixed (loadTables() added to socket connect handler) |
+| G006 | High | 404 for available-actions API endpoint | Not a bug (route works, url_prefix override is correct) |
+| T007 | Medium | Gameplay table shape (oval) doesn't match seat selection screen (rounded rectangle) — should use consistent rounded-rectangle shape | Fixed (border-radius: 50% → 250px) |
+| T008 | Critical | Deck not shuffled between hands — same cards dealt every hand. `start_hand()` must shuffle by default | Fixed |
+| T009 | Low | Add debug option for fixed/unseeded deck (useful for testing specific scenarios). Could be server flag, config option, or admin toggle. Similar to test fixtures in `tests/game/` | Open |

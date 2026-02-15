@@ -1,7 +1,7 @@
 # Project Status
 
 > Single source of truth for project state. Updated as work progresses.
-> Last updated: 2026-02-12
+> Last updated: 2026-02-14
 
 ## Architecture Overview
 
@@ -24,13 +24,13 @@ Rule-driven poker engine where variants are defined by JSON configs, not code. S
 
 Flask/SocketIO multiplayer web platform.
 
-| Service | File | Quality | Key Issues |
-|---------|------|---------|------------|
-| GameOrchestrator | `services/game_orchestrator.py` | 8/10 | Delegates hand starting to WebSocket handler |
-| GameStateManager | `services/game_state_manager.py` | 6/10 | Broken phase detection, stubbed hand results |
+| Service | File | Quality | Notes |
+|---------|------|---------|-------|
+| GameOrchestrator | `services/game_orchestrator.py` | 8/10 | Coordinates game lifecycle |
+| GameStateManager | `services/game_state_manager.py` | 8/10 | Phase detection and hand results working |
 | WebSocketManager | `services/websocket_manager.py` | 7/10 | Works but has responsibility leaks (game logic mixed in) |
 | PlayerActionManager | `services/player_action_manager.py` | 8/10 | Solid, minor timeout config issues |
-| DisconnectManager | `services/disconnect_manager.py` | 8/10 | Import bug (line 300), hardcoded timeouts |
+| DisconnectManager | `services/disconnect_manager.py` | 8/10 | Uses RLock to prevent deadlocks |
 | TableAccessManager | `services/table_access_manager.py` | 9/10 | Clean, mostly complete |
 | TableManager | `services/table_manager.py` | 9/10 | Clean |
 
@@ -38,9 +38,11 @@ Flask/SocketIO multiplayer web platform.
 
 | File | Lines | Quality | Notes |
 |------|-------|---------|-------|
-| `static/js/table.js` | 2,462 | 6/10 | Monolithic, needs splitting into modules |
+| `static/js/table.js` | 1,577 | 8/10 | Core module, uses GameStateStore + 7 extracted modules |
+| `static/js/table/` | ~850 | 8/10 | 7 modules: card-utils, modals, chat, timer, bet-controls, responsive, showdown |
+| `static/js/table/game-state-store.js` | ~35 | 9/10 | Centralized state management |
 | `static/js/lobby.js` | 1,033 | 8/10 | Clean, well-organized |
-| `static/css/table.css` | 2,935 | 9/10 | Well-organized, good responsive design |
+| `static/css/table.css` | ~2,950 | 9/10 | Well-organized, good responsive design |
 | `static/css/lobby.css` | 1,817 | 8/10 | Clean |
 
 ---
@@ -52,48 +54,48 @@ Flask/SocketIO multiplayer web platform.
 - Core poker engine (192+ variants, hand evaluation, betting logic)
 - User authentication and session management
 - Table creation and lobby (browse, filter, join)
-- WebSocket real-time communication (basic)
-- Card rendering and seat positioning (own cards)
-- Chat system (basic messaging)
+- WebSocket real-time communication
+- Card rendering and seat positioning (own cards + opponent card backs)
+- Chat system (messaging + game action log)
 - Responsive CSS layout
 - Ready system (players ready up, hand starts)
 - Betting actions: fold, check, call, bet, raise
 - Game auto-progression through dealing/betting rounds
-- Fold status resets between hands
-- Python integration tests can drive full game hands
+- Showdown display (reveal cards, announce winner, award pot)
+- Hand completion and next hand cycle
+- Deck shuffling between hands
+- Table rejoin after leaving
+- Lobby filter dropdowns (variant, stakes, structure, players)
+- WebSocket table join with buy-in validation and seat selection
+- Centralized game state store (GameStateStore)
+- Error notifications for failed fetch calls
 
-### Broken / Incomplete
+### Remaining Issues
 
-These are the active issues blocking a working 2-player Texas Hold'em game.
-
-| # | Bug | Priority | Description | Key Files |
-|---|-----|----------|-------------|-----------|
-| 1 | Blind deduction display | HIGH | Pot/stacks may not reflect blinds correctly in UI | `game_state_manager.py`, `table.js` |
-| 2 | Community cards structure | HIGH | `_get_game_phase()` uses `community_cards.get('board', [])` but cards are stored as `flop1/flop2/flop3/turn/river` keys | `game_state_manager.py:414` |
-| 3 | Opponent card backs | HIGH | Other players' face-down cards not rendered (empty seats) | `table.js`, `table.css` |
-| 4 | Hand result processing | HIGH | `process_hand_completion()` returns empty winners/pot_distribution | `game_state_manager.py:708-737` |
-| 5 | Game actions in chat | MEDIUM | Blinds, bets, folds not shown in action log | `websocket_manager.py`, `table.js` |
-| 6 | Showdown display | HIGH | Cards not revealed, winner not announced, pot not awarded visually | `table.js`, `websocket_manager.py` |
-| 7 | Table rejoin | MEDIUM | Cannot rejoin table after leaving | `lobby_routes.py`, `table_access_manager.py` |
-| 8 | Bot fold bug | LOW | SimpleBot folds when check is available | Bot logic |
-| 9 | Action panel width | LOW | Panel width shifts causing layout jitter | `table.css` |
-| 10 | Debug prints | LOW | 7 debug print statements in `lobby_routes.py` create_table | `lobby_routes.py:73-155` |
-| 11 | Disconnect import | LOW | Double-reference import in `disconnect_manager.py:300` | `disconnect_manager.py` |
-| 12 | Hardcoded timeouts | LOW | 30s action, 10min disconnect timeouts not configurable | `disconnect_manager.py` |
-
-### Not Started
-
-- Draw/discard actions (required for draw poker variants)
-- Card passing (required for pass-card variants)
-- Hand history display
-- Admin interface
-- Rate limiting
-- Mobile optimization testing
-- Socket.IO integration tests (Layer 2 testing)
+| # | Issue | Priority | Description |
+|---|-------|----------|-------------|
+| 1 | Bot fold bug | LOW | SimpleBot folds when check is available |
+| 2 | Debug prints | LOW | 7 debug print statements in `lobby_routes.py` create_table |
+| 3 | Hardcoded timeouts | LOW | 30s action, 10min disconnect timeouts not configurable |
+| 4 | Debug deck option | LOW | No way to use fixed/unseeded deck for testing |
+| 5 | 3+ player games | MEDIUM | Untested with more than 2 players |
+| 6 | Draw/discard actions | MEDIUM | Required for draw poker variants |
+| 7 | Card passing | MEDIUM | Required for pass-card variants |
+| 8 | Hand history display | LOW | Not implemented |
+| 9 | Mobile optimization | LOW | Chat panel toggle works but needs testing |
+| 10 | Admin interface | LOW | Not implemented |
 
 ---
 
 ## Testing
+
+### Test Counts (2026-02-14)
+
+| Layer | Tests | Status |
+|-------|-------|--------|
+| Python unit + integration | 801 | All passing |
+| Socket.IO integration | 9 | All passing (in `test_socketio_integration.py`) |
+| Playwright E2E | 26 | All passing (4 spec files) |
 
 ### Test Layers
 
@@ -101,30 +103,19 @@ These are the active issues blocking a working 2-player Texas Hold'em game.
 Layer 1: Python Integration Tests (engine + services)
   - Drive game engine directly: game.start_hand(), game.player_action()
   - No WebSocket, no browser needed. Fast (< 1 second per test)
-  - EXISTS: tests/integration/test_gameplay_integration.py
+  - tests/integration/test_gameplay_integration.py
   - Use this for 90% of bug fixes
 
 Layer 2: Socket.IO Integration Tests (WebSocket events)
-  - Use flask_socketio.test_client (Python, no browser)
-  - Test WebSocket events produce correct state broadcasts
-  - MISSING - needs to be built
+  - flask_socketio.test_client (Python, no browser)
+  - tests/integration/test_socketio_integration.py
+  - 9 tests covering connect, join, ready, fold, call/check, full hand, broadcasts
 
 Layer 3: E2E Browser Tests (visual verification)
   - Playwright with multi-user fixtures
-  - Slow (~10-30 seconds per test)
-  - EXISTS: tests/e2e/specs/preflop-betting.spec.ts
-  - Use sparingly - for visual/UX validation only
+  - tests/e2e/specs/ (4 spec files, 26 tests)
+  - Covers preflop betting, fold/cycle, full hand to showdown, UI elements
 ```
-
-### Existing Integration Tests
-
-| File | Coverage |
-|------|----------|
-| `test_auth_integration.py` | Registration, login, session management |
-| `test_game_config.py` | JSON config validation, schema compliance |
-| `test_gameplay_integration.py` | Full gameplay flow, betting, state progression |
-| `test_table_join_integration.py` | Public/private join, buy-in, seat selection |
-| `test_transaction_integration.py` | Bonus transactions, cash out, insufficient funds |
 
 ### Development Workflow for Bug Fixes
 
@@ -136,16 +127,35 @@ Layer 3: E2E Browser Tests (visual verification)
 
 ---
 
+## Completed Phases
+
+### Phase 0: Testing Foundation
+- Verified 768 existing tests pass, fixed 2 failing unit tests
+- Fixed `disconnect_manager.py` deadlock (Lock → RLock)
+- Fixed PlayerAction enum value casing
+- Added 9 Socket.IO integration tests
+
+### Phase 1: Core Gameplay (2-Player Texas Hold'em)
+- Fixed blind deduction display, community cards structure
+- Implemented hand result processing
+- Fixed showdown display, table rejoin
+- Fixed deck shuffling between hands
+- Fixed action double-send bug (WebSocket broadcast loop)
+- Added Playwright regression suite (26 tests)
+
+### Phase 2: UI Refactoring
+- Split table.js into 7 modules + core (2,462 → 1,577 + 850 lines)
+- Created centralized GameStateStore
+- Added error handling and user feedback (notifications on failed fetches)
+- Fixed action panel width stability
+- Fixed table shape (oval → rounded rectangle matching seat selection)
+- Fixed chat toggle (added collapsed CSS) and mobile panel toggle
+- Fixed lobby filter bug (tables disappearing permanently)
+- Fixed lobby race condition (loadTables before socket connected)
+- Fixed WebSocket join handlers (buy-in, seat selection, bankroll validation)
+
+---
+
 ## Historical Bugs (Fixed)
 
-These bugs from `.kiro/specs/online-poker-platform/bugs.md` have been resolved:
-
-| Bug | Description | Fix |
-|-----|-------------|-----|
-| G001 | Cards not rendering | Fixed card data path in table.js |
-| G002 | Action panel not showing | Fixed to use WebSocket-provided valid_actions |
-| G003 | Ready panel visible during play | Hidden during active hand |
-| G004 | Pot shows $0 after blinds | Fixed `_get_pot_info()` serialization |
-| G005 | Player join not updating other views | Added `_generate_waiting_state()` |
-| G007 | Fold status persists across hands | Added `player.is_active = True` in `clear_hands()` |
-| G008 | Game not auto-progressing after betting | Added `_next_step()` calls in action handlers |
+See `docs/BACKLOG.md` for the complete bug tracking list with statuses.

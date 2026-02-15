@@ -99,6 +99,7 @@ class PokerLobby {
         this.socket.on('connect', () => {
             console.log('Connected to server');
             this.showNotification('Connected to server', 'success');
+            this.loadTables();
         });
         
         this.socket.on('disconnect', () => {
@@ -198,27 +199,26 @@ class PokerLobby {
     
     renderTables() {
         const tableGrid = document.getElementById('table-grid');
-        const noTables = document.getElementById('no-tables');
         const tableCount = document.getElementById('table-count');
-        
+
         // Filter tables based on current filters
         const filteredTables = this.getFilteredTables();
-        
+
         tableCount.textContent = filteredTables.length;
-        
+
         if (filteredTables.length === 0) {
-            tableGrid.innerHTML = '';
-            tableGrid.appendChild(noTables);
+            tableGrid.innerHTML = `
+                <div class="no-tables" id="no-tables">
+                    <div class="no-tables-icon">🎲</div>
+                    <h3>No tables found</h3>
+                    <p>Create a new table or adjust your filters to see available games.</p>
+                </div>
+            `;
             return;
         }
-        
-        // Remove no-tables message
-        if (noTables.parentNode) {
-            noTables.remove();
-        }
-        
+
         tableGrid.innerHTML = filteredTables.map(table => this.renderTableCard(table)).join('');
-        
+
         // Add event listeners to table cards
         this.setupTableCardEvents();
     }
@@ -389,21 +389,23 @@ class PokerLobby {
     
     getStakesCategory(stakes, structure) {
         let bigBlind = 0;
-        
-        if (structure === 'limit') {
+        const struct = (structure || '').toLowerCase();
+
+        if (struct === 'limit') {
             bigBlind = stakes.big_bet || 0;
         } else {
             bigBlind = stakes.big_blind || 0;
         }
-        
-        if (bigBlind <= 0.10) return 'micro';
-        if (bigBlind <= 2) return 'low';
-        if (bigBlind <= 10) return 'mid';
+
+        if (bigBlind <= 0.50) return 'micro';
+        if (bigBlind <= 5) return 'low';
+        if (bigBlind <= 25) return 'mid';
         return 'high';
     }
     
     formatStakes(stakes, structure) {
-        if (structure === 'limit') {
+        const struct = (structure || '').toLowerCase();
+        if (struct === 'limit') {
             return `$${stakes.small_bet || 0}/$${stakes.big_bet || 0}`;
         } else {
             return `$${stakes.small_blind || 0}/$${stakes.big_blind || 0}`;

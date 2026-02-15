@@ -632,13 +632,29 @@ def register_lobby_socket_events(socketio):
                 emit('error', {'message': 'Cannot join private table without invite code'})
                 return
             
+            # Get buy-in amount (default to minimum if not specified)
+            buy_in_amount = data.get('buy_in_amount', table.get_minimum_buyin())
+            seat_number = data.get('seat_number')
+
+            # Validate buy-in amount
+            if buy_in_amount < table.get_minimum_buyin():
+                emit('error', {'message': f'Buy-in must be at least ${table.get_minimum_buyin()}'})
+                return
+            if buy_in_amount > table.get_maximum_buyin():
+                emit('error', {'message': f'Buy-in cannot exceed ${table.get_maximum_buyin()}'})
+                return
+            if current_user.bankroll < buy_in_amount:
+                emit('error', {'message': f'Insufficient bankroll. You have ${current_user.bankroll}'})
+                return
+
             # Join table using table access manager
             success, message, access = TableAccessManager.join_table(
                 user_id=current_user.id,
                 table_id=table_id,
-                buy_in_amount=table.get_minimum_buyin()
+                buy_in_amount=buy_in_amount,
+                seat_number=seat_number
             )
-            
+
             if success:
                 emit('table_joined', {
                     'table_id': table_id,
@@ -646,7 +662,6 @@ def register_lobby_socket_events(socketio):
                 })
 
                 # Broadcast table update to all lobby users so they see updated player count
-                # Refresh table data to get updated player count
                 table = db.session.query(PokerTable).filter(
                     PokerTable.id == table_id
                 ).first()
@@ -691,13 +706,29 @@ def register_lobby_socket_events(socketio):
                 emit('error', {'message': 'Incorrect password'})
                 return
             
+            # Get buy-in amount (default to minimum if not specified)
+            buy_in_amount = data.get('buy_in_amount', table.get_minimum_buyin())
+            seat_number = data.get('seat_number')
+
+            # Validate buy-in amount
+            if buy_in_amount < table.get_minimum_buyin():
+                emit('error', {'message': f'Buy-in must be at least ${table.get_minimum_buyin()}'})
+                return
+            if buy_in_amount > table.get_maximum_buyin():
+                emit('error', {'message': f'Buy-in cannot exceed ${table.get_maximum_buyin()}'})
+                return
+            if current_user.bankroll < buy_in_amount:
+                emit('error', {'message': f'Insufficient bankroll. You have ${current_user.bankroll}'})
+                return
+
             # Join table using table access manager
             success, message, access = TableAccessManager.join_table(
                 user_id=current_user.id,
                 table_id=table.id,
-                buy_in_amount=table.get_minimum_buyin()
+                buy_in_amount=buy_in_amount,
+                seat_number=seat_number
             )
-            
+
             if success:
                 emit('table_joined', {
                     'table_id': table.id,

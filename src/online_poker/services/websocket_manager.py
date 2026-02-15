@@ -885,17 +885,19 @@ class WebSocketManager:
         except Exception as e:
             logger.error(f"Failed to broadcast game state update: {e}")
 
-    def broadcast_hand_complete(self, table_id: str, hand_results: Dict[str, Any]) -> None:
+    def broadcast_hand_complete(self, table_id: str, hand_results: Dict[str, Any], hand_number: int = 1) -> None:
         """Broadcast hand completion with showdown results to all table participants.
-        
+
         Args:
             table_id: ID of the table
             hand_results: Hand results from the game engine
+            hand_number: The hand number that completed
         """
         try:
             hand_complete_data = {
                 'table_id': table_id,
                 'hand_results': hand_results,
+                'hand_number': hand_number,
                 'timestamp': datetime.utcnow().isoformat() + 'Z'
             }
             
@@ -1056,7 +1058,7 @@ class WebSocketManager:
                 logger.info(f"Moved dealer button to seat {game.table.button_seat}")
 
                 # Start the hand
-                game.start_hand()
+                game.start_hand(shuffle_deck=True)
                 logger.info(f"Started new hand at table {table_id}")
 
                 # Broadcast hand start and blinds to chat
