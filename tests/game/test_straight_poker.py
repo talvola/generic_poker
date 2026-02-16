@@ -1,12 +1,11 @@
 """Tests for simple straight poker game end-to-end."""
 import pytest
-from generic_poker.config.loader import GameRules
 from generic_poker.game.game import Game, GameState, PlayerAction
 from generic_poker.core.card import Card, Rank, Suit
 from generic_poker.game.betting import BettingStructure
 from generic_poker.core.deck import Deck
+from tests.test_helpers import load_rules_from_file
 
-import json 
 import logging
 import sys
 from typing import List
@@ -59,36 +58,14 @@ def create_predetermined_deck():
 
 def setup_test_game_with_mock_deck():
     """Create a test game with three players and a predetermined deck."""
-    rules = {
-        "game": "Straight Poker",
-        "players": {"min": 2, "max": 9},
-        "deck": {"type": "standard", "cards": 52},
-        "bettingStructures": ["Limit", "No Limit", "Pot Limit"],
-        "gamePlay": [
-            {"bet": {"type": "blinds"}, "name": "Post Blinds"},
-            {"deal": {
-                "location": "player",
-                "cards": [{"number": 5, "state": "face down"}]
-            }, "name": "Deal Hole Cards"},
-            {"bet": {"type": "small"}, "name": "Initial Bet"},
-            {"showdown": {"type": "final"}, "name": "Showdown"}
-        ],
-        "showdown": {
-            "order": "clockwise",
-            "startingFrom": "dealer",
-            "cardsRequired": "all cards",
-            "bestHand": [{"evaluationType": "high", "anyCards": 5}]
-        }
-    }
-    
     game = Game(
-        rules=GameRules.from_json(json.dumps(rules)),
+        rules=load_rules_from_file('straight'),
         structure=BettingStructure.LIMIT,
         small_bet=10,
         big_bet=20,
         min_buyin=100,
         max_buyin=1000,
-        auto_progress=False        
+        auto_progress=False
     )
   
     # Add players
@@ -116,36 +93,14 @@ def setup_test_game_with_mock_deck():
 
 def setup_test_game_with_mock_deck_nl():
     """Create a test game with three players and a predetermined deck.   No-limit."""
-    rules = {
-        "game": "Straight Poker",
-        "players": {"min": 2, "max": 9},
-        "deck": {"type": "standard", "cards": 52},
-        "bettingStructures": ["Limit", "No Limit", "Pot Limit"],
-        "gamePlay": [
-            {"bet": {"type": "blinds"}, "name": "Post Blinds"},
-            {"deal": {
-                "location": "player",
-                "cards": [{"number": 5, "state": "face down"}]
-            }, "name": "Deal Hole Cards"},
-            {"bet": {"type": "small"}, "name": "Initial Bet"},
-            {"showdown": {"type": "final"}, "name": "Showdown"}
-        ],
-        "showdown": {
-            "order": "clockwise",
-            "startingFrom": "dealer",
-            "cardsRequired": "all cards",
-            "bestHand": [{"evaluationType": "high", "anyCards": 5}]
-        }
-    }
-    
     game = Game(
-        rules=GameRules.from_json(json.dumps(rules)),
+        rules=load_rules_from_file('straight'),
         structure=BettingStructure.NO_LIMIT,
         small_blind=5,
         big_blind=10,
         min_buyin=100,
         max_buyin=1000,
-        auto_progress=False        
+        auto_progress=False
     )
    
     # Add players
@@ -216,36 +171,14 @@ def test_hands():
 
 def setup_test_game(mock_hands=None):
     """Create a test game with three players and optional preset hands."""
-    rules = {
-        "game": "Straight Poker",
-        "players": {"min": 2, "max": 9},
-        "deck": {"type": "standard", "cards": 52},
-        "bettingStructures": ["Limit", "No Limit", "Pot Limit"],
-        "gamePlay": [
-            {"bet": {"type": "blinds"}, "name": "Post Blinds"},
-            {"deal": {
-                "location": "player",
-                "cards": [{"number": 5, "state": "face down"}]
-            }, "name": "Deal Hole Cards"},
-            {"bet": {"type": "small"}, "name": "Initial Bet"},
-            {"showdown": {"type": "final"}, "name": "Showdown"}
-        ],
-        "showdown": {
-            "order": "clockwise",
-            "startingFrom": "dealer",
-            "cardsRequired": "all cards",
-            "bestHand": [{"evaluationType": "high", "anyCards": 5}]
-        }
-    }
-    
     game = Game(
-        rules=GameRules.from_json(json.dumps(rules)),
+        rules=load_rules_from_file('straight'),
         structure=BettingStructure.LIMIT,
         small_bet=10,
         big_bet=20,
         min_buyin=100,
         max_buyin=1000,
-        auto_progress=False        
+        auto_progress=False
     )
     
     # Add players
@@ -700,27 +633,8 @@ def test_game_description():
     assert info["active_players"] == 3  # All players should be active initially
     
     # Test No Limit game
-    rules_json = json.dumps({
-        "game": "Texas Hold'em",
-        "players": {"min": 2, "max": 9},
-        "deck": {"type": "standard", "cards": 52},
-        "bettingStructures": ["No Limit", "Pot Limit"],
-        "gamePlay": [
-            {"bet": {"type": "blinds"}, "name": "Post Blinds"},
-            {"deal": {"location": "player", "cards": [{"number": 2, "state": "face down"}]}, "name": "Deal Cards"},
-            {"bet": {"type": "small"}, "name": "Betting"},
-            {"showdown": {"type": "final"}, "name": "Showdown"}
-        ],
-        "showdown": {
-            "order": "clockwise",
-            "startingFrom": "dealer",
-            "cardsRequired": "all cards",
-            "bestHand": [{"evaluationType": "high", "anyCards": 5}]
-        }
-    })
-    
     nl_game = Game(
-        rules=GameRules.from_json(rules_json),
+        rules=load_rules_from_file('hold_em'),
         structure=BettingStructure.NO_LIMIT,
         small_blind=1,  # Small blind
         big_blind=2,    # Big blind
@@ -730,11 +644,11 @@ def test_game_description():
     )
     
     nl_description = nl_game.get_game_description()
-    assert nl_description == "$1/$2 No Limit Texas Hold'em"
+    assert nl_description == "$1/$2 No Limit Hold'em"
     
     # Test Pot Limit game with non-standard blinds
     pl_game = Game(
-        rules=GameRules.from_json(rules_json),
+        rules=load_rules_from_file('hold_em'),
         structure=BettingStructure.POT_LIMIT,
         small_blind=2,   # Small blind
         big_blind=5,     # Big blind (non-standard)
@@ -744,4 +658,4 @@ def test_game_description():
     )
     
     pl_description = pl_game.get_game_description()
-    assert "Pot Limit Texas Hold'em" in pl_description
+    assert "Pot Limit Hold'em" in pl_description

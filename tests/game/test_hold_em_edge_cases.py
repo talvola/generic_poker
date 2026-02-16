@@ -9,7 +9,6 @@ Tests cover scenarios not in the basic hold'em tests:
 """
 
 import pytest
-import json
 from typing import List, Optional
 
 from generic_poker.config.loader import GameRules
@@ -17,6 +16,7 @@ from generic_poker.game.game import Game, GameState, PlayerAction
 from generic_poker.game.betting import BettingStructure
 from generic_poker.core.card import Card, Rank, Suit
 from generic_poker.core.deck import Deck
+from tests.test_helpers import load_rules_from_file
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -29,34 +29,6 @@ class MockDeck(Deck):
         self.cards.clear()
         for card in reversed(cards):
             self.cards.append(card)
-
-
-HOLDEM_CONFIG = {
-    "game": "Hold'em",
-    "players": {"min": 2, "max": 9},
-    "deck": {"type": "standard", "cards": 52},
-    "bettingStructures": ["No Limit", "Limit", "Pot Limit"],
-    "forcedBets": {"style": "blinds"},
-    "bettingOrder": {"initial": "after_big_blind", "subsequent": "dealer"},
-    "gamePlay": [
-        {"name": "Post Blinds", "bet": {"type": "blinds"}},
-        {"name": "Deal Hole Cards", "deal": {"location": "player", "cards": [{"number": 2, "state": "face down"}]}},
-        {"name": "Pre-Flop Bet", "bet": {"type": "small"}},
-        {"name": "Deal Flop", "deal": {"location": "community", "cards": [{"number": 3, "state": "face up"}]}},
-        {"name": "Post-Flop Bet", "bet": {"type": "small"}},
-        {"name": "Deal Turn", "deal": {"location": "community", "cards": [{"number": 1, "state": "face up"}]}},
-        {"name": "Turn Bet", "bet": {"type": "big"}},
-        {"name": "Deal River", "deal": {"location": "community", "cards": [{"number": 1, "state": "face up"}]}},
-        {"name": "River Bet", "bet": {"type": "big"}},
-        {"name": "Showdown", "showdown": {"type": "final"}}
-    ],
-    "showdown": {
-        "order": "clockwise",
-        "startingFrom": "dealer",
-        "cardsRequired": "any combination of hole and community cards",
-        "bestHand": [{"evaluationType": "high", "anyCards": 5}]
-    }
-}
 
 
 def make_game(p1_stack=200, p2_stack=200, small_blind=1, big_blind=2,
@@ -74,7 +46,7 @@ def make_game(p1_stack=200, p2_stack=200, small_blind=1, big_blind=2,
         cards: If provided, list of 9+ cards in deal order
     """
     game = Game(
-        rules=GameRules.from_json(json.dumps(HOLDEM_CONFIG)),
+        rules=load_rules_from_file('hold_em'),
         structure=BettingStructure.NO_LIMIT,
         small_blind=small_blind,
         big_blind=big_blind,

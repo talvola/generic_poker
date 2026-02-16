@@ -6,8 +6,8 @@ from generic_poker.core.card import Card, Rank, Suit
 from generic_poker.game.betting import BettingStructure
 from generic_poker.core.deck import Deck
 from generic_poker.evaluation.hand_description import HandDescriber, EvaluationType
+from tests.test_helpers import load_rules_from_file
 
-import json 
 import logging
 import sys
 from typing import List
@@ -60,134 +60,14 @@ def create_predetermined_deck():
 
 def setup_test_game_with_mock_deck():
     """Create a test game with three players and a predetermined deck."""
-    rules = {
-        "game": "Hold'em Hi/Lo",
-        "players": {
-            "min": 2,
-            "max": 9
-        },
-        "deck": {
-            "type": "standard",
-            "cards": 52
-        },
-        "bettingStructures": [
-            "Limit",
-            "No Limit",
-            "Pot Limit"
-        ],
-        "gamePlay": [
-            {
-                "bet": {
-                    "type": "blinds"
-                },
-                "name": "Post Blinds"
-            },
-            {
-                "deal": {
-                    "location": "player",
-                    "cards": [
-                        {
-                            "number": 2,
-                            "state": "face down"
-                        }
-                    ]
-                },
-                "name": "Deal Hole Cards"
-            },
-            {
-                "bet": {
-                    "type": "small"
-                },
-                "name": "Pre-Flop Bet"
-            },
-            {
-                "deal": {
-                    "location": "community",
-                    "cards": [
-                        {
-                            "number": 3,
-                            "state": "face up"
-                        }
-                    ]
-                },
-                "name": "Deal Flop"
-            },
-            {
-                "bet": {
-                    "type": "small"
-                },
-                "name": "Post-Flop Bet"
-            },
-            {
-                "deal": {
-                    "location": "community",
-                    "cards": [
-                        {
-                            "number": 1,
-                            "state": "face up"
-                        }
-                    ]
-                },
-                "name": "Deal Turn"
-            },
-            {
-                "bet": {
-                    "type": "big"
-                },
-                "name": "Turn Bet"
-            },
-            {
-                "deal": {
-                    "location": "community",
-                    "cards": [
-                        {
-                            "number": 1,
-                            "state": "face up"
-                        }
-                    ]
-                },
-                "name": "Deal River"
-            },
-            {
-                "bet": {
-                    "type": "big"
-                },
-                "name": "River Bet"
-            },
-            {
-                "showdown": {
-                    "type": "final"
-                },
-                "name": "Showdown"
-            }
-        ],
-        "showdown": {
-            "order": "clockwise",
-            "startingFrom": "dealer",
-            "cardsRequired": "any combination of hole and community cards",
-            "bestHand": [
-                {
-                    "name": "High Hand",
-                    "evaluationType": "high",
-                    "anyCards": 5
-                },
-                {
-                    "name": "Low Hand",
-                    "evaluationType": "a5_low",
-                    "anyCards": 5                  
-                }
-            ]
-        }
-    }
-    
     game = Game(
-        rules=GameRules.from_json(json.dumps(rules)),
+        rules=load_rules_from_file('hold_em_hilo'),
         structure=BettingStructure.LIMIT,
         small_bet=10,
         big_bet=20,
         min_buyin=100,
         max_buyin=1000,
-        auto_progress=False        
+        auto_progress=False
     )
   
     # Add players

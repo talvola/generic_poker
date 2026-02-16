@@ -6,8 +6,8 @@ from generic_poker.core.card import Card, Rank, Suit
 from generic_poker.game.betting import BettingStructure
 from generic_poker.core.deck import Deck
 from generic_poker.evaluation.hand_description import HandDescriber, EvaluationType
+from tests.test_helpers import load_rules_from_file
 
-import json 
 import logging
 import sys
 from typing import List
@@ -60,74 +60,14 @@ def create_predetermined_deck():
 
 def setup_test_game_with_mock_deck():
     """Create a test game with three players and a predetermined deck."""
-    rules = {
-        "game": "Straight Poker 2-7",
-        "players": {
-            "min": 2,
-            "max": 9
-        },
-        "deck": {
-            "type": "standard",
-            "cards": 52
-        },
-        "bettingStructures": [
-            "Limit",
-            "No Limit",
-            "Pot Limit"
-        ],
-        "gamePlay": [
-            {
-                "bet": {
-                    "type": "blinds"
-                },
-                "name": "Post Blinds"
-            },
-            {
-                "deal": {
-                    "location": "player",
-                    "cards": [
-                        {
-                            "number": 5,
-                            "state": "face down"
-                        }
-                    ]
-                },
-                "name": "Deal Hole Cards"
-            },
-            {
-                "bet": {
-                    "type": "small"
-                },
-                "name": "Initial Bet"
-            },
-            {
-                "showdown": {
-                    "type": "final"
-                },
-                "name": "Showdown"
-            }
-        ],
-        "showdown": {
-            "order": "clockwise",
-            "startingFrom": "dealer",
-            "cardsRequired": "all cards",
-            "bestHand": [
-                {
-                    "evaluationType": "27_low",
-                    "anyCards": 5
-                }
-            ]
-        }
-    }
-    
     game = Game(
-        rules=GameRules.from_json(json.dumps(rules)),
+        rules=load_rules_from_file('straight_27'),
         structure=BettingStructure.LIMIT,
         small_bet=10,
         big_bet=20,
         min_buyin=100,
         max_buyin=1000,
-        auto_progress=False        
+        auto_progress=False
     )
   
     # Add players
@@ -155,74 +95,14 @@ def setup_test_game_with_mock_deck():
 
 def setup_test_game_with_mock_deck_nl():
     """Create a test game with three players and a predetermined deck.   No-limit."""
-    rules = {
-        "game": "Straight Poker 2-7",
-        "players": {
-            "min": 2,
-            "max": 9
-        },
-        "deck": {
-            "type": "standard",
-            "cards": 52
-        },
-        "bettingStructures": [
-            "Limit",
-            "No Limit",
-            "Pot Limit"
-        ],
-        "gamePlay": [
-            {
-                "bet": {
-                    "type": "blinds"
-                },
-                "name": "Post Blinds"
-            },
-            {
-                "deal": {
-                    "location": "player",
-                    "cards": [
-                        {
-                            "number": 5,
-                            "state": "face down"
-                        }
-                    ]
-                },
-                "name": "Deal Hole Cards"
-            },
-            {
-                "bet": {
-                    "type": "small"
-                },
-                "name": "Initial Bet"
-            },
-            {
-                "showdown": {
-                    "type": "final"
-                },
-                "name": "Showdown"
-            }
-        ],
-        "showdown": {
-            "order": "clockwise",
-            "startingFrom": "dealer",
-            "cardsRequired": "all cards",
-            "bestHand": [
-                {
-                    "evaluationType": "27_low",
-                    "anyCards": 5
-                }
-            ]
-        }
-    }
-    
     game = Game(
-        rules=GameRules.from_json(json.dumps(rules)),
+        rules=load_rules_from_file('straight_27'),
         structure=BettingStructure.NO_LIMIT,
         small_blind=5,
         big_blind=10,
         min_buyin=100,
         max_buyin=1000,
-        auto_progress=False        
+        auto_progress=False
     )
    
     # Add players

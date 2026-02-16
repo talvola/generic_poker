@@ -6,8 +6,8 @@ from generic_poker.core.card import Card, Rank, Suit
 from generic_poker.game.betting import BettingStructure
 from generic_poker.core.deck import Deck
 from generic_poker.evaluation.hand_description import HandDescriber, EvaluationType
+from tests.test_helpers import load_rules_from_file
 
-import json 
 import logging
 import sys
 from typing import List
@@ -83,122 +83,8 @@ def create_predetermined_deck_two_players():
 
 def setup_test_game_with_mock_deck():
     """Create a test game with three players and a predetermined deck."""
-    rules = {
-        "game": "Hold'em",
-        "players": {
-            "min": 2,
-            "max": 9
-        },
-        "deck": {
-            "type": "standard",
-            "cards": 52
-        },
-        "bettingStructures": [
-            "Limit",
-            "No Limit",
-            "Pot Limit"
-        ],
-        "gamePlay": [
-            {
-                "bet": {
-                    "type": "blinds"
-                },
-                "name": "Post Blinds"
-            },
-            {
-                "deal": {
-                    "location": "player",
-                    "cards": [
-                        {
-                            "number": 2,
-                            "state": "face down"
-                        }
-                    ]
-                },
-                "name": "Deal Hole Cards"
-            },
-            {
-                "bet": {
-                    "type": "small"
-                },
-                "name": "Pre-Flop Bet"
-            },
-            {
-                "deal": {
-                    "location": "community",
-                    "cards": [
-                        {
-                            "number": 3,
-                            "state": "face up"
-                        }
-                    ]
-                },
-                "name": "Deal Flop"
-            },
-            {
-                "bet": {
-                    "type": "small"
-                },
-                "name": "Post-Flop Bet"
-            },
-            {
-                "deal": {
-                    "location": "community",
-                    "cards": [
-                        {
-                            "number": 1,
-                            "state": "face up"
-                        }
-                    ]
-                },
-                "name": "Deal Turn"
-            },
-            {
-                "bet": {
-                    "type": "big"
-                },
-                "name": "Turn Bet"
-            },
-            {
-                "deal": {
-                    "location": "community",
-                    "cards": [
-                        {
-                            "number": 1,
-                            "state": "face up"
-                        }
-                    ]
-                },
-                "name": "Deal River"
-            },
-            {
-                "bet": {
-                    "type": "big"
-                },
-                "name": "River Bet"
-            },
-            {
-                "showdown": {
-                    "type": "final"
-                },
-                "name": "Showdown"
-            }
-        ],
-        "showdown": {
-            "order": "clockwise",
-            "startingFrom": "dealer",
-            "cardsRequired": "any combination of hole and community cards",
-            "bestHand": [
-                {
-                    "evaluationType": "high",
-                    "anyCards": 5
-                }
-            ]
-        }
-    }
-    
     game = Game(
-        rules=GameRules.from_json(json.dumps(rules)),
+        rules=load_rules_from_file('hold_em'),
         structure=BettingStructure.LIMIT,
         small_bet=10,
         big_bet=20,
@@ -232,35 +118,8 @@ def setup_test_game_with_mock_deck():
 
 def setup_test_game_with_mock_deck_two_players():
     """Create a test game with two players and a predetermined deck."""
-    hold_em_config = {
-        "game": "Hold'em",
-        "players": {"min": 2, "max": 9},
-        "deck": {"type": "standard", "cards": 52},
-        "bettingStructures": ["No Limit", "Limit", "Pot Limit"],
-        "forcedBets": {"style": "blinds"},
-        "bettingOrder": {"initial": "after_big_blind", "subsequent": "dealer"},
-        "gamePlay": [
-            {"name": "Post Blinds", "bet": {"type": "blinds"}},
-            {"name": "Deal Hole Cards", "deal": {"location": "player", "cards": [{"number": 2, "state": "face down"}]}},
-            {"name": "Pre-Flop Bet", "bet": {"type": "small"}},
-            {"name": "Deal Flop", "deal": {"location": "community", "cards": [{"number": 3, "state": "face up"}]}},
-            {"name": "Post-Flop Bet", "bet": {"type": "small"}},
-            {"name": "Deal Turn", "deal": {"location": "community", "cards": [{"number": 1, "state": "face up"}]}},
-            {"name": "Turn Bet", "bet": {"type": "big"}},
-            {"name": "Deal River", "deal": {"location": "community", "cards": [{"number": 1, "state": "face up"}]}},
-            {"name": "River Bet", "bet": {"type": "big"}},
-            {"name": "Showdown", "showdown": {"type": "final"}}
-        ],
-        "showdown": {
-            "order": "clockwise",
-            "startingFrom": "dealer",
-            "cardsRequired": "any combination of hole and community cards",
-            "bestHand": [{"evaluationType": "high", "anyCards": 5}]
-        }
-    }
-    
     game = Game(
-        rules=GameRules.from_json(json.dumps(hold_em_config)),
+        rules=load_rules_from_file('hold_em'),
         structure=BettingStructure.NO_LIMIT,
         small_blind=1,
         big_blind=2,
