@@ -1,5 +1,6 @@
 {
     "game": "Icelandic Scarney",
+    "category": "Draw",
     "players": {
         "min": 2,
         "max": 6

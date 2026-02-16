@@ -255,9 +255,8 @@ class TestGameStateManager:
             assert player_view.cards == []  # Other player's cards hidden
     
     def test_get_community_cards(self, app_context, mock_game_session):
-        """Test getting community cards."""
+        """Test getting community cards returns structured format."""
         # Community cards in the engine are Dict[str, List[Card]]
-        # where key is subset name (e.g., 'board') and value is list of Card objects
         mock_card1 = MagicMock()
         mock_card1.__str__ = lambda self: 'As'
         mock_card2 = MagicMock()
@@ -265,22 +264,29 @@ class TestGameStateManager:
         mock_card3 = MagicMock()
         mock_card3.__str__ = lambda self: 'Qs'
         mock_game_session.game.table.community_cards = {'board': [mock_card1, mock_card2, mock_card3]}
+        mock_game_session.game_rules = None  # No explicit layout - will auto-infer
 
         community_cards = GameStateManager._get_community_cards(mock_game_session)
 
-        # _get_community_cards maps to flop1/flop2/flop3/turn/river format
-        assert community_cards['flop1'] == 'As'
-        assert community_cards['flop2'] == 'Ks'
-        assert community_cards['flop3'] == 'Qs'
-    
+        # New structured format: {"layout": {...}, "cards": {"subset": [{"card": "Xs", "face_up": true}]}}
+        assert 'layout' in community_cards
+        assert 'cards' in community_cards
+        assert community_cards['layout']['type'] == 'linear'
+        assert 'board' in community_cards['cards']
+        assert len(community_cards['cards']['board']) == 3
+        assert community_cards['cards']['board'][0]['card'] == 'As'
+        assert community_cards['cards']['board'][1]['card'] == 'Ks'
+        assert community_cards['cards']['board'][2]['card'] == 'Qs'
+        assert community_cards['cards']['board'][0]['face_up'] == True
+
     def test_get_community_cards_no_game(self, app_context):
         """Test getting community cards when no game exists."""
         session = MagicMock()
         session.game = None
-        
+
         community_cards = GameStateManager._get_community_cards(session)
-        
-        assert community_cards == {}
+
+        assert community_cards == {"layout": {"type": "none"}, "cards": {}}
     
     def test_get_pot_info(self, app_context, mock_game_session):
         """Test getting pot information."""
@@ -398,11 +404,13 @@ class TestGameStateManager:
     def test_get_game_phase_betting_flop(self, app_context, mock_game_session):
         """Test getting game phase during flop betting."""
         mock_game_session.game.state = GameState.BETTING
+        # Set up 3 community cards so _count_community_cards returns 3
+        mock_card = MagicMock()
+        mock_game_session.game.table.community_cards = {'default': [mock_card, mock_card, mock_card]}
 
-        with patch.object(GameStateManager, '_get_community_cards', return_value={'flop1': 'As', 'flop2': 'Ks', 'flop3': 'Qs'}):
-            phase = GameStateManager._get_game_phase(mock_game_session)
+        phase = GameStateManager._get_game_phase(mock_game_session)
 
-            assert phase == GamePhase.FLOP
+        assert phase == GamePhase.FLOP
     
     def test_get_game_phase_showdown(self, app_context, mock_game_session):
         """Test getting game phase during showdown."""
@@ -497,7 +505,20 @@ class TestGameStateManager:
         )
         mock_game_session.game.get_hand_results = MagicMock(return_value=mock_result)
 
-        with patch.object(GameStateManager, '_get_community_cards', return_value={'flop1': 'As', 'flop2': 'Ks', 'flop3': 'Qs', 'turn': 'Js', 'river': '10s'}):
+        # Mock community cards in new structured format
+        new_format = {
+            "layout": {"type": "linear"},
+            "cards": {
+                "default": [
+                    {"card": "As", "face_up": True},
+                    {"card": "Ks", "face_up": True},
+                    {"card": "Qs", "face_up": True},
+                    {"card": "Js", "face_up": True},
+                    {"card": "10s", "face_up": True}
+                ]
+            }
+        }
+        with patch.object(GameStateManager, '_get_community_cards', return_value=new_format):
             hand_result = GameStateManager.process_hand_completion(mock_game_session)
 
             assert hand_result is not None

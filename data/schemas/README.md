@@ -7,6 +7,7 @@ This document describes the JSON schema for configuring poker games. The schema 
 | Field | Name | Type | Definition | Required |
 | ----- | ---- | ---- | ---------- | -------- |
 | **game** | Game Name | String | The name of the poker game | Yes |
+| **category** | Category | String | Game family for UI grouping. One of: "Hold'em", "Omaha", "Stud", "Draw", "Pineapple", "Dramaha", "Straight", "Other" | No |
 | **references** | References | Array of Strings | URLs pointing to descriptions or rules of the game | No |
 | **players** | Players | Object | Defines the minimum and maximum number of players | Yes |
 | **deck** | Deck | Object | Specifies the type and number of cards in the deck. | Yes |

@@ -14,6 +14,7 @@ class GamePhase(Enum):
     FLOP = "flop"
     TURN = "turn"
     RIVER = "river"
+    DRAWING = "drawing"
     SHOWDOWN = "showdown"
     COMPLETE = "complete"
 
@@ -26,6 +27,8 @@ class ActionType(Enum):
     BET = "bet"
     RAISE = "raise"
     ALL_IN = "all_in"
+    DRAW = "draw"
+    DISCARD = "discard"
 
 
 @dataclass

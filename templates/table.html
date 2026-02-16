@@ -46,17 +46,8 @@
             <!-- Poker Table -->
             <div class="poker-table-container">
                 <div class="poker-table" id="poker-table" data-max-players="{{ table.max_players }}">
-                    <!-- Community Cards Area -->
-                    <div class="community-cards" id="community-cards">
-                        <div class="board-label">Community Cards</div>
-                        <div class="cards-container">
-                            <div class="card-slot" data-card="flop1"></div>
-                            <div class="card-slot" data-card="flop2"></div>
-                            <div class="card-slot" data-card="flop3"></div>
-                            <div class="card-slot" data-card="turn"></div>
-                            <div class="card-slot" data-card="river"></div>
-                        </div>
-                    </div>
+                    <!-- Community Cards Area (dynamically populated by JS based on layout type) -->
+                    <div class="community-cards" id="community-cards"></div>
 
                     <!-- Pot Information -->
                     <div class="pot-info" id="pot-info">

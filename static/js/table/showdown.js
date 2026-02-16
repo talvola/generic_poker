@@ -120,11 +120,12 @@ class PokerShowdown {
 
         const communityCards = this._store.gameState?.community_cards || {};
         const boardCards = [];
-        if (communityCards.flop1) boardCards.push(communityCards.flop1);
-        if (communityCards.flop2) boardCards.push(communityCards.flop2);
-        if (communityCards.flop3) boardCards.push(communityCards.flop3);
-        if (communityCards.turn) boardCards.push(communityCards.turn);
-        if (communityCards.river) boardCards.push(communityCards.river);
+        const cardsData = communityCards.cards || {};
+        for (const subsetCards of Object.values(cardsData)) {
+            for (const cardInfo of subsetCards) {
+                boardCards.push(cardInfo.card);
+            }
+        }
 
         if (boardCards.length > 0) {
             this._displayChatMessage({

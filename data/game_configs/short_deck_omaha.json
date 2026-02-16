@@ -1,5 +1,6 @@
 {
     "game": "Short Deck Omaha",
+    "category": "Omaha",
     "references": [
         "https://www.barge.org/rulebook/short-deck-omaha.html"
     ],

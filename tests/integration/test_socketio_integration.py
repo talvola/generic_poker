@@ -16,6 +16,7 @@ from online_poker.database import db
 from online_poker.auth import init_login_manager
 from online_poker.routes.auth_routes import auth_bp
 from online_poker.routes.lobby_routes import lobby_bp, register_lobby_socket_events
+from online_poker.routes.game_routes import game_bp
 from online_poker.services.websocket_manager import init_websocket_manager
 from online_poker.services.user_manager import UserManager
 from online_poker.services.table_manager import TableManager
@@ -24,7 +25,8 @@ from online_poker.services.game_orchestrator import game_orchestrator
 from online_poker.services.disconnect_manager import disconnect_manager
 from online_poker.models.table_config import TableConfig
 from generic_poker.game.betting import BettingStructure
-from generic_poker.game.game_state import GameState
+from generic_poker.game.game_state import GameState, PlayerAction
+from generic_poker.core.card import Card
 
 
 def _patch_socketio_user_loading(socketio_instance):
@@ -78,6 +80,7 @@ def app_and_socketio():
     init_login_manager(app)
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(lobby_bp)
+    app.register_blueprint(game_bp, url_prefix='/game')
 
     socketio = SocketIO(app, logger=False, engineio_logger=False)
     init_websocket_manager(socketio)
@@ -854,7 +857,7 @@ class TestLeaveAndRejoin:
         sio2.disconnect()
 
     def test_leave_removes_player_from_game_session(self, app, socketio, player1, player2, holdem_table):
-        """When a player leaves during a game, they are removed from the game session."""
+        """When a player leaves during a game, they are auto-folded and removed after hand completes."""
         sio1, sio2, table_id = _setup_two_player_game(
             app, socketio, player1, player2, holdem_table
         )
@@ -863,13 +866,14 @@ class TestLeaveAndRejoin:
         assert player1.id in session.connected_players
         assert player2.id in session.connected_players
 
-        # Player 1 leaves
+        # Player 1 leaves mid-hand — should be auto-folded and removed after hand
         sio1.emit('leave_table', {'table_id': table_id})
         sio1.get_received()
+        sio2.get_received()
 
-        # Player 1 should be removed from game session
+        # Player 1 should be removed from game session after hand completion
         assert player1.id not in session.connected_players, \
-            "Player 1 should be removed from game session after leaving"
+            "Player 1 should be removed from game session after leaving mid-hand"
         assert player2.id in session.connected_players, \
             "Player 2 should still be in game session"
 
@@ -947,6 +951,136 @@ class TestLeaveAndRejoin:
         assert game.current_player is not None, "Game should have a current player"
 
         sio1_new.disconnect()
+        sio2.disconnect()
+
+    def test_leave_mid_hand_awards_pot_to_remaining_player(self, app, socketio, player1, player2, holdem_table):
+        """Leave mid-hand folds the leaving player and awards pot to remaining player."""
+        sio1, sio2, table_id = _setup_two_player_game(
+            app, socketio, player1, player2, holdem_table
+        )
+
+        session = game_orchestrator.get_session(table_id)
+        game = session.game
+
+        # Record player 2's stack before leave (after blinds posted)
+        p2_stack_before = game.table.players[player2.id].stack
+
+        # Player 1 leaves mid-hand
+        sio1.emit('leave_table', {'table_id': table_id})
+        sio1.get_received()
+        sio2.get_received()
+
+        # After leave-fold + player removal, game goes to WAITING (only 1 player left)
+        assert game.state in (GameState.COMPLETE, GameState.WAITING), \
+            f"Game should be COMPLETE or WAITING after leave-fold, got {game.state}"
+
+        # Player 2 should have won the pot (gained chips)
+        p2_stack_after = game.table.players[player2.id].stack
+        assert p2_stack_after > p2_stack_before, \
+            f"Winner should have more chips than {p2_stack_before}, got {p2_stack_after}"
+
+        # Player 1 should be removed from the game
+        assert player1.id not in session.connected_players, \
+            "Leaving player should be removed from session"
+
+        sio1.disconnect()
+        sio2.disconnect()
+
+    def test_leave_when_not_in_hand_removes_immediately(self, app, socketio, player1, player2, holdem_table):
+        """Leave when no hand is active removes player immediately (no pending)."""
+        table_id = str(holdem_table.id)
+
+        # Both join but don't start a hand (no ready)
+        http1, sio1 = _login_and_connect(app, socketio, player1)
+        http1.post(f'/api/tables/{table_id}/join', json={
+            'buy_in_amount': 100, 'seat_number': 1
+        })
+
+        http2, sio2 = _login_and_connect(app, socketio, player2)
+        http2.post(f'/api/tables/{table_id}/join', json={
+            'buy_in_amount': 100, 'seat_number': 2
+        })
+
+        sio1.get_received()
+        sio2.get_received()
+        sio1.emit('connect_to_table_room', {'table_id': table_id})
+        sio2.emit('connect_to_table_room', {'table_id': table_id})
+        sio1.get_received()
+        sio2.get_received()
+
+        # Player 1 leaves (no hand active)
+        sio1.emit('leave_table', {'table_id': table_id})
+        sio1.get_received()
+
+        # Player 1's access should be deactivated immediately
+        p1_access = TableAccessManager.get_user_access(player1.id, table_id)
+        assert p1_access is None, "Player 1 access should be cleared immediately"
+
+        sio1.disconnect()
+        sio2.disconnect()
+
+    def test_both_leave_deactivates_session(self, app, socketio, player1, player2, holdem_table):
+        """When both players leave, the session is deactivated."""
+        sio1, sio2, table_id = _setup_two_player_game(
+            app, socketio, player1, player2, holdem_table
+        )
+
+        session = game_orchestrator.get_session(table_id)
+        assert session.is_active, "Session should be active initially"
+
+        # Player 1 leaves (folds, hand completes, removed)
+        sio1.emit('leave_table', {'table_id': table_id})
+        sio1.get_received()
+        sio2.get_received()
+
+        # Player 2 leaves (no hand active now)
+        sio2.emit('leave_table', {'table_id': table_id})
+        sio2.get_received()
+
+        # Session should be deactivated
+        session = game_orchestrator.get_session(table_id)
+        if session:
+            assert not session.is_active, "Session should be deactivated when all players leave"
+            assert len(session.connected_players) == 0, "No connected players should remain"
+
+        sio1.disconnect()
+        sio2.disconnect()
+
+    def test_leave_mid_hand_preserves_disconnect_behavior(self, app, socketio, player1, player2, holdem_table):
+        """Disconnect mid-hand should NOT immediately fold (unlike intentional leave)."""
+        sio1, sio2, table_id = _setup_two_player_game(
+            app, socketio, player1, player2, holdem_table
+        )
+
+        session = game_orchestrator.get_session(table_id)
+
+        # Simulate disconnect (not intentional leave)
+        # Disconnect should go through disconnect_manager, not mark_player_leaving
+        assert player1.id in session.connected_players
+
+        # The disconnect handler gives a 30s grace period for reconnect
+        # Verify the disconnect manager tracks disconnected players separately
+        from online_poker.services.disconnect_manager import disconnect_manager as dm
+        is_current = (session.game.current_player and
+                      session.game.current_player.id == player1.id)
+
+        dm.handle_player_disconnect(player1.id, table_id, is_current)
+
+        # Player should be tracked as disconnected
+        assert dm.is_player_disconnected(player1.id), \
+            "Disconnected player should be tracked by disconnect manager"
+
+        # Player should NOT be in pending_leaves (that's for intentional leave)
+        assert player1.id not in session.pending_leaves, \
+            "Disconnected player should NOT be in pending_leaves"
+
+        # Clean up disconnect tracking
+        info = dm.disconnected_players.get(player1.id)
+        if info:
+            info.cancel_timers()
+        dm._cleanup_disconnected_player(player1.id)
+
+        sio1.disconnect()
         sio2.disconnect()
 
 
@@ -1435,6 +1569,266 @@ class TestRaiseViaSocketIO:
         state = _get_last_game_state(flop_cp_sio)
         pot = state.get('pot_info', {}).get('total_pot', 0)
         assert pot == 64, f"Expected pot of 64, got {pot}"
+
+        sio1.disconnect()
+        sio2.disconnect()
+
+
+# ── Draw Game Fixtures & Helpers ─────────────────────────────────────────────
+
+@pytest.fixture
+def draw_table(app, player1):
+    """Create a 5-Card Draw table."""
+    table_manager = TableManager()
+    config = TableConfig(
+        name="Test 5-Card Draw",
+        variant="5_card_draw",
+        betting_structure=BettingStructure.LIMIT,
+        stakes={'small_blind': 1, 'big_blind': 2, 'small_bet': 2, 'big_bet': 4},
+        max_players=6,
+        is_private=False,
+        allow_bots=False
+    )
+    return table_manager.create_table(player1.id, config)
+
+
+def _setup_draw_game(app, socketio, player1, player2, draw_table):
+    """Join both players, connect to room, set ready, start hand for draw game.
+
+    Returns (sio1, sio2, table_id).
+    """
+    table_id = str(draw_table.id)
+
+    http1, sio1 = _login_and_connect(app, socketio, player1)
+    http1.post(f'/api/tables/{table_id}/join', json={
+        'buy_in_amount': 100, 'seat_number': 1
+    })
+
+    http2, sio2 = _login_and_connect(app, socketio, player2)
+    http2.post(f'/api/tables/{table_id}/join', json={
+        'buy_in_amount': 100, 'seat_number': 2
+    })
+
+    sio1.get_received()
+    sio2.get_received()
+    sio1.emit('connect_to_table_room', {'table_id': table_id})
+    sio2.emit('connect_to_table_room', {'table_id': table_id})
+    sio1.get_received()
+    sio2.get_received()
+
+    sio1.emit('set_ready', {'table_id': table_id, 'ready': True})
+    sio1.get_received()
+    sio2.get_received()
+
+    sio2.emit('set_ready', {'table_id': table_id, 'ready': True})
+    sio1.get_received()
+    sio2.get_received()
+
+    return sio1, sio2, table_id
+
+
+def _advance_through_betting(game):
+    """Advance through a betting round (all players check/call).
+
+    Handles auto_progress=False by manually calling _next_step() after
+    the round completes (advance_step=True).
+    """
+    for _ in range(20):
+        if game.state != GameState.BETTING:
+            break
+        cp = game.current_player
+        if not cp:
+            break
+        actions = game.get_valid_actions(cp.id)
+        action_names = [a[0].value for a in actions]
+        if 'call' in action_names:
+            call_action = [a for a in actions if a[0] == PlayerAction.CALL][0]
+            result = game.player_action(cp.id, PlayerAction.CALL, call_action[1])
+        elif 'check' in action_names:
+            result = game.player_action(cp.id, PlayerAction.CHECK, 0)
+        else:
+            break
+        # With auto_progress=False, manually advance when round completes
+        if result.advance_step and not game.auto_progress and game.state != GameState.COMPLETE:
+            game._next_step()
+            _advance_through_non_player_steps(game)
+
+
+def _advance_through_non_player_steps(game):
+    """Auto-advance through dealing and other non-player-input steps."""
+    for _ in range(20):
+        if game.state == GameState.COMPLETE:
+            break
+        if game.current_step >= len(game.rules.gameplay):
+            break
+        if game.state == GameState.DEALING:
+            game._next_step()
+        elif game.state == GameState.BETTING and game.current_player is None:
+            game._next_step()
+        else:
+            break
+
+
+class TestDrawGameplay:
+    """Test draw game support through the online platform."""
+
+    def test_draw_game_phase_appears_in_state(self, app, socketio, player1, player2, draw_table):
+        """5-Card Draw shows drawing phase and draw actions after initial bet."""
+        sio1, sio2, table_id = _setup_draw_game(app, socketio, player1, player2, draw_table)
+
+        session = game_orchestrator.get_session(table_id)
+        assert session is not None
+        game = session.game
+        assert game is not None
+
+        # Game starts with blinds posted, then deal, then initial bet round
+        assert game.state == GameState.BETTING, f"Expected BETTING, got {game.state}"
+
+        # Advance through initial betting (handles auto_progress=False)
+        _advance_through_betting(game)
+
+        assert game.state == GameState.DRAWING, f"Expected DRAWING after betting, got {game.state}"
+
+        # Verify game state view shows drawing phase
+        from online_poker.services.game_state_manager import GameStateManager
+        state_view = GameStateManager.generate_game_state_view(table_id, player1.id)
+        assert state_view is not None
+        assert state_view.game_phase.value == "drawing"
+
+        # Check valid actions include draw for the current player
+        current_id = game.current_player.id
+        draw_state = GameStateManager.generate_game_state_view(table_id, current_id)
+        assert draw_state is not None
+        action_types = [a.action_type.value for a in draw_state.valid_actions]
+        assert 'draw' in action_types, f"Expected 'draw' in actions, got {action_types}"
+
+        # Verify draw action has correct min/max
+        draw_action = [a for a in draw_state.valid_actions if a.action_type.value == 'draw'][0]
+        assert draw_action.min_amount == 0, "Draw min should be 0 (stand pat allowed)"
+        assert draw_action.max_amount == 5, "Draw max should be 5"
+
+        sio1.disconnect()
+        sio2.disconnect()
+
+    def test_draw_action_replaces_cards(self, app, socketio, player1, player2, draw_table):
+        """Player submits draw action and cards are replaced."""
+        sio1, sio2, table_id = _setup_draw_game(app, socketio, player1, player2, draw_table)
+
+        session = game_orchestrator.get_session(table_id)
+        game = session.game
+
+        _advance_through_betting(game)
+        assert game.state == GameState.DRAWING
+
+        # Get current player and their cards
+        cp = game.current_player
+        assert cp is not None
+        original_cards = list(cp.hand.cards)
+        assert len(original_cards) == 5, f"Expected 5 cards, got {len(original_cards)}"
+
+        # Select 2 cards to discard
+        cards_to_discard = original_cards[:2]
+
+        # Submit draw action
+        result = game.player_action(cp.id, PlayerAction.DRAW, 0, cards=cards_to_discard)
+        assert result.success, f"Draw action failed: {result.error}"
+
+        # Verify player still has 5 cards but 2 are different
+        new_cards = list(cp.hand.cards)
+        assert len(new_cards) == 5, f"Expected 5 cards after draw, got {len(new_cards)}"
+
+        # The cards that weren't discarded should still be there
+        kept_cards = original_cards[2:]
+        for card in kept_cards:
+            assert card in new_cards, f"Kept card {card} missing from hand after draw"
+
+        sio1.disconnect()
+        sio2.disconnect()
+
+    def test_full_five_card_draw_hand(self, app, socketio, player1, player2, draw_table):
+        """Complete hand: deal -> bet -> draw -> bet -> showdown."""
+        sio1, sio2, table_id = _setup_draw_game(app, socketio, player1, player2, draw_table)
+
+        session = game_orchestrator.get_session(table_id)
+        game = session.game
+
+        # Phase 1: Initial betting round
+        assert game.state == GameState.BETTING
+        _advance_through_betting(game)
+
+        # Phase 2: Draw round
+        assert game.state == GameState.DRAWING, f"Expected DRAWING, got {game.state}"
+
+        # First player discards 2 cards
+        cp1 = game.current_player
+        cards_to_discard = list(cp1.hand.cards)[:2]
+        result1 = game.player_action(cp1.id, PlayerAction.DRAW, 0, cards=cards_to_discard)
+        assert result1.success, f"First player draw failed: {result1.error}"
+        # With auto_progress=False, manually advance if round complete
+        if result1.advance_step and not game.auto_progress:
+            game._next_step()
+            _advance_through_non_player_steps(game)
+
+        # Second player stands pat (discard 0 cards)
+        if game.state == GameState.DRAWING and game.current_player:
+            cp2 = game.current_player
+            result2 = game.player_action(cp2.id, PlayerAction.DRAW, 0, cards=[])
+            assert result2.success, f"Second player draw failed: {result2.error}"
+            if result2.advance_step and not game.auto_progress:
+                game._next_step()
+                _advance_through_non_player_steps(game)
+
+        # Phase 3: Final betting round
+        assert game.state == GameState.BETTING, f"Expected BETTING after draw, got {game.state}"
+        _advance_through_betting(game)
+
+        # Phase 4: Game should be complete
+        assert game.state in (GameState.SHOWDOWN, GameState.COMPLETE), \
+            f"Expected SHOWDOWN or COMPLETE, got {game.state}"
+
+        # Verify hand results
+        results = game.get_hand_results()
+        assert results is not None
+        assert results.is_complete
+        assert len(results.pots) > 0
+
+        sio1.disconnect()
+        sio2.disconnect()
+
+    def test_draw_action_via_http_api(self, app, socketio, player1, player2, draw_table):
+        """Draw action works through the HTTP API with cards parameter."""
+        sio1, sio2, table_id = _setup_draw_game(app, socketio, player1, player2, draw_table)
+
+        session = game_orchestrator.get_session(table_id)
+        game = session.game
+
+        _advance_through_betting(game)
+        assert game.state == GameState.DRAWING
+
+        # Get current player and their cards as strings
+        cp = game.current_player
+        cards_to_discard = [str(c) for c in list(cp.hand.cards)[:1]]  # Discard 1 card
+
+        # Log in as the current player via HTTP
+        if cp.id == player1.id:
+            test_username = player1._test_username
+        else:
+            test_username = player2._test_username
+
+        http_client = app.test_client()
+        http_client.post('/auth/api/login', json={
+            'username': test_username, 'password': 'password123'
+        })
+
+        # Send draw action via HTTP API
+        resp = http_client.post(f'/game/sessions/{table_id}/action', json={
+            'action': 'draw',
+            'cards': cards_to_discard
+        })
+
+        assert resp.status_code == 200, f"HTTP draw action failed: {resp.get_json()}"
+        result = resp.get_json()
+        assert result['success'], f"Draw action not successful: {result}"
 
         sio1.disconnect()
         sio2.disconnect()

@@ -1,5 +1,6 @@
 {
     "game": "4-Card Crazy Ocean Pineapple",
+    "category": "Pineapple",
     "players": {
         "min": 2,
         "max": 9

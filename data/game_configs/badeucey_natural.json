@@ -1,5 +1,6 @@
 {
     "game": "Badeucey Natural",
+    "category": "Draw",
     "players": {
         "min": 2,
         "max": 8

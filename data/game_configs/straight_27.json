@@ -1,5 +1,6 @@
 {
     "game": "Straight Poker 2-7",
+    "category": "Straight",
     "players": {
         "min": 2,
         "max": 9

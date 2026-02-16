@@ -4,11 +4,11 @@ class PokerChat {
         this._getSocket = getSocket;
         this._store = store;
         this.holeCardsAnnounced = false;
-        this.lastAnnouncedCommunityCards = {};
+        this.lastAnnouncedCommunityCardCount = 0;
     }
 
     resetForNewHand() {
-        this.lastAnnouncedCommunityCards = {};
+        this.lastAnnouncedCommunityCardCount = 0;
         this.holeCardsAnnounced = false;
     }
 
@@ -107,23 +107,24 @@ class PokerChat {
     }
 
     announceCommunityCards(communityCards) {
-        if (!communityCards) return;
+        if (!communityCards || !communityCards.cards) return;
 
-        const currentCards = {
-            flop1: communityCards.flop1 || null,
-            flop2: communityCards.flop2 || null,
-            flop3: communityCards.flop3 || null,
-            turn: communityCards.turn || null,
-            river: communityCards.river || null
-        };
+        // Flatten all cards from all subsets
+        const allCards = [];
+        for (const subsetCards of Object.values(communityCards.cards)) {
+            for (const cardInfo of subsetCards) {
+                allCards.push(cardInfo.card);
+            }
+        }
 
-        const lastCards = this.lastAnnouncedCommunityCards;
+        const lastCount = this.lastAnnouncedCommunityCardCount;
+        const currentCount = allCards.length;
 
-        const hasFlop = currentCards.flop1 && currentCards.flop2 && currentCards.flop3;
-        const hadFlop = lastCards.flop1 && lastCards.flop2 && lastCards.flop3;
+        if (currentCount === lastCount || currentCount === 0) return;
 
-        if (hasFlop && !hadFlop) {
-            const flopCards = [currentCards.flop1, currentCards.flop2, currentCards.flop3];
+        // Announce based on card count transitions (Hold'em-style labels)
+        if (lastCount === 0 && currentCount >= 3) {
+            const flopCards = allCards.slice(0, 3);
             this.displayChatMessage({
                 type: 'game_action',
                 action_type: 'deal',
@@ -132,26 +133,38 @@ class PokerChat {
             });
         }
 
-        if (currentCards.turn && !lastCards.turn) {
-            const board = [currentCards.flop1, currentCards.flop2, currentCards.flop3].join(' ');
+        if (lastCount <= 3 && currentCount >= 4) {
+            const board = allCards.slice(0, 3).join(' ');
             this.displayChatMessage({
                 type: 'game_action',
                 action_type: 'deal',
-                message: `*** TURN *** [${board}] [${currentCards.turn}]`,
+                message: `*** TURN *** [${board}] [${allCards[3]}]`,
                 timestamp: new Date().toISOString()
             });
         }
 
-        if (currentCards.river && !lastCards.river) {
-            const board = [currentCards.flop1, currentCards.flop2, currentCards.flop3, currentCards.turn].join(' ');
+        if (lastCount <= 4 && currentCount >= 5) {
+            const board = allCards.slice(0, 4).join(' ');
             this.displayChatMessage({
                 type: 'game_action',
                 action_type: 'deal',
-                message: `*** RIVER *** [${board}] [${currentCards.river}]`,
+                message: `*** RIVER *** [${board}] [${allCards[4]}]`,
                 timestamp: new Date().toISOString()
             });
         }
 
-        this.lastAnnouncedCommunityCards = { ...currentCards };
+        // For non-standard deals (e.g., 1 or 2 cards at a time), announce generically
+        if (lastCount > 0 && currentCount > lastCount && !(lastCount === 0 && currentCount >= 3) &&
+            !(lastCount <= 3 && currentCount >= 4) && !(lastCount <= 4 && currentCount >= 5)) {
+            const newCards = allCards.slice(lastCount);
+            this.displayChatMessage({
+                type: 'game_action',
+                action_type: 'deal',
+                message: `*** COMMUNITY CARDS *** [${newCards.join(' ')}]`,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        this.lastAnnouncedCommunityCardCount = currentCount;
     }
 }

@@ -285,12 +285,12 @@ body {
 /* Pot Information */
 .pot-info {
     position: absolute;
-    top: 30%;
+    top: 22%;
     left: 50%;
     transform: translate(-50%, -50%);
     text-align: center;
     background: rgba(0, 0, 0, 0.7);
-    padding: 1rem 1.5rem;
+    padding: 0.5rem 1.25rem;
     border-radius: var(--border-radius);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.2);
@@ -519,6 +519,36 @@ body {
     border-color: var(--danger-color);
 }
 
+/* Turn timer bar on active player's seat */
+.turn-timer-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 0 0 var(--border-radius) var(--border-radius);
+    overflow: hidden;
+}
+
+.turn-timer-fill {
+    height: 100%;
+    width: 100%;
+    background: var(--success-color);
+    transition: width 1s linear, background 0.5s ease;
+    border-radius: 0 0 var(--border-radius) var(--border-radius);
+}
+
+.turn-timer-text {
+    position: absolute;
+    top: -18px;
+    right: 4px;
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.8);
+    font-weight: bold;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
 .player-info.folded {
     opacity: 0.6;
     background: rgba(0, 0, 0, 0.5);
@@ -542,6 +572,13 @@ body {
     margin-top: 0.25rem;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+.leaving-indicator {
+    color: #ffc107;
+    font-size: 0.7rem;
+    font-weight: normal;
+    font-style: italic;
 }
 
 .player-name {
@@ -608,10 +645,8 @@ body {
     display: flex;
     gap: 0.25rem;
     margin-top: 0.5rem;
-    flex-wrap: wrap;
     justify-content: center;
-    max-width: 140px;
-    /* Constrain width to prevent overflow */
+    /* No flex-wrap — always single row, cards scale down */
 }
 
 .player-cards .card {
@@ -621,21 +656,47 @@ body {
     flex-shrink: 0;
 }
 
-/* Special handling for games with many cards (like Seven Card Stud) */
+/* 3-4 cards (Omaha, Pineapple) */
 .player-cards.many-cards {
-    gap: 0.1rem;
-    /* Tighter spacing for more cards */
+    gap: 0.15rem;
 }
 
 .player-cards.many-cards .card {
-    width: 30px;
-    height: 42px;
-    font-size: 0.6rem;
+    width: 28px;
+    height: 39px;
+    font-size: 0.55rem;
 }
 
-/* Stack cards slightly when there are more than 5 */
-.player-cards .card:nth-child(n+6) {
-    margin-left: -8px;
+/* 5-6 cards (5-Card Omaha, 6-Card Stud) */
+.player-cards.cards-5 .card,
+.player-cards.cards-6 .card {
+    width: 24px;
+    height: 34px;
+    font-size: 0.5rem;
+}
+
+.player-cards.cards-5,
+.player-cards.cards-6 {
+    gap: 0.1rem;
+}
+
+/* 7+ cards (Seven Card Stud, 8-Card Stud) — overlap to fit */
+.player-cards.cards-7 .card,
+.player-cards.cards-8 .card {
+    width: 22px;
+    height: 31px;
+    font-size: 0.45rem;
+    margin-left: -4px;
+}
+
+.player-cards.cards-7 .card:first-child,
+.player-cards.cards-8 .card:first-child {
+    margin-left: 0;
+}
+
+.player-cards.cards-7,
+.player-cards.cards-8 {
+    gap: 0;
 }
 
 .player-bet {
@@ -2993,4 +3054,46 @@ owdown Overlay Styles */
         text-align: center;
         gap: 0.5rem;
     }
+}
+
+/* Cards selectable during draw phase */
+.card.selectable {
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card.selectable:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(255, 215, 0, 0.3);
+}
+
+.card.selected {
+    transform: translateY(-10px);
+    box-shadow: 0 0 12px rgba(255, 215, 0, 0.7);
+    border: 2px solid var(--gold);
+}
+
+/* Draw controls area */
+.draw-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    justify-content: center;
+    align-items: center;
+    padding: 0.5rem;
+}
+
+.draw-info {
+    color: var(--gold);
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.draw-submit-btn {
+    min-width: 120px;
+}
+
+.draw-submit-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }

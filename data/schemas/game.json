@@ -1213,6 +1213,11 @@
       "type": "string",
       "description": "The name of the poker game"
     },
+    "category": {
+      "type": "string",
+      "description": "Game family for UI grouping",
+      "enum": ["Hold'em", "Omaha", "Stud", "Draw", "Pineapple", "Dramaha", "Straight", "Other"]
+    },
     "references": {
       "type": "array",
       "items": {
@@ -1326,6 +1331,39 @@
         ],
         "additionalProperties": false
       }
+    },
+    "communityCardLayout": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["none", "linear", "multi-row", "branching", "grid", "criss-cross"],
+          "description": "Layout type for rendering community cards"
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": { "type": "string", "description": "Display label for this row" },
+              "subsets": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Community card subset names in this row"
+              }
+            },
+            "required": ["subsets"]
+          },
+          "description": "Row definitions for multi-row, grid, and branching layouts"
+        },
+        "columns": {
+          "type": "integer",
+          "description": "Number of columns for grid layout"
+        }
+      },
+      "required": ["type"],
+      "additionalProperties": false,
+      "description": "Layout configuration for community card display. If omitted, layout is auto-inferred from gameplay steps."
     },
     "showdown": {
       "type": "object",

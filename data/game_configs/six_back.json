@@ -1,5 +1,6 @@
 {
     "game": "Six Back",
+    "category": "Other",
     "players": {
         "min": 2,
         "max": 6

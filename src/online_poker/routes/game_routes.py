@@ -9,6 +9,7 @@ from ..services.table_access_manager import TableAccessManager
 from ..models.table_access import TableAccess
 from ..database import db
 from generic_poker.game.game_state import PlayerAction
+from generic_poker.core.card import Card
 
 
 game_bp = Blueprint('game', __name__, url_prefix='/api/games')
@@ -290,10 +291,22 @@ def process_player_action(table_id: str):
             }), 400
         
         amount = data.get('amount')
-        
+
+        # Parse cards for draw/discard actions
+        cards_raw = data.get('cards', [])
+        card_objects = None
+        if cards_raw:
+            try:
+                card_objects = [Card.from_string(s) for s in cards_raw]
+            except (ValueError, Exception) as e:
+                return jsonify({
+                    'success': False,
+                    'error': f'Invalid card format: {e}'
+                }), 400
+
         # Process the action through the player action manager
         success, message, result = player_action_manager.process_player_action(
-            table_id, current_user.id, action, amount
+            table_id, current_user.id, action, amount, cards=card_objects
         )
         
         if not success:

@@ -1,5 +1,6 @@
 {
     "game": "Thermonuclear Armageddon Pineapple",
+    "category": "Pineapple",
     "players": {
         "min": 2,
         "max": 9

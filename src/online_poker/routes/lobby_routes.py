@@ -1,6 +1,6 @@
 """Routes for the poker lobby interface."""
 
-from flask import Blueprint, render_template, request, jsonify, redirect, url_for
+from flask import Blueprint, render_template, request, jsonify, redirect, url_for, current_app
 from flask_login import login_required, current_user
 from flask_socketio import emit, join_room, leave_room
 
@@ -70,10 +70,7 @@ def create_table():
                 'error': 'Authentication required'
             }), 401
         
-        print(f"DEBUG: User authenticated: {current_user.is_authenticated}")
-        print(f"DEBUG: Current user: {current_user}")
         data = request.get_json()
-        print(f"DEBUG: Request data: {data}")
         
         # Validate required fields
         required_fields = ['name', 'variant', 'betting_structure', 'max_players', 'stakes']
@@ -105,9 +102,6 @@ def create_table():
         from ..models.table_config import TableConfig
         from generic_poker.game.betting import BettingStructure
         
-        print(f"DEBUG: About to create table with data: {data}")
-        print(f"DEBUG: Current user ID: {current_user.id}")
-        
         # Convert betting structure string to enum
         betting_structure_map = {
             'no-limit': BettingStructure.NO_LIMIT,
@@ -137,8 +131,6 @@ def create_table():
         # Create table using table manager
         table = table_manager.create_table(current_user.id, config)
         
-        print(f"DEBUG: Table created: {table}")
-        
         if table:
             return jsonify({
                 'success': True,
@@ -152,9 +144,7 @@ def create_table():
             }), 500
             
     except Exception as e:
-        print(f"DEBUG: Exception in create_table: {e}")
-        import traceback
-        traceback.print_exc()
+        current_app.logger.error(f"Failed to create table: {e}", exc_info=True)
         return jsonify({
             'success': False,
             'error': str(e)

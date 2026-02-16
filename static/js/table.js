@@ -6,10 +6,7 @@ class PokerTable {
         this.store.tableId = this.getTableIdFromUrl();
         this.betControls = new PokerBetControls();
         this.timer = new PokerTimer(() => {
-            const foldAction = this.store.validActions.find(a => a.type === 'fold' || a.action_type === 'fold');
-            if (foldAction) {
-                this.handlePlayerAction(foldAction);
-            }
+            // Auto-fold disabled — timer is visual-only for now
         });
         this.responsive = new PokerResponsive(
             (actionType) => this.handleQuickAction(actionType),
@@ -20,6 +17,8 @@ class PokerTable {
             (data) => this.chat.displayChatMessage(data)
         );
         this.chat = new PokerChat(() => this.socket, this.store);
+        this.selectedDiscards = new Set(); // indices of cards selected for discard
+        this.drawAction = null; // current draw/discard action option
 
         this.init();
     }
@@ -177,6 +176,10 @@ class PokerTable {
             this.handlePlayerLeft(data);
         });
 
+        this.socket.on('player_leaving', (data) => {
+            this.handlePlayerLeaving(data);
+        });
+
         this.socket.on('chat_message', (data) => {
             console.log('DEBUG: Received chat message:', data);
             this.chat.displayChatMessage(data);
@@ -223,6 +226,10 @@ class PokerTable {
             // Reset tracking for new hand
             this.chat.resetForNewHand();
             this.showdown.resetForNewHand();
+            // Clear leaving players from previous hand
+            if (this.store.leavingPlayers) {
+                this.store.leavingPlayers.clear();
+            }
         });
 
         this.socket.on('game_state_update', (data) => {
@@ -390,9 +397,15 @@ class PokerTable {
         this.updateGameInfo();
         this.updateDealerButton(data.dealer_position);
 
-        if (this.store.isMyTurn) {
-            this.timer.start(data.time_limit || 30);
-            // WebSocket already provides valid_actions in game state - no need for separate API call
+        // Start/update timer for the current player's turn (visible to everyone)
+        if (data.current_player && data.game_phase && data.game_phase !== 'waiting' && data.game_phase !== 'complete' && data.game_phase !== 'showdown') {
+            // Only restart timer if the current player changed (new turn)
+            if (this.timer.currentPlayerId !== data.current_player) {
+                this.timer.start(data.time_limit || 30, data.current_player);
+            } else {
+                // Same player, just re-render the bar (DOM was rebuilt by renderPlayers)
+                this.timer._updateTimerBar();
+            }
         } else {
             this.timer.stop();
         }
@@ -448,6 +461,7 @@ class PokerTable {
         const isActive = player.is_active;
         const isDisconnected = player.is_disconnected;
         const hasFolded = player.has_folded;
+        const isLeaving = this.store.leavingPlayers?.has(player.user_id);
 
         let playerInfoClass = 'player-info';
         if (isActive) playerInfoClass += ' active';
@@ -457,17 +471,18 @@ class PokerTable {
 
         // Build position indicators (D, SB, BB)
         const positionIndicators = this.getPositionIndicators(player.seat_number);
+        const leavingTag = isLeaving ? ' <span class="leaving-indicator">(leaving)</span>' : '';
 
         seat.innerHTML = `
             <div class="${playerInfoClass}">
-                <div class="player-name">${PokerModals.escapeHtml(player.username)}</div>
+                <div class="player-name">${PokerModals.escapeHtml(player.username)}${leavingTag}</div>
                 <div class="player-chips">$${player.chip_stack || player.stack || 0}</div>
                 <div class="player-action">${player.last_action || ''}</div>
                 ${hasFolded ? '<div class="folded-indicator">FOLDED</div>' : ''}
                 ${player.current_bet > 0 ? `<div class="player-bet">$${player.current_bet}</div>` : ''}
                 ${positionIndicators}
             </div>
-            <div class="player-cards${(player.cards?.length || player.card_count || 0) > 2 ? ' many-cards' : ''}">
+            <div class="player-cards${this._cardCountClasses(player.cards?.length || player.card_count || 0)}">
                 ${this.renderPlayerCards(player, isCurrentPlayer, hasFolded)}
             </div>
         `;
@@ -499,6 +514,13 @@ class PokerTable {
         return `<div class="position-indicators">${indicators.join('')}</div>`;
     }
 
+    _cardCountClasses(count) {
+        if (count <= 2) return '';
+        let classes = ' many-cards';
+        if (count >= 5) classes += ` cards-${Math.min(count, 8)}`;
+        return classes;
+    }
+
     renderPlayerCards(player, isCurrentPlayer, hasFolded = false) {
         // If player has folded, don't show any cards (mucked)
         if (hasFolded) {
@@ -511,15 +533,24 @@ class PokerTable {
         // Check if we have showdown hole cards for this player (revealed at showdown)
         const showdownCards = this.showdown.showdownHoleCards && this.showdown.showdownHoleCards[player.user_id];
 
+        // Check if draw phase and this is the current user whose turn it is
+        const isDrawPhase = this.store.gameState?.game_phase === 'drawing';
+        const isMyDrawTurn = isDrawPhase && isCurrentPlayer && this.store.isMyTurn && this.drawAction;
+
         // If player has visible cards (current player or showdown), display them
         if (player.cards && player.cards.length > 0) {
-            return player.cards.map(card => {
+            return player.cards.map((card, index) => {
                 if (isCurrentPlayer || player.cards_visible || showdownCards) {
                     // Check if this specific card was used in the winning hand
                     const isWinningCard = isWinningPlayer && this.showdown.winningCards && this.showdown.winningCards.holeCards.includes(card);
-                    return PokerCardUtils.createCardElement(card, isWinningCard);
+                    const selectableClass = isMyDrawTurn ? ' selectable' : '';
+                    const selectedClass = isMyDrawTurn && this.selectedDiscards.has(index) ? ' selected' : '';
+                    const dataAttrs = isMyDrawTurn ? ` data-card-index="${index}" data-card-value="${card}"` : '';
+                    return PokerCardUtils.createCardElement(card, isWinningCard)
+                        .replace('<div class="card ', `<div class="card${selectableClass}${selectedClass} `)
+                        .replace(/data-rank="/, `${dataAttrs} data-rank="`);
                 } else {
-                    return '<div class="card card-back">🂠</div>';
+                    return '<div class="card card-back">\u{1F0A0}</div>';
                 }
             }).join('');
         }
@@ -546,17 +577,84 @@ class PokerTable {
     }
 
     renderCommunityCards(communityCards) {
-        if (!communityCards) return;
+        const container = document.getElementById('community-cards');
+        if (!container) return;
 
-        const cardSlots = document.querySelectorAll('.card-slot');
-        const cardTypes = ['flop1', 'flop2', 'flop3', 'turn', 'river'];
+        // Handle missing or empty data
+        if (!communityCards || !communityCards.layout) {
+            container.style.display = 'none';
+            return;
+        }
 
-        cardTypes.forEach((cardType, index) => {
-            const slot = document.querySelector(`[data-card=\"${cardType}\"]`);
-            if (!slot) return;
+        const layout = communityCards.layout;
+        const cards = communityCards.cards || {};
 
-            if (communityCards[cardType]) {
-                const cardStr = communityCards[cardType];
+        switch (layout.type) {
+            case 'none':
+                container.style.display = 'none';
+                return;
+            case 'linear':
+                this._renderLinearLayout(container, cards, layout);
+                break;
+            case 'multi-row':
+                this._renderMultiRowLayout(container, cards, layout);
+                break;
+            default:
+                this._renderLinearLayout(container, cards, layout); // fallback
+        }
+        container.style.display = '';
+    }
+
+    _renderLinearLayout(container, cards, layout) {
+        // Collect all cards from all subsets into one flat list
+        const allCards = [];
+        for (const subsetCards of Object.values(cards)) {
+            for (const cardInfo of subsetCards) {
+                allCards.push(cardInfo.card);
+            }
+        }
+
+        // Determine total slot count: show empty placeholders for undealt cards
+        const expectedCards = (layout && layout.expectedCards) || 0;
+        const totalSlots = Math.max(allCards.length, expectedCards);
+
+        if (totalSlots === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        // Check if we can reuse existing slots
+        let cardsContainer = container.querySelector('.cards-container');
+        const existingSlots = cardsContainer ? cardsContainer.querySelectorAll('.card-slot') : [];
+        const needsRebuild = !cardsContainer || existingSlots.length !== totalSlots;
+
+        if (needsRebuild) {
+            container.innerHTML = '';
+            const label = document.createElement('div');
+            label.className = 'board-label';
+            label.textContent = 'Community Cards';
+            container.appendChild(label);
+
+            cardsContainer = document.createElement('div');
+            cardsContainer.className = 'cards-container';
+
+            for (let i = 0; i < totalSlots; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'card-slot';
+                slot.dataset.cardIndex = i;
+                cardsContainer.appendChild(slot);
+            }
+            container.appendChild(cardsContainer);
+        }
+
+        // Update card content in each slot
+        const slots = cardsContainer.querySelectorAll('.card-slot');
+        for (let i = 0; i < totalSlots; i++) {
+            const slot = slots[i];
+            if (!slot) continue;
+
+            if (i < allCards.length) {
+                const cardStr = allCards[i];
                 const isWinningCard = PokerCardUtils.isCardInWinningHand(cardStr, this.showdown.winningCards);
                 slot.innerHTML = PokerCardUtils.createCardElement(cardStr, isWinningCard);
                 slot.classList.add('has-card');
@@ -566,11 +664,17 @@ class PokerTable {
                     slot.classList.remove('winning-card');
                 }
             } else {
+                // Empty placeholder slot
                 slot.innerHTML = '';
-                slot.classList.remove('has-card');
-                slot.classList.remove('winning-card');
+                slot.classList.remove('has-card', 'winning-card');
             }
-        });
+        }
+    }
+
+    _renderMultiRowLayout(container, cards, layout) {
+        // Future: render multiple labeled rows
+        // For now, fallback to linear
+        this._renderLinearLayout(container, cards);
     }
 
     /**
@@ -581,18 +685,28 @@ class PokerTable {
     updateActionButtons() {
         const actionButtons = document.getElementById('action-buttons');
         const betControls = document.getElementById('bet-controls');
-        
-        console.log('DEBUG: updateActionButtons called');
-        console.log('DEBUG: isMyTurn:', this.store.isMyTurn);
-        console.log('DEBUG: validActions:', this.store.validActions);
-        console.log('DEBUG: validActions.length:', this.store.validActions.length);
 
         if (!this.store.isMyTurn || this.store.validActions.length === 0) {
             actionButtons.innerHTML = '<div class=\"waiting-message\">Waiting for your turn...</div>';
             betControls.style.display = 'none';
+            this.drawAction = null;
             return;
         }
 
+        // Check for draw/discard actions
+        const drawAction = this.store.validActions.find(a => a.type === 'draw' || a.type === 'discard');
+        if (drawAction) {
+            this.drawAction = drawAction;
+            this.selectedDiscards.clear();
+            this._renderDrawControls(actionButtons, drawAction);
+            betControls.style.display = 'none';
+            // Re-render players to make cards selectable
+            this.renderPlayers();
+            this._setupCardSelectionHandlers();
+            return;
+        }
+
+        this.drawAction = null;
         actionButtons.innerHTML = '';
         let showBetControls = false;
 
@@ -613,6 +727,91 @@ class PokerTable {
         if (showBetControls) {
             this.betControls.setup(this.betControls.minBet, this.betControls.maxBet, this.betControls.betAmount);
         }
+    }
+
+    _renderDrawControls(container, drawAction) {
+        const minCards = drawAction.min_amount || 0;
+        const maxCards = drawAction.max_amount || 0;
+        const selected = this.selectedDiscards.size;
+        const actionName = drawAction.type === 'discard' ? 'Discard' : 'Draw';
+
+        let buttonText;
+        if (selected === 0) {
+            buttonText = minCards === 0 ? 'Stand Pat' : `Select at least ${minCards} card${minCards > 1 ? 's' : ''}`;
+        } else {
+            buttonText = `${actionName} ${selected}`;
+        }
+
+        const canSubmit = selected >= minCards && selected <= maxCards;
+
+        container.innerHTML = `
+            <div class="draw-controls">
+                <div class="draw-info">Select cards to discard (${minCards}-${maxCards})</div>
+                <button class="action-btn primary draw-submit-btn" ${canSubmit ? '' : 'disabled'}>
+                    ${buttonText}
+                </button>
+            </div>
+        `;
+
+        container.querySelector('.draw-submit-btn')?.addEventListener('click', () => {
+            if (canSubmit) this._submitDrawAction();
+        });
+    }
+
+    _setupCardSelectionHandlers() {
+        // Add click handlers to selectable cards
+        document.querySelectorAll('.card.selectable').forEach(cardEl => {
+            cardEl.addEventListener('click', (e) => {
+                const index = parseInt(cardEl.dataset.cardIndex);
+                if (isNaN(index)) return;
+
+                if (this.selectedDiscards.has(index)) {
+                    this.selectedDiscards.delete(index);
+                    cardEl.classList.remove('selected');
+                } else {
+                    const maxCards = this.drawAction?.max_amount || 0;
+                    if (this.selectedDiscards.size < maxCards) {
+                        this.selectedDiscards.add(index);
+                        cardEl.classList.add('selected');
+                    }
+                }
+
+                // Update the draw button
+                const actionButtons = document.getElementById('action-buttons');
+                if (this.drawAction) {
+                    this._renderDrawControls(actionButtons, this.drawAction);
+                }
+            });
+        });
+    }
+
+    _submitDrawAction() {
+        if (!this.drawAction) return;
+
+        // Get the player's cards from game state
+        const myPlayer = this.store.findPlayerByUserId(this.store.currentUser?.id);
+        if (!myPlayer || !myPlayer.cards) return;
+
+        // Map selected indices to card strings
+        const selectedCards = [];
+        this.selectedDiscards.forEach(index => {
+            if (myPlayer.cards[index]) {
+                selectedCards.push(myPlayer.cards[index]);
+            }
+        });
+
+        const actionData = {
+            action: this.drawAction.type,
+            cards: selectedCards
+        };
+
+        this.sendPlayerAction(actionData);
+        this.selectedDiscards.clear();
+        this.drawAction = null;
+
+        // Disable draw button
+        document.querySelectorAll('.draw-submit-btn').forEach(btn => btn.disabled = true);
+        this.timer.stop();
     }
 
     createActionButton(action) {
@@ -867,6 +1066,21 @@ class PokerTable {
         this.socket.emit('request_game_state', { table_id: this.store.tableId });
     }
 
+    handlePlayerLeaving(data) {
+        const username = data.username || 'A player';
+        this.chat.displayChatMessage({
+            type: 'system',
+            message: `${username} is leaving after this hand`,
+            timestamp: new Date().toISOString()
+        });
+        // Store leaving player ID so renderPlayers can show indicator
+        if (!this.store.leavingPlayers) {
+            this.store.leavingPlayers = new Set();
+        }
+        this.store.leavingPlayers.add(data.user_id);
+        this.renderPlayers();
+    }
+
     // Chat methods delegated to this.chat (PokerChat)
 
     // toggleMobilePanel delegated to this.responsive (PokerResponsive)
@@ -875,6 +1089,12 @@ class PokerTable {
         this.stopGameUpdateTimer();
         this.socket.emit('leave_table', { table_id: this.store.tableId });
         PokerModals.closeModal('leave-table-modal');
+
+        // Show notification if hand is in progress
+        const gs = this.store.gameState;
+        if (gs && gs.game_state && !['waiting', 'complete'].includes(gs.game_state.toLowerCase())) {
+            PokerModals.showNotification('Leaving after this hand...', 'info');
+        }
 
         setTimeout(() => {
             window.location.href = '/';

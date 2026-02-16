@@ -47,6 +47,7 @@ class GameSession:
         self.connected_players: Set[str] = set()
         self.disconnected_players: Dict[str, datetime] = {}
         self.spectators: Set[str] = set()
+        self.pending_leaves: Set[str] = set()  # Players who clicked Leave mid-hand
         
         # Hand tracking
         self.hands_played = 0
@@ -117,12 +118,18 @@ class GameSession:
             # Update session tracking
             self.connected_players.discard(user_id)
             self.disconnected_players.pop(user_id, None)
-            
+            self.pending_leaves.discard(user_id)
+
             self.update_activity()
-            
+
             # Check if we need to pause the game
             self._check_pause_conditions()
-            
+
+            # Deactivate session if no players remain
+            if not self.connected_players:
+                self.is_active = False
+                logger.info(f"Session {self.session_id} deactivated (no players remaining)")
+
             logger.info(f"Player {user_id} removed from session {self.session_id}: {reason}")
             return True, "Player removed successfully"
             
@@ -130,6 +137,145 @@ class GameSession:
             logger.error(f"Failed to remove player {user_id} from session {self.session_id}: {e}")
             return False, str(e)
     
+    def mark_player_leaving(self, user_id: str) -> Tuple[bool, str]:
+        """Mark a player as leaving and fold them immediately.
+
+        This is an intentional leave (not a disconnect), so no grace period.
+
+        If a hand is active:
+        - If it's the player's turn, fold via normal game action
+        - If not their turn, directly mark as inactive (out-of-turn fold)
+        - Either way, if only 1 active player remains, the hand completes
+
+        If no hand is active, remove immediately.
+
+        Args:
+            user_id: User ID of the player leaving
+
+        Returns:
+            Tuple of (hand_completed, message)
+        """
+        try:
+            if user_id not in self.connected_players:
+                return False, "Player not in game"
+
+            # Check if a hand is in progress
+            hand_active = self.game and self.game.state in (
+                GameState.BETTING, GameState.DEALING, GameState.SHOWDOWN,
+                GameState.DRAWING
+            )
+
+            if not hand_active:
+                # No hand active, remove immediately
+                self.remove_player(user_id, "Player left table")
+                return False, "Removed immediately (no active hand)"
+
+            # Hand is active - add to pending leaves
+            self.pending_leaves.add(user_id)
+
+            # Check if the player is even in the hand (may have already folded)
+            player = self.game.table.players.get(user_id)
+            if not player or not player.is_active:
+                logger.info(f"Player {user_id} already folded/inactive, marked for post-hand removal")
+                return False, "Marked for removal after hand"
+
+            # If this player is the current player, fold via normal game action
+            if (self.game.current_player and
+                self.game.current_player.id == user_id and
+                self.game.state == GameState.BETTING):
+                success, message, result = self.process_player_action(
+                    user_id, PlayerAction.FOLD, 0
+                )
+                if success:
+                    logger.info(f"Auto-folded leaving player {user_id} (was current player)")
+                    return self.game.state == GameState.COMPLETE, "Folded and marked for removal"
+                else:
+                    logger.warning(f"Failed to auto-fold leaving player {user_id}: {message}")
+
+            # Not current player (or fold failed): directly mark as inactive
+            # This is safe for intentional leaves — no grace period needed
+            if player.is_active:
+                player.is_active = False
+                # Mark bet as acted so betting round logic isn't stuck
+                from generic_poker.game.betting import PlayerBet
+                bet = self.game.betting.current_bets.get(user_id, PlayerBet())
+                bet.has_acted = True
+                self.game.betting.current_bets[user_id] = bet
+
+                logger.info(f"Directly folded leaving player {user_id} (not current player)")
+
+                # Check if only 1 active player remains → hand should complete
+                active_players = [p for p in self.game.table.players.values() if p.is_active]
+                if len(active_players) == 1:
+                    self.game._handle_fold_win()
+                    logger.info(f"Hand completed after leaving player fold (last player standing)")
+                    return True, "Folded (out of turn) and hand completed"
+
+            return False, "Folded and marked for post-hand removal"
+
+        except Exception as e:
+            logger.error(f"Failed to mark player {user_id} as leaving: {e}")
+            return False, str(e)
+
+    def auto_fold_pending_player(self) -> Tuple[bool, Optional[str]]:
+        """Check if the current player is pending leave and auto-fold them.
+
+        Should be called after any game state change that sets a new current player.
+
+        Returns:
+            Tuple of (player_was_folded, folded_user_id)
+        """
+        try:
+            if not self.game or not self.game.current_player:
+                return False, None
+
+            current_id = self.game.current_player.id
+            if current_id not in self.pending_leaves:
+                return False, None
+
+            if self.game.state != GameState.BETTING:
+                return False, None
+
+            # Auto-fold the pending player
+            success, message, result = self.process_player_action(
+                current_id, PlayerAction.FOLD, 0
+            )
+
+            if success:
+                logger.info(f"Auto-folded pending-leave player {current_id}")
+                return True, current_id
+            else:
+                logger.warning(f"Failed to auto-fold pending-leave player {current_id}: {message}")
+                return False, None
+
+        except Exception as e:
+            logger.error(f"Failed to auto-fold pending player: {e}")
+            return False, None
+
+    def process_pending_leaves(self) -> List[str]:
+        """Process all pending leaves after a hand completes.
+
+        Removes players from the game engine who clicked Leave during the hand.
+
+        Returns:
+            List of removed user IDs
+        """
+        if not self.pending_leaves:
+            return []
+
+        removed = []
+        for user_id in list(self.pending_leaves):
+            try:
+                if user_id in self.connected_players:
+                    self.remove_player(user_id, "Left during hand")
+                    removed.append(user_id)
+                    logger.info(f"Removed pending-leave player {user_id} after hand completion")
+            except Exception as e:
+                logger.error(f"Failed to remove pending-leave player {user_id}: {e}")
+
+        self.pending_leaves.clear()
+        return removed
+
     def handle_player_disconnect(self, user_id: str) -> None:
         """Handle a player disconnection.
         
@@ -201,26 +347,28 @@ class GameSession:
         self.spectators.discard(user_id)
         logger.info(f"Spectator {user_id} removed from session {self.session_id}")
     
-    def process_player_action(self, user_id: str, action: PlayerAction, amount: int = 0) -> Tuple[bool, str, Any]:
+    def process_player_action(self, user_id: str, action: PlayerAction, amount: int = 0,
+                             cards=None) -> Tuple[bool, str, Any]:
         """Process a player action in the game.
-        
+
         Args:
             user_id: User ID of the acting player
             action: The action being taken
             amount: Amount for betting actions
-            
+            cards: Cards for draw/discard actions
+
         Returns:
             Tuple of (success, error_message, action_result)
         """
         try:
             if not self.is_active or self.is_paused:
                 return False, "Game is not active", None
-            
+
             if user_id not in self.connected_players:
                 return False, "Player not in game", None
-            
+
             # Process action through the underlying Game
-            result = self.game.player_action(user_id, action, amount)
+            result = self.game.player_action(user_id, action, amount, cards=cards)
             
             if result.success:
                 self.update_activity()

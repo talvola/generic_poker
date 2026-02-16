@@ -11,7 +11,7 @@ from ..models.table import PokerTable
 from ..models.table_config import TableConfig
 from ..models.user import User
 from ..services.user_manager import UserManager
-from generic_poker.config.loader import GameRules
+from generic_poker.config.loader import GameRules, GameActionType
 from generic_poker.game.betting import BettingStructure
 from generic_poker.game.game import Game
 
@@ -32,19 +32,32 @@ class TableManager:
     # Cache for loaded game rules to avoid repeated file I/O
     _rules_cache: Dict[str, GameRules] = {}
     
+    # Actions not yet supported in the online platform
+    UNSUPPORTED_ACTIONS = {
+        GameActionType.EXPOSE,
+        GameActionType.PASS,
+        GameActionType.DECLARE,
+        GameActionType.SEPARATE,
+        GameActionType.CHOOSE,
+    }
+
     @staticmethod
     def get_available_variants() -> List[Dict[str, Any]]:
         """Get list of all available poker variants.
-        
+
+        Filters out variants that use unsupported actions (expose, pass,
+        declare, separate, choose).
+
         Returns:
-            List of variant dictionaries with name, min_players, max_players, and supported betting structures
+            List of variant dictionaries with name, display_name, category,
+            min_players, max_players, and supported betting structures
         """
         variants = []
         config_dir = Path("data/game_configs")
-        
+
         if not config_dir.exists():
             return variants
-        
+
         for config_file in config_dir.glob("*.json"):
             try:
                 # Load game rules from cache or file
@@ -54,26 +67,55 @@ class TableManager:
                     TableManager._rules_cache[variant_name] = rules
                 else:
                     rules = TableManager._rules_cache[variant_name]
-                
+
+                # Skip variants with unsupported actions
+                has_unsupported = False
+                for step in rules.gameplay:
+                    if step.action_type in TableManager.UNSUPPORTED_ACTIONS:
+                        has_unsupported = True
+                        break
+                    # Also check sub-actions in grouped steps
+                    if step.action_type == GameActionType.GROUPED and isinstance(step.action_config, list):
+                        for sub_action in step.action_config:
+                            for key in sub_action:
+                                if key == 'name':
+                                    continue
+                                try:
+                                    sub_type = GameActionType[key.upper()]
+                                    if sub_type in TableManager.UNSUPPORTED_ACTIONS:
+                                        has_unsupported = True
+                                        break
+                                except KeyError:
+                                    pass
+                            if has_unsupported:
+                                break
+                    if has_unsupported:
+                        break
+                if has_unsupported:
+                    continue
+
                 # Convert betting structures to string values
                 supported_structures = [structure.value for structure in rules.betting_structures]
-                
+
+                display_name = rules.game
+                category = rules.category or 'Other'
+
                 variant_info = {
                     'name': variant_name,
-                    'display_name': variant_name.replace('_', ' ').title(),
+                    'display_name': display_name,
+                    'category': category,
                     'min_players': rules.min_players,
                     'max_players': rules.max_players,
                     'betting_structures': supported_structures,
                     'deck_type': rules.deck_type,
-                    'description': f"{rules.game} ({rules.min_players}-{rules.max_players} players)"
                 }
                 variants.append(variant_info)
-                
+
             except Exception as e:
                 # Log error but continue with other variants
                 current_app.logger.warning(f"Failed to load variant {config_file.stem}: {e}")
                 continue
-        
+
         # Sort variants alphabetically by display name
         variants.sort(key=lambda x: x['display_name'])
         return variants

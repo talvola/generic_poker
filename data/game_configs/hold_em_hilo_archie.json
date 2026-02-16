@@ -1,5 +1,6 @@
 {
     "game": "Hold'em Hi/Lo Archie-Style",
+    "category": "Hold'em",
     "players": {
         "min": 2,
         "max": 9

@@ -1,5 +1,6 @@
 {
     "game": "Hi-dugi",
+    "category": "Draw",
     "players": {
         "min": 2,
         "max": 6

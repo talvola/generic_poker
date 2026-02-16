@@ -1,5 +1,6 @@
 {
     "game": "Dramaha Hi-dugi",
+    "category": "Dramaha",
     "players": {
         "min": 2,
         "max": 6

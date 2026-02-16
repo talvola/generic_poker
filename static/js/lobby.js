@@ -4,6 +4,8 @@ class PokerLobby {
         this.socket = io();
         this.tables = [];
         this.userTables = [];  // Table IDs where current user is seated
+        this.variants = [];    // Available game variants from API
+        this.variantMap = {};   // variant_name -> display_name lookup
         this.filters = {
             variant: '',
             stakes: '',
@@ -13,10 +15,11 @@ class PokerLobby {
 
         this.init();
     }
-    
+
     init() {
         this.setupEventListeners();
         this.setupSocketEvents();
+        this.loadVariants();
         this.loadTables();
         this.setupStakesConfiguration();
     }
@@ -73,6 +76,11 @@ class PokerLobby {
             privateOptions.style.display = e.target.checked ? 'block' : 'none';
         });
         
+        // Game variant change - update available betting structures
+        document.getElementById('game-variant').addEventListener('change', (e) => {
+            this.updateBettingStructureOptions(e.target.value);
+        });
+
         // Betting structure change
         document.getElementById('betting-structure').addEventListener('change', (e) => {
             this.updateStakesInputs(e.target.value);
@@ -152,7 +160,104 @@ class PokerLobby {
         // Initialize with no-limit structure
         this.updateStakesInputs('no-limit');
     }
-    
+
+    async loadVariants() {
+        try {
+            const response = await fetch('/table/variants');
+            const data = await response.json();
+            if (data.success) {
+                this.variants = data.variants;
+                // Build lookup map
+                this.variantMap = {};
+                for (const v of this.variants) {
+                    this.variantMap[v.name] = v.display_name;
+                }
+                this.populateVariantDropdowns();
+            }
+        } catch (error) {
+            console.error('Failed to load variants:', error);
+        }
+    }
+
+    populateVariantDropdowns() {
+        // Group variants by category
+        const categoryOrder = ["Hold'em", 'Omaha', 'Stud', 'Draw', 'Pineapple', 'Dramaha', 'Straight', 'Other'];
+        const grouped = {};
+        for (const v of this.variants) {
+            const cat = v.category || 'Other';
+            if (!grouped[cat]) grouped[cat] = [];
+            grouped[cat].push(v);
+        }
+
+        // Build optgroup HTML for the create-table dropdown
+        const createSelect = document.getElementById('game-variant');
+        let createHtml = '<option value="">Select a variant</option>';
+        for (const cat of categoryOrder) {
+            const games = grouped[cat];
+            if (!games || games.length === 0) continue;
+            createHtml += `<optgroup label="${cat}">`;
+            for (const g of games) {
+                createHtml += `<option value="${g.name}">${g.display_name}</option>`;
+            }
+            createHtml += '</optgroup>';
+        }
+        createSelect.innerHTML = createHtml;
+
+        // Build flat list for filter dropdown (just unique variants seen in tables)
+        const filterSelect = document.getElementById('variant-filter');
+        let filterHtml = '<option value="">All Variants</option>';
+        for (const cat of categoryOrder) {
+            const games = grouped[cat];
+            if (!games || games.length === 0) continue;
+            filterHtml += `<optgroup label="${cat}">`;
+            for (const g of games) {
+                filterHtml += `<option value="${g.name}">${g.display_name}</option>`;
+            }
+            filterHtml += '</optgroup>';
+        }
+        filterSelect.innerHTML = filterHtml;
+    }
+
+    updateBettingStructureOptions(variantName) {
+        const structSelect = document.getElementById('betting-structure');
+        const variant = this.variants.find(v => v.name === variantName);
+        if (!variant) {
+            // Reset to all structures
+            structSelect.innerHTML = `
+                <option value="">Select structure</option>
+                <option value="no-limit">No Limit</option>
+                <option value="pot-limit">Pot Limit</option>
+                <option value="limit">Limit</option>
+            `;
+            return;
+        }
+
+        const structMap = {
+            'No Limit': 'no-limit',
+            'Pot Limit': 'pot-limit',
+            'Limit': 'limit'
+        };
+        const displayMap = {
+            'no-limit': 'No Limit',
+            'pot-limit': 'Pot Limit',
+            'limit': 'Limit'
+        };
+
+        let html = '<option value="">Select structure</option>';
+        for (const bs of variant.betting_structures) {
+            const val = structMap[bs] || bs.toLowerCase().replace(' ', '-');
+            const label = displayMap[val] || bs;
+            html += `<option value="${val}">${label}</option>`;
+        }
+        structSelect.innerHTML = html;
+
+        // Auto-select if only one option
+        if (variant.betting_structures.length === 1) {
+            structSelect.value = structMap[variant.betting_structures[0]] || '';
+            this.updateStakesInputs(structSelect.value);
+        }
+    }
+
     updateStakesInputs(structure) {
         const stakesInputs = document.getElementById('stakes-inputs');
         
@@ -413,16 +518,11 @@ class PokerLobby {
     }
     
     formatVariantName(variant) {
-        const variants = {
-            'hold_em': "Texas Hold'em",
-            'omaha': 'Omaha',
-            'omaha_8': 'Omaha Hi-Lo',
-            '7_card_stud': '7-Card Stud',
-            '7_card_stud_8': '7-Card Stud Hi-Lo',
-            'razz': 'Razz',
-            'mexican_poker': 'Mexican Poker'
-        };
-        return variants[variant] || variant.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+        if (this.variantMap[variant]) {
+            return this.variantMap[variant];
+        }
+        // Fallback: convert underscores to spaces and title-case
+        return variant.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
     
     formatStructure(structure) {

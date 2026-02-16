@@ -124,6 +124,8 @@ class GameRules:
     gameplay: List[GameStep]
     showdown: ShowdownConfig
     named_bets: Dict[str, int] = field(default_factory=dict)
+    category: str = ""
+    community_card_layout: Optional[Dict[str, Any]] = None
 
     @classmethod
     def from_file(cls, filepath: Path) -> 'GameRules':
@@ -382,7 +384,9 @@ class GameRules:
             gameplay=gameplay,
             forced_bets=forced_bets,
             betting_order=betting_order,
-            showdown=showdown
+            showdown=showdown,
+            category=data.get('category', ''),
+            community_card_layout=data.get('communityCardLayout')
         )
         
         # Validate the complete rules

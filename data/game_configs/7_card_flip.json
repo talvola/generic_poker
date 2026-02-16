@@ -1,5 +1,6 @@
 {
     "game": "7-Card Flip",
+    "category": "Other",
     "players": {
         "min": 2,
         "max": 7

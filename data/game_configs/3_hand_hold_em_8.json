@@ -1,5 +1,6 @@
 {
     "game": "3-Hand Hold'em 8",
+    "category": "Hold'em",
     "players": {
         "min": 2,
         "max": 7

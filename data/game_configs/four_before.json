@@ -1,5 +1,6 @@
 {
     "game": "Four-Before",
+    "category": "Other",
     "players": {
         "min": 2,
         "max": 8

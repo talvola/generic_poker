@@ -263,7 +263,37 @@ class PlayerActionManager:
                     display_text="Raise",
                     button_style="warning"
                 )
-            
+
+            elif action_type == PlayerAction.DRAW:
+                max_cards = max_amount or 0
+                min_cards = min_amount or 0
+                if min_cards == 0:
+                    display_text = f"Draw 0-{max_cards}"
+                else:
+                    display_text = f"Draw {min_cards}-{max_cards}"
+                return PlayerActionOption(
+                    action_type=action_type,
+                    min_amount=min_cards,
+                    max_amount=max_cards,
+                    display_text=display_text,
+                    button_style="primary"
+                )
+
+            elif action_type == PlayerAction.DISCARD:
+                max_cards = max_amount or 0
+                min_cards = min_amount or 0
+                if min_cards == 0:
+                    display_text = f"Discard 0-{max_cards}"
+                else:
+                    display_text = f"Discard {min_cards}-{max_cards}"
+                return PlayerActionOption(
+                    action_type=action_type,
+                    min_amount=min_cards,
+                    max_amount=max_cards,
+                    display_text=display_text,
+                    button_style="primary"
+                )
+
             else:
                 # Handle other action types (for future expansion)
                 return PlayerActionOption(
@@ -369,16 +399,17 @@ class PlayerActionManager:
             logger.error(f"Failed to get pot size: {e}")
             return 0
     
-    def validate_action(self, table_id: str, user_id: str, action: PlayerAction, 
-                       amount: Optional[int] = None) -> ActionValidation:
+    def validate_action(self, table_id: str, user_id: str, action: PlayerAction,
+                       amount: Optional[int] = None, cards: Optional[List] = None) -> ActionValidation:
         """Validate a player action before processing.
-        
+
         Args:
             table_id: ID of the table
             user_id: ID of the player
             action: The action being attempted
             amount: Amount for betting actions
-            
+            cards: Cards for draw/discard actions
+
         Returns:
             ActionValidation result
         """
@@ -426,43 +457,54 @@ class PlayerActionManager:
             if action in [PlayerAction.BET, PlayerAction.RAISE, PlayerAction.CALL]:
                 if amount is None:
                     return ActionValidation(False, "Amount required for betting action")
-                
+
                 if valid_min is not None and amount < valid_min:
                     return ActionValidation(
-                        False, 
+                        False,
                         f"Amount too low (minimum: {valid_min})",
                         valid_min
                     )
-                
+
                 if valid_max is not None and amount > valid_max:
                     return ActionValidation(
-                        False, 
+                        False,
                         f"Amount too high (maximum: {valid_max})",
                         valid_max
                     )
-            
+
+            # Validate card count for draw/discard actions
+            if action in [PlayerAction.DRAW, PlayerAction.DISCARD]:
+                card_count = len(cards) if cards else 0
+                min_cards = valid_min or 0
+                max_cards = valid_max or 0
+                if card_count < min_cards:
+                    return ActionValidation(False, f"Must discard at least {min_cards} cards")
+                if max_cards > 0 and card_count > max_cards:
+                    return ActionValidation(False, f"Cannot discard more than {max_cards} cards")
+
             return ActionValidation(True)
             
         except Exception as e:
             logger.error(f"Failed to validate action for player {user_id}: {e}")
             return ActionValidation(False, f"Validation error: {str(e)}")
     
-    def process_player_action(self, table_id: str, user_id: str, action: PlayerAction, 
-                            amount: Optional[int] = None) -> Tuple[bool, str, Any]:
+    def process_player_action(self, table_id: str, user_id: str, action: PlayerAction,
+                            amount: Optional[int] = None, cards: Optional[List] = None) -> Tuple[bool, str, Any]:
         """Process a validated player action.
-        
+
         Args:
             table_id: ID of the table
             user_id: ID of the player
             action: The action being taken
             amount: Amount for betting actions
-            
+            cards: Cards for draw/discard actions
+
         Returns:
             Tuple of (success, message, result)
         """
         try:
             # Validate the action first
-            validation = self.validate_action(table_id, user_id, action, amount)
+            validation = self.validate_action(table_id, user_id, action, amount, cards=cards)
             if not validation.is_valid:
                 return False, validation.error_message, None
             
@@ -475,7 +517,7 @@ class PlayerActionManager:
             self.timeout_manager.cancel_timeout(user_id)
             
             # Process the action through the game session
-            success, message, result = session.process_player_action(user_id, action, amount or 0)
+            success, message, result = session.process_player_action(user_id, action, amount or 0, cards=cards)
 
             if success:
                 # Check if we need to advance to the next step (betting round complete)
@@ -504,11 +546,15 @@ class PlayerActionManager:
                 self._record_action(table_id, user_id, action, amount, datetime.utcnow())
 
                 # Notify other players via WebSocket
-                self._broadcast_player_action(table_id, user_id, action, amount, result)
+                self._broadcast_player_action(table_id, user_id, action, amount, result, cards=cards)
 
                 # Check if hand is complete (showdown finished)
                 if session.game and session.game.state.name == 'COMPLETE':
                     self._handle_hand_completion(table_id, session)
+                else:
+                    # Hand still in progress - check if new current player is pending leave
+                    if session.pending_leaves:
+                        self._auto_fold_pending_players(table_id, session)
 
                 # Start timeout for next player if needed
                 self._start_next_player_timeout(session)
@@ -605,7 +651,7 @@ class PlayerActionManager:
         try:
             # Get current player
             current_player = self._get_current_player(session)
-            if current_player and session.game.state == GameState.BETTING:
+            if current_player and session.game.state in (GameState.BETTING, GameState.DRAWING):
                 # Start timeout for the current player
                 self.start_action_timer(session.table.id, current_player)
                 
@@ -645,7 +691,7 @@ class PlayerActionManager:
             logger.error(f"Failed to record action: {e}")
     
     def _broadcast_player_action(self, table_id: str, user_id: str, action: PlayerAction,
-                               amount: Optional[int], result: Any) -> None:
+                               amount: Optional[int], result: Any, cards: Optional[List] = None) -> None:
         """Broadcast a player action to all table participants.
 
         Args:
@@ -654,6 +700,7 @@ class PlayerActionManager:
             action: The action taken
             amount: Amount for betting actions
             result: Result from the game engine
+            cards: Cards for draw/discard actions
         """
         try:
             ws_manager = get_websocket_manager()
@@ -696,6 +743,17 @@ class PlayerActionManager:
                 action_msg = f"{username} raises to ${amount}"
             elif action == PlayerAction.ALL_IN:
                 action_msg = f"{username} is all-in for ${amount}"
+            elif action == PlayerAction.DRAW:
+                card_count = len(cards) if cards else 0
+                if card_count == 0:
+                    action_msg = f"{username} stands pat"
+                elif card_count == 1:
+                    action_msg = f"{username} draws 1 card"
+                else:
+                    action_msg = f"{username} draws {card_count} cards"
+            elif action == PlayerAction.DISCARD:
+                card_count = len(cards) if cards else 0
+                action_msg = f"{username} discards {card_count} card{'s' if card_count != 1 else ''}"
             else:
                 action_msg = f"{username} {action_name}"
                 if amount:
@@ -905,8 +963,79 @@ class PlayerActionManager:
             else:
                 logger.warning("WebSocket manager not available for broadcasting hand completion")
 
+            # Process any pending leaves now that the hand is complete
+            if session.pending_leaves:
+                removed_players = session.process_pending_leaves()
+                if removed_players:
+                    from ..services.table_access_manager import TableAccessManager
+                    from ..services.table_manager import TableManager
+                    for removed_id in removed_players:
+                        # Remove from DB
+                        TableAccessManager.leave_table(removed_id, table_id)
+                        logger.info(f"Removed pending-leave player {removed_id} from DB after hand completion")
+
+                    # Broadcast updated state
+                    if websocket_manager:
+                        websocket_manager.broadcast_game_state_update(table_id)
+
+                    # Update lobby
+                    table = TableManager.get_table_by_id(table_id)
+                    if table:
+                        if websocket_manager:
+                            websocket_manager.socketio.emit('table_updated', {
+                                'table': table.to_dict(),
+                                'action': 'player_left'
+                            })
+
         except Exception as e:
             logger.error(f"Failed to handle hand completion for table {table_id}: {e}")
+
+    def _auto_fold_pending_players(self, table_id: str, session: GameSession) -> None:
+        """Auto-fold any pending-leave players who are now current to act.
+
+        Loops in case multiple consecutive players are pending leave.
+
+        Args:
+            table_id: ID of the table
+            session: GameSession instance
+        """
+        try:
+            max_iterations = 10  # safety limit
+            for _ in range(max_iterations):
+                if not session.game or session.game.state == GameState.COMPLETE:
+                    break
+
+                folded, folded_id = session.auto_fold_pending_player()
+                if not folded:
+                    break
+
+                logger.info(f"Auto-folded pending-leave player {folded_id} at table {table_id}")
+
+                # Advance through non-player-input steps
+                game = session.game
+                if game.state != GameState.COMPLETE:
+                    while game.state != GameState.COMPLETE:
+                        if game.current_step >= len(game.rules.gameplay):
+                            break
+                        if game.state == GameState.DEALING:
+                            game._next_step()
+                        elif game.state == GameState.BETTING and game.current_player is None:
+                            game._next_step()
+                        else:
+                            break
+
+                # Broadcast action and state
+                ws_manager = get_websocket_manager()
+                if ws_manager:
+                    ws_manager.broadcast_game_state_update(table_id)
+
+                # Check if hand completed
+                if session.game.state == GameState.COMPLETE:
+                    self._handle_hand_completion(table_id, session)
+                    break
+
+        except Exception as e:
+            logger.error(f"Failed to auto-fold pending players at table {table_id}: {e}")
 
 
 # Global player action manager instance

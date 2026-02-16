@@ -2,7 +2,7 @@
 
 > Prioritized task list. Work top-to-bottom within each phase.
 > Phase 2 is the current focus: UI refactoring.
-> Last updated: 2026-02-14
+> Last updated: 2026-02-15
 
 ---
 
@@ -80,27 +80,36 @@ After gameplay works, make the frontend maintainable.
 
 | # | Task | Status |
 |---|------|--------|
-| 3.1 | Fix bot decision logic (don't fold when check available) | TODO |
-| 3.2 | Support 3+ player games | TODO |
+| 3.1 | Fix bot decision logic (don't fold when check available) | DONE |
+| 3.2 | Support 3+ player games | DONE (verified) |
 | 3.3 | Omaha E2E support (many-cards CSS, 4 hole cards in browser) | DONE |
-| 3.4 | Proper table leave/rejoin lifecycle | TODO |
-| 3.5 | Add player timeout countdown UI | TODO |
-| 3.6 | Implement draw/discard actions | TODO |
+| 3.4 | Proper table leave/rejoin lifecycle | DONE |
+| 3.5 | Add player timeout countdown UI | DONE |
+| 3.6 | Implement draw/discard actions | DONE |
 | 3.7 | Implement card passing | TODO |
 | 3.8 | Add hand history display | TODO |
 | 3.9 | Mobile optimization pass | TODO |
+| 3.10 | Stud game support (7-card stud UI, per-player up/down cards) | TODO |
 
 ### Task Details
 
 **3.3 result:** Added dynamic `many-cards` CSS class to `player-cards` div when card count > 2 (activates existing 30px card styling). Created `tests/e2e/specs/omaha.spec.ts` with 4 tests: 4 hole cards visible, opponent card backs, many-cards class applied, full hand to showdown. Also fixed lobby `formatStakes()` case-sensitivity bug (Limit tables showed $0/$0). Also fixed `hand_complete` event missing `hand_number` which caused showdown display dedup to skip hand 2+.
 
-**3.4 details:** Proper leave/rejoin lifecycle with these semantics:
-- **Leave mid-hand:** Player is auto-folded in the current hand, then removed from the table after the hand completes (not immediately). UI should show "Leaving after this hand..." state.
-- **Table drops to 1 player:** After the hand finishes and leaving player is removed, the remaining player waits. New hand doesn't start until min_players (from game config) are seated and ready.
-- **Everyone leaves:** Table has no active session/state. Next players to join start fresh — wait for min_players, ready up, deal.
-- **Rejoin:** A player who left can rejoin normally through the lobby (new buy-in, seat selection). No state carries over from the previous session.
-- **Server restart:** In-memory game sessions are lost. Players reconnecting should see a clean waiting state, not a stale hand. Sessions should not be reconstructable from DB — the hand is simply lost.
-- Key files: `game_orchestrator.py` (GameSession), `game.py` (remove_player), `websocket_manager.py` (leave handler), `game_state_manager.py` (suppress actions when paused), `player_action_manager.py` (post-hand cleanup)
+**3.1 result:** Bot had a 30% chance to fold even when check was available (folding a free option is irrational). Fixed weights: fold=0 when check is available, fold=20 when facing a bet. Also increased bet/raise weight from 10→20 for slightly more aggressive play. Added 5 unit tests in `tests/unit/test_simple_bot.py`.
+
+**3.5 result:** Added visual countdown timer bar on the active player's seat. All players see the timer (not just the player whose turn it is). Bar starts green, transitions to yellow at 50%, red at 25%. Timer only restarts when the current player changes (not on every state broadcast). Displays seconds remaining as text. Timer bar sits at the bottom of the `player-info` panel. Changes: `timer.js` (track `currentPlayerId`, render bar on seat), `table.js` (pass player ID, avoid restarting on same player), `table.css` (`.turn-timer-bar`/`.turn-timer-fill`/`.turn-timer-text` styles).
+
+**3.2 result:** Engine, CSS layouts, and rendering already supported 3+ players. Three-player E2E tests exist and pass. No code changes needed — verified working.
+
+**3.6 result:** Connected existing engine draw/discard support through all online platform layers. Added DRAWING phase and DRAW/DISCARD action types to view models. Plumbed `cards` parameter through game_routes → player_action_manager → game_orchestrator → engine (both HTTP and WebSocket paths). Frontend card selection UI: during draw phase, player's cards become clickable, selected cards glow gold and lift up, dynamic "Stand Pat" / "Draw N" button. Added `category` field to game config schema (8 families: Hold'em, Omaha, Stud, Draw, Pineapple, Dramaha, Straight, Other) and all 192 configs. Updated lobby game selector from 7 hardcoded games to 166 dynamically-loaded supported variants grouped by category with `<optgroup>`. Betting structure dropdown now filters to structures the selected game supports. 4 new SocketIO integration tests. 26 unsupported games (expose/pass/declare/separate/choose) filtered out automatically.
+
+**3.4 result:** Implemented leave/rejoin lifecycle with these semantics:
+- **Leave mid-hand:** Player is immediately folded (even out-of-turn via direct `is_active=False`), then removed from session after hand completes. Pot awarded correctly. UI shows "Leaving after this hand..." notification and "(leaving)" indicator next to player name.
+- **Table drops to 1 player:** Game goes to WAITING state. Remaining player waits for new players + ready.
+- **Everyone leaves:** Session deactivated (`is_active=False`). Next join creates fresh session.
+- **Disconnect vs Leave:** Intentional leave = immediate fold, no grace period. Network disconnect = 30s reconnect window (existing `disconnect_manager.py` behavior preserved).
+- Key files: `game_orchestrator.py` (`pending_leaves`, `mark_player_leaving()`, `process_pending_leaves()`), `websocket_manager.py` (deferred leave handler, `player_leaving` event, stale session cleanup), `player_action_manager.py` (post-hand pending leave processing).
+- 4 new SocketIO integration tests: mid-hand leave awards pot, no-hand leave removes immediately, both-leave deactivates session, disconnect behavior preserved.
 
 ---
 
@@ -110,7 +119,7 @@ After gameplay works, make the frontend maintainable.
 |---|------|--------|
 | 4.1 | Unify timeout systems (action, disconnect, ready) | TODO |
 | 4.2 | Make hardcoded constants configurable | TODO |
-| 4.3 | Remove debug print statements from routes | TODO |
+| 4.3 | Remove debug print statements from routes | DONE |
 | 4.4 | Sync game engine state with database after each hand | TODO |
 | 4.5 | Add rate limiting | TODO |
 | 4.6 | Admin interface | TODO |

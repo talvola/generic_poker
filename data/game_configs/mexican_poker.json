@@ -1,5 +1,6 @@
 {
     "game": "Mexican Poker",
+    "category": "Stud",
     "references": [
         "https://www.barge.org/rulebook/mexican-poker.html"
     ],          

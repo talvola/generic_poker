@@ -1,5 +1,6 @@
 {
     "game": "Tic Tac Hold'em",
+    "category": "Hold'em",
     "references": [
         "https://www.ichabod801.com/poker_db/common/05-card.html#variant-1111"
     ],

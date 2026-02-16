@@ -16,6 +16,7 @@ from ..services.user_manager import UserManager
 from ..database import db
 from generic_poker.game.game_state import GameState, PlayerAction
 from generic_poker.game.game import Game
+from generic_poker.config.loader import GameActionType
 
 
 logger = logging.getLogger(__name__)
@@ -179,7 +180,7 @@ class GameStateManager:
                 session_id='',  # No session yet
                 viewer_id=viewer_id,
                 players=player_views,
-                community_cards={},
+                community_cards={"layout": {"type": "none"}, "cards": {}},
                 pot_info=PotInfo(0),
                 current_player=None,
                 valid_actions=[],
@@ -264,40 +265,99 @@ class GameStateManager:
             return None
     
     @staticmethod
-    def _get_community_cards(session: GameSession) -> Dict[str, str]:
+    def _infer_community_layout(session: GameSession) -> Dict[str, Any]:
+        """Infer community card layout from game rules if not explicitly specified."""
+        # 1. If config has explicit communityCardLayout, use it
+        if hasattr(session, 'game_rules') and session.game_rules and session.game_rules.community_card_layout:
+            return session.game_rules.community_card_layout
+
+        # 2. Scan gameplay steps for community deals
+        game_rules = getattr(session, 'game_rules', None)
+        if not game_rules:
+            return {"type": "linear"}
+
+        has_community = False
+        all_subsets = set()
+        total_community_cards = 0
+        for step in game_rules.gameplay:
+            if step.action_type == GameActionType.DEAL:
+                config = step.action_config
+                if config.get('location') == 'community':
+                    has_community = True
+                    for card_info in config.get('cards', []):
+                        total_community_cards += card_info.get('number', 0)
+                        subset = card_info.get('community_subset') or card_info.get('subset')
+                        if subset:
+                            if isinstance(subset, list):
+                                all_subsets.update(subset)
+                            else:
+                                all_subsets.add(subset)
+            elif step.action_type == GameActionType.GROUPED:
+                for action in step.action_config:
+                    if 'deal' in action:
+                        deal_config = action['deal']
+                        if deal_config.get('location') == 'community':
+                            has_community = True
+                            for card_info in deal_config.get('cards', []):
+                                total_community_cards += card_info.get('number', 0)
+                                subset = card_info.get('community_subset') or card_info.get('subset')
+                                if subset:
+                                    if isinstance(subset, list):
+                                        all_subsets.update(subset)
+                                    else:
+                                        all_subsets.add(subset)
+
+        # 3. No community deals -> "none"
+        if not has_community:
+            return {"type": "none"}
+
+        # 4. All default/no subset -> "linear"
+        if not all_subsets or all_subsets == {"default"}:
+            return {"type": "linear", "expectedCards": total_community_cards}
+
+        # 5. Has subsets but no explicit layout -> "linear" fallback
+        return {"type": "linear", "expectedCards": total_community_cards}
+
+    @staticmethod
+    def _get_community_cards(session: GameSession) -> Dict[str, Any]:
         """Get community cards from the game session.
 
-        Returns cards in format expected by frontend:
-        {flop1: "Ts", flop2: "9s", flop3: "8s", turn: "Ah", river: "Kd"}
+        Returns structured format:
+        {
+            "layout": {"type": "linear"},
+            "cards": {
+                "default": [
+                    {"card": "Ts", "face_up": true},
+                    ...
+                ]
+            }
+        }
         """
         try:
             if not session.game or not hasattr(session.game, 'table'):
-                return {}
+                return {"layout": {"type": "none"}, "cards": {}}
 
-            # Get community cards from the game engine
-            community_cards = {}
+            layout = GameStateManager._infer_community_layout(session)
 
-            # Try to get community cards from the game table
-            # table.community_cards is a Dict[str, List[Card]] where key is subset name
+            cards_by_subset = {}
+
             if hasattr(session.game.table, 'community_cards'):
                 cards_dict = session.game.table.community_cards
                 if cards_dict:
-                    # Combine all community card subsets into a flat list
-                    all_cards = []
                     for subset_name, card_list in cards_dict.items():
-                        all_cards.extend([str(card) for card in card_list])
+                        cards_by_subset[subset_name] = [
+                            {"card": str(card), "face_up": True}
+                            for card in card_list
+                        ]
 
-                    # Map to frontend expected format: flop1, flop2, flop3, turn, river
-                    card_keys = ['flop1', 'flop2', 'flop3', 'turn', 'river']
-                    for i, card_str in enumerate(all_cards):
-                        if i < len(card_keys):
-                            community_cards[card_keys[i]] = card_str
+            if not cards_by_subset:
+                return {"layout": layout, "cards": {}}
 
-            return community_cards
-            
+            return {"layout": layout, "cards": cards_by_subset}
+
         except Exception as e:
             logger.error(f"Failed to get community cards: {e}")
-            return {}
+            return {"layout": {"type": "none"}, "cards": {}}
     
     @staticmethod
     def _get_pot_info(session: GameSession) -> PotInfo:
@@ -378,7 +438,9 @@ class GameStateManager:
                 PlayerAction.CHECK: ActionType.CHECK,
                 PlayerAction.CALL: ActionType.CALL,
                 PlayerAction.BET: ActionType.BET,
-                PlayerAction.RAISE: ActionType.RAISE
+                PlayerAction.RAISE: ActionType.RAISE,
+                PlayerAction.DRAW: ActionType.DRAW,
+                PlayerAction.DISCARD: ActionType.DISCARD
             }
             
             action_type = action_type_map.get(action_option.action_type, ActionType.FOLD)
@@ -409,9 +471,8 @@ class GameStateManager:
             elif game_state == GameState.DEALING:
                 return GamePhase.DEALING
             elif game_state == GameState.BETTING:
-                # Determine betting round based on community cards
-                community_cards = GameStateManager._get_community_cards(session)
-                num_cards = len(community_cards)  # Keys: flop1, flop2, flop3, turn, river
+                # Determine betting round based on total community card count
+                num_cards = GameStateManager._count_community_cards(session)
 
                 if num_cards == 0:
                     return GamePhase.PREFLOP
@@ -423,6 +484,8 @@ class GameStateManager:
                     return GamePhase.RIVER
                 else:
                     return GamePhase.PREFLOP
+            elif game_state == GameState.DRAWING:
+                return GamePhase.DRAWING
             elif game_state == GameState.SHOWDOWN:
                 return GamePhase.SHOWDOWN
             elif game_state == GameState.COMPLETE:
@@ -434,6 +497,20 @@ class GameStateManager:
             logger.error(f"Failed to get game phase: {e}")
             return GamePhase.WAITING
     
+    @staticmethod
+    def _count_community_cards(session: GameSession) -> int:
+        """Count total community cards directly from game engine (avoids structured format overhead)."""
+        try:
+            if not session.game or not hasattr(session.game, 'table'):
+                return 0
+            if hasattr(session.game.table, 'community_cards'):
+                cards_dict = session.game.table.community_cards
+                if cards_dict:
+                    return sum(len(card_list) for card_list in cards_dict.values())
+            return 0
+        except Exception:
+            return 0
+
     @staticmethod
     def _get_table_info(session: GameSession) -> Dict[str, Any]:
         """Get table information."""
@@ -725,8 +802,11 @@ class GameStateManager:
                     pot_distribution[winner_id] = pot_distribution.get(winner_id, 0) + amount
 
             # Get community cards as flat list
-            community_cards = GameStateManager._get_community_cards(session)
-            final_board = list(community_cards.values())
+            community_data = GameStateManager._get_community_cards(session)
+            final_board = []
+            for subset_cards in community_data.get("cards", {}).values():
+                for card_info in subset_cards:
+                    final_board.append(card_info["card"])
 
             # Build player hands dict
             player_hands = {}
@@ -801,8 +881,8 @@ class GameStateManager:
                 ))
             
             # Check for community card changes
-            old_cards = list(old_state.community_cards.values())
-            new_cards = list(new_state.community_cards.values())
+            old_cards = old_state.community_cards.get("cards", {})
+            new_cards = new_state.community_cards.get("cards", {})
             if old_cards != new_cards:
                 changes.append(GameStateManager.create_game_state_update(
                     new_state.table_id,

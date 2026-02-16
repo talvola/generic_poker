@@ -32,6 +32,7 @@ class GameEvent:
     NOTIFICATION = "notification"
     READY_STATUS_UPDATE = "ready_status_update"
     HAND_STARTING = "hand_starting"
+    PLAYER_LEAVING = "player_leaving"
 
 
 class WebSocketManager:
@@ -165,35 +166,71 @@ class WebSocketManager:
 
                 user_id = current_user.id
 
+                from ..services.game_orchestrator import game_orchestrator
+                from ..services.table_access_manager import TableAccessManager
+                from ..services.table_manager import TableManager
+                from generic_poker.game.game_state import GameState
+
+                session = game_orchestrator.get_session(table_id)
+
+                # Check if a hand is actively in progress
+                hand_active = (session and session.game and session.game.state in (
+                    GameState.BETTING, GameState.DEALING, GameState.SHOWDOWN,
+                    GameState.DRAWING
+                ))
+
+                if hand_active:
+                    # Mid-hand: fold and mark for removal after hand
+                    hand_completed, msg = session.mark_player_leaving(user_id)
+                    logger.info(f"Player {user_id} leaving mid-hand: {msg}")
+
+                    # Broadcast that this player is leaving
+                    self.broadcast_to_table(table_id, 'player_leaving', {
+                        'user_id': user_id,
+                        'username': current_user.username,
+                        'timestamp': datetime.utcnow().isoformat() + 'Z'
+                    })
+
+                    # If fold completed the hand, handle completion
+                    if hand_completed and session.game.state == GameState.COMPLETE:
+                        try:
+                            hand_results = session.game.get_hand_results()
+                            if hand_results:
+                                from online_poker.services.player_action_manager import player_action_manager
+                                player_action_manager._handle_hand_completion(table_id, session)
+                        except Exception as hc_err:
+                            logger.error(f"Failed to handle hand completion after leave-fold: {hc_err}")
+                    else:
+                        # Hand continues - broadcast updated state
+                        self.broadcast_game_state_update(table_id)
+                else:
+                    # Not mid-hand: remove from game session immediately
+                    if session:
+                        session.remove_player(user_id, "Player left table")
+
                 # Leave the WebSocket room
                 self.leave_table_room(user_id, table_id)
 
-                # Remove player from game session (if active)
-                from ..services.game_orchestrator import game_orchestrator
-                session = game_orchestrator.get_session(table_id)
-                if session:
-                    session.remove_player(user_id, "Player left table")
-
                 # Remove player from the table in the database
-                from ..services.table_access_manager import TableAccessManager
-                from ..services.table_manager import TableManager
-                success, message = TableAccessManager.leave_table(user_id, table_id)
-                if not success:
-                    logger.warning(f"Failed to leave table in database: {message}")
-                else:
-                    logger.info(f"User {user_id} left table {table_id}")
+                # (skip if hand_completed — _handle_hand_completion already did this)
+                if not (hand_active and hand_completed):
+                    success, message = TableAccessManager.leave_table(user_id, table_id)
+                    if not success:
+                        logger.warning(f"Failed to leave table in database: {message}")
+                    else:
+                        logger.info(f"User {user_id} left table {table_id}")
 
-                    # Broadcast updated game state to remaining players
-                    if session:
-                        self.broadcast_game_state_update(table_id)
+                # Broadcast updated game state to remaining players
+                if session:
+                    self.broadcast_game_state_update(table_id)
 
-                    # Broadcast table update to all lobby users so they see updated player count
-                    table = TableManager.get_table_by_id(table_id)
-                    if table:
-                        self.socketio.emit('table_updated', {
-                            'table': table.to_dict(),
-                            'action': 'player_left'
-                        })
+                # Broadcast table update to all lobby users so they see updated player count
+                table = TableManager.get_table_by_id(table_id)
+                if table:
+                    self.socketio.emit('table_updated', {
+                        'table': table.to_dict(),
+                        'action': 'player_left'
+                    })
 
                 emit('left_table', {
                     'table_id': table_id,
@@ -262,29 +299,40 @@ class WebSocketManager:
                 table_id = data.get('table_id')
                 action = data.get('action')
                 amount = data.get('amount', 0)
-                
+
                 if not table_id or not action:
                     emit('error', {'message': 'Table ID and action required'})
                     return
-                
+
                 user_id = current_user.id
-                
+
                 # Process action through game orchestrator
                 from ..services.game_orchestrator import game_orchestrator
                 session = game_orchestrator.get_session(table_id)
                 if not session:
                     emit('error', {'message': 'Game session not found'})
                     return
-                
+
                 from generic_poker.game.game_state import PlayerAction
                 try:
                     player_action = PlayerAction(action.lower())
                 except ValueError:
                     emit('error', {'message': f'Invalid action: {action}'})
                     return
-                
+
+                # Parse cards for draw/discard actions
+                cards_raw = data.get('cards', [])
+                card_objects = None
+                if cards_raw:
+                    from generic_poker.core.card import Card
+                    try:
+                        card_objects = [Card.from_string(s) for s in cards_raw]
+                    except (ValueError, Exception) as e:
+                        emit('error', {'message': f'Invalid card format: {e}'})
+                        return
+
                 success, message, result = session.process_player_action(
-                    user_id, player_action, amount
+                    user_id, player_action, amount, cards=card_objects
                 )
 
                 if success:
@@ -373,6 +421,10 @@ class WebSocketManager:
                                 player_action_manager._handle_hand_completion(table_id, session)
                         except Exception as hc_err:
                             logger.error(f"Failed to broadcast hand completion: {hc_err}")
+                    else:
+                        # Hand still in progress - check if new current player is pending leave
+                        if session and session.pending_leaves:
+                            self._auto_fold_pending_players(table_id, session)
 
                     emit('action_result', {
                         'success': True,
@@ -1027,6 +1079,11 @@ class WebSocketManager:
 
             # Get or create game session
             session = game_orchestrator.get_session(table_id)
+            if session and not session.is_active:
+                # Stale session (everyone left) - remove and create fresh
+                logger.info(f"Removing stale session for table {table_id}")
+                game_orchestrator.remove_session(table_id)
+                session = None
             if not session:
                 # Create a new session - returns tuple (success, message, session)
                 success, message, session = game_orchestrator.create_session(table_id)
@@ -1112,6 +1169,62 @@ class WebSocketManager:
             self.broadcast_to_table(table_id, GameEvent.ERROR, {
                 'message': 'Failed to start hand'
             })
+
+    def _auto_fold_pending_players(self, table_id: str, session) -> None:
+        """Auto-fold any pending-leave players who are now current to act.
+
+        Loops in case multiple consecutive players are pending leave.
+
+        Args:
+            table_id: ID of the table
+            session: GameSession instance
+        """
+        try:
+            from generic_poker.game.game_state import GameState as GS
+
+            # Keep folding pending players until we reach a non-pending player
+            # or the hand completes
+            max_iterations = 10  # safety limit
+            for _ in range(max_iterations):
+                if not session.game or session.game.state == GS.COMPLETE:
+                    break
+
+                folded, folded_id = session.auto_fold_pending_player()
+                if not folded:
+                    break
+
+                logger.info(f"Auto-folded pending-leave player {folded_id}")
+
+                # Advance the game if needed (fold may have completed a betting round)
+                game = session.game
+                if hasattr(game, 'state') and game.state != GS.COMPLETE:
+                    # Check if we need to advance through non-player-input steps
+                    while game.state != GS.COMPLETE:
+                        if game.current_step >= len(game.rules.gameplay):
+                            break
+                        if game.state == GS.DEALING:
+                            game._next_step()
+                        elif game.state == GS.BETTING and game.current_player is None:
+                            game._next_step()
+                        else:
+                            break
+
+                # Broadcast updated state
+                self.broadcast_game_state_update(table_id)
+
+                # Check if hand completed
+                if session.game.state == GS.COMPLETE:
+                    try:
+                        hand_results = session.game.get_hand_results()
+                        if hand_results:
+                            from online_poker.services.player_action_manager import player_action_manager
+                            player_action_manager._handle_hand_completion(table_id, session)
+                    except Exception as hc_err:
+                        logger.error(f"Failed to handle hand completion after auto-fold: {hc_err}")
+                    break
+
+        except Exception as e:
+            logger.error(f"Failed to auto-fold pending players at table {table_id}: {e}")
 
     def broadcast_ready_status(self, table_id: str) -> None:
         """Broadcast current ready status to all table participants.

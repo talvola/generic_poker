@@ -1,7 +1,7 @@
 # Project Status
 
 > Single source of truth for project state. Updated as work progresses.
-> Last updated: 2026-02-14
+> Last updated: 2026-02-15
 
 ## Architecture Overview
 
@@ -60,41 +60,47 @@ Flask/SocketIO multiplayer web platform.
 - Responsive CSS layout
 - Ready system (players ready up, hand starts)
 - Betting actions: fold, check, call, bet, raise
+- Draw/discard actions with card selection UI (5-Card Draw, Badugi, Triple Draw, etc.)
 - Game auto-progression through dealing/betting rounds
 - Showdown display (reveal cards, announce winner, award pot)
 - Hand completion and next hand cycle
 - Deck shuffling between hands
 - Table rejoin after leaving
+- Leave/rejoin lifecycle (mid-hand leave auto-folds, deferred removal, session cleanup)
 - Lobby filter dropdowns (variant, stakes, structure, players)
 - WebSocket table join with buy-in validation and seat selection
 - Centralized game state store (GameStateStore)
 - Error notifications for failed fetch calls
+- Turn timer countdown visible on active player's seat (all players see it)
+- 166 game variants available in lobby (dynamically loaded, grouped by category)
+- Game config `category` field for UI grouping (8 families)
 
 ### Remaining Issues
 
 | # | Issue | Priority | Description |
 |---|-------|----------|-------------|
-| 1 | Bot fold bug | LOW | SimpleBot folds when check is available |
-| 2 | Debug prints | LOW | 7 debug print statements in `lobby_routes.py` create_table |
+| ~~1~~ | ~~Bot fold bug~~ | ~~DONE~~ | ~~Fixed: never fold when check available~~ |
+| ~~2~~ | ~~Debug prints~~ | ~~DONE~~ | ~~Removed 7 debug prints, replaced with proper logging~~ |
 | 3 | Hardcoded timeouts | LOW | 30s action, 10min disconnect timeouts not configurable |
 | 4 | Debug deck option | LOW | No way to use fixed/unseeded deck for testing |
-| 5 | 3+ player games | MEDIUM | Untested with more than 2 players |
-| 6 | Draw/discard actions | MEDIUM | Required for draw poker variants |
+| ~~5~~ | ~~3+ player games~~ | ~~DONE~~ | ~~Engine, CSS, rendering all support 3+ players~~ |
+| ~~6~~ | ~~Draw/discard actions~~ | ~~DONE~~ | ~~Card selection UI, backend plumbing, 65 draw games playable~~ |
 | 7 | Card passing | MEDIUM | Required for pass-card variants |
 | 8 | Hand history display | LOW | Not implemented |
 | 9 | Mobile optimization | LOW | Chat panel toggle works but needs testing |
 | 10 | Admin interface | LOW | Not implemented |
+| 11 | Stud game UI | MEDIUM | Per-player up/down cards, 7+ cards per player |
 
 ---
 
 ## Testing
 
-### Test Counts (2026-02-14)
+### Test Counts (2026-02-15)
 
 | Layer | Tests | Status |
 |-------|-------|--------|
-| Python unit + integration | 801 | All passing |
-| Socket.IO integration | 9 | All passing (in `test_socketio_integration.py`) |
+| Python unit + integration | 814 | All passing |
+| Socket.IO integration | 33 | All passing (in `test_socketio_integration.py`) |
 | Playwright E2E | 26 | All passing (4 spec files) |
 
 ### Test Layers

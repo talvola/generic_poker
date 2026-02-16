@@ -1,5 +1,6 @@
 {
     "game": "Upside-Down Pineapple 8",
+    "category": "Pineapple",
     "players": {
         "min": 2,
         "max": 9

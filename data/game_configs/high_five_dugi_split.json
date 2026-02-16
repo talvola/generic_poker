@@ -1,5 +1,6 @@
 {
     "game": "High-Five-Dugi Split",
+    "category": "Other",
     "players": {
         "min": 2,
         "max": 6

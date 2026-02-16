@@ -1,5 +1,6 @@
 {
     "game": "6-Card Stud",
+    "category": "Stud",
     "references": [
         "https://www.pokerrules.net/stud/six-card-stud/"
     ],

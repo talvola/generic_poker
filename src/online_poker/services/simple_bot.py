@@ -16,37 +16,44 @@ class SimpleBot:
         self.is_bot = True
     
     def choose_action(self, valid_actions: List[Tuple], pot_amount: int = 0, stack: int = 0) -> Tuple[PlayerAction, Optional[int]]:
-        """Choose an action from the valid actions list."""
+        """Choose an action from the valid actions list.
+
+        Strategy:
+        - Never fold when check is available (folding a free option is irrational)
+        - Check/call most of the time, occasionally bet/raise
+        - Fold facing a bet/raise ~20% of the time
+        """
         if not valid_actions:
             logger.warning(f"Bot {self.username} has no valid actions")
             return PlayerAction.FOLD, None
-        
+
         try:
-            # Simple strategy: 
-            # - Always call/check if possible (60% chance)
-            # - Sometimes fold (30% chance)
-            # - Rarely bet/raise (10% chance)
-            
+            action_types = {a[0] for a in valid_actions}
+            can_check = PlayerAction.CHECK in action_types
+
             action_weights = {}
             for action_tuple in valid_actions:
                 action_type, min_amount, max_amount = action_tuple
-                
+
                 if action_type == PlayerAction.FOLD:
-                    action_weights[action_tuple] = 30
-                elif action_type in [PlayerAction.CHECK, PlayerAction.CALL]:
+                    # Never fold when check is available
+                    action_weights[action_tuple] = 0 if can_check else 20
+                elif action_type == PlayerAction.CHECK:
+                    action_weights[action_tuple] = 70
+                elif action_type == PlayerAction.CALL:
                     action_weights[action_tuple] = 60
                 elif action_type in [PlayerAction.BET, PlayerAction.RAISE]:
-                    action_weights[action_tuple] = 10
+                    action_weights[action_tuple] = 20
                 else:
                     action_weights[action_tuple] = 5
-            
+
             # Choose weighted random action
             actions = list(action_weights.keys())
             weights = list(action_weights.values())
             chosen_action = random.choices(actions, weights=weights)[0]
-            
+
             action_type, min_amount, max_amount = chosen_action
-            
+
             # Determine amount for betting actions
             amount = None
             if action_type in [PlayerAction.BET, PlayerAction.RAISE, PlayerAction.CALL]:
@@ -60,10 +67,10 @@ class SimpleBot:
                         amount = min_amount + int(range_size * random_factor)
                     else:
                         amount = min_amount
-            
+
             logger.info(f"Bot {self.username} chose action: {action_type.value} {amount if amount else ''}")
             return action_type, amount
-            
+
         except Exception as e:
             logger.error(f"Bot {self.username} error choosing action: {e}")
             # Fallback to first valid action

@@ -1,5 +1,6 @@
 {
     "game": "8-Card Stud",
+    "category": "Stud",
     "references": [
         "https://www.pokerrules.net/stud/eight-card-stud/"
     ],

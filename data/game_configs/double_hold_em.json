@@ -1,5 +1,6 @@
 {
     "game": "Double Hold'em",
+    "category": "Hold'em",
     "players": {
         "min": 2,
         "max": 7
