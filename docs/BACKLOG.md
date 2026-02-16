@@ -1,8 +1,7 @@
 # Backlog
 
 > Prioritized task list. Work top-to-bottom within each phase.
-> Phase 2 is the current focus: UI refactoring.
-> Last updated: 2026-02-15
+> Last updated: 2026-02-16
 
 ---
 
@@ -90,6 +89,9 @@ After gameplay works, make the frontend maintainable.
 | 3.8 | Add hand history display | TODO |
 | 3.9 | Mobile optimization pass | TODO |
 | 3.10 | Stud game support (7-card stud UI, per-player up/down cards) | TODO |
+| 3.11 | Community card layout: multi-row boards (double-board, murder) | TODO |
+| 3.12 | Community card layout: branching/diamond (chowaha, omaha 321) | TODO |
+| 3.13 | Community card layout: grid/criss-cross (tic-tac, banco) | TODO |
 
 ### Task Details
 
@@ -110,6 +112,13 @@ After gameplay works, make the frontend maintainable.
 - **Disconnect vs Leave:** Intentional leave = immediate fold, no grace period. Network disconnect = 30s reconnect window (existing `disconnect_manager.py` behavior preserved).
 - Key files: `game_orchestrator.py` (`pending_leaves`, `mark_player_leaving()`, `process_pending_leaves()`), `websocket_manager.py` (deferred leave handler, `player_leaving` event, stale session cleanup), `player_action_manager.py` (post-hand pending leave processing).
 - 4 new SocketIO integration tests: mid-hand leave awards pot, no-hand leave removes immediately, both-leave deactivates session, disconnect behavior preserved.
+
+**3.6 addendum (community card layout):** Replaced hardcoded 5-slot Hold'em community card display with data-driven layout system. Backend auto-infers layout type (`linear` or `none`) from game config gameplay steps. `_get_community_cards()` now returns structured `{layout: {type}, cards: {subset: [...]}}` format. Frontend `renderCommunityCards()` dynamically creates card slots based on layout. Draw games hide community area entirely. ~160 games work with auto-inferred linear layout. Future phases need explicit `communityCardLayout` configs for multi-row (6 games), branching (9 games), grid (5 games), criss-cross (4 games). See plan file for details.
+
+**3.11-3.13 details:** The community card layout system (Phase 1: linear/none) is done. Remaining phases need:
+- **3.11 Multi-row:** 6 configs (double-board, murder, oklahoma). Add `communityCardLayout: {type: "multi-row", rows: [...]}` to configs, implement `_renderMultiRowLayout()` with labeled stacked rows.
+- **3.12 Branching:** 9 configs (chowaha, omaha 321). Diamond renderer with CSS connector lines.
+- **3.13 Grid/Criss-cross:** 9 configs (tic-tac, banco, criss-cross). CSS Grid renderers.
 
 ---
 
@@ -133,17 +142,30 @@ for adding new variants. See `docs/GAME_VALIDATION.md` for full details.
 
 | # | Task | Key Files | Status |
 |---|------|-----------|--------|
-| 5.1 | Create parametrized smoke test for all 192 variants | `tests/game/` | TODO |
+| 5.1 | Create parametrized smoke test for all 192 variants | `tests/game/` | DONE |
+| 5.1b | Migrate inline config tests to file-based loading | `tests/game/` | DONE |
 | 5.2 | Add tests for rare-feature games (roll_die, choose, remove) | `tests/game/` | TODO |
 | 5.3 | Implement `all_exposed`/`any_exposed`/`none_exposed` conditions | `game.py:531` | TODO |
 | 5.4 | Implement `separate.hand_comparison` if needed | `player_action_handler.py` | TODO |
 | 5.5 | Build "can this game be implemented?" assessment skill | `.claude/` | TODO |
 | 5.6 | Build "implement new game variant" skill | `.claude/` | TODO |
+| 5.7 | Fix known engine bugs (13 games, see STATUS.md) | `showdown_manager.py`, `evaluator.py` | TODO |
 
-**5.1 details:** A single parametrized test that loads each config, creates a game with
-minimum players, and plays a hand to completion (everyone checks/calls). Should catch
-crashes, infinite loops, and missing implementations. ~126 variants currently have no
-end-to-end test.
+**5.1 result:** `tests/game/test_all_variants_smoke.py` — parametrized smoke test for all 192 configs.
+Two test functions: `test_variant_config_loads` (all 192 parse correctly) and `test_variant_loads_and_plays`
+(166 supported games play a hand to completion passively). 26 unsupported games skipped (need expose/pass/
+declare/separate/choose actions). 13 games marked xfail for known engine bugs (showdown TypeError, evaluation
+card count mismatches, drawing phase stuck, chip conservation failures). Total: 345 passed, 12 xfailed.
+
+**5.1b result:** Migrated 12 test files from inline JSON game configs to `load_rules_from_file()`.
+Removed 1,307 lines of duplicated config data. All tests pass with file-based loading.
+
+**5.7 details:** 13 games have engine bugs found by the smoke test. Grouped by root cause:
+- **Showdown TypeError** (2 games): `int + list` in `showdown_manager.py:1645` — 2_or_5_omaha_8 variants
+- **Evaluation card count** (5 games): Evaluator expects exactly N cards but gets wrong count — canadian_stud (soko_high), london_lowball (a6_low), razzaho (a5_low), razzbadeucey/super_razzbadeucey (badugi_ah)
+- **Showdown NoneType** (1 game): omaha_321_hi_hi — `NoneType.cards` in showdown_manager.py:1472
+- **Drawing stuck** (1 game): one_mans_trash — DRAW returns no valid actions
+- **Chip conservation** (4 games): stampler/stumpler variants — ante handling bug, non-deterministic
 
 **5.5-5.6 details:** Claude Code skills that:
 - 5.5: Given a game description URL, analyze rules and determine if implementable with

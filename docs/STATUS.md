@@ -1,7 +1,7 @@
 # Project Status
 
 > Single source of truth for project state. Updated as work progresses.
-> Last updated: 2026-02-15
+> Last updated: 2026-02-16
 
 ## Architecture Overview
 
@@ -74,6 +74,8 @@ Flask/SocketIO multiplayer web platform.
 - Turn timer countdown visible on active player's seat (all players see it)
 - 166 game variants available in lobby (dynamically loaded, grouped by category)
 - Game config `category` field for UI grouping (8 families)
+- Data-driven community card layout (linear layout auto-inferred for ~160 games, draw games hide community area)
+- Granular card display scaling (3-4 cards, 5-6 cards, 7-8 cards with overlap)
 
 ### Remaining Issues
 
@@ -95,17 +97,25 @@ Flask/SocketIO multiplayer web platform.
 
 ## Testing
 
-### Test Counts (2026-02-15)
+### Test Counts (2026-02-16)
 
 | Layer | Tests | Status |
 |-------|-------|--------|
 | Python unit + integration | 814 | All passing |
+| Smoke test (all 192 variants) | 345 | 333 pass, 12 xfail (known bugs) |
 | Socket.IO integration | 33 | All passing (in `test_socketio_integration.py`) |
 | Playwright E2E | 26 | All passing (4 spec files) |
+| **Total** | **1,159** | **All passing** |
 
 ### Test Layers
 
 ```
+Layer 0: Smoke Tests (all 192 variants)
+  - Parametrized: loads each config, creates game, plays a hand passively
+  - Catches crashes, infinite loops, missing implementations
+  - tests/game/test_all_variants_smoke.py
+  - 26 unsupported (unimplemented actions), 13 xfail (engine bugs)
+
 Layer 1: Python Integration Tests (engine + services)
   - Drive game engine directly: game.start_hand(), game.player_action()
   - No WebSocket, no browser needed. Fast (< 1 second per test)
@@ -159,6 +169,36 @@ Layer 3: E2E Browser Tests (visual verification)
 - Fixed lobby filter bug (tables disappearing permanently)
 - Fixed lobby race condition (loadTables before socket connected)
 - Fixed WebSocket join handlers (buy-in, seat selection, bankroll validation)
+
+---
+
+## Known Engine Bugs (from smoke test)
+
+Found by `tests/game/test_all_variants_smoke.py`. All marked `xfail` so test suite stays green.
+
+| Game | Bug | Location |
+|------|-----|----------|
+| 2_or_5_omaha_8, 2_or_5_omaha_8_with_draw | `TypeError: int + list` in showdown | `showdown_manager.py:1645` |
+| canadian_stud | `soko_high` evaluation requires exactly 5 cards | `evaluator.py` |
+| london_lowball | `a6_low` evaluation requires exactly 5 cards | `evaluator.py` |
+| razzaho | `a5_low` evaluation requires exactly 5 cards | `evaluator.py` |
+| razzbadeucey, super_razzbadeucey | `badugi_ah` evaluation requires exactly 4 cards | `evaluator.py` |
+| omaha_321_hi_hi | `NoneType.cards` AttributeError in showdown | `showdown_manager.py:1472` |
+| one_mans_trash | Drawing phase stuck (DRAW returns no valid actions) | `player_action_handler.py` |
+| stampler, stumpler, 5_card_stampler, 6_card_stampler | Chip conservation failure (ante handling) | `betting.py` / `game.py` |
+
+### Unsupported Games (26 — require unimplemented actions)
+
+These games use `expose`, `pass`, `declare`, `separate`, or `choose` actions that haven't been implemented yet. They are skipped entirely in the smoke test.
+
+```
+3_hand_hold_em, 3_hand_hold_em_8, 5_card_shodugi, 6_card_shodugi,
+7_card_flip, 7_card_flip_8, 7_card_stud_hilo_declare, cowpie,
+crazy_sohe, double_hold_em, italian_poker, kentrel, lazy_sohe,
+mexican_poker, paradise_road_pickem, pass_the_pineapple, sheshe,
+showmaha, showmaha_8, sohe, sohe_311, straight_7card_declare,
+straight_9card_declare, straight_declare, studaha, tahoe_pitch_roll
+```
 
 ---
 
