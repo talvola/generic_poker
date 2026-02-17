@@ -545,28 +545,32 @@ class Table:
         active_players = [p for p in self.players.values() if p.is_active]
         if not active_players:
             return None
-        
+
         # Get visible community cards from appropriate subsets
         visible_community = self._get_visible_community_cards_for_betting()
-        
-        num_visible = sum(1 for c in active_players[0].hand.get_cards() 
-                         if c.visibility == Visibility.FACE_UP)
-        if num_visible == 0 and not visible_community:
+
+        # Use max face-up count across all players (not just first) since
+        # expose actions can result in different face-up counts per player
+        max_face_up = max(
+            sum(1 for c in p.hand.get_cards() if c.visibility == Visibility.FACE_UP)
+            for p in active_players
+        )
+        if max_face_up == 0 and not visible_community:
             logger.debug("No visible cards, falling back to first active player")
             return active_players[0]
-        
+
         from generic_poker.game.bringin import BringInDeterminator, CardRule
-        bring_in_rule = (CardRule(forced_bets['rule']) 
-                        if self.rules and forced_bets['rule'] 
+        bring_in_rule = (CardRule(forced_bets['rule'])
+                        if self.rules and forced_bets['rule']
                         else CardRule.LOW_CARD)
-        
+
         # Determine total visible cards for evaluation
-        total_visible = num_visible + len(visible_community)
+        total_visible = max_face_up + len(visible_community)
         eval_type = BringInDeterminator._get_dynamic_eval_type(
             total_visible, bring_in_rule, forced_bets, self.rules
         )
-        logger.debug(f"Evaluating best hand with {num_visible} player + {len(visible_community)} community visible cards using {eval_type}")
-        
+        logger.debug(f"Evaluating best hand with {max_face_up} player + {len(visible_community)} community visible cards using {eval_type}")
+
         # Get required hand size for the eval type
         from generic_poker.evaluation.constants import HAND_SIZES
         required_size = HAND_SIZES.get(eval_type.value, 5)
@@ -584,23 +588,33 @@ class Table:
                     best = combo_list
             return best or cards[:n]
 
-        best_player = active_players[0]
-        best_hand = best_n_cards(
-            [c for c in best_player.hand.get_cards()
-             if c.visibility == Visibility.FACE_UP][:num_visible] + visible_community,
-            required_size
-        )
+        best_player = None
+        best_hand = None
 
-        for player in active_players[1:]:
-            visible_cards = best_n_cards(
-                [c for c in player.hand.get_cards()
-                 if c.visibility == Visibility.FACE_UP][:num_visible] + visible_community,
-                required_size
-            )
-            if evaluator.compare_hands(visible_cards, best_hand, eval_type) > 0:
-                best_hand = visible_cards
-                best_player = player
-        
+        for player in active_players:
+            player_visible = [c for c in player.hand.get_cards()
+                              if c.visibility == Visibility.FACE_UP]
+            all_visible = player_visible + visible_community
+            # Skip players with fewer visible cards than the evaluator requires
+            if len(all_visible) < required_size:
+                continue
+            try:
+                player_hand = best_n_cards(all_visible, required_size)
+                if best_hand is None:
+                    best_hand = player_hand
+                    best_player = player
+                elif evaluator.compare_hands(player_hand, best_hand, eval_type) > 0:
+                    best_hand = player_hand
+                    best_player = player
+            except (ValueError, KeyError) as e:
+                # Skip players whose hands can't be evaluated (e.g., joker in lookup table)
+                logger.debug(f"Skipping {player.name} in best hand eval: {e}")
+                continue
+
+        # Fallback to first active player if no one could be evaluated
+        if best_player is None:
+            best_player = active_players[0]
+
         logger.debug(f"Best hand player: {best_player.name} with cards {best_hand}")
         return best_player
     

@@ -11,39 +11,26 @@ from typing import List
 
 from generic_poker.config.loader import GameRules, BettingStructure
 from generic_poker.game.game import Game, GameState, PlayerAction
-from generic_poker.core.card import Card
+from generic_poker.core.card import Card, Visibility
 
 # ── Config Discovery ──────────────────────────────────────────────────────────
 
 CONFIGS_DIR = Path(__file__).parents[2] / "data" / "game_configs"
 
-# Games that use unimplemented actions (expose, pass, declare, separate, choose)
+# Games that use unimplemented actions (declare, choose)
 # These are expected to fail until those features are implemented.
 UNSUPPORTED_GAMES = {
-    "3_hand_hold_em", "3_hand_hold_em_8",
-    "5_card_shodugi", "6_card_shodugi",
-    "7_card_flip", "7_card_flip_8",
     "7_card_stud_hilo_declare",
-    "cowpie", "crazy_sohe",
-    "double_hold_em",
     "italian_poker",
-    "kentrel",
-    "lazy_sohe",
-    "mexican_poker",
     "paradise_road_pickem",
-    "pass_the_pineapple",
-    "sheshe",
-    "showmaha", "showmaha_8",
-    "sohe", "sohe_311",
     "straight_7card_declare", "straight_9card_declare", "straight_declare",
-    "studaha",
-    "tahoe_pitch_roll",
 }
 
 # Games that have known engine bugs (evaluation errors, showdown crashes, etc.)
 # These should be fixed eventually. Marked xfail so the test suite stays green.
 # All 13 previously-buggy games fixed as of 2026-02-17.
 KNOWN_ENGINE_BUGS = {
+    "mexican_poker": "joker card (W1B1) not in 27_ja_ffh_high_wild_bug hand ranking tables — crashes ~8% of hands",
 }
 
 
@@ -176,6 +163,26 @@ def play_hand_passively(game: Game, max_actions: int = 500) -> int:
                     to_replace = all_community[:num_replace]
                     _take_action(game, player_id, PlayerAction.REPLACE_COMMUNITY,
                                  amount=num_replace, cards=to_replace)
+                elif PlayerAction.PASS in action_map:
+                    num_pass, _ = action_map[PlayerAction.PASS]
+                    hand_cards = list(game.table.players[player_id].hand.cards)
+                    to_pass = hand_cards[:num_pass]
+                    _take_action(game, player_id, PlayerAction.PASS, cards=to_pass)
+                elif PlayerAction.EXPOSE in action_map:
+                    min_expose, max_expose = action_map[PlayerAction.EXPOSE]
+                    hand_cards = list(game.table.players[player_id].hand.cards)
+                    # Select face-down cards to expose
+                    face_down = [c for c in hand_cards if c.visibility == Visibility.FACE_DOWN]
+                    to_expose = face_down[:max_expose]
+                    # If min is 0 and no face-down cards, expose nothing
+                    if len(to_expose) < min_expose:
+                        to_expose = face_down[:min_expose] if face_down else []
+                    _take_action(game, player_id, PlayerAction.EXPOSE, cards=to_expose)
+                elif PlayerAction.SEPARATE in action_map:
+                    total, _ = action_map[PlayerAction.SEPARATE]
+                    hand_cards = list(game.table.players[player_id].hand.cards)
+                    # Just assign cards in order to satisfy the total count
+                    _take_action(game, player_id, PlayerAction.SEPARATE, cards=hand_cards[:total])
                 else:
                     action = next(iter(action_map))
                     _take_action(game, player_id, action, amount=0, cards=[])

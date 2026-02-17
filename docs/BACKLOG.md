@@ -85,10 +85,11 @@ After gameplay works, make the frontend maintainable.
 | 3.4 | Proper table leave/rejoin lifecycle | DONE |
 | 3.5 | Add player timeout countdown UI | DONE |
 | 3.6 | Implement draw/discard actions | DONE |
-| 3.7 | Implement card passing | TODO |
+| 3.7 | Implement card passing | DONE |
+| 3.7b | Implement expose/separate actions + card visibility | DONE |
 | 3.8 | Add hand history display | TODO |
 | 3.9 | Mobile optimization pass | TODO |
-| 3.10 | Stud game support (7-card stud UI, per-player up/down cards) | TODO |
+| 3.10 | Stud game support (7-card stud UI, per-player up/down cards) | DONE (covered by 3.7b card visibility) |
 | 3.11 | Community card layout: multi-row boards (double-board, murder) | TODO |
 | 3.12 | Community card layout: branching/diamond (chowaha, omaha 321) | TODO |
 | 3.13 | Community card layout: grid/criss-cross (tic-tac, banco) | TODO |
@@ -112,6 +113,16 @@ After gameplay works, make the frontend maintainable.
 - **Disconnect vs Leave:** Intentional leave = immediate fold, no grace period. Network disconnect = 30s reconnect window (existing `disconnect_manager.py` behavior preserved).
 - Key files: `game_orchestrator.py` (`pending_leaves`, `mark_player_leaving()`, `process_pending_leaves()`), `websocket_manager.py` (deferred leave handler, `player_leaving` event, stale session cleanup), `player_action_manager.py` (post-hand pending leave processing).
 - 4 new SocketIO integration tests: mid-hand leave awards pot, no-hand leave removes immediately, both-leave deactivates session, disconnect behavior preserved.
+
+**3.7 result:** Connected existing engine card passing support through all online platform layers. Added `ActionType.PASS` to view models. Mapped `PlayerAction.PASS` in `GameStateManager`. Added PASS action option creation, card validation (requires exactly N cards), and broadcast message in `PlayerActionManager`. Frontend reuses the existing draw/discard card selection UI — during pass phase, cards become clickable with "Select card(s) to pass" label and "Pass N" submit button. Added `pass_the_pineapple` to smoke test (removed from UNSUPPORTED_GAMES, now 167 supported games). 2 new SocketIO integration tests (3-player pass phase detection, full hand to showdown). 25 unsupported games remaining (expose/declare/separate/choose).
+
+**3.7b result:** Connected engine EXPOSE and SEPARATE actions through all online platform layers. Three-part implementation:
+1. **Card visibility infrastructure:** New `_get_player_cards_with_visibility()` method sends per-card face-up/face-down info to opponents. Cards array now supports `null` entries (face-down) alongside card strings (face-up), enabling mixed visibility for stud and post-expose games. Frontend `renderPlayerCards()` renders `null` as card backs.
+2. **EXPOSE action:** Added `ActionType.EXPOSE`, action option creation (min/max cards), card count validation, broadcast messages. Frontend reuses draw/discard card selection UI with expose-specific labels. Smoke test handler selects face-down cards.
+3. **SEPARATE action:** Added `ActionType.SEPARATE` with `metadata` field on `ActionOption` (carries subset names/counts from `game.current_separate_config`). New `_renderSeparateControls()` UI with sequential subset assignment: cards fill current subset, auto-advance to next, color-coded by subset (blue/green/orange). Post-separation display groups cards by subset with labels. Added `card_subsets` field to `PlayerView`.
+- 19 newly-supported games (from 167 → 186 supported, 6 remaining need DECLARE/CHOOSE): 7_card_flip, 7_card_flip_8, kentrel, showmaha, showmaha_8, studaha, tahoe_pitch_roll, mexican_poker (xfail - chip bug), 3_hand_hold_em, 3_hand_hold_em_8, 5_card_shodugi, 6_card_shodugi, cowpie, crazy_sohe, double_hold_em, lazy_sohe, sheshe, sohe, sohe_311.
+- 2 new SocketIO integration tests (showmaha expose, double_hold_em separate).
+- Key files: `game_state_view.py` (EXPOSE/SEPARATE ActionTypes, metadata, card_subsets), `game_state_manager.py` (visibility method, subset metadata, card_subsets population), `player_action_manager.py` (action options, validation, broadcast), `table.js` (mixed visibility, expose UI, separate UI, subset display), `table.css` (subset colors/labels).
 
 **3.6 addendum (community card layout):** Replaced hardcoded 5-slot Hold'em community card display with data-driven layout system. Backend auto-infers layout type (`linear` or `none`) from game config gameplay steps. `_get_community_cards()` now returns structured `{layout: {type}, cards: {subset: [...]}}` format. Frontend `renderCommunityCards()` dynamically creates card slots based on layout. Draw games hide community area entirely. ~160 games work with auto-inferred linear layout. Future phases need explicit `communityCardLayout` configs for multi-row (6 games), branching (9 games), grid (5 games), criss-cross (4 games). See plan file for details.
 

@@ -1832,3 +1832,405 @@ class TestDrawGameplay:
 
         sio1.disconnect()
         sio2.disconnect()
+
+
+# ── Pass Game Fixtures & Helpers ─────────────────────────────────────────────
+
+@pytest.fixture
+def player3(app):
+    """Create third test player."""
+    uid = str(uuid.uuid4())[:8]
+    user = UserManager.create_user(f"charlie_{uid}", f"charlie_{uid}@test.com", "password123")
+    UserManager.update_user_bankroll(user.id, 1000)
+    user._test_username = f"charlie_{uid}"
+    return user
+
+
+@pytest.fixture
+def pass_table(app, player1):
+    """Create a Pass the Pineapple table."""
+    table_manager = TableManager()
+    config = TableConfig(
+        name="Test Pass the Pineapple",
+        variant="pass_the_pineapple",
+        betting_structure=BettingStructure.LIMIT,
+        stakes={'small_blind': 5, 'big_blind': 10, 'small_bet': 10, 'big_bet': 20},
+        max_players=9,
+        is_private=False,
+        allow_bots=False
+    )
+    return table_manager.create_table(player1.id, config)
+
+
+def _setup_pass_game(app, socketio, player1, player2, player3, pass_table):
+    """Join 3 players, connect, set ready, start hand for pass game.
+
+    Returns (sio1, sio2, sio3, table_id).
+    """
+    table_id = str(pass_table.id)
+
+    http1, sio1 = _login_and_connect(app, socketio, player1)
+    http1.post(f'/api/tables/{table_id}/join', json={
+        'buy_in_amount': 200, 'seat_number': 1
+    })
+
+    http2, sio2 = _login_and_connect(app, socketio, player2)
+    http2.post(f'/api/tables/{table_id}/join', json={
+        'buy_in_amount': 200, 'seat_number': 2
+    })
+
+    http3, sio3 = _login_and_connect(app, socketio, player3)
+    http3.post(f'/api/tables/{table_id}/join', json={
+        'buy_in_amount': 200, 'seat_number': 3
+    })
+
+    # Drain events
+    sio1.get_received()
+    sio2.get_received()
+    sio3.get_received()
+
+    sio1.emit('connect_to_table_room', {'table_id': table_id})
+    sio2.emit('connect_to_table_room', {'table_id': table_id})
+    sio3.emit('connect_to_table_room', {'table_id': table_id})
+    sio1.get_received()
+    sio2.get_received()
+    sio3.get_received()
+
+    sio1.emit('set_ready', {'table_id': table_id, 'ready': True})
+    sio1.get_received()
+    sio2.get_received()
+    sio3.get_received()
+
+    sio2.emit('set_ready', {'table_id': table_id, 'ready': True})
+    sio1.get_received()
+    sio2.get_received()
+    sio3.get_received()
+
+    sio3.emit('set_ready', {'table_id': table_id, 'ready': True})
+    sio1.get_received()
+    sio2.get_received()
+    sio3.get_received()
+
+    return sio1, sio2, sio3, table_id
+
+
+class TestPassGameplay:
+    """Test pass (card passing) game support through the online platform."""
+
+    def test_pass_phase_appears_in_state(self, app, socketio, player1, player2, player3, pass_table):
+        """Pass the Pineapple shows drawing phase with pass actions after flop bet."""
+        sio1, sio2, sio3, table_id = _setup_pass_game(
+            app, socketio, player1, player2, player3, pass_table
+        )
+
+        session = game_orchestrator.get_session(table_id)
+        assert session is not None
+        game = session.game
+        assert game is not None
+
+        # Game starts with blinds posted, then deal, then pre-flop bet
+        assert game.state == GameState.BETTING, f"Expected BETTING, got {game.state}"
+
+        # Advance through pre-flop betting
+        _advance_through_betting(game)
+
+        # Should be dealing flop
+        _advance_through_non_player_steps(game)
+
+        # Post-flop betting
+        if game.state == GameState.BETTING:
+            _advance_through_betting(game)
+
+        # Should now be in DRAWING state (pass phase)
+        assert game.state == GameState.DRAWING, f"Expected DRAWING for pass phase, got {game.state}"
+
+        # Verify game state view shows drawing phase
+        from online_poker.services.game_state_manager import GameStateManager
+        current_id = game.current_player.id
+        state_view = GameStateManager.generate_game_state_view(table_id, current_id)
+        assert state_view is not None
+        assert state_view.game_phase.value == "drawing"
+
+        # Check valid actions include pass for the current player
+        action_types = [a.action_type.value for a in state_view.valid_actions]
+        assert 'pass' in action_types, f"Expected 'pass' in actions, got {action_types}"
+
+        # Verify pass action has correct min/max (1 card)
+        pass_action = [a for a in state_view.valid_actions if a.action_type.value == 'pass'][0]
+        assert pass_action.min_amount == 1, f"Pass min should be 1, got {pass_action.min_amount}"
+        assert pass_action.max_amount == 1, f"Pass max should be 1, got {pass_action.max_amount}"
+
+        sio1.disconnect()
+        sio2.disconnect()
+        sio3.disconnect()
+
+    def test_full_pass_the_pineapple_hand(self, app, socketio, player1, player2, player3, pass_table):
+        """Complete hand: deal -> bet -> flop -> bet -> pass -> deal turn -> bet -> river -> bet -> showdown."""
+        sio1, sio2, sio3, table_id = _setup_pass_game(
+            app, socketio, player1, player2, player3, pass_table
+        )
+
+        session = game_orchestrator.get_session(table_id)
+        game = session.game
+
+        # Phase 1: Pre-flop betting
+        assert game.state == GameState.BETTING
+        _advance_through_betting(game)
+        _advance_through_non_player_steps(game)
+
+        # Phase 2: Post-flop betting
+        if game.state == GameState.BETTING:
+            _advance_through_betting(game)
+
+        # Phase 3: Pass round
+        assert game.state == GameState.DRAWING, f"Expected DRAWING for pass, got {game.state}"
+
+        # Each player passes 1 card
+        for _ in range(3):
+            cp = game.current_player
+            assert cp is not None, "Expected current player for pass action"
+            cards_to_pass = [cp.hand.cards[0]]  # Pass first card
+            result = game.player_action(cp.id, PlayerAction.PASS, cards=cards_to_pass)
+            assert result.success, f"Pass action failed: {result.error}"
+            if result.advance_step and not game.auto_progress and game.state != GameState.COMPLETE:
+                game._next_step()
+                _advance_through_non_player_steps(game)
+
+        # Phase 4: Turn betting
+        if game.state == GameState.BETTING:
+            _advance_through_betting(game)
+            _advance_through_non_player_steps(game)
+
+        # Phase 5: River betting
+        if game.state == GameState.BETTING:
+            _advance_through_betting(game)
+
+        # Phase 6: Game should be complete
+        assert game.state in (GameState.SHOWDOWN, GameState.COMPLETE), \
+            f"Expected SHOWDOWN or COMPLETE, got {game.state}"
+
+        # Verify hand results
+        results = game.get_hand_results()
+        assert results is not None
+        assert results.is_complete
+        assert len(results.pots) > 0
+
+        sio1.disconnect()
+        sio2.disconnect()
+        sio3.disconnect()
+
+
+# ── Expose Game Tests ─────────────────────────────────────────────────────────
+
+@pytest.fixture
+def expose_table(app, player1):
+    """Create a Showmaha table (expose 2 of 4 hole cards after flop)."""
+    table_manager = TableManager()
+    config = TableConfig(
+        name="Test Showmaha",
+        variant="showmaha",
+        betting_structure=BettingStructure.LIMIT,
+        stakes={'small_blind': 5, 'big_blind': 10, 'small_bet': 10, 'big_bet': 20},
+        max_players=9,
+        is_private=False,
+        allow_bots=False
+    )
+    return table_manager.create_table(player1.id, config)
+
+
+def _setup_expose_game(app, socketio, player1, player2, expose_table):
+    """Join both players, connect, set ready for expose game."""
+    table_id = str(expose_table.id)
+
+    http1, sio1 = _login_and_connect(app, socketio, player1)
+    http1.post(f'/api/tables/{table_id}/join', json={'buy_in_amount': 500, 'seat_number': 1})
+
+    http2, sio2 = _login_and_connect(app, socketio, player2)
+    http2.post(f'/api/tables/{table_id}/join', json={'buy_in_amount': 500, 'seat_number': 2})
+
+    sio1.get_received()
+    sio2.get_received()
+    sio1.emit('connect_to_table_room', {'table_id': table_id})
+    sio2.emit('connect_to_table_room', {'table_id': table_id})
+    sio1.get_received()
+    sio2.get_received()
+
+    sio1.emit('set_ready', {'table_id': table_id, 'ready': True})
+    sio1.get_received()
+    sio2.get_received()
+
+    sio2.emit('set_ready', {'table_id': table_id, 'ready': True})
+    sio1.get_received()
+    sio2.get_received()
+
+    return sio1, sio2, table_id
+
+
+class TestExposeGameplay:
+    """Test expose action through the online platform."""
+
+    def test_expose_action_completes_hand(self, app, socketio, player1, player2, expose_table):
+        """Showmaha game: deal 4 cards, bet, flop, expose 2, bet through to completion."""
+        sio1, sio2, table_id = _setup_expose_game(app, socketio, player1, player2, expose_table)
+
+        session = game_orchestrator.get_session(table_id)
+        assert session is not None
+        game = session.game
+        assert game is not None
+
+        # Advance through initial deal and pre-flop betting
+        _advance_through_non_player_steps(game)
+        if game.state == GameState.BETTING:
+            _advance_through_betting(game)
+            _advance_through_non_player_steps(game)
+
+        # Should reach flop deal, then expose phase
+        if game.state == GameState.BETTING:
+            _advance_through_betting(game)
+            _advance_through_non_player_steps(game)
+
+        # Now should be in DRAWING state for expose
+        if game.state == GameState.DRAWING:
+            from generic_poker.core.card import Visibility
+            for _ in range(10):
+                if game.state != GameState.DRAWING:
+                    break
+                cp = game.current_player
+                if not cp:
+                    break
+                actions = game.get_valid_actions(cp.id)
+                expose_actions = [a for a in actions if a[0] == PlayerAction.EXPOSE]
+                if not expose_actions:
+                    break
+                _, min_expose, max_expose = expose_actions[0]
+                hand_cards = list(cp.hand.cards)
+                face_down = [c for c in hand_cards if c.visibility == Visibility.FACE_DOWN]
+                to_expose = face_down[:max_expose]
+                result = game.player_action(cp.id, PlayerAction.EXPOSE, cards=to_expose)
+                if result.advance_step and not game.auto_progress and game.state != GameState.COMPLETE:
+                    game._next_step()
+                    _advance_through_non_player_steps(game)
+
+        # Continue through remaining betting rounds
+        for _ in range(10):
+            if game.state == GameState.COMPLETE:
+                break
+            if game.state == GameState.BETTING:
+                _advance_through_betting(game)
+                _advance_through_non_player_steps(game)
+            elif game.state == GameState.DRAWING:
+                break  # Shouldn't happen again
+            elif game.state in (GameState.DEALING, GameState.SHOWDOWN):
+                game._next_step()
+                _advance_through_non_player_steps(game)
+
+        assert game.state in (GameState.SHOWDOWN, GameState.COMPLETE), \
+            f"Expected SHOWDOWN or COMPLETE, got {game.state} at step {game.current_step}"
+
+        results = game.get_hand_results()
+        assert results is not None
+        assert results.is_complete
+
+        sio1.disconnect()
+        sio2.disconnect()
+
+
+# ── Separate Game Tests ───────────────────────────────────────────────────────
+
+@pytest.fixture
+def separate_table(app, player1):
+    """Create a Double Hold'em table (separate 3 cards into Point/Left/Right)."""
+    table_manager = TableManager()
+    config = TableConfig(
+        name="Test Double Hold'em",
+        variant="double_hold_em",
+        betting_structure=BettingStructure.LIMIT,
+        stakes={'small_blind': 5, 'big_blind': 10, 'small_bet': 10, 'big_bet': 20},
+        max_players=7,
+        is_private=False,
+        allow_bots=False
+    )
+    return table_manager.create_table(player1.id, config)
+
+
+def _setup_separate_game(app, socketio, player1, player2, separate_table):
+    """Join both players, connect, set ready for separate game."""
+    table_id = str(separate_table.id)
+
+    http1, sio1 = _login_and_connect(app, socketio, player1)
+    http1.post(f'/api/tables/{table_id}/join', json={'buy_in_amount': 500, 'seat_number': 1})
+
+    http2, sio2 = _login_and_connect(app, socketio, player2)
+    http2.post(f'/api/tables/{table_id}/join', json={'buy_in_amount': 500, 'seat_number': 2})
+
+    sio1.get_received()
+    sio2.get_received()
+    sio1.emit('connect_to_table_room', {'table_id': table_id})
+    sio2.emit('connect_to_table_room', {'table_id': table_id})
+    sio1.get_received()
+    sio2.get_received()
+
+    sio1.emit('set_ready', {'table_id': table_id, 'ready': True})
+    sio1.get_received()
+    sio2.get_received()
+
+    sio2.emit('set_ready', {'table_id': table_id, 'ready': True})
+    sio1.get_received()
+    sio2.get_received()
+
+    return sio1, sio2, table_id
+
+
+class TestSeparateGameplay:
+    """Test separate action through the online platform."""
+
+    def test_separate_action_completes_hand(self, app, socketio, player1, player2, separate_table):
+        """Double Hold'em: deal 3 cards, separate into subsets, play to completion."""
+        sio1, sio2, table_id = _setup_separate_game(app, socketio, player1, player2, separate_table)
+
+        session = game_orchestrator.get_session(table_id)
+        assert session is not None
+        game = session.game
+        assert game is not None
+
+        # Advance through initial steps
+        _advance_through_non_player_steps(game)
+
+        # Play through all phases
+        for _ in range(50):
+            if game.state == GameState.COMPLETE:
+                break
+            if game.state == GameState.BETTING:
+                _advance_through_betting(game)
+                _advance_through_non_player_steps(game)
+            elif game.state == GameState.DRAWING:
+                # Separate phase
+                cp = game.current_player
+                if not cp:
+                    game._next_step()
+                    _advance_through_non_player_steps(game)
+                    continue
+                actions = game.get_valid_actions(cp.id)
+                sep_actions = [a for a in actions if a[0] == PlayerAction.SEPARATE]
+                if sep_actions:
+                    _, total, _ = sep_actions[0]
+                    hand_cards = list(cp.hand.cards)
+                    result = game.player_action(cp.id, PlayerAction.SEPARATE, cards=hand_cards[:total])
+                    if result.advance_step and not game.auto_progress and game.state != GameState.COMPLETE:
+                        game._next_step()
+                        _advance_through_non_player_steps(game)
+                else:
+                    break
+            elif game.state in (GameState.DEALING, GameState.SHOWDOWN):
+                game._next_step()
+                _advance_through_non_player_steps(game)
+
+        assert game.state in (GameState.SHOWDOWN, GameState.COMPLETE), \
+            f"Expected SHOWDOWN or COMPLETE, got {game.state} at step {game.current_step}"
+
+        results = game.get_hand_results()
+        assert results is not None
+        assert results.is_complete
+
+        sio1.disconnect()
+        sio2.disconnect()

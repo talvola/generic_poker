@@ -17,6 +17,7 @@ from ..database import db
 from generic_poker.game.game_state import GameState, PlayerAction
 from generic_poker.game.game import Game
 from generic_poker.config.loader import GameActionType
+from generic_poker.core.card import Visibility
 
 
 logger = logging.getLogger(__name__)
@@ -81,7 +82,7 @@ class GameStateManager:
                 # Import here to avoid circular imports
                 from ..services.player_action_manager import player_action_manager
                 action_options = player_action_manager.get_available_actions(table_id, viewer_id)
-                valid_actions = [GameStateManager._convert_action_option(opt) for opt in action_options]
+                valid_actions = [GameStateManager._convert_action_option(opt, session) for opt in action_options]
             
             # Determine game phase
             game_phase = GameStateManager._get_game_phase(session)
@@ -205,14 +206,11 @@ class GameStateManager:
         """Create a player view from player information."""
         try:
             user_id = player_info['user_id']
-            
-            # Determine if this player's cards should be visible
-            show_cards = (user_id == viewer_id and not is_spectator) or GameStateManager._should_show_cards(session, user_id)
-            
-            # Get player cards
-            cards = []
-            if show_cards:
-                cards = GameStateManager._get_player_cards(session, user_id)
+
+            # Get player cards with per-card visibility
+            cards = GameStateManager._get_player_cards_with_visibility(
+                session, user_id, viewer_id, is_spectator
+            )
             
             # Check if player is connected
             is_connected = user_id in session.connected_players
@@ -239,6 +237,9 @@ class GameStateManager:
             card_count = GameStateManager._get_player_card_count(session, user_id)
 
             # Create player view
+            # Get card subsets if the player has separated their cards
+            card_subsets = GameStateManager._get_card_subsets(session, user_id, viewer_id, is_spectator)
+
             player_view = PlayerView(
                 user_id=user_id,
                 username=player_info['username'],
@@ -255,7 +256,8 @@ class GameStateManager:
                 is_all_in=GameStateManager._is_all_in(session, user_id),
                 has_folded=GameStateManager._has_folded(session, user_id),
                 last_action=last_action,
-                time_to_act=time_to_act
+                time_to_act=time_to_act,
+                card_subsets=card_subsets
             )
             
             return player_view
@@ -422,12 +424,13 @@ class GameStateManager:
             return None
     
     @staticmethod
-    def _convert_action_option(action_option) -> ActionOption:
+    def _convert_action_option(action_option, session: GameSession = None) -> ActionOption:
         """Convert PlayerActionOption to ActionOption for the game state view.
-        
+
         Args:
             action_option: PlayerActionOption from the action manager
-            
+            session: Optional game session for metadata extraction
+
         Returns:
             ActionOption for the game state view
         """
@@ -440,16 +443,30 @@ class GameStateManager:
                 PlayerAction.BET: ActionType.BET,
                 PlayerAction.RAISE: ActionType.RAISE,
                 PlayerAction.DRAW: ActionType.DRAW,
-                PlayerAction.DISCARD: ActionType.DISCARD
+                PlayerAction.DISCARD: ActionType.DISCARD,
+                PlayerAction.PASS: ActionType.PASS,
+                PlayerAction.EXPOSE: ActionType.EXPOSE,
+                PlayerAction.SEPARATE: ActionType.SEPARATE
             }
-            
+
             action_type = action_type_map.get(action_option.action_type, ActionType.FOLD)
-            
+
+            # Attach subset metadata for SEPARATE actions
+            metadata = None
+            if action_option.action_type == PlayerAction.SEPARATE and session and session.game:
+                if hasattr(session.game, 'current_separate_config'):
+                    config = session.game.current_separate_config
+                    metadata = {"subsets": [
+                        {"name": cfg["hole_subset"], "count": cfg["number"]}
+                        for cfg in config.get("cards", [])
+                    ]}
+
             return ActionOption(
                 action_type=action_type,
                 min_amount=action_option.min_amount,
                 max_amount=action_option.max_amount,
-                display_text=action_option.display_text
+                display_text=action_option.display_text,
+                metadata=metadata
             )
             
         except Exception as e:
@@ -579,6 +596,95 @@ class GameStateManager:
         except Exception as e:
             logger.error(f"Failed to get player card count for {user_id}: {e}")
             return 0
+
+    @staticmethod
+    def _get_player_cards_with_visibility(session: GameSession, user_id: str,
+                                          viewer_id: str, is_spectator: bool) -> List[Optional[str]]:
+        """Get a player's cards with per-card visibility for the viewer.
+
+        - Viewer's own cards: all returned as strings (all visible)
+        - Showdown/complete: all returned as strings (all visible)
+        - Opponent mid-hand: face-up cards as strings, face-down as None.
+          If ALL are face-down, returns empty list (let card_count handle backs).
+        """
+        try:
+            if not session.game or not hasattr(session.game, 'table'):
+                return []
+
+            player = session.game.table.players.get(user_id)
+            if not player or not hasattr(player, 'hand') or not hasattr(player.hand, 'cards'):
+                return []
+
+            cards = player.hand.cards
+            if not cards:
+                return []
+
+            # Viewer's own cards: always fully visible
+            if user_id == viewer_id and not is_spectator:
+                return [str(card) for card in cards]
+
+            # Showdown/complete: all visible
+            if GameStateManager._should_show_cards(session, user_id):
+                return [str(card) for card in cards]
+
+            # Opponent mid-hand: check per-card visibility
+            result = []
+            has_face_up = False
+            for card in cards:
+                if card.visibility == Visibility.FACE_UP:
+                    result.append(str(card))
+                    has_face_up = True
+                else:
+                    result.append(None)
+
+            # If all cards are face-down, return empty list for backward compat
+            # (frontend uses card_count to show backs)
+            if not has_face_up:
+                return []
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Failed to get cards with visibility for {user_id}: {e}")
+            return []
+
+    @staticmethod
+    def _get_card_subsets(session: GameSession, user_id: str,
+                         viewer_id: str, is_spectator: bool) -> Optional[Dict[str, List[str]]]:
+        """Get card subsets for a player who has separated their cards.
+
+        Returns subset name -> card strings for viewer's own cards or showdown,
+        subset name -> card count for opponents mid-hand.
+        Returns None if no subsets exist.
+        """
+        try:
+            if not session.game or not hasattr(session.game, 'table'):
+                return None
+
+            player = session.game.table.players.get(user_id)
+            if not player or not hasattr(player, 'hand') or not hasattr(player.hand, 'subsets'):
+                return None
+
+            subsets = player.hand.subsets
+            if not subsets:
+                return None
+
+            is_own_cards = (user_id == viewer_id and not is_spectator)
+            is_showdown = GameStateManager._should_show_cards(session, user_id)
+
+            result = {}
+            for name, cards in subsets.items():
+                if is_own_cards or is_showdown:
+                    result[name] = [str(c) for c in cards]
+                else:
+                    # For opponents, just show count per subset
+                    result[name] = [str(c) if c.visibility == Visibility.FACE_UP else None for c in cards]
+
+            return result if result else None
+
+        except Exception as e:
+            logger.error(f"Failed to get card subsets for {user_id}: {e}")
+            return None
 
     @staticmethod
     def _is_current_player(session: GameSession, user_id: str) -> bool:

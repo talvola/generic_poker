@@ -29,6 +29,9 @@ class ActionType(Enum):
     ALL_IN = "all_in"
     DRAW = "draw"
     DISCARD = "discard"
+    PASS = "pass"
+    EXPOSE = "expose"
+    SEPARATE = "separate"
 
 
 @dataclass
@@ -39,16 +42,20 @@ class ActionOption:
     max_amount: int = 0
     is_enabled: bool = True
     display_text: str = ""
-    
+    metadata: Optional[Dict[str, Any]] = None
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
-        return {
+        result = {
             'action_type': self.action_type.value,
             'min_amount': self.min_amount,
             'max_amount': self.max_amount,
             'is_enabled': self.is_enabled,
             'display_text': self.display_text
         }
+        if self.metadata is not None:
+            result['metadata'] = self.metadata
+        return result
 
 
 @dataclass
@@ -92,10 +99,11 @@ class PlayerView:
     has_folded: bool = False
     last_action: Optional[str] = None
     time_to_act: Optional[int] = None  # Seconds remaining to act
+    card_subsets: Optional[Dict[str, List[str]]] = None  # Named card subsets (for separate games)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary representation."""
-        return {
+        result = {
             'user_id': self.user_id,
             'username': self.username,
             'position': self.position,
@@ -113,6 +121,9 @@ class PlayerView:
             'last_action': self.last_action,
             'time_to_act': self.time_to_act
         }
+        if self.card_subsets is not None:
+            result['card_subsets'] = self.card_subsets
+        return result
 
 
 @dataclass

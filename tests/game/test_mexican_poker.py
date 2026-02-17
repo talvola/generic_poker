@@ -228,164 +228,113 @@ def test_game_deal():
     assert result.success
 
     # The grouped actions should be:
-    # P2 - Expose 0 cards, Deal 1 card face up
-    # P3 - Expose 1 card, Deal 1 card face down
-    # P1 - Expose 1 card, Deal 1 card face down
+    # P2 - Expose 0 cards, Deal 1 card face up (auto-executed after expose)
+    # P3 - Expose 1 card, Deal 1 card face down (auto-executed after expose)
+    # P1 - Expose 1 card, Deal 1 card face down (auto-executed after expose)
 
     game._next_step()
     assert game.current_step == 4
-    assert game.action_handler.current_substep == 0 # expose is first part of group    
+    assert game.action_handler.current_substep == 0  # expose is first part of group
     assert game.state == GameState.DRAWING  # really expose
     assert game.current_player.id == "p2"
 
     # check cards haven't changed
     assert str(game.table.players['p1'].hand.cards[0]) == "Rj"  # Alice
     assert str(game.table.players['p2'].hand.cards[0]) == "Qd"  # Bob
-    assert str(game.table.players['p3'].hand.cards[0]) == "Js"  # Charlie    
+    assert str(game.table.players['p3'].hand.cards[0]) == "Js"  # Charlie
 
     assert game.table.players['p1'].hand.get_cards(visible_only=True) == [Card(Rank.QUEEN, Suit.HEARTS)]
     assert game.table.players['p2'].hand.get_cards(visible_only=True) == [Card(Rank.KING, Suit.DIAMONDS)]
-    assert game.table.players['p3'].hand.get_cards(visible_only=True) == [Card(Rank.TWO, Suit.CLUBS)]    
+    assert game.table.players['p3'].hand.get_cards(visible_only=True) == [Card(Rank.TWO, Suit.CLUBS)]
 
     valid_actions = game.get_valid_actions(game.current_player.id)
     assert len(valid_actions) == 1
     assert any(action[0] == PlayerAction.EXPOSE and action[1] == 0 and action[2] == 1 for action in valid_actions)
 
+    # Bob (P2) exposes 0 cards — deal auto-executes: not all_exposed → face up card
     exposing_player = game.current_player.id
     cards_to_expose = None
     result = game.player_action(exposing_player, PlayerAction.EXPOSE, cards=cards_to_expose)
     assert result.success
     assert result.advance_step == False  # not time to go to next step yet
 
-    # did not expose anything - so just the single card is visible until we deal
-    assert game.table.players[exposing_player].hand.get_cards(visible_only=True) == [Card(Rank.KING, Suit.DIAMONDS)]    
-
-    # deal part of the grouped action 
-    assert game.current_step == 4
-    assert game.action_handler.current_substep == 1 # deal is second part of group    
-    assert game.state == GameState.DEALING  
-    assert game.current_player.id == "p2"
-
-    valid_actions = game.get_valid_actions(game.current_player.id)
-    print (valid_actions)
-
-    # this is unusual but the way that grouped actions work - there is an assumption 
-    # they are all player actions, and DEAL is not a player action
-    result = game.player_action(exposing_player, PlayerAction.DEAL)
-    assert result.success
-
-    print(f"exposing_player: {exposing_player} cards are {game.table.players[exposing_player].hand.get_cards()}")
+    # After expose, deal auto-executed — Bob now has 3 cards
     assert str(game.table.players[exposing_player].hand.cards[0]) == "Qd"  # Bob (p2)
-    assert str(game.table.players[exposing_player].hand.cards[1]) == "Kd"  # Bob     
-    assert str(game.table.players[exposing_player].hand.cards[2]) == "5d"  # Bob    
+    assert str(game.table.players[exposing_player].hand.cards[1]) == "Kd"  # Bob
+    assert str(game.table.players[exposing_player].hand.cards[2]) == "5d"  # Bob (dealt face up)
 
-    assert game.table.players[exposing_player].hand.get_cards(visible_only=True) == [Card(Rank.KING, Suit.DIAMONDS),Card(Rank.FIVE, Suit.DIAMONDS)]    
+    assert game.table.players[exposing_player].hand.get_cards(visible_only=True) == [Card(Rank.KING, Suit.DIAMONDS), Card(Rank.FIVE, Suit.DIAMONDS)]
 
 
-    # moving onto next player to act - Charlie (P3)
+    # Moving onto next player to act - Charlie (P3)
     # P3 - Expose 1 card, Deal 1 card face down
 
     assert game.current_step == 4
-    assert game.action_handler.current_substep == 0 # expose is first part of group    
+    assert game.action_handler.current_substep == 0  # back to expose for next player
 
     assert game.current_player.id == "p3"
     exposing_player = game.current_player.id
     cards_to_expose = game.table.players[exposing_player].hand.cards[:1]  # expose the first card
-    print(f"exposing_player: {exposing_player} plans to expose {cards_to_expose}")
 
     valid_actions = game.get_valid_actions(game.current_player.id)
     assert len(valid_actions) == 1
-    assert any(action[0] == PlayerAction.EXPOSE and action[1] == 0 and action[2] == 1 for action in valid_actions)  
+    assert any(action[0] == PlayerAction.EXPOSE and action[1] == 0 and action[2] == 1 for action in valid_actions)
 
     assert str(game.table.players[exposing_player].hand.cards[0]) == "Js"  # Charlie (p3)
-    assert str(game.table.players[exposing_player].hand.cards[1]) == "2c"  # Charlie     
+    assert str(game.table.players[exposing_player].hand.cards[1]) == "2c"  # Charlie
 
     # before expose, just the original 2c
-    assert game.table.players[exposing_player].hand.get_cards(visible_only=True) == [Card(Rank.TWO, Suit.CLUBS)]    
+    assert game.table.players[exposing_player].hand.get_cards(visible_only=True) == [Card(Rank.TWO, Suit.CLUBS)]
 
     result = game.player_action(exposing_player, PlayerAction.EXPOSE, cards=cards_to_expose)
     assert result.success
     assert result.advance_step == False  # not time to go to next step yet
 
-    assert game.current_step == 4
-    assert game.action_handler.current_substep == 1 # deal is second part of group    
-    assert game.state == GameState.DEALING  
-    assert game.current_player.id == "p3"
-
-    result = game.player_action(exposing_player, PlayerAction.DEAL)
-    assert result.success
-
+    # After expose + auto-deal: exposed Js, original 2c face up, 7h dealt face down
     assert str(game.table.players[exposing_player].hand.cards[0]) == "Js"  # Charlie (p3)
-    assert str(game.table.players[exposing_player].hand.cards[1]) == "2c"  # Charlie     
-    assert str(game.table.players[exposing_player].hand.cards[2]) == "7h"  # Charlie   
+    assert str(game.table.players[exposing_player].hand.cards[1]) == "2c"  # Charlie
+    assert str(game.table.players[exposing_player].hand.cards[2]) == "7h"  # Charlie (dealt face down)
 
-    # after deal, exposed Js and original 2c are face up
-    assert game.table.players[exposing_player].hand.get_cards(visible_only=True) == [Card(Rank.JACK, Suit.SPADES), Card(Rank.TWO, Suit.CLUBS)]    
+    assert game.table.players[exposing_player].hand.get_cards(visible_only=True) == [Card(Rank.JACK, Suit.SPADES), Card(Rank.TWO, Suit.CLUBS)]
 
- 
-    # moving onto last player to act - Alice (P1)
+
+    # Moving onto last player to act - Alice (P1)
     # P1 - Expose 1 card, Deal 1 card face down
 
     assert game.current_step == 4
-    assert game.action_handler.current_substep == 0 # expose is first part of group    
+    assert game.action_handler.current_substep == 0  # back to expose for next player
 
     assert game.current_player.id == "p1"
     exposing_player = game.current_player.id
     cards_to_expose = game.table.players[exposing_player].hand.cards[:1]  # expose the first card
-    print(f"exposing_player: {exposing_player} plans to expose {cards_to_expose}")
 
     valid_actions = game.get_valid_actions(game.current_player.id)
     assert len(valid_actions) == 1
-    assert any(action[0] == PlayerAction.EXPOSE and action[1] == 0 and action[2] == 1 for action in valid_actions)  
+    assert any(action[0] == PlayerAction.EXPOSE and action[1] == 0 and action[2] == 1 for action in valid_actions)
 
     assert str(game.table.players[exposing_player].hand.cards[0]) == "Rj"  # Alice (p1)
-    assert str(game.table.players[exposing_player].hand.cards[1]) == "Qh"  # Alice     
+    assert str(game.table.players[exposing_player].hand.cards[1]) == "Qh"  # Alice
 
     # before expose, just the original Qh
-    assert game.table.players[exposing_player].hand.get_cards(visible_only=True) == [Card(Rank.QUEEN, Suit.HEARTS)]      
+    assert game.table.players[exposing_player].hand.get_cards(visible_only=True) == [Card(Rank.QUEEN, Suit.HEARTS)]
 
     result = game.player_action(exposing_player, PlayerAction.EXPOSE, cards=cards_to_expose)
     assert result.success
-    assert result.advance_step == False  # not time to go to next step yet
 
-    assert game.current_step == 4
-    assert game.action_handler.current_substep == 1 # deal is second part of group    
-    assert game.state == GameState.DEALING  
-    assert game.current_player.id == "p1"     
-
-    result = game.player_action(exposing_player, PlayerAction.DEAL)
-    assert result.success
-
+    # After expose + auto-deal: exposed Rj, original Qh face up, 6c dealt face down
     assert str(game.table.players[exposing_player].hand.cards[0]) == "Rj"  # Alice (p1)
-    assert str(game.table.players[exposing_player].hand.cards[1]) == "Qh"  # Alice      
-    assert str(game.table.players[exposing_player].hand.cards[2]) == "6c"  # Alice       
+    assert str(game.table.players[exposing_player].hand.cards[1]) == "Qh"  # Alice
+    assert str(game.table.players[exposing_player].hand.cards[2]) == "6c"  # Alice (dealt face down)
 
-    # after deal, exposed Rj and original Qh are face up
-    assert game.table.players[exposing_player].hand.get_cards(visible_only=True) == [Card(Rank.JOKER, Suit.JOKER), Card(Rank.QUEEN, Suit.HEARTS)]    
+    assert game.table.players[exposing_player].hand.get_cards(visible_only=True) == [Card(Rank.JOKER, Suit.JOKER), Card(Rank.QUEEN, Suit.HEARTS)]
 
     # validate wild card status of joker
     assert game.table.players[exposing_player].hand.cards[0].is_wild == True
     assert game.table.players[exposing_player].hand.cards[0].wild_type == WildType.NAMED
 
-
-        # Card(Rank.JOKER, Suit.JOKER), #Alice FD HOLE
-        # Card(Rank.QUEEN, Suit.DIAMONDS), #Bob FD HOLE
-        # Card(Rank.JACK, Suit.SPADES), #Charlie FD HOLE
-        # Card(Rank.QUEEN, Suit.HEARTS), #Alice DOOR CARD
-        # Card(Rank.KING, Suit.DIAMONDS), #Bob DOOR CARD
-        # Card(Rank.TWO, Suit.CLUBS), #Charlie DOOR CARD
-        # Card(Rank.FIVE, Suit.DIAMONDS), #Bob 3RD ST
-        # Card(Rank.SEVEN, Suit.HEARTS), #Charlie 3RD ST
-        # Card(Rank.SIX, Suit.CLUBS), #Alice 3RD ST
-        
-        # Card(Rank.FOUR, Suit.SPADES), #Alice 4TH ST
-        # Card(Rank.QUEEN, Suit.CLUBS), #Bob 4TH ST
-        # Card(Rank.QUEEN, Suit.SPADES), #Charlie 4TH ST
-        # Card(Rank.JACK, Suit.HEARTS), #Alice 5TH ST
-        # Card(Rank.FOUR, Suit.DIAMONDS), #Bob 5TH ST
-        # Card(Rank.FOUR, Suit.HEARTS), #Charlie 5TH ST
-
-    game._next_step()
+    # All players exposed + dealt — advance to next step (betting)
+    if result.advance_step:
+        game._next_step()
     assert game.current_step == 5
     assert game.state == GameState.BETTING
 

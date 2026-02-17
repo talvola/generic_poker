@@ -527,6 +527,19 @@ class PokerTable {
             return '';
         }
 
+        // If player has card subsets (separated cards), render grouped display
+        if (player.card_subsets && Object.keys(player.card_subsets).length > 0) {
+            const subsetNames = Object.keys(player.card_subsets);
+            return subsetNames.map((name, si) => {
+                const cards = player.card_subsets[name];
+                const cardHtml = cards.map(c => {
+                    if (c === null) return '<div class="card card-back">\u{1F0A0}</div>';
+                    return PokerCardUtils.createCardElement(c, false);
+                }).join('');
+                return `<div class="card-subset-group subset-${si}"><div class="subset-label">${name}</div>${cardHtml}</div>`;
+            }).join('');
+        }
+
         // Check if this player is the winning player
         const isWinningPlayer = this.showdown.winningCards && this.showdown.winningCards.playerId === player.user_id;
 
@@ -538,8 +551,13 @@ class PokerTable {
         const isMyDrawTurn = isDrawPhase && isCurrentPlayer && this.store.isMyTurn && this.drawAction;
 
         // If player has visible cards (current player or showdown), display them
+        // Cards array may contain null entries for face-down opponent cards (stud/expose)
         if (player.cards && player.cards.length > 0) {
             return player.cards.map((card, index) => {
+                // null = face-down card (opponent's hidden card in stud/expose games)
+                if (card === null) {
+                    return '<div class="card card-back">\u{1F0A0}</div>';
+                }
                 if (isCurrentPlayer || player.cards_visible || showdownCards) {
                     // Check if this specific card was used in the winning hand
                     const isWinningCard = isWinningPlayer && this.showdown.winningCards && this.showdown.winningCards.holeCards.includes(card);
@@ -550,7 +568,8 @@ class PokerTable {
                         .replace('<div class="card ', `<div class="card${selectableClass}${selectedClass} `)
                         .replace(/data-rank="/, `${dataAttrs} data-rank="`);
                 } else {
-                    return '<div class="card card-back">\u{1F0A0}</div>';
+                    // Face-up card for opponent (mixed visibility)
+                    return PokerCardUtils.createCardElement(card, false);
                 }
             }).join('');
         }
@@ -693,12 +712,18 @@ class PokerTable {
             return;
         }
 
-        // Check for draw/discard actions
-        const drawAction = this.store.validActions.find(a => a.type === 'draw' || a.type === 'discard');
+        // Check for draw/discard/pass/expose/separate actions
+        const drawAction = this.store.validActions.find(a =>
+            a.type === 'draw' || a.type === 'discard' || a.type === 'pass' ||
+            a.type === 'expose' || a.type === 'separate');
         if (drawAction) {
             this.drawAction = drawAction;
             this.selectedDiscards.clear();
-            this._renderDrawControls(actionButtons, drawAction);
+            if (drawAction.type === 'separate') {
+                this._renderSeparateControls(actionButtons, drawAction);
+            } else {
+                this._renderDrawControls(actionButtons, drawAction);
+            }
             betControls.style.display = 'none';
             // Re-render players to make cards selectable
             this.renderPlayers();
@@ -733,20 +758,36 @@ class PokerTable {
         const minCards = drawAction.min_amount || 0;
         const maxCards = drawAction.max_amount || 0;
         const selected = this.selectedDiscards.size;
-        const actionName = drawAction.type === 'discard' ? 'Discard' : 'Draw';
+        const isPass = drawAction.type === 'pass';
+        const isExpose = drawAction.type === 'expose';
+        const actionName = isExpose ? 'Expose' : (isPass ? 'Pass' : (drawAction.type === 'discard' ? 'Discard' : 'Draw'));
 
         let buttonText;
         if (selected === 0) {
-            buttonText = minCards === 0 ? 'Stand Pat' : `Select at least ${minCards} card${minCards > 1 ? 's' : ''}`;
+            if (isPass) {
+                buttonText = `Select ${minCards} card${minCards > 1 ? 's' : ''} to pass`;
+            } else if (isExpose) {
+                buttonText = `Select ${minCards} card${minCards > 1 ? 's' : ''} to expose`;
+            } else {
+                buttonText = minCards === 0 ? 'Stand Pat' : `Select at least ${minCards} card${minCards > 1 ? 's' : ''}`;
+            }
         } else {
             buttonText = `${actionName} ${selected}`;
         }
 
         const canSubmit = selected >= minCards && selected <= maxCards;
+        let infoText;
+        if (isExpose) {
+            infoText = `Select card${maxCards > 1 ? 's' : ''} to expose (${minCards === maxCards ? minCards : `${minCards}-${maxCards}`})`;
+        } else if (isPass) {
+            infoText = `Select card${maxCards > 1 ? 's' : ''} to pass (${minCards === maxCards ? minCards : `${minCards}-${maxCards}`})`;
+        } else {
+            infoText = `Select cards to discard (${minCards}-${maxCards})`;
+        }
 
         container.innerHTML = `
             <div class="draw-controls">
-                <div class="draw-info">Select cards to discard (${minCards}-${maxCards})</div>
+                <div class="draw-info">${infoText}</div>
                 <button class="action-btn primary draw-submit-btn" ${canSubmit ? '' : 'disabled'}>
                     ${buttonText}
                 </button>
@@ -812,6 +853,146 @@ class PokerTable {
         // Disable draw button
         document.querySelectorAll('.draw-submit-btn').forEach(btn => btn.disabled = true);
         this.timer.stop();
+    }
+
+    _renderSeparateControls(container, separateAction) {
+        const subsets = separateAction.metadata?.subsets || [];
+        if (subsets.length === 0) {
+            // Fallback: render as generic draw
+            this._renderDrawControls(container, separateAction);
+            return;
+        }
+
+        // Initialize separate selections tracking
+        if (!this.separateSelections || this.separateSelections.length !== subsets.length) {
+            this.separateSelections = subsets.map(() => []);
+        }
+
+        // Determine current subset being filled
+        let currentSubsetIndex = 0;
+        for (let i = 0; i < subsets.length; i++) {
+            if (this.separateSelections[i].length < subsets[i].count) {
+                currentSubsetIndex = i;
+                break;
+            }
+            if (i === subsets.length - 1) {
+                currentSubsetIndex = subsets.length; // All filled
+            }
+        }
+
+        const allFilled = currentSubsetIndex >= subsets.length;
+        const totalAssigned = this.separateSelections.reduce((sum, s) => sum + s.length, 0);
+        const totalNeeded = subsets.reduce((sum, s) => sum + s.count, 0);
+
+        // Build info text
+        let infoText;
+        if (allFilled) {
+            infoText = 'All cards assigned. Click Separate to confirm.';
+        } else {
+            const sub = subsets[currentSubsetIndex];
+            const remaining = sub.count - this.separateSelections[currentSubsetIndex].length;
+            infoText = `Assign ${remaining} card${remaining > 1 ? 's' : ''} to "${sub.name}"`;
+        }
+
+        // Build subset summary
+        let summaryHtml = '<div class="separate-summary">';
+        subsets.forEach((sub, i) => {
+            const filled = this.separateSelections[i].length;
+            const isCurrent = i === currentSubsetIndex && !allFilled;
+            summaryHtml += `<span class="subset-tag subset-${i}${isCurrent ? ' current' : ''}">${sub.name}: ${filled}/${sub.count}</span>`;
+        });
+        summaryHtml += '</div>';
+
+        container.innerHTML = `
+            <div class="draw-controls">
+                <div class="draw-info">${infoText}</div>
+                ${summaryHtml}
+                <div class="separate-buttons">
+                    <button class="action-btn secondary separate-reset-btn" ${totalAssigned === 0 ? 'disabled' : ''}>Reset</button>
+                    <button class="action-btn primary draw-submit-btn" ${allFilled ? '' : 'disabled'}>
+                        Separate
+                    </button>
+                </div>
+            </div>
+        `;
+
+        // Reset button handler
+        container.querySelector('.separate-reset-btn')?.addEventListener('click', () => {
+            this.separateSelections = subsets.map(() => []);
+            this.selectedDiscards.clear();
+            this.renderPlayers();
+            this._setupSeparateCardHandlers(subsets);
+            const actionButtons = document.getElementById('action-buttons');
+            this._renderSeparateControls(actionButtons, separateAction);
+        });
+
+        // Submit button handler
+        container.querySelector('.draw-submit-btn')?.addEventListener('click', () => {
+            if (!allFilled) return;
+            const myPlayer = this.store.findPlayerByUserId(this.store.currentUser?.id);
+            if (!myPlayer || !myPlayer.cards) return;
+
+            // Build flat ordered card list from selections
+            const flatCards = [];
+            this.separateSelections.forEach(indices => {
+                indices.forEach(idx => {
+                    if (myPlayer.cards[idx]) flatCards.push(myPlayer.cards[idx]);
+                });
+            });
+
+            this.sendPlayerAction({ action: 'separate', cards: flatCards });
+            this.separateSelections = null;
+            this.selectedDiscards.clear();
+            this.drawAction = null;
+            document.querySelectorAll('.draw-submit-btn').forEach(btn => btn.disabled = true);
+            this.timer.stop();
+        });
+
+        // Setup card click handlers for separate mode
+        this._setupSeparateCardHandlers(subsets);
+    }
+
+    _setupSeparateCardHandlers(subsets) {
+        document.querySelectorAll('.card.selectable').forEach(cardEl => {
+            cardEl.addEventListener('click', () => {
+                const index = parseInt(cardEl.dataset.cardIndex);
+                if (isNaN(index)) return;
+
+                // Check if this card is already assigned to a subset
+                for (let i = 0; i < this.separateSelections.length; i++) {
+                    const pos = this.separateSelections[i].indexOf(index);
+                    if (pos !== -1) {
+                        // Remove from this subset
+                        this.separateSelections[i].splice(pos, 1);
+                        this.selectedDiscards.delete(index);
+                        cardEl.classList.remove('selected');
+                        for (let j = 0; j < subsets.length; j++) cardEl.classList.remove(`subset-${j}`);
+                        const actionButtons = document.getElementById('action-buttons');
+                        this._renderSeparateControls(actionButtons, this.drawAction);
+                        return;
+                    }
+                }
+
+                // Find current unfilled subset
+                let targetSubset = -1;
+                for (let i = 0; i < subsets.length; i++) {
+                    if (this.separateSelections[i].length < subsets[i].count) {
+                        targetSubset = i;
+                        break;
+                    }
+                }
+
+                if (targetSubset === -1) return; // All full
+
+                // Add to target subset
+                this.separateSelections[targetSubset].push(index);
+                this.selectedDiscards.add(index);
+                cardEl.classList.add('selected', `subset-${targetSubset}`);
+
+                const actionButtons = document.getElementById('action-buttons');
+                this._renderSeparateControls(actionButtons, this.drawAction);
+            });
+        });
     }
 
     createActionButton(action) {

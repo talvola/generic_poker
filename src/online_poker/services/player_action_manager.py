@@ -294,6 +294,43 @@ class PlayerActionManager:
                     button_style="primary"
                 )
 
+            elif action_type == PlayerAction.PASS:
+                num_cards = max_amount or 0
+                display_text = f"Pass {num_cards} card{'s' if num_cards != 1 else ''}"
+                return PlayerActionOption(
+                    action_type=action_type,
+                    min_amount=num_cards,
+                    max_amount=num_cards,
+                    display_text=display_text,
+                    button_style="primary"
+                )
+
+            elif action_type == PlayerAction.EXPOSE:
+                num_cards = max_amount or 0
+                min_cards = min_amount or num_cards
+                if min_cards != num_cards:
+                    display_text = f"Expose {min_cards}-{num_cards}"
+                else:
+                    display_text = f"Expose {num_cards}"
+                return PlayerActionOption(
+                    action_type=action_type,
+                    min_amount=min_cards,
+                    max_amount=num_cards,
+                    display_text=display_text,
+                    button_style="primary"
+                )
+
+            elif action_type == PlayerAction.SEPARATE:
+                total = max_amount or 0
+                display_text = f"Separate {total} cards"
+                return PlayerActionOption(
+                    action_type=action_type,
+                    min_amount=total,
+                    max_amount=total,
+                    display_text=display_text,
+                    button_style="primary"
+                )
+
             else:
                 # Handle other action types (for future expansion)
                 return PlayerActionOption(
@@ -472,15 +509,16 @@ class PlayerActionManager:
                         valid_max
                     )
 
-            # Validate card count for draw/discard actions
-            if action in [PlayerAction.DRAW, PlayerAction.DISCARD]:
+            # Validate card count for draw/discard/pass/expose/separate actions
+            if action in [PlayerAction.DRAW, PlayerAction.DISCARD, PlayerAction.PASS,
+                          PlayerAction.EXPOSE, PlayerAction.SEPARATE]:
                 card_count = len(cards) if cards else 0
                 min_cards = valid_min or 0
                 max_cards = valid_max or 0
                 if card_count < min_cards:
-                    return ActionValidation(False, f"Must discard at least {min_cards} cards")
+                    return ActionValidation(False, f"Must select at least {min_cards} cards")
                 if max_cards > 0 and card_count > max_cards:
-                    return ActionValidation(False, f"Cannot discard more than {max_cards} cards")
+                    return ActionValidation(False, f"Cannot select more than {max_cards} cards")
 
             return ActionValidation(True)
             
@@ -754,6 +792,14 @@ class PlayerActionManager:
             elif action == PlayerAction.DISCARD:
                 card_count = len(cards) if cards else 0
                 action_msg = f"{username} discards {card_count} card{'s' if card_count != 1 else ''}"
+            elif action == PlayerAction.PASS:
+                card_count = len(cards) if cards else 0
+                action_msg = f"{username} passes {card_count} card{'s' if card_count != 1 else ''}"
+            elif action == PlayerAction.EXPOSE:
+                card_count = len(cards) if cards else 0
+                action_msg = f"{username} exposes {card_count} card{'s' if card_count != 1 else ''}"
+            elif action == PlayerAction.SEPARATE:
+                action_msg = f"{username} separates their cards"
             else:
                 action_msg = f"{username} {action_name}"
                 if amount:

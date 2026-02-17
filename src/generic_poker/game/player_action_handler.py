@@ -791,8 +791,36 @@ class PlayerActionHandler:
             self.setup_declare_round(next_subaction["declare"])     
             # DON'T change current_player here - keep the same player for grouped actions
         elif "deal" in next_key:
-            self.game.state = GameState.DEALING
-            logging.info(f"Next step is a deal - not a player action - no setup needed for {self.game.current_player.name}")
+            # Deal is not a player action — execute it immediately for the current player
+            player_id = self.game.current_player.id if self.game.current_player else None
+            self.game._handle_deal(next_subaction["deal"], player_id=player_id)
+            logger.info(f"Auto-executed deal substep for {self.game.current_player.name if self.game.current_player else 'all'}")
+
+            # Mark this substep as completed for the player
+            if player_id:
+                self.player_completed_subactions[player_id].add(self.current_substep)
+
+            # Check if this is the last substep — if so, mark player as done with grouped step
+            if self.current_substep >= len(subactions) - 1:
+                if player_id:
+                    self.grouped_step_completed.add(player_id)
+                self.current_substep = 0
+                self.game.current_player = self.game.next_player(round_start=False)
+                # Re-setup first subaction's state for the next player
+                first_sub = subactions[0]
+                first_key = list(first_sub.keys())[0]
+                if any(k in first_key for k in ["expose", "draw", "discard", "separate", "pass"]):
+                    self.game.state = GameState.DRAWING
+                elif "bet" in first_key:
+                    self.game.state = GameState.BETTING
+                elif "declare" in first_key:
+                    self.game.state = GameState.DECLARING
+                else:
+                    self.game.state = GameState.DEALING
+            else:
+                self.current_substep += 1
+                # Recursively handle the next substep (could be another deal or action)
+                self._update_state_for_next_subaction(subactions)
 
     def _handle_protection_action(self, player_id: str, action: PlayerAction) -> ActionResult:
         """Handle protection card purchase decision."""

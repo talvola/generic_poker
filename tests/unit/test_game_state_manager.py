@@ -221,7 +221,7 @@ class TestGameStateManager:
         mock_player.has_folded = False
         mock_game_session.game.table.players = {'user1': mock_player}
 
-        with patch.object(GameStateManager, '_get_player_cards', return_value=['As', 'Ks']):
+        with patch.object(GameStateManager, '_get_player_cards_with_visibility', return_value=['As', 'Ks']):
             with patch.object(GameStateManager, '_is_current_player', return_value=True):
                 player_view = GameStateManager._create_player_view(
                     player_info, mock_game_session, "user1", False
