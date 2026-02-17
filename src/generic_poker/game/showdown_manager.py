@@ -2410,10 +2410,33 @@ class ShowdownManager:
             rule_type = rule["type"]
             role = rule.get("role", "wild")
 
-            # Skip conditional wild cards during showdown evaluation
-            # They should have been set correctly when cards were dealt
-            if role == "conditional":
-                logger.debug(f"Skipping conditional wild card rule during showdown - should already be set")
+            # Re-evaluate conditional wild cards at showdown based on current visibility
+            # (cards may have been exposed/flipped since deal time)
+            if role == "conditional" and "condition" in rule:
+                condition = rule["condition"]
+                visibility_condition = condition.get("visibility")
+                all_cards = player.hand.get_cards() + comm_cards
+
+                for card in all_cards:
+                    # Check if card matches the rule type
+                    if rule_type == "joker" and card.rank == Rank.JOKER:
+                        pass  # matches
+                    elif rule_type == "rank" and card.rank == Rank(rule.get("rank", "R")):
+                        pass  # matches
+                    else:
+                        continue
+
+                    # Determine correct wild type based on current visibility
+                    is_face_up = card.visibility == Visibility.FACE_UP
+                    if (visibility_condition == "face up" and is_face_up) or \
+                       (visibility_condition == "face down" and not is_face_up):
+                        chosen_role = condition.get("true_role", "wild")
+                    else:
+                        chosen_role = condition.get("false_role", "wild")
+
+                    chosen_wild_type = WildType.BUG if chosen_role == "bug" else WildType.NAMED
+                    card.make_wild(chosen_wild_type)
+                    logger.debug(f"Showdown conditional: {card} is {chosen_role} (face_up={is_face_up})")
                 continue
 
             if rule_type == "last_community_card":

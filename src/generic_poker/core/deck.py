@@ -58,7 +58,7 @@ class Deck(CardContainer):
         elif deck_type == DeckType.SHORT_6A:
             ranks = [r for r in Rank if r not in {Rank.TWO, Rank.THREE, Rank.FOUR, Rank.FIVE, Rank.JOKER, Rank.ONE}]
         elif deck_type == DeckType.SHORT_27_JA:
-            ranks = [r for r in Rank if r not in {Rank.EIGHT, Rank.NINE, Rank.TEN, Rank.ONE}]
+            ranks = [r for r in Rank if r not in {Rank.EIGHT, Rank.NINE, Rank.TEN, Rank.ONE, Rank.JOKER}]
         else:  # STANDARD
             ranks = [r for r in Rank if r not in {Rank.JOKER, Rank.ONE}]
 

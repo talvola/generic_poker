@@ -132,10 +132,11 @@ class Card:
         return "unknown"  # For jokers or other special cards
 
     def make_wild(self, wild_type: WildType) -> None:
-        """Make this card wild, but prevent Jokers from changing their wild type unless specified."""
+        """Make this card wild. For natural Jokers, allow changing to BUG or NAMED but not MATCHING."""
         if self.rank == Rank.JOKER and self.suit == Suit.JOKER and self.wild_type == WildType.NATURAL:
-            if wild_type == WildType.BUG:
-                self.wild_type = wild_type  # Allow changing to BUG
+            if wild_type in (WildType.BUG, WildType.NAMED):
+                self.wild_type = wild_type
+            # Joker is already wild from creation; don't downgrade to MATCHING
             return
         self.is_wild = True
         self.wild_type = wild_type

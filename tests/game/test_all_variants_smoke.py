@@ -30,7 +30,6 @@ UNSUPPORTED_GAMES = {
 # These should be fixed eventually. Marked xfail so the test suite stays green.
 # All 13 previously-buggy games fixed as of 2026-02-17.
 KNOWN_ENGINE_BUGS = {
-    "mexican_poker": "joker card (W1B1) not in 27_ja_ffh_high_wild_bug hand ranking tables — crashes ~8% of hands",
 }
 
 
