@@ -149,23 +149,23 @@ for adding new variants. See `docs/GAME_VALIDATION.md` for full details.
 | 5.4 | Implement `separate.hand_comparison` if needed | `player_action_handler.py` | TODO |
 | 5.5 | Build "can this game be implemented?" assessment skill | `.claude/` | TODO |
 | 5.6 | Build "implement new game variant" skill | `.claude/` | TODO |
-| 5.7 | Fix known engine bugs (13 games, see STATUS.md) | `showdown_manager.py`, `evaluator.py` | TODO |
+| 5.7 | Fix known engine bugs (13 games, see STATUS.md) | `showdown_manager.py`, `evaluator.py` | DONE |
 
 **5.1 result:** `tests/game/test_all_variants_smoke.py` — parametrized smoke test for all 192 configs.
 Two test functions: `test_variant_config_loads` (all 192 parse correctly) and `test_variant_loads_and_plays`
 (166 supported games play a hand to completion passively). 26 unsupported games skipped (need expose/pass/
-declare/separate/choose actions). 13 games marked xfail for known engine bugs (showdown TypeError, evaluation
-card count mismatches, drawing phase stuck, chip conservation failures). Total: 345 passed, 12 xfailed.
+declare/separate/choose actions). All 13 previously-buggy games now fixed (Phase 5.7). Total: 358 passed, 0 xfailed.
 
 **5.1b result:** Migrated 12 test files from inline JSON game configs to `load_rules_from_file()`.
 Removed 1,307 lines of duplicated config data. All tests pass with file-based loading.
 
-**5.7 details:** 13 games have engine bugs found by the smoke test. Grouped by root cause:
-- **Showdown TypeError** (2 games): `int + list` in `showdown_manager.py:1645` — 2_or_5_omaha_8 variants
-- **Evaluation card count** (5 games): Evaluator expects exactly N cards but gets wrong count — canadian_stud (soko_high), london_lowball (a6_low), razzaho (a5_low), razzbadeucey/super_razzbadeucey (badugi_ah)
-- **Showdown NoneType** (1 game): omaha_321_hi_hi — `NoneType.cards` in showdown_manager.py:1472
-- **Drawing stuck** (1 game): one_mans_trash — DRAW returns no valid actions
-- **Chip conservation** (4 games): stampler/stumpler variants — ante handling bug, non-deterministic
+**5.7 result:** All 13 engine bugs fixed. Zero xfails remaining. Key fixes:
+- `showdown_manager.py`: List handling for holeCards/communityCards in odd-chip logic (2 games)
+- `bringin.py`: Fallback to generic N-card eval types for exotic bring-in evaluations (5 games)
+- `table.py`: Combinatorial best-of-N card selection when visible cards exceed evaluator hand size (5 games)
+- `omaha_321_hi_hi.json`: Config name mismatch fix (1 game)
+- `one_mans_trash.json`: communityCards 5→3, smoke test REPLACE_COMMUNITY handler (1 game)
+- `showdown_manager.py`: `_award_special_pot()` now calls `betting.award_pots()` to transfer chips (4 games)
 
 **5.5-5.6 details:** Claude Code skills that:
 - 5.5: Given a game description URL, analyze rules and determine if implementable with

@@ -142,13 +142,22 @@ class BringInDeterminator:
             # Construct e.g., "two_card_high" or "four_card_a5_low"
             card_count_prefix = ["", "one_card", "two_card", "three_card", "four_card"][num_cards]
             eval_type_str = f"{card_count_prefix}_{base_eval}"
-            
+
             # Convert to EvaluationType
             try:
                 return EvaluationType(eval_type_str)
             except ValueError:
-                logger.warning(f"Unknown evaluation type '{eval_type_str}', falling back to '{base_eval}'")
-                return EvaluationType(base_eval)
+                # Specific N-card variant doesn't exist for this eval type.
+                # Fall back to generic N-card high or low based on bring-in rule.
+                if card_rule in (CardRule.LOW_CARD, CardRule.LOW_CARD_AL):
+                    fallback_eval = f"{card_count_prefix}_a5_low"
+                else:
+                    fallback_eval = f"{card_count_prefix}_high"
+                logger.warning(
+                    f"Unknown evaluation type '{eval_type_str}', "
+                    f"falling back to '{fallback_eval}'"
+                )
+                return EvaluationType(fallback_eval)
             
     @classmethod
     def _get_visible_cards(cls, player: Player) -> List[Card]:

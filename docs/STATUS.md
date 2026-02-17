@@ -1,7 +1,7 @@
 # Project Status
 
 > Single source of truth for project state. Updated as work progresses.
-> Last updated: 2026-02-16
+> Last updated: 2026-02-17
 
 ## Architecture Overview
 
@@ -97,15 +97,15 @@ Flask/SocketIO multiplayer web platform.
 
 ## Testing
 
-### Test Counts (2026-02-16)
+### Test Counts (2026-02-17)
 
 | Layer | Tests | Status |
 |-------|-------|--------|
-| Python unit + integration | 814 | All passing |
-| Smoke test (all 192 variants) | 345 | 333 pass, 12 xfail (known bugs) |
+| Python unit + integration | 648 | All passing |
+| Smoke test (all 192 variants) | 358 | All passing (0 xfail — all engine bugs fixed) |
 | Socket.IO integration | 33 | All passing (in `test_socketio_integration.py`) |
 | Playwright E2E | 26 | All passing (4 spec files) |
-| **Total** | **1,159** | **All passing** |
+| **Total** | **1,065** | **All passing** |
 
 ### Test Layers
 
@@ -113,8 +113,9 @@ Flask/SocketIO multiplayer web platform.
 Layer 0: Smoke Tests (all 192 variants)
   - Parametrized: loads each config, creates game, plays a hand passively
   - Catches crashes, infinite loops, missing implementations
+  - All 166 supported games pass (26 unsupported need expose/pass/declare/separate/choose)
   - tests/game/test_all_variants_smoke.py
-  - 26 unsupported (unimplemented actions), 13 xfail (engine bugs)
+  - 26 unsupported (unimplemented actions), 0 xfail (all engine bugs fixed)
 
 Layer 1: Python Integration Tests (engine + services)
   - Drive game engine directly: game.start_hand(), game.player_action()
@@ -174,18 +175,14 @@ Layer 3: E2E Browser Tests (visual verification)
 
 ## Known Engine Bugs (from smoke test)
 
-Found by `tests/game/test_all_variants_smoke.py`. All marked `xfail` so test suite stays green.
+All 13 previously-buggy games fixed (2026-02-17). Zero xfails remaining.
 
-| Game | Bug | Location |
-|------|-----|----------|
-| 2_or_5_omaha_8, 2_or_5_omaha_8_with_draw | `TypeError: int + list` in showdown | `showdown_manager.py:1645` |
-| canadian_stud | `soko_high` evaluation requires exactly 5 cards | `evaluator.py` |
-| london_lowball | `a6_low` evaluation requires exactly 5 cards | `evaluator.py` |
-| razzaho | `a5_low` evaluation requires exactly 5 cards | `evaluator.py` |
-| razzbadeucey, super_razzbadeucey | `badugi_ah` evaluation requires exactly 4 cards | `evaluator.py` |
-| omaha_321_hi_hi | `NoneType.cards` AttributeError in showdown | `showdown_manager.py:1472` |
-| one_mans_trash | Drawing phase stuck (DRAW returns no valid actions) | `player_action_handler.py` |
-| stampler, stumpler, 5_card_stampler, 6_card_stampler | Chip conservation failure (ante handling) | `betting.py` / `game.py` |
+Fixes applied:
+- **2 games** (2_or_5_omaha_8 variants): `int + list` TypeError — added list handling for holeCards/communityCards in showdown odd-chip logic
+- **5 games** (canadian_stud, london_lowball, razzaho, razzbadeucey, super_razzbadeucey): Evaluation card count errors — bring-in fallback to generic N-card eval types + combinatorial best-of-N selection when visible cards exceed evaluator hand size
+- **1 game** (omaha_321_hi_hi): Config name mismatch — `usesUnusedFrom: "High Hand"` referenced non-existent config name `"High"`
+- **1 game** (one_mans_trash): Drawing stuck — smoke test didn't handle REPLACE_COMMUNITY action + config had wrong communityCards count (5→3)
+- **4 games** (stampler/stumpler variants): Chip conservation — `_award_special_pot()` created PotResult records but never called `betting.award_pots()` to transfer chips
 
 ### Unsupported Games (26 — require unimplemented actions)
 

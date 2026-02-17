@@ -127,7 +127,7 @@
         "cardsRequired": "all cards",
         "bestHand": [
             {
-                "name": "High",
+                "name": "High Hand",
                 "evaluationType": "high",
                 "holeCards": 2,
                 "communityCards": 3,

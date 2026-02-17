@@ -1,4 +1,5 @@
 """Enhanced Table implementation with realistic poker seating."""
+import itertools
 import logging
 import random
 from dataclasses import dataclass, field
@@ -566,13 +567,36 @@ class Table:
         )
         logger.debug(f"Evaluating best hand with {num_visible} player + {len(visible_community)} community visible cards using {eval_type}")
         
+        # Get required hand size for the eval type
+        from generic_poker.evaluation.constants import HAND_SIZES
+        required_size = HAND_SIZES.get(eval_type.value, 5)
+
+        def best_n_cards(cards, n):
+            """Find the best n-card subset from cards for the eval type."""
+            if len(cards) <= n:
+                return cards
+            best = None
+            for combo in itertools.combinations(cards, n):
+                combo_list = list(combo)
+                if best is None:
+                    best = combo_list
+                elif evaluator.compare_hands(combo_list, best, eval_type) > 0:
+                    best = combo_list
+            return best or cards[:n]
+
         best_player = active_players[0]
-        best_hand = ([c for c in best_player.hand.get_cards() 
-                     if c.visibility == Visibility.FACE_UP][:num_visible] + visible_community)
-        
+        best_hand = best_n_cards(
+            [c for c in best_player.hand.get_cards()
+             if c.visibility == Visibility.FACE_UP][:num_visible] + visible_community,
+            required_size
+        )
+
         for player in active_players[1:]:
-            visible_cards = ([c for c in player.hand.get_cards() 
-                            if c.visibility == Visibility.FACE_UP][:num_visible] + visible_community)
+            visible_cards = best_n_cards(
+                [c for c in player.hand.get_cards()
+                 if c.visibility == Visibility.FACE_UP][:num_visible] + visible_community,
+                required_size
+            )
             if evaluator.compare_hands(visible_cards, best_hand, eval_type) > 0:
                 best_hand = visible_cards
                 best_player = player

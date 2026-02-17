@@ -1527,11 +1527,18 @@ class ShowdownManager:
                                 card_counts[idx] = 5  # Default to 5 cards for "all" hole cards                                
                             else:
                                 hole_cards = eval_hand_config.get("holeCards", 0)
-                                # Make sure we're dealing with an integer
-                                hole_cards = 0 if not isinstance(hole_cards, int) else hole_cards
+                                # Handle list values (e.g., [2, 5] for "2 or 5" games)
+                                if isinstance(hole_cards, list):
+                                    hole_cards = max(hole_cards)
+                                elif not isinstance(hole_cards, int):
+                                    hole_cards = 0
                                 comm_cards = eval_hand_config.get("communityCards", 0)
+                                if isinstance(comm_cards, list):
+                                    comm_cards = max(comm_cards)
+                                elif not isinstance(comm_cards, int):
+                                    comm_cards = 0
                                 card_counts[idx] = hole_cards + comm_cards
-                        
+
                         # Find current config index more robustly
                         current_config_name = hand_config.get('name')
                         current_config_idx = None
@@ -1541,11 +1548,11 @@ class ShowdownManager:
                                 break
                         if current_config_idx is None:
                             current_config_idx = 0  # Default to first config if not found
-                            
+
                         other_config_idx = 1 if current_config_idx == 0 else 0
 
                         # Apply the rules for odd chip assignment
-                        gets_odd_chip = False   
+                        gets_odd_chip = False
 
                         # Rule 1: Traditional High-Low games - high hand gets odd chip
                         if (self.rules.showdown.best_hand[0].get("evaluationType") == "high" and 
@@ -1639,9 +1646,16 @@ class ShowdownManager:
                             card_counts[idx] = 5  # Default to 5 cards for "all" hole cards
                         else:
                             hole_cards = eval_hand_config.get("holeCards", 0)
-                            # Make sure we're dealing with an integer
-                            hole_cards = 0 if not isinstance(hole_cards, int) else hole_cards
+                            # Handle list values (e.g., [2, 5] for "2 or 5" games)
+                            if isinstance(hole_cards, list):
+                                hole_cards = max(hole_cards)
+                            elif not isinstance(hole_cards, int):
+                                hole_cards = 0
                             comm_cards = eval_hand_config.get("communityCards", 0)
+                            if isinstance(comm_cards, list):
+                                comm_cards = max(comm_cards)
+                            elif not isinstance(comm_cards, int):
+                                comm_cards = 0
                             card_counts[idx] = hole_cards + comm_cards
 
                     # Find current config index more robustly
@@ -2564,6 +2578,7 @@ class ShowdownManager:
         # Main pot portion
         main_amount = int(main_pot * pot_percentage)
         if main_amount > 0:
+            self.betting.award_pots(best_players, None, main_amount)
             pot_result = PotResult(
                 amount=main_amount,
                 winners=winner_ids,
@@ -2572,7 +2587,7 @@ class ShowdownManager:
                 eligible_players=set(p.id for p in best_players)
             )
             pot_results.append(pot_result)
-        
+
         # Side pots portion
         for i, side_amount in enumerate(side_pots):
             portion_amount = int(side_amount * pot_percentage)
@@ -2580,6 +2595,8 @@ class ShowdownManager:
                 eligible_ids = self.betting.get_side_pot_eligible_players(i)
                 eligible_winners = [p.id for p in best_players if p.id in eligible_ids]
                 if eligible_winners:
+                    winners_for_pot = [p for p in best_players if p.id in eligible_ids]
+                    self.betting.award_pots(winners_for_pot, i, portion_amount)
                     pot_result = PotResult(
                         amount=portion_amount,
                         winners=eligible_winners,

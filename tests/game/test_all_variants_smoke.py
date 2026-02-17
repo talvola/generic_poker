@@ -42,25 +42,8 @@ UNSUPPORTED_GAMES = {
 
 # Games that have known engine bugs (evaluation errors, showdown crashes, etc.)
 # These should be fixed eventually. Marked xfail so the test suite stays green.
+# All 13 previously-buggy games fixed as of 2026-02-17.
 KNOWN_ENGINE_BUGS = {
-    # Showdown TypeError: int + list in showdown_manager.py:1645
-    "2_or_5_omaha_8": "showdown int+list TypeError",
-    "2_or_5_omaha_8_with_draw": "showdown int+list TypeError",
-    # ValueError: evaluation requires exactly N cards
-    "canadian_stud": "soko_high evaluation requires exactly 5 cards",
-    "london_lowball": "a6_low evaluation requires exactly 5 cards",
-    "razzaho": "a5_low evaluation requires exactly 5 cards",
-    "razzbadeucey": "badugi_ah evaluation requires exactly 4 cards",
-    "super_razzbadeucey": "badugi_ah evaluation requires exactly 4 cards",
-    # AttributeError: NoneType has no attribute 'cards' in showdown_manager.py:1472
-    "omaha_321_hi_hi": "showdown NoneType.cards AttributeError",
-    # Drawing phase stuck — DRAW action returns no valid actions
-    "one_mans_trash": "drawing phase stuck (complex draw logic)",
-    # Chip conservation failures (non-deterministic, depends on dealt cards)
-    "stampler": "chip conservation failure (ante handling bug)",
-    "stumpler": "chip conservation failure (ante handling bug)",
-    "5_card_stampler": "chip conservation failure (ante handling bug)",
-    "6_card_stampler": "chip conservation failure (ante handling bug)",
 }
 
 
@@ -184,6 +167,15 @@ def play_hand_passively(game: Game, max_actions: int = 500) -> int:
                     hand_cards = list(game.table.players[player_id].hand.cards)
                     discard = hand_cards[:min_disc] if min_disc else []
                     _take_action(game, player_id, PlayerAction.DISCARD, amount=min_disc, cards=discard)
+                elif PlayerAction.REPLACE_COMMUNITY in action_map:
+                    num_replace, _ = action_map[PlayerAction.REPLACE_COMMUNITY]
+                    # Pick community cards to replace
+                    all_community = []
+                    for subset_cards in game.table.community_cards.values():
+                        all_community.extend(subset_cards)
+                    to_replace = all_community[:num_replace]
+                    _take_action(game, player_id, PlayerAction.REPLACE_COMMUNITY,
+                                 amount=num_replace, cards=to_replace)
                 else:
                     action = next(iter(action_map))
                     _take_action(game, player_id, action, amount=0, cards=[])
