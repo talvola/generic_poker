@@ -19,6 +19,7 @@ A generic poker engine with a configurable game rules system supporting 100+ pok
 # Environment
 source env/bin/activate
 pip install -e ".[test]"
+pip install -e ".[dev]"           # Includes ruff, bandit, pre-commit
 
 # Run application
 python app.py                    # Full web app at http://localhost:5000
@@ -29,6 +30,13 @@ pytest tests/unit/               # Unit tests only
 pytest tests/integration/        # Integration tests only
 pytest path/to/test.py::TestClass::test_method  # Specific test
 pytest -v -x --tb=short          # Verbose, stop on first failure
+
+# Code Quality
+ruff check src/                  # Lint (errors block commits via pre-commit)
+ruff check src/ --fix            # Auto-fix lint issues
+ruff format src/                 # Format code (runs on commit via pre-commit)
+pre-commit run --all-files       # Run all pre-commit hooks manually
+pip-audit                        # Check dependencies for vulnerabilities
 
 # Database
 python tools/init_db.py          # Initialize schema
@@ -343,6 +351,46 @@ render logs -r srv-d6b0ik86fj8s73bppftg --limit 100 --output json  # View logs
 - All models must use `String(36)` for IDs (not `UUID(as_uuid=True)`) to work with both SQLite and PostgreSQL
 - Free tier spins down after 15 min idle (~60s cold start on next request)
 - Free Postgres expires after 90 days (recreate or upgrade)
+
+## Code Quality
+
+### Tools
+
+All configured in `pyproject.toml`. Pre-commit hooks enforce formatting and linting on every commit.
+
+| Tool | Purpose | Config |
+|------|---------|--------|
+| **Ruff** | Linter + formatter (replaces flake8, autopep8, isort, black) | `[tool.ruff]` in pyproject.toml |
+| **Pre-commit** | Git hooks for automated checks on commit | `.pre-commit-config.yaml` |
+| **Bandit** | Python security scanner | `[tool.bandit]` in pyproject.toml |
+| **pip-audit** | Dependency vulnerability scanner | Run manually: `pip-audit` |
+
+### Rules
+
+- **All new/modified Python code must pass `ruff check` and `ruff format`** — pre-commit hooks enforce this
+- Ruff uses 120 char line length, double quotes, Python 3.10+ target
+- Import ordering handled automatically by ruff (isort rules)
+- SQLAlchemy `== True`/`== False` comparisons are allowed (E712 ignored)
+- `print()` allowed in `app.py`, `tools/`, and test files
+- Security rules relaxed for `tests/` and `tools/` directories
+- Game config JSON files validated against `data/schemas/game.json` schema
+
+### Setup
+
+```bash
+pip install -e ".[dev]"          # Install dev tools
+pre-commit install               # Set up git hooks (one-time)
+```
+
+### Common Commands
+
+```bash
+ruff check src/                  # Check for lint errors
+ruff check src/ --fix            # Auto-fix what's possible
+ruff format src/                 # Format all source code
+pre-commit run --all-files       # Run all hooks on entire codebase
+pip-audit                        # Check for dependency vulnerabilities
+```
 
 ## Project Status & Planning
 

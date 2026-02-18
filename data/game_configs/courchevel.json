@@ -1,131 +1,135 @@
 {
-    "game": "Courchevel",
-    "category": "Omaha",
-    "references": [
-        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
-        "https://www.barge.org/rulebook/courchevel.html"
-    ],            
-    "players": {
-        "min": 2,
-        "max": 8
-    },
-    "deck": {
-        "type": "standard",
-        "cards": 52
-    },
-    "bettingStructures": [
-        "Limit",
-        "No Limit",
-        "Pot Limit"
-    ],
-    "gamePlay": [
-        {
-            "bet": {
-                "type": "blinds"
-            },
-            "name": "Post Blinds"
-        },
-        {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 5,
-                        "state": "face down"
-                    }
-                ]
-            },
-            "name": "Deal Hole Cards"
-        },
-        {
-            "deal": {
-                "location": "community",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal First Flop Card"
-        },
-        {
-            "bet": {
-                "type": "small"
-            },
-            "name": "Pre-Flop Bet"
-        },
-        {
-            "deal": {
-                "location": "community",
-                "cards": [
-                    {
-                        "number": 2,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal Flop"
-        },
-        {
-            "bet": {
-                "type": "small"
-            },
-            "name": "Post-Flop Bet"
-        },
-        {
-            "deal": {
-                "location": "community",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal Turn"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "Turn Bet"
-        },
-        {
-            "deal": {
-                "location": "community",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal River"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "River Bet"
-        },
-        {
-            "showdown": {
-                "type": "final"
-            },
-            "name": "Showdown"
-        }
-    ],
-    "showdown": {
-        "order": "clockwise",
-        "startingFrom": "dealer",
-        "cardsRequired": "two hole cards, three community cards",
-        "bestHand": [
-            {
-                "evaluationType": "high",
-                "holeCards": 2,
-                "communityCards": 3
-            }
-        ]
+  "game": "Courchevel",
+  "category": "Omaha",
+  "references": [
+    "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
+    "https://www.barge.org/rulebook/courchevel.html",
+    {
+      "url": "https://www.pagat.com/poker/variants/omaha.html#courchevel",
+      "description": "Pagat.com - Courchevel"
     }
+  ],
+  "players": {
+    "min": 2,
+    "max": 8
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal First Flop Card"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Pre-Flop Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 2,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Flop"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Post-Flop Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Turn"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Turn Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal River"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "River Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "two hole cards, three community cards",
+    "bestHand": [
+      {
+        "evaluationType": "high",
+        "holeCards": 2,
+        "communityCards": 3
+      }
+    ]
+  }
 }

@@ -1,80 +1,84 @@
 {
-    "game": "A-6 Single Draw",
-    "category": "Draw",
-    "references": [
-       "https://en.wikipedia.org/wiki/Lowball_(poker)"
-    ],        
-    "players": {
-        "min": 2,
-        "max": 8
-    },
-    "deck": {
-        "type": "standard",
-        "cards": 52
-    },
-    "bettingStructures": [
-        "Limit",
-        "No Limit",
-        "Pot Limit"
-    ],
-    "gamePlay": [
-        {
-            "bet": {
-                "type": "blinds"
-            },
-            "name": "Post Blinds"
-        },
-        {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 5,
-                        "state": "face down"
-                    }
-                ]
-            },
-            "name": "Deal Hole Cards"
-        },
-        {
-            "bet": {
-                "type": "small"
-            },
-            "name": "Initial Bet"
-        },
-        {
-            "draw": {
-                "cards": [
-                    {
-                        "number": 5,
-                        "state": "face down"
-                    }
-                ]
-            },
-            "name": "Draw Cards"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "Final Bet"
-        },
-        {
-            "showdown": {
-                "type": "final"
-            },
-            "name": "Showdown"
-        }
-    ],
-    "showdown": {
-        "order": "clockwise",
-        "startingFrom": "dealer",
-        "cardsRequired": "all cards",
-        "bestHand": [
-            {
-                "evaluationType": "a6_low",
-                "anyCards": 5
-            }
-        ]
+  "game": "A-6 Single Draw",
+  "category": "Draw",
+  "references": [
+    "https://en.wikipedia.org/wiki/Lowball_(poker)",
+    {
+      "url": "https://www.pagat.com/poker/variants/lowball.html#acetosix",
+      "description": "Pagat.com - A-6 Single Draw"
     }
+  ],
+  "players": {
+    "min": 2,
+    "max": 8
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Initial Bet"
+    },
+    {
+      "draw": {
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Draw Cards"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all cards",
+    "bestHand": [
+      {
+        "evaluationType": "a6_low",
+        "anyCards": 5
+      }
+    ]
+  }
 }

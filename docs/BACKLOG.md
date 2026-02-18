@@ -1,7 +1,7 @@
 # Backlog
 
 > Prioritized task list. Work top-to-bottom within each phase.
-> Last updated: 2026-02-17
+> Last updated: 2026-02-18
 
 ---
 
@@ -199,6 +199,67 @@ Removed 1,307 lines of duplicated config data. All tests pass with file-based lo
   JSON-only or needs code changes. Check against the feature matrix.
 - 5.6: Walk through implementing a new variant - create config, write test, run test.
   For code-change variants, identify what engine changes are needed.
+
+---
+
+## Phase 6: Pagat.com Variant Expansion
+
+Goal: Expand game library based on cross-reference with Pagat.com poker variants.
+See `docs/PAGAT_CROSS_REFERENCE.md` for the full analysis (352 Pagat variants vs our 192 configs).
+
+### 6.1 Config-Only New Games (~38 games, no engine changes needed)
+
+These games use existing engine features and only need a new JSON config file.
+
+| # | Task | Status |
+|---|------|--------|
+| 6.1.1 | Tahoe / Wichita Hold'em (3 hole cards, use 2) | TODO |
+| 6.1.2 | Iron Cross (community in + shape) | TODO |
+| 6.1.3 | Low Chicago (lowest spade wins half) | TODO |
+| 6.1.4 | 5-Card Stud Hi-Lo | TODO |
+| 6.1.5 | Royal Hold'em (T-A only, short deck) | TODO |
+| 6.1.6 | Sviten Special (Scandinavian Dramaha variant) | TODO |
+| 6.1.7 | 7-Card Draw | TODO |
+| 6.1.8 | Double Draw Lowball (2-draw variant) | TODO |
+| 6.1.9 | Blind Hold'em / Blind Omaha (all face-down community) | TODO |
+| 6.1.10 | Round the World (Cincinnati variant) | TODO |
+| 6.1.11 | Remaining ~28 config-only games from Pagat analysis | TODO |
+
+### 6.2 New Engine Features
+
+Features prioritized by casino relevance and games unlocked. Each unlocks multiple new variants.
+
+| # | Feature | Games Unlocked | Casino Relevance | Difficulty | Status |
+|---|---------|---------------|-----------------|------------|--------|
+| 6.2.1 | Mixed Game Rotation (HORSE, 8 Game Mix, Dealer's Choice) | ~10 | Very High | Medium | TODO |
+| 6.2.2 | Buy Your Card (pay chips to acquire/replace cards) | ~19 | Medium | Medium-Hard | TODO |
+| 6.2.3 | Dynamic Wild Cards (event-triggered wild changes) | ~12 | Medium | Hard | TODO |
+| 6.2.4 | Enhanced Pass Mechanics (multi-round, accept/reject) | ~8 | Low-Medium | Easy-Medium | TODO |
+| 6.2.5 | No Peek Mechanic (blind card reveal game mode) | ~4 | Low | Hard | TODO |
+| 6.2.6 | Inverted Visibility / Indian Poker (cards visible to opponents only) | ~2 | Very Low | Medium | TODO |
+
+**6.2.1 details:** Orchestration layer above Game that rotates through configs (e.g., HORSE = Hold'em → Omaha 8 → Razz → 7-Stud → 7-Stud 8). Handles blind/ante transitions between variants. All individual games already work.
+
+**6.2.2 details:** New `PlayerAction.BUY` action. Config schema: `{"buy": {"cost": "fixed", "amount": 50, "trigger": "rank", "ranks": ["3"]}}`. Fixed-cost buys are easiest; auction variants need bidding sub-rounds.
+
+**6.2.3 details:** Wild cards currently static (set at game start). Need event hooks on card deals, per-player wild tracking ("low hole wild"), re-evaluation when wilds change. Config: `{"wildCardRule": {"type": "follow", "trigger": "queen"}}`.
+
+**6.2.4 details:** Our PASS action exists but may need: configurable pass count per round, multi-round sequences (pass 3→2→1), accept/reject mechanics, pass to specific player.
+
+**6.2.5 details:** Completely different game flow — all cards dealt face down, sequential reveal loop with "beat or fold". Needs new step type `{"nopeek": {"cards": 7}}`.
+
+**6.2.6 details:** New `Visibility.FACE_OUT` enum — cards visible to all OTHER players but hidden from owner. `GameStateManager` flips visibility logic for this type.
+
+### 6.3 Pagat URL Documentation (DONE)
+
+| # | Task | Status |
+|---|------|--------|
+| 6.3.1 | Add Pagat URLs to 42 matching game configs | DONE |
+| 6.3.2 | Create Pagat cross-reference analysis document | DONE |
+
+**6.3.1 result:** Added Pagat.com URLs as reference objects to 42 game config JSON files. 45 total matches (3 already had Pagat refs: kryky, one_mans_trash, texas_reach_around). Remaining 147 configs have no Pagat match (community-invented or hi-lo variants of games Pagat only covers in high-only form).
+
+**6.3.2 result:** `docs/PAGAT_CROSS_REFERENCE.md` — 515-line analysis with three sections: (1) Games we support with Pagat matches (45), (2) Pagat games we don't support categorized by feasibility (~38 config-only, ~47 need features, ~57 out of scope), (3) Missing features summary prioritized by casino relevance and games unlocked.
 
 ---
 

@@ -1,125 +1,129 @@
 {
-    "game": "2-11 Poker",
-    "category": "Other",
-    "references": [
-        "https://211poker.com/",
-        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
-    ],        
-    "players": {
-        "min": 2,
-        "max": 9
-    },
-    "deck": {
-        "type": "standard",
-        "cards": 52
-    },
-    "bettingStructures": [
-        "Limit",
-        "No Limit",
-        "Pot Limit"
-    ],
-    "gamePlay": [
-        {
-            "bet": {
-                "type": "blinds"
-            },
-            "name": "Post Blinds"
-        },
-        {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 4,
-                        "state": "face down"
-                    }
-                ]
-            },
-            "name": "Deal Hole Cards"
-        },
-        {
-            "bet": {
-                "type": "small"
-            },
-            "name": "Pre-Flop Bet"
-        },
-        {
-            "deal": {
-                "location": "community",
-                "cards": [
-                    {
-                        "number": 2,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal Flop"
-        },
-        {
-            "bet": {
-                "type": "small"
-            },
-            "name": "Post-Flop Bet"
-        },
-        {
-            "deal": {
-                "location": "community",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal Turn"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "Turn Bet"
-        },
-        {
-            "deal": {
-                "location": "community",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal River"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "River Bet"
-        },
-        {
-            "showdown": {
-                "type": "final"
-            },
-            "name": "Showdown"
-        }
-    ],
-    "showdown": {
-        "order": "clockwise",
-        "startingFrom": "dealer",
-        "cardsRequired": "two or three hole cards, three or two community cards",
-        "bestHand": [
-            {
-                "evaluationType": "high",
-                "holeCards": [
-                    2,
-                    3
-                ],
-                "communityCards": [
-                    3,
-                    2
-                ]
-            }
-        ]
+  "game": "2-11 Poker",
+  "category": "Other",
+  "references": [
+    "https://211poker.com/",
+    "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
+    {
+      "url": "https://www.pagat.com/poker/variants/invented/shared.html#211",
+      "description": "Pagat.com - 2-11 Poker"
     }
+  ],
+  "players": {
+    "min": 2,
+    "max": 9
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 4,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Pre-Flop Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 2,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Flop"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Post-Flop Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Turn"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Turn Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal River"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "River Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "two or three hole cards, three or two community cards",
+    "bestHand": [
+      {
+        "evaluationType": "high",
+        "holeCards": [
+          2,
+          3
+        ],
+        "communityCards": [
+          3,
+          2
+        ]
+      }
+    ]
+  }
 }

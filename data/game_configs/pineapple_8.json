@@ -1,138 +1,142 @@
 {
-    "game": "Pineapple 8",
-    "category": "Pineapple",
-    "references": [
-        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
-    ],        
-    "players": {
-        "min": 2,
-        "max": 9
-    },
-    "deck": {
-        "type": "standard",
-        "cards": 52
-    },
-    "bettingStructures": [
-        "Limit",
-        "No Limit",
-        "Pot Limit"
-    ],
-    "gamePlay": [
-        {
-            "bet": {
-                "type": "blinds"
-            },
-            "name": "Post Blinds"
-        },
-        {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 3,
-                        "state": "face down"
-                    }
-                ]
-            },
-            "name": "Deal Hole Cards"
-        },
-        {
-            "bet": {
-                "type": "small"
-            },
-            "name": "Pre-Flop Bet"
-        },
-        {
-            "discard": {
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face down"
-                    }
-                ]
-            },
-            "name": "Discard One"
-        },
-        {
-            "deal": {
-                "location": "community",
-                "cards": [
-                    {
-                        "number": 3,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal Flop"
-        },
-        {
-            "bet": {
-                "type": "small"
-            },
-            "name": "Post-Flop Bet"
-        },
-        {
-            "deal": {
-                "location": "community",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal Turn"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "Turn Bet"
-        },
-        {
-            "deal": {
-                "location": "community",
-                "cards": [
-                    {
-                        "number": 1,
-                        "state": "face up"
-                    }
-                ]
-            },
-            "name": "Deal River"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "River Bet"
-        },
-        {
-            "showdown": {
-                "type": "final"
-            },
-            "name": "Showdown"
-        }
-    ],
-    "showdown": {
-        "order": "clockwise",
-        "startingFrom": "dealer",
-        "cardsRequired": "any combination of hole and community cards",
-        "bestHand": [
-            {
-                "name": "High Hand",
-                "evaluationType": "high",
-                "anyCards": 5
-            },
-            {
-                "name": "Low Hand",
-                "evaluationType": "a5_low",
-                "anyCards": 5,
-                "qualifier": [
-                    1,
-                    56
-                ]
-            }
-        ]
+  "game": "Pineapple 8",
+  "category": "Pineapple",
+  "references": [
+    "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
+    {
+      "url": "https://www.pagat.com/poker/variants/texasholdem.html#pineapple",
+      "description": "Pagat.com - Pineapple 8"
     }
+  ],
+  "players": {
+    "min": 2,
+    "max": 9
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 3,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Pre-Flop Bet"
+    },
+    {
+      "discard": {
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Discard One"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 3,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Flop"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Post-Flop Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Turn"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Turn Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal River"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "River Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "any combination of hole and community cards",
+    "bestHand": [
+      {
+        "name": "High Hand",
+        "evaluationType": "high",
+        "anyCards": 5
+      },
+      {
+        "name": "Low Hand",
+        "evaluationType": "a5_low",
+        "anyCards": 5,
+        "qualifier": [
+          1,
+          56
+        ]
+      }
+    ]
+  }
 }

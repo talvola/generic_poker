@@ -1,6 +1,7 @@
+from generic_poker.core.card import Visibility
 from generic_poker.game.game import Game
 from generic_poker.game.game_state import GameState
-from generic_poker.core.card import Visibility  
+
 
 def display_game_state(game: Game) -> None:
     """Display the current game state in a user-friendly way."""
@@ -22,8 +23,7 @@ def display_game_state(game: Game) -> None:
         for subset_name, subset_cards in subsets.items():
             if subset_cards:
                 cards_display = " ".join(
-                    "**" if card.visibility == Visibility.FACE_DOWN else str(card)
-                    for card in subset_cards
+                    "**" if card.visibility == Visibility.FACE_DOWN else str(card) for card in subset_cards
                 )
             else:
                 cards_display = "None"
@@ -33,8 +33,7 @@ def display_game_state(game: Game) -> None:
         unassigned = [c for c in all_cards if not any(c in sc for sc in subsets.values())]
         if unassigned:
             unassigned_display = " ".join(
-                "**" if card.visibility == Visibility.FACE_DOWN else str(card)
-                for card in unassigned
+                "**" if card.visibility == Visibility.FACE_DOWN else str(card) for card in unassigned
             )
             subset_display.append(f"Unassigned: {unassigned_display}")
 

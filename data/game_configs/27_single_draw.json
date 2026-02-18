@@ -1,81 +1,85 @@
 {
-    "game": "2-7 Single Draw",
-    "category": "Draw",
-    "references": [
-        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
-        "https://www.barge.org/rulebook/deuce-to-seven-lowball.html"
-    ],        
-    "players": {
-        "min": 2,
-        "max": 8
-    },
-    "deck": {
-        "type": "standard",
-        "cards": 52
-    },
-    "bettingStructures": [
-        "Limit",
-        "No Limit",
-        "Pot Limit"
-    ],
-    "gamePlay": [
-        {
-            "bet": {
-                "type": "blinds"
-            },
-            "name": "Post Blinds"
-        },
-        {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 5,
-                        "state": "face down"
-                    }
-                ]
-            },
-            "name": "Deal Hole Cards"
-        },
-        {
-            "bet": {
-                "type": "small"
-            },
-            "name": "Initial Bet"
-        },
-        {
-            "draw": {
-                "cards": [
-                    {
-                        "number": 5,
-                        "state": "face down"
-                    }
-                ]
-            },
-            "name": "Draw Cards"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "Final Bet"
-        },
-        {
-            "showdown": {
-                "type": "final"
-            },
-            "name": "Showdown"
-        }
-    ],
-    "showdown": {
-        "order": "clockwise",
-        "startingFrom": "dealer",
-        "cardsRequired": "all cards",
-        "bestHand": [
-            {
-                "evaluationType": "27_low",
-                "anyCards": 5
-            }
-        ]
+  "game": "2-7 Single Draw",
+  "category": "Draw",
+  "references": [
+    "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
+    "https://www.barge.org/rulebook/deuce-to-seven-lowball.html",
+    {
+      "url": "https://www.pagat.com/poker/variants/lowball.html#kansas",
+      "description": "Pagat.com - 2-7 Single Draw"
     }
+  ],
+  "players": {
+    "min": 2,
+    "max": 8
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Initial Bet"
+    },
+    {
+      "draw": {
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Draw Cards"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all cards",
+    "bestHand": [
+      {
+        "evaluationType": "27_low",
+        "anyCards": 5
+      }
+    ]
+  }
 }

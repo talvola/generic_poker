@@ -1,88 +1,92 @@
 {
-    "game": "Five Card Draw with Bug",
-    "category": "Draw",
-    "references": [
-        "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
-        "https://www.barge.org/rulebook/five-card-draw.html"
-    ],    
-    "players": {
-        "min": 2,
-        "max": 6
-    },
-    "deck": {
-        "type": "standard",
-        "cards": 52,
-        "jokers": 1
-    },
-    "bettingStructures": [
-        "Limit",
-        "No Limit",
-        "Pot Limit"
-    ],
-    "gamePlay": [
-        {
-            "bet": {
-                "type": "blinds"
-            },
-            "name": "Post Blinds"
-        },
-        {
-            "deal": {
-                "location": "player",
-                "cards": [
-                    {
-                        "number": 5,
-                        "state": "face down"
-                    }
-                ]
-            },
-            "name": "Deal Hole Cards"
-        },
-        {
-            "bet": {
-                "type": "small"
-            },
-            "name": "Initial Bet"
-        },
-        {
-            "draw": {
-                "cards": [
-                    {
-                        "number": 5,
-                        "state": "face down"
-                    }
-                ]
-            },
-            "name": "Draw Cards"
-        },
-        {
-            "bet": {
-                "type": "big"
-            },
-            "name": "Final Bet"
-        },
-        {
-            "showdown": {
-                "type": "final"
-            },
-            "name": "Showdown"
-        }
-    ],
-    "showdown": {
-        "order": "clockwise",
-        "startingFrom": "dealer",
-        "cardsRequired": "all cards",
-        "bestHand": [
-            {
-                "evaluationType": "high_wild_bug",
-                "anyCards": 5,
-                "wildCards": [
-                    {    
-                        "type": "joker",
-                        "role": "bug"
-                    }
-                ]
-            }
-        ]
+  "game": "Five Card Draw with Bug",
+  "category": "Draw",
+  "references": [
+    "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
+    "https://www.barge.org/rulebook/five-card-draw.html",
+    {
+      "url": "https://www.pagat.com/poker/variants/5draw.html#bug",
+      "description": "Pagat.com - Five Card Draw with Bug"
     }
+  ],
+  "players": {
+    "min": 2,
+    "max": 6
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52,
+    "jokers": 1
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Initial Bet"
+    },
+    {
+      "draw": {
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Draw Cards"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all cards",
+    "bestHand": [
+      {
+        "evaluationType": "high_wild_bug",
+        "anyCards": 5,
+        "wildCards": [
+          {
+            "type": "joker",
+            "role": "bug"
+          }
+        ]
+      }
+    ]
+  }
 }

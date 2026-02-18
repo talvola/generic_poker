@@ -21,6 +21,12 @@ test = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
 ]
+dev = [
+    "ruff>=0.8.0",
+    "bandit>=1.7.0",
+    "pip-audit>=2.7.0",
+    "pre-commit>=3.5.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -42,3 +48,69 @@ packages = ["src/generic_poker"]
 [tool.setuptools]
 packages = ["generic_poker"]
 package-dir = {"" = "src"}
+
+# ── Ruff (linter + formatter) ──────────────────────────────────────────
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "F",     # pyflakes (unused imports, undefined names, etc.)
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "I",     # isort (import ordering)
+    "UP",    # pyupgrade (modernize Python syntax)
+    "B",     # flake8-bugbear (common bugs)
+    "SIM",   # flake8-simplify
+    "S",     # flake8-bandit (security)
+    "A",     # flake8-builtins (shadowing builtins)
+    "T20",   # flake8-print (print statements)
+]
+ignore = [
+    "E501",  # line-too-long — ruff format handles wrapping for new code
+    "E712",  # == True/False — required for SQLAlchemy filter expressions
+    "S101",  # assert usage — fine in non-production code
+    "S104",  # hardcoded-bind-all-interfaces — intentional for dev server
+    "S105",  # hardcoded password — false positives on test credentials
+    "S106",  # hardcoded password in function args — false positives on test credentials
+    "S311",  # suspicious-non-cryptographic-random — fine for card shuffling
+    "T201",  # print() — used intentionally in CLI scripts and app startup
+    "B008",  # function call in default arg — common in Flask/Click patterns
+    "SIM102", # collapsible-if — sometimes less readable when collapsed
+    "SIM108", # ternary operator — sometimes less readable
+    "B904",  # raise-without-from — good practice but low priority cleanup
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S",     # security warnings not relevant in tests
+    "B011",  # assert False
+    "F811",  # redefined names (pytest fixtures)
+    "SIM117", # nested with statements — often clearer in test setup
+]
+"tools/**/*.py" = [
+    "T201",  # print() is expected in CLI tools
+    "S",     # security warnings not relevant in tools
+]
+"src/online_poker/models/**/*.py" = [
+    "F821",  # SQLAlchemy Mapped["ForwardRef"] triggers false positives
+]
+"app.py" = ["T201"]  # print() for startup messages
+"wsgi.py" = ["E402"]  # imports after eventlet monkey_patch
+
+[tool.ruff.lint.isort]
+known-first-party = ["generic_poker", "online_poker"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+# ── Bandit (security scanner) ──────────────────────────────────────────
+
+[tool.bandit]
+exclude_dirs = ["tests", "tools", "env"]
+skips = ["B101", "B104", "B105", "B106", "B201", "B311"]  # assert, bind-all, hardcoded passwords, debug=True, pseudo-random

@@ -1,21 +1,24 @@
 """Simple bot player for demo purposes."""
 
-import random
 import logging
-from typing import List, Tuple, Optional
+import random
+
 from generic_poker.game.game import PlayerAction
 
 logger = logging.getLogger(__name__)
 
+
 class SimpleBot:
     """A very basic bot that makes random valid actions."""
-    
+
     def __init__(self, player_id: str, username: str):
         self.player_id = player_id
         self.username = username
         self.is_bot = True
-    
-    def choose_action(self, valid_actions: List[Tuple], pot_amount: int = 0, stack: int = 0) -> Tuple[PlayerAction, Optional[int]]:
+
+    def choose_action(
+        self, valid_actions: list[tuple], pot_amount: int = 0, stack: int = 0
+    ) -> tuple[PlayerAction, int | None]:
         """Choose an action from the valid actions list.
 
         Strategy:
@@ -77,38 +80,40 @@ class SimpleBot:
             first_action = valid_actions[0]
             action_type, min_amount, max_amount = first_action
             return action_type, min_amount
-    
+
     @staticmethod
     def is_bot_player(player_id: str) -> bool:
         """Check if a player ID represents a bot/demo player."""
-        return player_id.startswith('demo_player_') or player_id.startswith('bot_')
+        return player_id.startswith("demo_player_") or player_id.startswith("bot_")
+
 
 class BotManager:
     """Manages bot players for tables."""
-    
+
     def __init__(self):
         self.bots = {}
-    
+
     def create_bot(self, player_id: str, username: str) -> SimpleBot:
         """Create a new bot player."""
         bot = SimpleBot(player_id, username)
         self.bots[player_id] = bot
         logger.info(f"Created bot player: {username} ({player_id})")
         return bot
-    
-    def get_bot(self, player_id: str) -> Optional[SimpleBot]:
+
+    def get_bot(self, player_id: str) -> SimpleBot | None:
         """Get a bot by player ID."""
         return self.bots.get(player_id)
-    
+
     def is_bot(self, player_id: str) -> bool:
         """Check if a player is a bot."""
         return SimpleBot.is_bot_player(player_id) or player_id in self.bots
-    
+
     def remove_bot(self, player_id: str):
         """Remove a bot."""
         if player_id in self.bots:
             del self.bots[player_id]
             logger.info(f"Removed bot player: {player_id}")
+
 
 # Global bot manager instance
 bot_manager = BotManager()

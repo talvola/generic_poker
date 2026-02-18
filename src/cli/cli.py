@@ -1,11 +1,12 @@
-from typing import Tuple, Optional, List, Dict
-from generic_poker.game.game import Game, PlayerAction, GameActionType
-from generic_poker.game.game_state import GameState
 from generic_poker.core.card import Card, Visibility
+from generic_poker.game.game import Game, GameActionType, PlayerAction
+from generic_poker.game.game_state import GameState
 from generic_poker.game.table import Player
+
 from .display import display_game_state
 
-def get_player_action(game: Game, player: 'Player') -> Tuple[PlayerAction, int]:
+
+def get_player_action(game: Game, player: "Player") -> tuple[PlayerAction, int]:
     """Prompt the current player for their action."""
     valid_actions = game.get_valid_actions(player.id)
     print(f"\n{player.name}'s Turn | Stack: ${player.stack}")
@@ -78,14 +79,15 @@ def get_player_action(game: Game, player: 'Player') -> Tuple[PlayerAction, int]:
             return action, min_amt or 0
         print("Invalid choice.")
 
-def get_discard_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Optional[List[Card]]]:
+
+def get_discard_action(game: Game, player: Player) -> tuple[PlayerAction, int, list[Card] | None]:
     """Prompt the current player to select cards to discard, or handle forced discards."""
     step = game.rules.gameplay[game.current_step]
     if step.action_type == GameActionType.GROUPED:
         discard_config = step.action_config[game.action_handler.current_substep]
     else:
         discard_config = step.action_config
-    
+
     # Get the actual card configuration from the discard config
     card_config = discard_config["cards"][0]  # Assume one discard object for now
 
@@ -93,18 +95,18 @@ def get_discard_action(game: Game, player: Player) -> Tuple[PlayerAction, int, O
     if "rule" in discard_config:
         print(f"\n{player.name}'s Turn | Forced discard ({card_config['rule']})")
         return PlayerAction.DISCARD, 0, []  # Engine handles the rule-based discard
-    
+
     hand = player.hand.get_cards()
     if not hand:
         print(f"\n{player.name}'s Turn | No cards to discard")
         return PlayerAction.DISCARD, 0, []
-    
+
     valid_actions = game.get_valid_actions(player.id)
     discard_action = next((a for a in valid_actions if a[0] == PlayerAction.DISCARD), None)
     if not discard_action:
         print(f"\n{player.name}'s Turn | Discarding not allowed")
         return PlayerAction.DISCARD, 0, []
-    _, min_discards, max_discards = discard_action    
+    _, min_discards, max_discards = discard_action
 
     print(f"\n{player.name}'s Turn | Stack: ${player.stack}")
     print("Your cards:")
@@ -116,17 +118,19 @@ def get_discard_action(game: Game, player: Player) -> Tuple[PlayerAction, int, O
     unassigned = [c for c in hand if not any(c in sc for sc in subsets.values())]
     for i, card in enumerate(unassigned, 1):
         card_list.append((f"Unassigned {i}", card))
-    for idx, (label, card) in enumerate(card_list, 1):
+    for idx, (_label, card) in enumerate(card_list, 1):
         print(f"{idx}: {card}")
-    
+
     # Fix the prompt to correctly handle optional discards
     if min_discards == 0:
         if max_discards == 0:
             prompt = "No cards need to be discarded. Press Enter to continue:"
         elif max_discards == 1:
-            prompt = f"Select 0 or 1 card to discard (press Enter to discard nothing, or enter card number):"
+            prompt = "Select 0 or 1 card to discard (press Enter to discard nothing, or enter card number):"
         else:
-            prompt = f"Select 0 to {max_discards} cards to discard (press Enter to discard nothing, or enter card numbers):"
+            prompt = (
+                f"Select 0 to {max_discards} cards to discard (press Enter to discard nothing, or enter card numbers):"
+            )
     else:
         prompt = f"Select {min_discards} to {max_discards} cards to discard (e.g., '1 3 5'):"
     print(prompt)
@@ -159,14 +163,15 @@ def get_discard_action(game: Game, player: Player) -> Tuple[PlayerAction, int, O
         except ValueError:
             print("Invalid input. Use space-separated numbers (e.g., '1 3').")
 
-def get_expose_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Optional[List[Card]]]:
+
+def get_expose_action(game: Game, player: Player) -> tuple[PlayerAction, int, list[Card] | None]:
     """
     Prompt the player to select cards to expose based on valid game actions.
-    
+
     Args:
         game: The current Game instance.
         player: The Player instance making the action.
-    
+
     Returns:
         Tuple containing:
         - PlayerAction.EXPOSE: The action type.
@@ -196,7 +201,7 @@ def get_expose_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Op
     unassigned = [c for c in hand if not any(c in sc for sc in subsets.values())]
     for i, card in enumerate(unassigned, 1):
         card_list.append((f"Unassigned {i}", card))
-    for idx, (label, card) in enumerate(card_list, 1):
+    for idx, (_label, card) in enumerate(card_list, 1):
         visibility = "face up" if card.visibility == Visibility.FACE_UP else "face down"
         print(f"{idx}: {card} ({visibility})")
 
@@ -215,31 +220,32 @@ def get_expose_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Op
         try:
             # Convert input to zero-based indices
             indices = [int(x) - 1 for x in choice.split()]
-            
+
             # Validate indices are within range
             if not all(0 <= i < len(hand) for i in indices):
                 print("Invalid card numbers. Try again.")
                 continue
-            
+
             # Check number of cards selected is within min and max
             num_expose = len(indices)
             if num_expose < min_expose or num_expose > max_expose:
                 print(f"Must expose between {min_expose} and {max_expose} cards.")
                 continue
-            
+
             # Ensure no duplicate selections
             if len(indices) != len(set(indices)):
                 print("Duplicate card numbers. Try again.")
                 continue
-            
+
             # Create list of cards to expose
             cards_to_expose = [hand[i] for i in indices]
             return PlayerAction.EXPOSE, 0, cards_to_expose
-        
+
         except ValueError:
             print("Invalid input. Use space-separated numbers (e.g., '1 3').")
 
-def get_separate_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Optional[List[Card]]]:
+
+def get_separate_action(game: Game, player: Player) -> tuple[PlayerAction, int, list[Card] | None]:
     """Prompt the player to separate their hand into specified subsets."""
     hand = player.hand.get_cards()
     if not hand:
@@ -258,7 +264,9 @@ def get_separate_action(game: Game, player: Player) -> Tuple[PlayerAction, int, 
     separate_config = step.action_config["cards"]  # List of {"hole_subset": str, "number": int}
     total_cards_required = sum(subset["number"] for subset in separate_config)
     if len(hand) != total_cards_required:
-        print(f"\n{player.name}'s Turn | Hand size ({len(hand)}) does not match required total ({total_cards_required})")
+        print(
+            f"\n{player.name}'s Turn | Hand size ({len(hand)}) does not match required total ({total_cards_required})"
+        )
         return PlayerAction.SEPARATE, 0, []
 
     print(f"\n{player.name}'s Turn | Stack: ${player.stack}")
@@ -311,7 +319,8 @@ def get_separate_action(game: Game, player: Player) -> Tuple[PlayerAction, int, 
 
     return PlayerAction.SEPARATE, 0, selected_cards
 
-def get_declare_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Optional[List[Dict]]]:
+
+def get_declare_action(game: Game, player: Player) -> tuple[PlayerAction, int, list[dict] | None]:
     """
     Prompt the player to declare their intention (high, low, or high/low) for each eligible pot.
 
@@ -359,7 +368,9 @@ def get_declare_action(game: Game, player: Player) -> Tuple[PlayerAction, int, O
             while True:
                 choice = input(prompt).strip().lower().replace("/", "_")
                 if choice not in allowed_options:
-                    print(f"Invalid declaration. Choose from: {', '.join(opt.replace('_', '/') for opt in allowed_options)}")
+                    print(
+                        f"Invalid declaration. Choose from: {', '.join(opt.replace('_', '/') for opt in allowed_options)}"
+                    )
                     continue
                 declarations.append({"pot_index": pot_index, "declaration": choice})
                 break
@@ -369,14 +380,17 @@ def get_declare_action(game: Game, player: Player) -> Tuple[PlayerAction, int, O
         while True:
             choice = input(prompt).strip().lower().replace("/", "_")
             if choice not in allowed_options:
-                print(f"Invalid declaration. Choose from: {', '.join(opt.replace('_', '/') for opt in allowed_options)}")
+                print(
+                    f"Invalid declaration. Choose from: {', '.join(opt.replace('_', '/') for opt in allowed_options)}"
+                )
                 continue
             declarations.append({"pot_index": -1, "declaration": choice})
             break
 
     return PlayerAction.DECLARE, 0, declarations
 
-def get_draw_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Optional[List[Card]]]:
+
+def get_draw_action(game: Game, player: Player) -> tuple[PlayerAction, int, list[Card] | None]:
     """Prompt the player to select cards from a subset to discard and draw replacements."""
     step = game.rules.gameplay[game.current_step]
     draw_config = step.action_config["cards"][0]  # Assume one draw object for now
@@ -387,7 +401,7 @@ def get_draw_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Opti
     if not hand:
         print(f"\n{player.name}'s Turn | No cards in '{subset_name}' subset to draw")
         return PlayerAction.DRAW, 0, []
-    
+
     valid_actions = game.get_valid_actions(player.id)
     draw_action = next((a for a in valid_actions if a[0] == PlayerAction.DRAW), None)
     if not draw_action:
@@ -428,6 +442,7 @@ def get_draw_action(game: Game, player: Player) -> Tuple[PlayerAction, int, Opti
         except ValueError:
             print("Invalid input. Use space-separated numbers (e.g., '1 3').")
 
+
 def run_game(game: Game) -> None:
     """Run an interactive poker game."""
     print(f"Starting {game.rules.game} Game")
@@ -436,22 +451,22 @@ def run_game(game: Game) -> None:
     game.start_hand(shuffle_deck=True)
 
     while True:
-        
         while game.state != GameState.COMPLETE:
             display_game_state(game)
             step = game.rules.gameplay[game.current_step]
 
             # Handle non-player actions
-            if step.action_type == GameActionType.DEAL:
+            if step.action_type == GameActionType.DEAL or step.action_type == GameActionType.ROLL_DIE:
                 input("\nPress Enter to proceed...")
                 game._next_step()
-            elif step.action_type == GameActionType.ROLL_DIE:
-                input("\nPress Enter to proceed...")
-                game._next_step()                
             elif step.action_type == GameActionType.REMOVE:
                 input("\nPress Enter to remove board cards...")
-                game._next_step()                
-            elif step.action_type == GameActionType.BET and "type" in step.action_config and step.action_config["type"] in ["antes", "blinds"]:
+                game._next_step()
+            elif (
+                step.action_type == GameActionType.BET
+                and "type" in step.action_config
+                and step.action_config["type"] in ["antes", "blinds"]
+            ):
                 input("\nPress Enter to post forced bets...")
                 game._next_step()
             elif game.current_player:
@@ -472,23 +487,25 @@ def run_game(game: Game) -> None:
                         result = game.player_action(game.current_player.id, action, amount, cards)
                     elif action_type == GameActionType.EXPOSE and game.current_player:
                         action, amount, cards = get_expose_action(game, game.current_player)
-                        result = game.player_action(game.current_player.id, action, amount, cards)    
+                        result = game.player_action(game.current_player.id, action, amount, cards)
                     elif action_type == GameActionType.DECLARE and game.current_player:
                         action, amount, declaration_data = get_declare_action(game, game.current_player)
-                        result = game.player_action(game.current_player.id, action, amount, declaration_data=declaration_data)
+                        result = game.player_action(
+                            game.current_player.id, action, amount, declaration_data=declaration_data
+                        )
                     elif action_type == GameActionType.SEPARATE:
                         action, amount, cards = get_separate_action(game, game.current_player)
-                        result = game.player_action(game.current_player.id, action, amount, cards)     
+                        result = game.player_action(game.current_player.id, action, amount, cards)
                     elif action_type == GameActionType.DRAW:
                         action, amount, cards = get_draw_action(game, game.current_player)
-                        result = game.player_action(game.current_player.id, action, amount, cards)        
+                        result = game.player_action(game.current_player.id, action, amount, cards)
                     elif action_type == GameActionType.DEAL:
                         # assume no player input needed - just send the player action
-                        result = game.player_action(game.current_player.id, PlayerAction.DEAL)                                                                                                      
+                        result = game.player_action(game.current_player.id, PlayerAction.DEAL)
                     else:
                         print(f"Unhandled game state: {game.state}")
                         input("\nPress Enter to proceed...")
-                        break                        
+                        break
 
                     if not result.success:
                         print(f"Error: {result.error}")
@@ -518,18 +535,18 @@ def run_game(game: Game) -> None:
             print(f"{player.name}: ${player.stack}")
         while True:
             choice = input("\nContinue to next hand? (y/n): ").strip().lower()
-            if choice in ('y', 'n'):
+            if choice in ("y", "n"):
                 break
             print("Please enter 'y' or 'n'.")
-        
-        if choice == 'n':
+
+        if choice == "n":
             print("Game ended.")
             break
-        
+
         # Start new hand with the updated button position
         initial_stacks = {pid: p.stack for pid, p in game.table.players.items()}
         game.start_hand(shuffle_deck=True)
-    
+
     display_game_state(game)
     print("\nResults:")
     for pid, player in game.table.players.items():

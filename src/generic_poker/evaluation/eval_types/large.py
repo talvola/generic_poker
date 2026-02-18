@@ -1,9 +1,10 @@
 import sqlite3
-from typing import List, Optional, Union
 from pathlib import Path
+
 from generic_poker.core.card import Card
 from generic_poker.evaluation.eval_types.base import BaseEvaluator
 from generic_poker.evaluation.types import HandRanking
+
 
 class LargeHandEvaluator(BaseEvaluator):
     """Evaluator for large hand sets using an SQLite database."""
@@ -15,7 +16,7 @@ class LargeHandEvaluator(BaseEvaluator):
         self.conn = sqlite3.connect(db_file)
         self.cursor = self.conn.cursor()
 
-    def evaluate(self, cards: List[Card]) -> Optional[HandRanking]:
+    def evaluate(self, cards: list[Card]) -> HandRanking | None:
         """Evaluate a hand by querying the SQLite database."""
         self._validate_hand_size(cards)
 
@@ -31,7 +32,7 @@ class LargeHandEvaluator(BaseEvaluator):
         hand_str = self._cards_to_string(sorted_cards)
 
         # Query the database
-        self.cursor.execute('SELECT rank, ordered_rank FROM hand_rankings WHERE hand_str = ?', (hand_str,))
+        self.cursor.execute("SELECT rank, ordered_rank FROM hand_rankings WHERE hand_str = ?", (hand_str,))
         result = self.cursor.fetchone()
 
         if result:
@@ -42,23 +43,25 @@ class LargeHandEvaluator(BaseEvaluator):
 
     def get_sample_hand(self, rank: int, ordered_rank: int) -> str:
         """Retrieve a sample hand from the database for the given rank and ordered_rank."""
-        self.cursor.execute('SELECT hand_str FROM hand_rankings WHERE rank = ? AND ordered_rank = ? LIMIT 1', (rank, ordered_rank))
+        self.cursor.execute(
+            "SELECT hand_str FROM hand_rankings WHERE rank = ? AND ordered_rank = ? LIMIT 1", (rank, ordered_rank)
+        )
         result = self.cursor.fetchone()
         if result:
             return result[0]
         raise ValueError(f"No sample hand found for rank {rank} and ordered_rank {ordered_rank}")
 
-    def pad_hand(self, player_hand: List[Union[Card, str]], pad_to: int) -> List[Union[Card, str]]:
+    def pad_hand(self, player_hand: list[Card | str], pad_to: int) -> list[Card | str]:
         """Pad the hand to the required length with 'Xx' placeholders."""
         num_padding = pad_to - len(player_hand)
-        return player_hand + ['Xx'] * num_padding
+        return player_hand + ["Xx"] * num_padding
 
-    def _transform_wild_cards(self, cards: List[Card]) -> List[Union[Card, str]]:
+    def _transform_wild_cards(self, cards: list[Card]) -> list[Card | str]:
         """Transform wild cards into special strings (e.g., 'W1', 'B1')."""
         wild_count = 0
         transformed_cards = []
         for card in cards:
-            if card.is_wild and card.wild_type != 'BUG':  # NEHE doesn’t use bugs, but included for generality
+            if card.is_wild and card.wild_type != "BUG":  # NEHE doesn’t use bugs, but included for generality
                 wild_count += 1
                 transformed_cards.append(f"W{wild_count}")
             else:

@@ -190,6 +190,16 @@ Fixes applied:
 
 None — all 192 game variants are now fully supported. All action types (expose, pass, declare, separate, choose) implemented.
 
+### Pagat.com Cross-Reference (2026-02-18)
+
+Cross-referenced our 192 configs against 352 Pagat.com poker variants. See `docs/PAGAT_CROSS_REFERENCE.md`.
+
+- **45 of our games** match Pagat variants (42 had Pagat URLs added to their references)
+- **~38 Pagat games** could be added with config-only changes (no engine modifications)
+- **~47 Pagat games** need new engine features (Buy, Dynamic Wilds, No Peek, etc.)
+- **~57 Pagat games** are out of scope (guts/match games, non-poker)
+- **6 new engine features** identified, prioritized by casino relevance (see `docs/BACKLOG.md` Phase 6)
+
 ---
 
 ## Historical Bugs (Fixed)
