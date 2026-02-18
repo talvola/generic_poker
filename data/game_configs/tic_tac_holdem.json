@@ -4,6 +4,15 @@
     "references": [
         "https://www.ichabod801.com/poker_db/common/05-card.html#variant-1111"
     ],
+    "communityCardLayout": {
+        "type": "grid",
+        "columns": 3,
+        "cells": [
+            [["Row1","Col1"], ["Row1","Col2"], ["Row1","Col3"]],
+            [["Row2","Col1"], ["Row2","Col2"], ["Row2","Col3"]],
+            [["Row3","Col1"], ["Row3","Col2"], ["Row3","Col3"]]
+        ]
+    },
     "players": {
         "min": 2,
         "max": 10

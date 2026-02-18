@@ -5,6 +5,14 @@
         "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
         "https://www.pokernews.com/strategy/plo-variant-pot-limit-omaha-3-2-1-26713.htm"
     ],
+    "communityCardLayout": {
+        "type": "branching",
+        "rows": [
+            {"label": "Flops", "subsets": ["Top Flop", "Middle Flop", "Bottom Flop"]},
+            {"label": "Turns", "subsets": ["Top Turn", "Bottom Turn"]},
+            {"label": "River", "subsets": ["River"]}
+        ]
+    },
     "players": {
         "min": 2,
         "max": 9

@@ -1359,6 +1359,14 @@
         "columns": {
           "type": "integer",
           "description": "Number of columns for grid layout"
+        },
+        "cells": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {}
+          },
+          "description": "2D array of cell definitions for grid layout. Each cell is either a string (subset name) or an array of strings (subset intersection)."
         }
       },
       "required": ["type"],

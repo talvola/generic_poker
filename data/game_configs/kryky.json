@@ -4,6 +4,13 @@
     "references": [
         "https://www.pagat.com/poker/variants/invented/shared.html#kryky"
     ],
+    "communityCardLayout": {
+        "type": "multi-row",
+        "rows": [
+            {"label": "Board", "subsets": ["Board"]},
+            {"label": "Wild", "subsets": ["Wild"]}
+        ]
+    },
     "players": {
         "min": 2,
         "max": 7

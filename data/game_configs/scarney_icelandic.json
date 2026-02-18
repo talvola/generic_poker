@@ -1,6 +1,13 @@
 {
     "game": "Icelandic Scarney",
     "category": "Draw",
+    "communityCardLayout": {
+        "type": "multi-row",
+        "rows": [
+            {"label": "Board", "subsets": ["Board"]},
+            {"label": "Discard", "subsets": ["Discard"]}
+        ]
+    },
     "players": {
         "min": 2,
         "max": 6

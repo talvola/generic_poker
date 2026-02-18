@@ -15,6 +15,7 @@ class GamePhase(Enum):
     TURN = "turn"
     RIVER = "river"
     DRAWING = "drawing"
+    DECLARING = "declaring"
     SHOWDOWN = "showdown"
     COMPLETE = "complete"
 
@@ -27,11 +28,15 @@ class ActionType(Enum):
     BET = "bet"
     RAISE = "raise"
     ALL_IN = "all_in"
+    BRING_IN = "bring_in"
+    COMPLETE = "complete"
     DRAW = "draw"
     DISCARD = "discard"
     PASS = "pass"
     EXPOSE = "expose"
     SEPARATE = "separate"
+    DECLARE = "declare"
+    CHOOSE = "choose"
 
 
 @dataclass

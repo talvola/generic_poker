@@ -113,7 +113,11 @@ class Game:
             self.small_bet = big_blind
             self.big_bet = big_blind
             self.betting = create_betting_manager(structure, self.small_bet, self.big_bet, self.table)   
-        self.bring_in = bring_in            
+        # Default bring-in to half the small bet for bring-in style games
+        if bring_in is None and self.rules.forced_bets and self.rules.forced_bets.style == "bring-in":
+            self.bring_in = max(1, self.small_bet // 2)
+        else:
+            self.bring_in = bring_in
         self.ante = ante            
 
         self.auto_progress = auto_progress  # Store the setting     

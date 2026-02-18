@@ -4,6 +4,16 @@
     "references": [
       "https://www.barge.org/rulebook/bidirectional-chowaha.html"
     ],
+    "communityCardLayout": {
+      "type": "branching",
+      "rows": [
+        {"label": "Row 1", "subsets": ["Row1"]},
+        {"label": "Row 2", "subsets": ["Row2"]},
+        {"label": "Row 3", "subsets": ["Row3"]},
+        {"label": "Turns", "subsets": ["Turn1", "Turn2"]},
+        {"label": "River", "subsets": ["River"]}
+      ]
+    },
     "players": {
       "min": 2,
       "max": 9

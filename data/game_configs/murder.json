@@ -4,6 +4,14 @@
     "references": [
         "https://www.barge.org/rulebook/murder.html"
     ],
+    "communityCardLayout": {
+        "type": "multi-row",
+        "rows": [
+            {"label": "Board 1", "subsets": ["Board 1"]},
+            {"label": "Board 2", "subsets": ["Board 2"]},
+            {"label": "Board 3", "subsets": ["Board 3"]}
+        ]
+    },
     "players": {
         "min": 2,
         "max": 8

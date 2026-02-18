@@ -10,5 +10,8 @@ export * from './table-helpers';
 // Re-export game helpers
 export * from './game-helpers';
 
+// Re-export variant data
+export * from './variant-data';
+
 // Re-export fixtures
 export { test, expect } from '../fixtures/multi-user';

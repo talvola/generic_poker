@@ -4,6 +4,13 @@
     "references": [
         "https://www.koodikulma.fi/card-games/tapiola-holdem"
     ],
+    "communityCardLayout": {
+        "type": "branching",
+        "rows": [
+            {"label": "Towers", "subsets": ["Tower1", "Tower2"]},
+            {"label": "Center", "subsets": ["Center"]}
+        ]
+    },
     "players": {
         "min": 2,
         "max": 9

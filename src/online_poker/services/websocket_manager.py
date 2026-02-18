@@ -331,8 +331,12 @@ class WebSocketManager:
                         emit('error', {'message': f'Invalid card format: {e}'})
                         return
 
+                # Parse declaration data for declare actions
+                declaration_data = data.get('declaration_data')
+
                 success, message, result = session.process_player_action(
-                    user_id, player_action, amount, cards=card_objects
+                    user_id, player_action, amount, cards=card_objects,
+                    declaration_data=declaration_data
                 )
 
                 if success:
@@ -368,8 +372,12 @@ class WebSocketManager:
                                         self.broadcast_game_action_chat(table_id, f"*** RIVER *** [{cards_str}]", 'deal')
                                     prev_community_count = curr_community_count
 
-                                # DEALING state doesn't require player input - auto advance
+                                # DEALING state - auto advance unless it's a CHOOSE step
                                 if game.state == GameState.DEALING:
+                                    from generic_poker.config.loader import GameActionType
+                                    current_step = game.rules.gameplay[game.current_step]
+                                    if current_step.action_type == GameActionType.CHOOSE:
+                                        break  # Wait for player choice
                                     game._next_step()
                                 # BETTING state with no current player - round complete, advance
                                 elif game.state == GameState.BETTING and game.current_player is None:

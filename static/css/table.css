@@ -202,6 +202,68 @@ body {
     gap: 0.5rem;
 }
 
+/* Multi-row layout (double board, etc.) */
+.board-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.board-row-label {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.75rem;
+    font-weight: 600;
+    min-width: 55px;
+    text-align: right;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Branching layout (chowaha, 3-2-1, etc.) */
+.branching-row {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 0.25rem;
+}
+
+.subset-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    position: relative;
+}
+
+.subset-group-label {
+    font-size: 0.65rem;
+    color: rgba(255, 255, 255, 0.5);
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Grid layout (tic-tac, criss-cross, banco) */
+.grid-layout {
+    display: grid;
+    gap: 0.5rem;
+    justify-content: center;
+}
+
+.grid-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Declare/Choose button layouts */
+.declare-buttons,
+.choose-buttons {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
 .card-slot {
     width: var(--card-width);
     height: var(--card-height);

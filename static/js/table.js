@@ -618,6 +618,12 @@ class PokerTable {
             case 'multi-row':
                 this._renderMultiRowLayout(container, cards, layout);
                 break;
+            case 'branching':
+                this._renderBranchingLayout(container, cards, layout);
+                break;
+            case 'grid':
+                this._renderGridLayout(container, cards, layout);
+                break;
             default:
                 this._renderLinearLayout(container, cards, layout); // fallback
         }
@@ -691,9 +697,211 @@ class PokerTable {
     }
 
     _renderMultiRowLayout(container, cards, layout) {
-        // Future: render multiple labeled rows
-        // For now, fallback to linear
-        this._renderLinearLayout(container, cards);
+        const rows = layout.rows || [];
+        if (rows.length === 0) {
+            this._renderLinearLayout(container, cards, layout);
+            return;
+        }
+
+        // Check if we can reuse existing structure
+        const existingRows = container.querySelectorAll('.board-row');
+        const needsRebuild = existingRows.length !== rows.length ||
+            container.querySelector('.cards-container:not(.board-row .cards-container)');
+
+        if (needsRebuild) {
+            container.innerHTML = '';
+            for (const row of rows) {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'board-row';
+                rowDiv.dataset.subsets = JSON.stringify(row.subsets);
+
+                const label = document.createElement('span');
+                label.className = 'board-row-label';
+                label.textContent = row.label || '';
+                rowDiv.appendChild(label);
+
+                const cardsDiv = document.createElement('div');
+                cardsDiv.className = 'cards-container';
+                rowDiv.appendChild(cardsDiv);
+
+                container.appendChild(rowDiv);
+            }
+        }
+
+        // Update cards in each row
+        const rowDivs = container.querySelectorAll('.board-row');
+        rowDivs.forEach((rowDiv, i) => {
+            const row = rows[i];
+            if (!row) return;
+            const cardsDiv = rowDiv.querySelector('.cards-container');
+            const rowCards = this._collectSubsetCards(cards, row.subsets);
+            this._fillCardSlots(cardsDiv, rowCards);
+        });
+    }
+
+    _renderBranchingLayout(container, cards, layout) {
+        const rows = layout.rows || [];
+        if (rows.length === 0) {
+            this._renderLinearLayout(container, cards, layout);
+            return;
+        }
+
+        // Check rebuild needed
+        const existingRows = container.querySelectorAll('.branching-row');
+        const needsRebuild = existingRows.length !== rows.length;
+
+        if (needsRebuild) {
+            container.innerHTML = '';
+            for (const row of rows) {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'branching-row';
+
+                for (const subset of row.subsets) {
+                    const group = document.createElement('div');
+                    group.className = 'subset-group';
+                    group.dataset.subset = subset;
+
+                    const groupLabel = document.createElement('span');
+                    groupLabel.className = 'subset-group-label';
+                    groupLabel.textContent = subset;
+                    group.appendChild(groupLabel);
+
+                    const cardsDiv = document.createElement('div');
+                    cardsDiv.className = 'cards-container';
+                    group.appendChild(cardsDiv);
+
+                    rowDiv.appendChild(group);
+                }
+                container.appendChild(rowDiv);
+            }
+        }
+
+        // Update cards in each subset group
+        const branchingRows = container.querySelectorAll('.branching-row');
+        branchingRows.forEach((rowDiv, i) => {
+            const row = rows[i];
+            if (!row) return;
+            const groups = rowDiv.querySelectorAll('.subset-group');
+            groups.forEach((group, j) => {
+                const subset = row.subsets[j];
+                if (!subset) return;
+                const cardsDiv = group.querySelector('.cards-container');
+                const subsetCards = this._collectSubsetCards(cards, [subset]);
+                this._fillCardSlots(cardsDiv, subsetCards);
+            });
+        });
+    }
+
+    _renderGridLayout(container, cards, layout) {
+        const cells = layout.cells || [];
+        const columns = layout.columns || 3;
+        if (cells.length === 0) {
+            this._renderLinearLayout(container, cards, layout);
+            return;
+        }
+
+        // Check rebuild
+        const existingGrid = container.querySelector('.grid-layout');
+        const totalCells = cells.reduce((sum, row) => sum + row.length, 0);
+        const existingCells = existingGrid ? existingGrid.querySelectorAll('.grid-cell') : [];
+        const needsRebuild = !existingGrid || existingCells.length !== totalCells;
+
+        if (needsRebuild) {
+            container.innerHTML = '';
+            const grid = document.createElement('div');
+            grid.className = 'grid-layout';
+            grid.style.gridTemplateColumns = `repeat(${columns}, var(--card-width))`;
+
+            for (const row of cells) {
+                for (const cell of row) {
+                    const cellDiv = document.createElement('div');
+                    cellDiv.className = 'grid-cell';
+                    cellDiv.dataset.cell = JSON.stringify(cell);
+                    grid.appendChild(cellDiv);
+                }
+            }
+            container.appendChild(grid);
+        }
+
+        // Update cards in each cell
+        const gridDiv = container.querySelector('.grid-layout');
+        const cellDivs = gridDiv.querySelectorAll('.grid-cell');
+        let cellIndex = 0;
+        for (const row of cells) {
+            for (const cell of row) {
+                const cellDiv = cellDivs[cellIndex++];
+                if (!cellDiv) continue;
+                const card = this._findGridCard(cards, cell);
+                this._fillCardSlots(cellDiv, card ? [card] : [], 1);
+            }
+        }
+    }
+
+    /** Collect cards from multiple subsets into a flat array of card strings */
+    _collectSubsetCards(cards, subsets) {
+        const result = [];
+        for (const subset of subsets) {
+            const subsetCards = cards[subset] || [];
+            for (const cardInfo of subsetCards) {
+                result.push(cardInfo.card);
+            }
+        }
+        return result;
+    }
+
+    /** Find a card in the grid by cell descriptor (string subset or array intersection) */
+    _findGridCard(cards, cell) {
+        if (typeof cell === 'string') {
+            // Single subset name - find first card in that subset
+            const subsetCards = cards[cell] || [];
+            return subsetCards.length > 0 ? subsetCards[0].card : null;
+        }
+        if (Array.isArray(cell)) {
+            // Intersection of multiple subsets - find card present in ALL listed subsets
+            // Each subset should have exactly one card at this intersection
+            const subsetArrays = cell.map(s => (cards[s] || []).map(c => c.card));
+            if (subsetArrays.length === 0 || subsetArrays.some(a => a.length === 0)) return null;
+            // Find card that appears in all subset arrays
+            const first = subsetArrays[0];
+            for (const cardStr of first) {
+                if (subsetArrays.every(arr => arr.includes(cardStr))) {
+                    return cardStr;
+                }
+            }
+            return null;
+        }
+        return null;
+    }
+
+    /** Fill a container with card slots, reusing existing ones if count matches */
+    _fillCardSlots(container, cardStrings, expectedCount) {
+        const total = expectedCount || Math.max(cardStrings.length, 1);
+        const existingSlots = container.querySelectorAll('.card-slot');
+
+        if (existingSlots.length !== total) {
+            container.innerHTML = '';
+            for (let i = 0; i < total; i++) {
+                const slot = document.createElement('div');
+                slot.className = 'card-slot';
+                container.appendChild(slot);
+            }
+        }
+
+        const slots = container.querySelectorAll('.card-slot');
+        for (let i = 0; i < total; i++) {
+            const slot = slots[i];
+            if (!slot) continue;
+            if (i < cardStrings.length && cardStrings[i]) {
+                const cardStr = cardStrings[i];
+                const isWinning = PokerCardUtils.isCardInWinningHand(cardStr, this.showdown.winningCards);
+                slot.innerHTML = PokerCardUtils.createCardElement(cardStr, isWinning);
+                slot.classList.add('has-card');
+                slot.classList.toggle('winning-card', isWinning);
+            } else {
+                slot.innerHTML = '';
+                slot.classList.remove('has-card', 'winning-card');
+            }
+        }
     }
 
     /**
@@ -728,6 +936,24 @@ class PokerTable {
             // Re-render players to make cards selectable
             this.renderPlayers();
             this._setupCardSelectionHandlers();
+            return;
+        }
+
+        // Check for declare action
+        const declareAction = this.store.validActions.find(a => a.type === 'declare');
+        if (declareAction) {
+            this.drawAction = null;
+            this._renderDeclareControls(actionButtons, declareAction);
+            betControls.style.display = 'none';
+            return;
+        }
+
+        // Check for choose action
+        const chooseAction = this.store.validActions.find(a => a.type === 'choose');
+        if (chooseAction) {
+            this.drawAction = null;
+            this._renderChooseControls(actionButtons, chooseAction);
+            betControls.style.display = 'none';
             return;
         }
 
@@ -995,6 +1221,67 @@ class PokerTable {
         });
     }
 
+    _renderDeclareControls(container, declareAction) {
+        const options = declareAction.metadata?.options || ['high', 'low'];
+        const perPot = declareAction.metadata?.per_pot || false;
+
+        const optionLabels = {
+            'high': 'High',
+            'low': 'Low',
+            'high_low': 'Both (Hi/Lo)'
+        };
+
+        let infoText = perPot ? 'Declare for each pot:' : 'Declare your hand:';
+
+        let buttonsHtml = options.map(opt => {
+            const label = optionLabels[opt] || opt;
+            return `<button class="action-btn primary declare-btn" data-declaration="${opt}">${label}</button>`;
+        }).join('');
+
+        container.innerHTML = `
+            <div class="draw-controls">
+                <div class="draw-info">${infoText}</div>
+                <div class="declare-buttons">${buttonsHtml}</div>
+            </div>
+        `;
+
+        container.querySelectorAll('.declare-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const declaration = btn.dataset.declaration;
+                this.sendPlayerAction({
+                    action: 'declare',
+                    declaration_data: [{ pot_index: -1, declaration: declaration }]
+                });
+                container.querySelectorAll('.declare-btn').forEach(b => b.disabled = true);
+                this.timer.stop();
+            });
+        });
+    }
+
+    _renderChooseControls(container, chooseAction) {
+        const options = chooseAction.metadata?.options || [];
+
+        let buttonsHtml = options.map((opt, i) => {
+            return `<button class="action-btn primary choose-btn" data-choice-index="${i}">${opt}</button>`;
+        }).join('');
+
+        container.innerHTML = `
+            <div class="draw-controls">
+                <div class="draw-info">Choose a game variant:</div>
+                <div class="choose-buttons">${buttonsHtml}</div>
+            </div>
+        `;
+
+        container.querySelectorAll('.choose-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const index = parseInt(btn.dataset.choiceIndex);
+                this.sendPlayerAction({ action: 'choose', amount: index });
+                container.querySelectorAll('.choose-btn').forEach(b => b.disabled = true);
+                this.timer.stop();
+            });
+        });
+    }
+
     createActionButton(action) {
         const button = document.createElement('button');
         const actionType = action.action_type || action.type;
@@ -1047,6 +1334,10 @@ class PokerTable {
             actionData.amount = this.betControls.getBetAmount();
         } else if ((action.action_type?.toLowerCase() === 'call' || action.type?.toLowerCase() === 'call')) {
             // Get call amount from min_amount (WebSocket format) or default_amount/amount (API format)
+            actionData.amount = action.min_amount || action.default_amount || action.amount;
+        } else if ((action.action_type?.toLowerCase() === 'bring_in' || action.type?.toLowerCase() === 'bring_in') ||
+                   (action.action_type?.toLowerCase() === 'complete' || action.type?.toLowerCase() === 'complete')) {
+            // Bring-in and complete have fixed amounts from min_amount
             actionData.amount = action.min_amount || action.default_amount || action.amount;
         }
 

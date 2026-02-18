@@ -32,14 +32,8 @@ class TableManager:
     # Cache for loaded game rules to avoid repeated file I/O
     _rules_cache: Dict[str, GameRules] = {}
     
-    # Actions not yet supported in the online platform
-    UNSUPPORTED_ACTIONS = {
-        GameActionType.EXPOSE,
-        GameActionType.PASS,
-        GameActionType.DECLARE,
-        GameActionType.SEPARATE,
-        GameActionType.CHOOSE,
-    }
+    # Actions not yet supported in the online platform — all actions now supported
+    UNSUPPORTED_ACTIONS = set()
 
     @staticmethod
     def get_available_variants() -> List[Dict[str, Any]]:

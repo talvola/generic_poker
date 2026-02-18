@@ -348,7 +348,7 @@ class GameSession:
         logger.info(f"Spectator {user_id} removed from session {self.session_id}")
     
     def process_player_action(self, user_id: str, action: PlayerAction, amount: int = 0,
-                             cards=None) -> Tuple[bool, str, Any]:
+                             cards=None, declaration_data=None) -> Tuple[bool, str, Any]:
         """Process a player action in the game.
 
         Args:
@@ -356,6 +356,7 @@ class GameSession:
             action: The action being taken
             amount: Amount for betting actions
             cards: Cards for draw/discard actions
+            declaration_data: Declaration data for declare actions
 
         Returns:
             Tuple of (success, error_message, action_result)
@@ -368,7 +369,7 @@ class GameSession:
                 return False, "Player not in game", None
 
             # Process action through the underlying Game
-            result = self.game.player_action(user_id, action, amount, cards=cards)
+            result = self.game.player_action(user_id, action, amount, cards=cards, declaration_data=declaration_data)
             
             if result.success:
                 self.update_activity()

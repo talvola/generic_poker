@@ -25,6 +25,9 @@ export interface TableConfig {
   bettingStructure?: string;
   smallBlind?: number;
   bigBlind?: number;
+  smallBet?: number;
+  bigBet?: number;
+  ante?: number;
   minBuyIn?: number;
   maxBuyIn?: number;
   maxPlayers?: number;
@@ -71,29 +74,53 @@ export async function createTable(page: Page, config: TableConfig = {}): Promise
     await page.selectOption('#max-players', finalConfig.maxPlayers.toString());
   }
 
+  // Map config value to actual option value
+  const structureMap: Record<string, string> = {
+    'No-Limit': 'no-limit',
+    'no-limit': 'no-limit',
+    'Pot-Limit': 'pot-limit',
+    'pot-limit': 'pot-limit',
+    'Limit': 'limit',
+    'limit': 'limit'
+  };
+  const structureVal = structureMap[finalConfig.bettingStructure || 'No-Limit'] || 'no-limit';
+
   if (finalConfig.bettingStructure) {
-    // Map config value to actual option value
-    const structureMap: Record<string, string> = {
-      'No-Limit': 'no-limit',
-      'no-limit': 'no-limit',
-      'Pot-Limit': 'pot-limit',
-      'pot-limit': 'pot-limit',
-      'Limit': 'limit',
-      'limit': 'limit'
-    };
-    const structure = structureMap[finalConfig.bettingStructure] || finalConfig.bettingStructure.toLowerCase();
-    await page.selectOption('#betting-structure', structure);
+    // Wait for betting structure options to be populated after variant selection
+    await page.waitForFunction(
+      (val) => {
+        const sel = document.getElementById('betting-structure') as HTMLSelectElement;
+        return sel && Array.from(sel.options).some(opt => opt.value === val);
+      },
+      structureVal,
+      { timeout: 5000 }
+    );
+    await page.selectOption('#betting-structure', structureVal);
   }
 
   // Wait for stakes inputs to be generated (they're dynamic based on betting structure)
-  await page.waitForSelector('#small-blind', { timeout: 5000 });
-
-  // Set stakes
-  if (finalConfig.smallBlind) {
-    await page.fill('#small-blind', finalConfig.smallBlind.toString());
-  }
-  if (finalConfig.bigBlind) {
-    await page.fill('#big-blind', finalConfig.bigBlind.toString());
+  if (structureVal === 'limit') {
+    await page.waitForSelector('#small-bet', { timeout: 5000 });
+    if (finalConfig.smallBet) {
+      await page.fill('#small-bet', finalConfig.smallBet.toString());
+    }
+    if (finalConfig.bigBet) {
+      await page.fill('#big-bet', finalConfig.bigBet.toString());
+    }
+    const anteInput = page.locator('#ante');
+    if (await anteInput.isVisible({ timeout: 1000 }).catch(() => false)) {
+      if (finalConfig.ante !== undefined) {
+        await anteInput.fill(finalConfig.ante.toString());
+      }
+    }
+  } else {
+    await page.waitForSelector('#small-blind', { timeout: 5000 });
+    if (finalConfig.smallBlind) {
+      await page.fill('#small-blind', finalConfig.smallBlind.toString());
+    }
+    if (finalConfig.bigBlind) {
+      await page.fill('#big-blind', finalConfig.bigBlind.toString());
+    }
   }
 
   // Click Create button in modal footer
@@ -174,8 +201,14 @@ export async function joinTableByName(
   // Wait for tables to load
   await expect(page.locator('.table-card').first()).toBeVisible({ timeout: 10000 });
 
-  // Find the table card
-  const tableCard = page.locator('.table-card', { hasText: tableName });
+  // Find the table card — retry with page refresh if not found initially
+  let tableCard = page.locator('.table-card', { hasText: tableName });
+  if (!(await tableCard.isVisible({ timeout: 3000 }).catch(() => false))) {
+    // Table may not have rendered yet — refresh and retry
+    await page.reload();
+    await expect(page.locator('.table-card').first()).toBeVisible({ timeout: 10000 });
+    tableCard = page.locator('.table-card', { hasText: tableName });
+  }
   await expect(tableCard).toBeVisible({ timeout: 5000 });
 
   const joinBtn = tableCard.locator('.join-table-btn');
@@ -267,7 +300,7 @@ export async function waitForGameStart(page: Page): Promise<void> {
 }
 
 /**
- * Check if it's this player's turn to act.
+ * Check if it's this player's turn to act (betting actions only).
  */
 export async function isMyTurn(page: Page): Promise<boolean> {
   const actionBtns = page.locator(
@@ -277,6 +310,38 @@ export async function isMyTurn(page: Page): Promise<boolean> {
     'button:has-text("Check"):not([disabled])'
   );
   return (await actionBtns.count()) > 0;
+}
+
+/**
+ * Check if this player has ANY action to perform (betting, draw, declare, choose, etc.)
+ * Uses the client-side game state store for authoritative check (avoids stale DOM elements).
+ */
+export async function isMyAction(page: Page): Promise<boolean> {
+  return await page.evaluate(() => {
+    const pt = (window as any).pokerTable;
+    return !!(pt?.store?.isMyTurn && pt?.store?.validActions?.length > 0);
+  });
+}
+
+/**
+ * Get the current game phase from the client-side store.
+ */
+export async function getGamePhase(page: Page): Promise<string> {
+  return await page.evaluate(() => {
+    const pt = (window as any).pokerTable;
+    return pt?.store?.gameState?.game_phase || '';
+  });
+}
+
+/**
+ * Get the list of valid action types from the client-side store.
+ */
+export async function getValidActionTypes(page: Page): Promise<string[]> {
+  return await page.evaluate(() => {
+    const pt = (window as any).pokerTable;
+    const actions = pt?.store?.validActions || [];
+    return actions.map((a: any) => a.type || a.action_type || '');
+  });
 }
 
 /**

@@ -304,9 +304,13 @@ def process_player_action(table_id: str):
                     'error': f'Invalid card format: {e}'
                 }), 400
 
+        # Parse declaration data for declare actions
+        declaration_data = data.get('declaration_data')
+
         # Process the action through the player action manager
         success, message, result = player_action_manager.process_player_action(
-            table_id, current_user.id, action, amount, cards=card_objects
+            table_id, current_user.id, action, amount, cards=card_objects,
+            declaration_data=declaration_data
         )
         
         if not success:

@@ -3,7 +3,14 @@
     "category": "Omaha",
     "references": [
         "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
-    ],            
+    ],
+    "communityCardLayout": {
+        "type": "multi-row",
+        "rows": [
+            {"label": "Board 1", "subsets": ["Board 1"]},
+            {"label": "Board 2", "subsets": ["Board 2"]}
+        ]
+    },
     "players": {
         "min": 2,
         "max": 9

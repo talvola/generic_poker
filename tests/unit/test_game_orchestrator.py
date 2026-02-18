@@ -263,7 +263,7 @@ class TestGameSession:
             
             assert success is True
             assert result == mock_result
-            mock_game.player_action.assert_called_once_with("user123", PlayerAction.CALL, 100, cards=None)
+            mock_game.player_action.assert_called_once_with("user123", PlayerAction.CALL, 100, cards=None, declaration_data=None)
     
     def test_process_player_action_not_in_game(self, app_context, test_table, mock_game_rules):
         """Test processing action for player not in game."""

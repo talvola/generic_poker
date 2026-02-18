@@ -3,7 +3,14 @@
     "category": "Draw",
     "references": [
         "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
-    ],        
+    ],
+    "communityCardLayout": {
+        "type": "multi-row",
+        "rows": [
+            {"label": "Board", "subsets": ["Board"]},
+            {"label": "Discard", "subsets": ["Discard"]}
+        ]
+    },
     "players": {
         "min": 2,
         "max": 6

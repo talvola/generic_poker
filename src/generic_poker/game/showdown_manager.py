@@ -374,6 +374,9 @@ class ShowdownManager:
         Returns:
             Tuple of (awarded_portions, had_any_winners)
         """        
+        if not best_hand_configs:
+            logger.warning("No best hand configurations available for showdown")
+            return (0, False)
         pot_percentage = 1.0 / len(best_hand_configs)
         awarded_portions = 0
         had_any_winners = False

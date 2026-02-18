@@ -442,16 +442,20 @@ class GameStateManager:
                 PlayerAction.CALL: ActionType.CALL,
                 PlayerAction.BET: ActionType.BET,
                 PlayerAction.RAISE: ActionType.RAISE,
+                PlayerAction.BRING_IN: ActionType.BRING_IN,
+                PlayerAction.COMPLETE: ActionType.COMPLETE,
                 PlayerAction.DRAW: ActionType.DRAW,
                 PlayerAction.DISCARD: ActionType.DISCARD,
                 PlayerAction.PASS: ActionType.PASS,
                 PlayerAction.EXPOSE: ActionType.EXPOSE,
-                PlayerAction.SEPARATE: ActionType.SEPARATE
+                PlayerAction.SEPARATE: ActionType.SEPARATE,
+                PlayerAction.DECLARE: ActionType.DECLARE,
+                PlayerAction.CHOOSE: ActionType.CHOOSE
             }
 
             action_type = action_type_map.get(action_option.action_type, ActionType.FOLD)
 
-            # Attach subset metadata for SEPARATE actions
+            # Attach metadata for special actions
             metadata = None
             if action_option.action_type == PlayerAction.SEPARATE and session and session.game:
                 if hasattr(session.game, 'current_separate_config'):
@@ -460,6 +464,18 @@ class GameStateManager:
                         {"name": cfg["hole_subset"], "count": cfg["number"]}
                         for cfg in config.get("cards", [])
                     ]}
+            elif action_option.action_type == PlayerAction.DECLARE and session and session.game:
+                if hasattr(session.game, 'current_declare_config'):
+                    config = session.game.current_declare_config
+                    metadata = {
+                        "options": config.get("options", ["high", "low"]),
+                        "per_pot": config.get("per_pot", False)
+                    }
+            elif action_option.action_type == PlayerAction.CHOOSE and session and session.game:
+                step = session.game.rules.gameplay[session.game.current_step]
+                if step.action_type == GameActionType.CHOOSE:
+                    possible_values = step.action_config.get("possible_values", [])
+                    metadata = {"options": possible_values}
 
             return ActionOption(
                 action_type=action_type,
@@ -502,6 +518,9 @@ class GameStateManager:
                 else:
                     return GamePhase.PREFLOP
             elif game_state == GameState.DRAWING:
+                # Distinguish declaring from other drawing actions
+                if hasattr(session.game, 'current_declare_config'):
+                    return GamePhase.DECLARING
                 return GamePhase.DRAWING
             elif game_state == GameState.SHOWDOWN:
                 return GamePhase.SHOWDOWN

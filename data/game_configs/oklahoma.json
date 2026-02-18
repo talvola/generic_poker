@@ -5,6 +5,14 @@
         "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/",
         "https://www.barge.org/rulebook/oklahoma.html"
     ],
+    "communityCardLayout": {
+        "type": "multi-row",
+        "rows": [
+            {"label": "Board 1", "subsets": ["Board 1"]},
+            {"label": "Board 2", "subsets": ["Board 2"]},
+            {"label": "Board 3", "subsets": ["Board 3"]}
+        ]
+    },
     "players": {
         "min": 2,
         "max": 9

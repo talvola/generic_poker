@@ -4,6 +4,13 @@
     "references": [
         "https://www.ichabod801.com/poker_db/common/05-card.html#variant-313"
     ],
+    "communityCardLayout": {
+        "type": "multi-row",
+        "rows": [
+            {"label": "Common 1", "subsets": ["Common1"]},
+            {"label": "Common 2", "subsets": ["Common2"]}
+        ]
+    },
     "players": {
         "min": 2,
         "max": 10

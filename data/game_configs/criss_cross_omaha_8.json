@@ -4,6 +4,14 @@
     "references": [
         "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
     ],            
+    "communityCardLayout": {
+        "type": "grid",
+        "columns": 5,
+        "cells": [
+            [["Top","Vertical1"], ["Top","Vertical2"], ["Top","Vertical3"], ["Top","Vertical4"], ["Top","Vertical5"]],
+            [["Bottom","Vertical1"], ["Bottom","Vertical2"], ["Bottom","Vertical3"], ["Bottom","Vertical4"], ["Bottom","Vertical5"]]
+        ]
+    },
     "players": {
         "min": 2,
         "max": 8

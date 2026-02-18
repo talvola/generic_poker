@@ -17,14 +17,8 @@ from generic_poker.core.card import Card, Visibility
 
 CONFIGS_DIR = Path(__file__).parents[2] / "data" / "game_configs"
 
-# Games that use unimplemented actions (declare, choose)
-# These are expected to fail until those features are implemented.
-UNSUPPORTED_GAMES = {
-    "7_card_stud_hilo_declare",
-    "italian_poker",
-    "paradise_road_pickem",
-    "straight_7card_declare", "straight_9card_declare", "straight_declare",
-}
+# Games that use unimplemented actions — now empty, all 192 supported
+UNSUPPORTED_GAMES = set()
 
 # Games that have known engine bugs (evaluation errors, showdown crashes, etc.)
 # These should be fixed eventually. Marked xfail so the test suite stays green.
@@ -125,6 +119,17 @@ def play_hand_passively(game: Game, max_actions: int = 500) -> int:
     actions_taken = 0
 
     while game.state != GameState.COMPLETE and actions_taken < max_actions:
+        # Handle CHOOSE action in DEALING state (needs player input)
+        if game.state == GameState.DEALING and game.current_player is not None:
+            player_id = game.current_player.id
+            valid = game.get_valid_actions(player_id)
+            if valid:
+                action_map = {a[0]: (a[1] if len(a) > 1 else None, a[2] if len(a) > 2 else None) for a in valid}
+                if PlayerAction.CHOOSE in action_map:
+                    _take_action(game, player_id, PlayerAction.CHOOSE, amount=0)
+                    actions_taken += 1
+                    continue
+
         if game.state in (GameState.BETTING, GameState.DRAWING):
             if game.current_player is None:
                 game._next_step()
@@ -139,7 +144,7 @@ def play_hand_passively(game: Game, max_actions: int = 500) -> int:
                 actions_taken += 1
                 continue
 
-            action_map = {a[0]: (a[1], a[2]) for a in valid}
+            action_map = {a[0]: (a[1] if len(a) > 1 else None, a[2] if len(a) > 2 else None) for a in valid}
 
             if game.state == GameState.DRAWING:
                 # Stand pat when possible, otherwise discard the minimum required
@@ -182,6 +187,17 @@ def play_hand_passively(game: Game, max_actions: int = 500) -> int:
                     hand_cards = list(game.table.players[player_id].hand.cards)
                     # Just assign cards in order to satisfy the total count
                     _take_action(game, player_id, PlayerAction.SEPARATE, cards=hand_cards[:total])
+                elif PlayerAction.DECLARE in action_map:
+                    # Always declare "high"
+                    result = game.player_action(
+                        player_id, PlayerAction.DECLARE,
+                        declaration_data=[{"pot_index": -1, "declaration": "high"}]
+                    )
+                    if result and result.advance_step:
+                        game._next_step()
+                elif PlayerAction.CHOOSE in action_map:
+                    # Always pick first option (index 0)
+                    _take_action(game, player_id, PlayerAction.CHOOSE, amount=0)
                 else:
                     action = next(iter(action_map))
                     _take_action(game, player_id, action, amount=0, cards=[])

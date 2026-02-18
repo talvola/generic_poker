@@ -1,7 +1,7 @@
 # Backlog
 
 > Prioritized task list. Work top-to-bottom within each phase.
-> Last updated: 2026-02-16
+> Last updated: 2026-02-17
 
 ---
 
@@ -90,9 +90,12 @@ After gameplay works, make the frontend maintainable.
 | 3.8 | Add hand history display | TODO |
 | 3.9 | Mobile optimization pass | TODO |
 | 3.10 | Stud game support (7-card stud UI, per-player up/down cards) | DONE (covered by 3.7b card visibility) |
-| 3.11 | Community card layout: multi-row boards (double-board, murder) | TODO |
-| 3.12 | Community card layout: branching/diamond (chowaha, omaha 321) | TODO |
-| 3.13 | Community card layout: grid/criss-cross (tic-tac, banco) | TODO |
+| 3.11 | Community card layout: multi-row boards (double-board, murder, scarney, kryky) | DONE |
+| 3.12 | Community card layout: branching/diamond (chowaha, omaha 321, tapiola, bidirectional) | DONE |
+| 3.13 | Community card layout: grid/criss-cross (tic-tac, banco, criss-cross) | DONE |
+| 3.14 | DECLARE action (hi/lo declare for 5 games) | DONE |
+| 3.15 | CHOOSE action (variant selection for paradise_road_pickem) | DONE |
+| 3.16 | Parametrized E2E variant smoke tests (15 variants + 8 Tier 2) | DONE |
 
 ### Task Details
 
@@ -126,10 +129,24 @@ After gameplay works, make the frontend maintainable.
 
 **3.6 addendum (community card layout):** Replaced hardcoded 5-slot Hold'em community card display with data-driven layout system. Backend auto-infers layout type (`linear` or `none`) from game config gameplay steps. `_get_community_cards()` now returns structured `{layout: {type}, cards: {subset: [...]}}` format. Frontend `renderCommunityCards()` dynamically creates card slots based on layout. Draw games hide community area entirely. ~160 games work with auto-inferred linear layout. Future phases need explicit `communityCardLayout` configs for multi-row (6 games), branching (9 games), grid (5 games), criss-cross (4 games). See plan file for details.
 
-**3.11-3.13 details:** The community card layout system (Phase 1: linear/none) is done. Remaining phases need:
-- **3.11 Multi-row:** 6 configs (double-board, murder, oklahoma). Add `communityCardLayout: {type: "multi-row", rows: [...]}` to configs, implement `_renderMultiRowLayout()` with labeled stacked rows.
-- **3.12 Branching:** 9 configs (chowaha, omaha 321). Diamond renderer with CSS connector lines.
-- **3.13 Grid/Criss-cross:** 9 configs (tic-tac, banco, criss-cross). CSS Grid renderers.
+**3.11 result:** Added `communityCardLayout` field to 12 game configs (double-board x4, murder, oklahoma, italian_poker, scarney x4, kryky). Implemented `_renderMultiRowLayout()` in table.js — renders labeled horizontal rows stacked vertically, one per board. Added `.board-row` / `.board-row-label` CSS.
+
+**3.12 result:** Added `communityCardLayout` field to 8 game configs (chowaha x2, omaha_321 x3, tapiola_holdem, bidirectional_chowaha x2). Implemented `_renderBranchingLayout()` in table.js — renders rows top-to-bottom with centered subset groups (3 flops → 2 turns → 1 river). Added `.branching-row` / `.subset-group` / `.subset-group-label` CSS.
+
+**3.13 result:** Added `communityCardLayout` field to 7 game configs (tic_tac_holdem, criss_cross x4, banco x2). Implemented `_renderGridLayout()` in table.js — uses CSS Grid to position cards in 2D. Supports both array-based cells (intersection of subsets, e.g., `["Row1","Col1"]`) and string-based cells (single subset, e.g., `"Flop 1.1"`). Added `.grid-layout` / `.grid-cell` CSS.
+
+**3.14 result:** Connected engine DECLARE action through online platform. Added `GamePhase.DECLARING` and `ActionType.DECLARE` to view models. Maps to `DRAWING` engine state with `current_declare_config`. Frontend renders declare buttons (High/Low/Both) from metadata options. `declaration_data` passed through game_routes → player_action_manager → game_orchestrator → engine. 5 declare games now playable: 7_card_stud_hilo_declare, straight_declare, straight_7card_declare, straight_9card_declare, italian_poker.
+
+**3.15 result:** Connected engine CHOOSE action through online platform. Added `ActionType.CHOOSE` to view models. CHOOSE step uses DEALING state with current_player set — fixed auto-advance loops in player_action_manager and websocket_manager to stop when DEALING has a current_player (needs input). Frontend renders variant buttons from metadata options. Fixed tuple unpacking for 4-element CHOOSE tuples. Fixed showdown guard for empty best_hand_configs. 1 game now playable: paradise_road_pickem.
+
+**Net result of 3.11-3.15:** All 192 game configs now supported (0 unsupported, 0 xfails). 384 smoke tests pass. `UNSUPPORTED_ACTIONS` in table_manager.py emptied. 27 game configs got `communityCardLayout` fields.
+
+**3.16 result:** Built parametrized Playwright E2E tests covering 15 representative game variants and 8 Tier 2 UI verification tests. Expanded E2E suite from 26 tests (4 spec files) to 57 tests (9 spec files).
+- New spec files: `variant-smoke.spec.ts` (15 tests), `draw-actions.spec.ts` (4 tests), `special-actions.spec.ts` (4 tests)
+- New helpers: `variant-data.ts` (variant configs), extended `game-helpers.ts` (`playHandPassively`, `performPassiveAction`, `getActivePlayer`), extended `table-helpers.ts` (Limit stakes, `isMyAction`, `getGamePhase`)
+- Variant coverage: Hold'em, Omaha (NL/PL), 7-Card Stud (bring-in), 5-Card Draw, Badugi (3-draw), Crazy Pineapple (discard), Showmaha (expose), SOHE (separate), Straight Declare, Paradise Road Pick'em (choose), Double Board Hold'em (multi-row), Chowaha (branching), Tic-Tac Hold'em (grid), Six Plus (short deck)
+- Tier 2 verifies draw controls (stand pat, selectable cards, multi-round draw, forced discard), declare buttons, expose phase, separate subsets, choose buttons
+- Fixes: bring-in serialization pipeline, DOM-detach resilience in action handlers, store-based completion detection
 
 ---
 
@@ -164,8 +181,7 @@ for adding new variants. See `docs/GAME_VALIDATION.md` for full details.
 
 **5.1 result:** `tests/game/test_all_variants_smoke.py` — parametrized smoke test for all 192 configs.
 Two test functions: `test_variant_config_loads` (all 192 parse correctly) and `test_variant_loads_and_plays`
-(166 supported games play a hand to completion passively). 26 unsupported games skipped (need expose/pass/
-declare/separate/choose actions). All 13 previously-buggy games now fixed (Phase 5.7). Total: 358 passed, 0 xfailed.
+(all 192 games play a hand to completion passively). 0 unsupported, 0 xfail. Total: 384 passed.
 
 **5.1b result:** Migrated 12 test files from inline JSON game configs to `load_rules_from_file()`.
 Removed 1,307 lines of duplicated config data. All tests pass with file-based loading.

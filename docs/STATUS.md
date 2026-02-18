@@ -1,7 +1,7 @@
 # Project Status
 
 > Single source of truth for project state. Updated as work progresses.
-> Last updated: 2026-02-17
+> Last updated: 2026-02-18
 
 ## Architecture Overview
 
@@ -72,40 +72,40 @@ Flask/SocketIO multiplayer web platform.
 - Centralized game state store (GameStateStore)
 - Error notifications for failed fetch calls
 - Turn timer countdown visible on active player's seat (all players see it)
-- 166 game variants available in lobby (dynamically loaded, grouped by category)
+- All 192 game variants available in lobby (dynamically loaded, grouped by category)
 - Game config `category` field for UI grouping (8 families)
-- Data-driven community card layout (linear layout auto-inferred for ~160 games, draw games hide community area)
+- Data-driven community card layout (linear, multi-row, branching, grid)
+- Multi-row layout for double board, scarney, kryky games (~12 configs)
+- Branching layout for chowaha, omaha 3-2-1, tapiola games (~12 configs)
+- Grid layout for tic-tac, criss-cross, banco games (~7 configs)
 - Granular card display scaling (3-4 cards, 5-6 cards, 7-8 cards with overlap)
+- DECLARE action (hi/lo declare UI for 5 games)
+- CHOOSE action (variant selection UI for paradise_road_pickem)
+- Parametrized E2E smoke tests (15 variants covering all action types and community layouts)
 
 ### Remaining Issues
 
 | # | Issue | Priority | Description |
 |---|-------|----------|-------------|
-| ~~1~~ | ~~Bot fold bug~~ | ~~DONE~~ | ~~Fixed: never fold when check available~~ |
-| ~~2~~ | ~~Debug prints~~ | ~~DONE~~ | ~~Removed 7 debug prints, replaced with proper logging~~ |
 | 3 | Hardcoded timeouts | LOW | 30s action, 10min disconnect timeouts not configurable |
 | 4 | Debug deck option | LOW | No way to use fixed/unseeded deck for testing |
-| ~~5~~ | ~~3+ player games~~ | ~~DONE~~ | ~~Engine, CSS, rendering all support 3+ players~~ |
-| ~~6~~ | ~~Draw/discard actions~~ | ~~DONE~~ | ~~Card selection UI, backend plumbing, 65 draw games playable~~ |
-| 7 | Card passing | MEDIUM | Required for pass-card variants |
 | 8 | Hand history display | LOW | Not implemented |
 | 9 | Mobile optimization | LOW | Chat panel toggle works but needs testing |
 | 10 | Admin interface | LOW | Not implemented |
-| 11 | Stud game UI | MEDIUM | Per-player up/down cards, 7+ cards per player |
 
 ---
 
 ## Testing
 
-### Test Counts (2026-02-17)
+### Test Counts (2026-02-18)
 
 | Layer | Tests | Status |
 |-------|-------|--------|
 | Python unit + integration | 648 | All passing |
-| Smoke test (all 192 variants) | 358 | All passing (0 xfail — all engine bugs fixed) |
+| Smoke test (all 192 variants) | 384 | All passing (0 unsupported, 0 xfail) |
 | Socket.IO integration | 33 | All passing (in `test_socketio_integration.py`) |
-| Playwright E2E | 26 | All passing (4 spec files) |
-| **Total** | **1,065** | **All passing** |
+| Playwright E2E | 57 | All passing (9 spec files) |
+| **Total** | **~1,122** | **All passing** |
 
 ### Test Layers
 
@@ -113,9 +113,8 @@ Flask/SocketIO multiplayer web platform.
 Layer 0: Smoke Tests (all 192 variants)
   - Parametrized: loads each config, creates game, plays a hand passively
   - Catches crashes, infinite loops, missing implementations
-  - All 166 supported games pass (26 unsupported need expose/pass/declare/separate/choose)
+  - All 192 games pass (0 unsupported, 0 xfail)
   - tests/game/test_all_variants_smoke.py
-  - 26 unsupported (unimplemented actions), 0 xfail (all engine bugs fixed)
 
 Layer 1: Python Integration Tests (engine + services)
   - Drive game engine directly: game.start_hand(), game.player_action()
@@ -130,8 +129,11 @@ Layer 2: Socket.IO Integration Tests (WebSocket events)
 
 Layer 3: E2E Browser Tests (visual verification)
   - Playwright with multi-user fixtures
-  - tests/e2e/specs/ (4 spec files, 26 tests)
-  - Covers preflop betting, fold/cycle, full hand to showdown, UI elements
+  - tests/e2e/specs/ (9 spec files, 57 tests)
+  - Original 6 specs: preflop betting, fold/cycle, full hand, UI elements, 3-player, Omaha
+  - variant-smoke.spec.ts: 15 representative variants (betting, draw, expose, declare, choose, separate)
+  - draw-actions.spec.ts: 4 draw/discard UI verification tests
+  - special-actions.spec.ts: 4 declare/expose/separate/choose UI tests
 ```
 
 ### Development Workflow for Bug Fixes
@@ -158,7 +160,7 @@ Layer 3: E2E Browser Tests (visual verification)
 - Fixed showdown display, table rejoin
 - Fixed deck shuffling between hands
 - Fixed action double-send bug (WebSocket broadcast loop)
-- Added Playwright regression suite (26 tests)
+- Added Playwright regression suite (34 tests across 6 spec files)
 
 ### Phase 2: UI Refactoring
 - Split table.js into 7 modules + core (2,462 → 1,577 + 850 lines)
@@ -184,18 +186,9 @@ Fixes applied:
 - **1 game** (one_mans_trash): Drawing stuck — smoke test didn't handle REPLACE_COMMUNITY action + config had wrong communityCards count (5→3)
 - **4 games** (stampler/stumpler variants): Chip conservation — `_award_special_pot()` created PotResult records but never called `betting.award_pots()` to transfer chips
 
-### Unsupported Games (26 — require unimplemented actions)
+### Unsupported Games
 
-These games use `expose`, `pass`, `declare`, `separate`, or `choose` actions that haven't been implemented yet. They are skipped entirely in the smoke test.
-
-```
-3_hand_hold_em, 3_hand_hold_em_8, 5_card_shodugi, 6_card_shodugi,
-7_card_flip, 7_card_flip_8, 7_card_stud_hilo_declare, cowpie,
-crazy_sohe, double_hold_em, italian_poker, kentrel, lazy_sohe,
-mexican_poker, paradise_road_pickem, pass_the_pineapple, sheshe,
-showmaha, showmaha_8, sohe, sohe_311, straight_7card_declare,
-straight_9card_declare, straight_declare, studaha, tahoe_pitch_roll
-```
+None — all 192 game variants are now fully supported. All action types (expose, pass, declare, separate, choose) implemented.
 
 ---
 

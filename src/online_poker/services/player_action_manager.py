@@ -182,8 +182,10 @@ class PlayerActionManager:
             # Convert game engine actions to our action options
             action_options = []
             for action_tuple in valid_actions:
-                action_type, min_amount, max_amount = action_tuple
-                
+                action_type = action_tuple[0]
+                min_amount = action_tuple[1] if len(action_tuple) > 1 else None
+                max_amount = action_tuple[2] if len(action_tuple) > 2 else None
+
                 # Create action option with proper display text and styling
                 option = self._create_action_option(
                     action_type, min_amount, max_amount, session
@@ -327,6 +329,26 @@ class PlayerActionManager:
                     action_type=action_type,
                     min_amount=total,
                     max_amount=total,
+                    display_text=display_text,
+                    button_style="primary"
+                )
+
+            elif action_type == PlayerAction.DECLARE:
+                display_text = "Declare"
+                return PlayerActionOption(
+                    action_type=action_type,
+                    min_amount=0,
+                    max_amount=0,
+                    display_text=display_text,
+                    button_style="primary"
+                )
+
+            elif action_type == PlayerAction.CHOOSE:
+                display_text = "Choose"
+                return PlayerActionOption(
+                    action_type=action_type,
+                    min_amount=min_amount or 0,
+                    max_amount=max_amount or 0,
                     display_text=display_text,
                     button_style="primary"
                 )
@@ -480,7 +502,10 @@ class PlayerActionManager:
             valid_min = None
             valid_max = None
             
-            for valid_action, min_amt, max_amt in valid_actions:
+            for valid_tuple in valid_actions:
+                valid_action = valid_tuple[0]
+                min_amt = valid_tuple[1] if len(valid_tuple) > 1 else None
+                max_amt = valid_tuple[2] if len(valid_tuple) > 2 else None
                 if valid_action == action:
                     action_valid = True
                     valid_min = min_amt
@@ -527,7 +552,8 @@ class PlayerActionManager:
             return ActionValidation(False, f"Validation error: {str(e)}")
     
     def process_player_action(self, table_id: str, user_id: str, action: PlayerAction,
-                            amount: Optional[int] = None, cards: Optional[List] = None) -> Tuple[bool, str, Any]:
+                            amount: Optional[int] = None, cards: Optional[List] = None,
+                            declaration_data=None) -> Tuple[bool, str, Any]:
         """Process a validated player action.
 
         Args:
@@ -536,6 +562,7 @@ class PlayerActionManager:
             action: The action being taken
             amount: Amount for betting actions
             cards: Cards for draw/discard actions
+            declaration_data: Declaration data for declare actions
 
         Returns:
             Tuple of (success, message, result)
@@ -545,17 +572,19 @@ class PlayerActionManager:
             validation = self.validate_action(table_id, user_id, action, amount, cards=cards)
             if not validation.is_valid:
                 return False, validation.error_message, None
-            
+
             # Get game session
             session = game_orchestrator.get_session(table_id)
             if not session:
                 return False, "Game session not found", None
-            
+
             # Cancel any active timeout for this player
             self.timeout_manager.cancel_timeout(user_id)
-            
+
             # Process the action through the game session
-            success, message, result = session.process_player_action(user_id, action, amount or 0, cards=cards)
+            success, message, result = session.process_player_action(
+                user_id, action, amount or 0, cards=cards, declaration_data=declaration_data
+            )
 
             if success:
                 # Check if we need to advance to the next step (betting round complete)
@@ -565,12 +594,15 @@ class PlayerActionManager:
                         logger.info(f"Betting round complete, advancing to next step")
                         game._next_step()
                         # Continue advancing through dealing/non-player-input steps
-                        # Check for DEALING state (doesn't require player input) OR no current player
+                        from generic_poker.config.loader import GameActionType
                         while game.state != GameState.COMPLETE:
                             if game.current_step >= len(game.rules.gameplay):
                                 break
-                            # DEALING state doesn't require player input - auto advance
+                            # DEALING state - auto advance unless it's a CHOOSE step needing player input
                             if game.state == GameState.DEALING:
+                                current_step = game.rules.gameplay[game.current_step]
+                                if current_step.action_type == GameActionType.CHOOSE:
+                                    break  # Wait for player choice
                                 game._next_step()
                             # BETTING state with no current player - round complete, advance
                             elif game.state == GameState.BETTING and game.current_player is None:
@@ -800,6 +832,10 @@ class PlayerActionManager:
                 action_msg = f"{username} exposes {card_count} card{'s' if card_count != 1 else ''}"
             elif action == PlayerAction.SEPARATE:
                 action_msg = f"{username} separates their cards"
+            elif action == PlayerAction.DECLARE:
+                action_msg = f"{username} declares"
+            elif action == PlayerAction.CHOOSE:
+                action_msg = f"{username} chooses"
             else:
                 action_msg = f"{username} {action_name}"
                 if amount:

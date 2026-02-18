@@ -4,7 +4,15 @@
     "references": [
         "https://www.barge.org/rulebook/chowaha.html",
         "https://www.pokerchipforum.com/resources/abby99s-mixed-game-cards.45/"
-    ],    
+    ],
+    "communityCardLayout": {
+        "type": "branching",
+        "rows": [
+            {"label": "Flops", "subsets": ["Flop 1", "Flop 2", "Flop 3"]},
+            {"label": "Turns", "subsets": ["Turn 1", "Turn 2"]},
+            {"label": "River", "subsets": ["River"]}
+        ]
+    },
     "players": {
         "min": 2,
         "max": 10
