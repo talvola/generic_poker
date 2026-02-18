@@ -89,13 +89,17 @@ def create_app(config_class=Config):
 
 def setup_logging():
     """Set up logging for the application."""
+    handlers = [logging.StreamHandler()]
+    # Only add file handler in development (Render filesystem is ephemeral)
+    if os.environ.get('FLASK_ENV') != 'production':
+        try:
+            handlers.append(logging.FileHandler('poker_platform.log'))
+        except OSError:
+            pass
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.INFO if os.environ.get('FLASK_ENV') == 'production' else logging.DEBUG,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler('poker_platform.log')
-        ]
+        handlers=handlers
     )
 
 if __name__ == '__main__':

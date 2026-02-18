@@ -4,14 +4,23 @@ import os
 from typing import Optional
 
 
+def _fix_database_url(url: str) -> str:
+    """Fix Render's postgres:// URL to postgresql:// for SQLAlchemy 2.0+."""
+    if url and url.startswith('postgres://'):
+        return url.replace('postgres://', 'postgresql://', 1)
+    return url
+
+
 class Config:
     """Base configuration class."""
-    
+
     # Flask settings
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
-    
+
     # Database settings
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///poker_platform.db'
+    SQLALCHEMY_DATABASE_URI = _fix_database_url(
+        os.environ.get('DATABASE_URL') or 'sqlite:///poker_platform.db'
+    )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # Session settings
@@ -76,8 +85,9 @@ class ProductionConfig(Config):
     TESTING = False
     
     # Use PostgreSQL for production
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-        'postgresql://user:password@localhost/poker_platform'
+    SQLALCHEMY_DATABASE_URI = _fix_database_url(
+        os.environ.get('DATABASE_URL') or 'postgresql://user:password@localhost/poker_platform'
+    )
     
     # Strict security settings
     SESSION_COOKIE_SECURE = True

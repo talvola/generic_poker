@@ -19,7 +19,11 @@ def init_database(app: Flask) -> None:
         # Default to SQLite for development
         basedir = os.path.abspath(os.path.dirname(__file__))
         database_url = f'sqlite:///{os.path.join(basedir, "../../poker_platform.db")}'
-    
+
+    # Fix Render's postgres:// URL to postgresql:// for SQLAlchemy 2.0+
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
