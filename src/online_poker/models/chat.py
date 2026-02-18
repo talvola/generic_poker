@@ -4,7 +4,6 @@ import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Text, DateTime, Boolean, Integer, ForeignKey
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID
 from typing import Dict, Any, Optional
 
 from ..database import db
@@ -12,12 +11,12 @@ from ..database import db
 
 class ChatMessage(db.Model):
     """Model for chat messages."""
-    
+
     __tablename__ = 'chat_messages'
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    table_id = Column(UUID(as_uuid=True), ForeignKey('poker_tables.id'), nullable=False)
-    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    table_id = Column(String(36), ForeignKey('poker_tables.id'), nullable=False)
+    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
     message = Column(Text, nullable=False)
     filtered_message = Column(Text, nullable=True)  # Message after filtering
     message_type = Column(String(50), nullable=False, default='chat')  # chat, system, action
@@ -74,10 +73,10 @@ class ChatModerationAction(db.Model):
     
     __tablename__ = 'chat_moderation_actions'
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    table_id = Column(UUID(as_uuid=True), ForeignKey('poker_tables.id'), nullable=False)
-    target_user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
-    moderator_user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)  # None for auto-moderation
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    table_id = Column(String(36), ForeignKey('poker_tables.id'), nullable=False)
+    target_user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
+    moderator_user_id = Column(String(36), ForeignKey('users.id'), nullable=True)  # None for auto-moderation
     action_type = Column(String(50), nullable=False)  # mute, unmute, ban, unban, warn
     reason = Column(Text, nullable=True)
     duration_minutes = Column(Integer, nullable=True)  # None for permanent
@@ -119,7 +118,7 @@ class ChatFilter(db.Model):
     
     __tablename__ = 'chat_filters'
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     pattern = Column(String(255), nullable=False, unique=True)
     filter_type = Column(String(50), nullable=False)  # profanity, spam, inappropriate
     action = Column(String(50), nullable=False)  # block, replace, warn

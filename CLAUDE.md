@@ -296,6 +296,54 @@ Auth blueprint registered with `/auth` prefix:
 | Database | `instance/poker_platform.db` |
 | Logs | `poker_platform.log` |
 
+## Deployment (Render)
+
+Hosted on Render (free tier) with auto-deploy from GitHub.
+
+**Architecture:** Web Service (Flask+SocketIO via gunicorn+eventlet) + PostgreSQL database.
+
+**Key files:**
+| File | Purpose |
+|------|---------|
+| `render.yaml` | Render blueprint — defines web service + Postgres |
+| `wsgi.py` | Production entry point (eventlet monkey-patch + gunicorn) |
+| `build.sh` | Build script (install deps, create tables, seed DB) |
+| `requirements.txt` | Pinned Python dependencies for production |
+
+**Start command:** `gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT wsgi:app`
+
+**Environment variables (set in Render dashboard):**
+- `DATABASE_URL` — PostgreSQL connection string (from Render Postgres)
+- `FLASK_ENV` — `production`
+- `SECRET_KEY` — auto-generated
+- `PYTHON_VERSION` — `3.10.12`
+
+**Render CLI:**
+```bash
+# Install: download from https://github.com/render-oss/cli/releases
+# Auth
+render login
+render workspace set tea-d6b0cji4d50c73ccmfl0
+
+# Service management
+render services --output json                              # List all services
+render deploys list srv-d6b0ik86fj8s73bppftg --output json # List deploys
+render deploys create srv-d6b0ik86fj8s73bppftg             # Trigger deploy
+render logs -r srv-d6b0ik86fj8s73bppftg --limit 100 --output json  # View logs
+```
+
+**IDs:**
+- Blueprint: `exs-d6b0i6rnv86c73cb5c10`
+- Web Service: `srv-d6b0ik86fj8s73bppftg`
+- Postgres: `dpg-d6b0icg6fj8s73bppbp0-a`
+- Workspace: `tea-d6b0cji4d50c73ccmfl0`
+
+**Known issues:**
+- Render provides `postgres://` URLs but SQLAlchemy 2.0+ requires `postgresql://` — handled by `_fix_database_url()` in `config.py` and `database.py`
+- All models must use `String(36)` for IDs (not `UUID(as_uuid=True)`) to work with both SQLite and PostgreSQL
+- Free tier spins down after 15 min idle (~60s cold start on next request)
+- Free Postgres expires after 90 days (recreate or upgrade)
+
 ## Project Status & Planning
 
 | Document | Purpose |
