@@ -443,20 +443,7 @@ class SeatAssignmentService:
             else:
                 message = f"{new_user.username} joined the table in seat {seat_number}"
 
-            # TODO: Send real-time notifications via WebSocket
-            # For now, just log the notification
             current_app.logger.info(f"Table {table_id}: {message}")
-
-            # This would be implemented with WebSocket/Socket.IO:
-            # from ..services.websocket_manager import WebSocketManager
-            # websocket_manager = WebSocketManager()
-            # websocket_manager.broadcast_to_table(table_id, 'player_joined', {
-            #     'user_id': new_player_id,
-            #     'username': new_user.username,
-            #     'seat_number': seat_number,
-            #     'is_spectator': is_spectator,
-            #     'message': message
-            # })
 
         except Exception as e:
             current_app.logger.error(f"Failed to notify players of join: {e}")

@@ -722,8 +722,7 @@ class PlayerActionHandler:
                 additional_amount = player.stack
                 total_amount = player.stack + current_bet
             else:
-                #        additional_amount = amount - current_bet + current_ante
-                additional_amount = amount - current_bet  # Remove the + current_ante
+                additional_amount = amount - current_bet
                 total_amount = amount
         return total_amount, additional_amount
 
@@ -1404,13 +1403,6 @@ class PlayerActionHandler:
             self.game.current_player = self.game.next_player(round_start=True)
             if self.game.current_player:
                 self.first_player_in_round = self.game.current_player.id
-
-    #    self.first_player_in_round = None  # Track first player to determine when round is complete
-    #
-    #    # Set the current player to the first player (usually UTG or first active)
-    #    self.game.current_player = self.game.next_player(round_start=True)
-    #    if self.game.current_player:
-    #        self.first_player_in_round = self.game.current_player.id
 
     def setup_draw_round(self, config: dict) -> None:
         """Set up a draw round."""

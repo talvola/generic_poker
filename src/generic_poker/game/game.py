@@ -1230,7 +1230,6 @@ class Game:
                 amount = min(ante_amount, player.stack)
                 if amount > 0:
                     player.stack -= amount
-                    # self.betting.pot.add_bet(player.id, amount, is_all_in=(amount == player.stack), stack_before=player.stack)
                     self.betting.place_bet(player.id, amount, player.stack + amount, is_forced=True, is_ante=True)
                     logger.info(f"{player.name} posts ante of ${amount} (Remaining stack: ${player.stack})")
 

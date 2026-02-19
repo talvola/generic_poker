@@ -1,7 +1,7 @@
 # Project Status
 
 > Single source of truth for project state. Updated as work progresses.
-> Last updated: 2026-02-18
+> Last updated: 2026-02-19
 
 ## Architecture Overview
 
@@ -97,15 +97,14 @@ Flask/SocketIO multiplayer web platform.
 
 ## Testing
 
-### Test Counts (2026-02-18)
+### Test Counts (2026-02-19)
 
 | Layer | Tests | Status |
 |-------|-------|--------|
-| Python unit + integration | 648 | All passing |
+| Python unit + integration | 668 | All passing |
 | Smoke test (all 192 variants) | 384 | All passing (0 unsupported, 0 xfail) |
-| Socket.IO integration | 33 | All passing (in `test_socketio_integration.py`) |
 | Playwright E2E | 57 | All passing (9 spec files) |
-| **Total** | **~1,122** | **All passing** |
+| **Total** | **~1,109** | **All passing** |
 
 ### Test Layers
 
@@ -122,10 +121,10 @@ Layer 1: Python Integration Tests (engine + services)
   - tests/integration/test_gameplay_integration.py
   - Use this for 90% of bug fixes
 
-Layer 2: Socket.IO Integration Tests (WebSocket events)
+Layer 2: Socket.IO Integration Tests (WebSocket events, included in Layer 1 count)
   - flask_socketio.test_client (Python, no browser)
   - tests/integration/test_socketio_integration.py
-  - 9 tests covering connect, join, ready, fold, call/check, full hand, broadcasts
+  - Tests covering connect, join, ready, fold, call/check, full hand, broadcasts
 
 Layer 3: E2E Browser Tests (visual verification)
   - Playwright with multi-user fixtures
