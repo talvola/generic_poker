@@ -704,6 +704,48 @@ def get_hand_result(table_id: str):
         return jsonify({"success": False, "error": "Failed to get hand result"}), 500
 
 
+@game_bp.route("/tables/<table_id>/hand-history", methods=["GET"])
+@login_required
+def get_hand_history(table_id: str):
+    """Get hand history for a table.
+
+    Args:
+        table_id: ID of the table
+
+    Query parameters:
+        limit: Maximum number of hands to return (default: 20)
+
+    Returns:
+        JSON response with hand history
+    """
+    try:
+        from ..database import db
+        from ..models.game_history import GameHistory
+
+        limit = int(request.args.get("limit", 20))
+        limit = min(limit, 100)  # Cap at 100
+
+        records = (
+            db.session.query(GameHistory)
+            .filter(GameHistory.table_id == table_id)
+            .order_by(GameHistory.hand_number.desc())
+            .limit(limit)
+            .all()
+        )
+
+        return jsonify(
+            {
+                "success": True,
+                "hands": [record.to_dict() for record in records],
+                "count": len(records),
+            }
+        )
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to get hand history: {e}")
+        return jsonify({"success": False, "error": "Failed to get hand history"}), 500
+
+
 @game_bp.route("/cleanup", methods=["POST"])
 @login_required
 def cleanup_inactive_sessions():

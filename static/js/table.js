@@ -91,6 +91,11 @@ class PokerTable {
             this.responsive.toggleMobilePanel('settings');
         });
 
+        // Hand History button
+        document.getElementById('hand-history-btn').addEventListener('click', () => {
+            this.showHandHistory();
+        });
+
         // Debug toggle
         document.getElementById('debug-toggle').addEventListener('click', () => {
             this.toggleDebugPanel();
@@ -350,7 +355,7 @@ class PokerTable {
             this.socket.emit('request_game_state', { table_id: this.store.tableId });
         }, 5000);
     }
-    
+
     stopGameUpdateTimer() {
         if (this.gameUpdateInterval) {
             clearInterval(this.gameUpdateInterval);
@@ -381,7 +386,7 @@ class PokerTable {
 
         // Showdown display is handled by the hand_complete event (handleHandComplete).
         // No need to duplicate here — game_state_update with phase 'complete' just updates UI state.
-        
+
         // Update debug panel
         this.updateDebugPanel();
 
@@ -816,6 +821,7 @@ class PokerTable {
                 for (const cell of row) {
                     const cellDiv = document.createElement('div');
                     cellDiv.className = 'grid-cell';
+                    if (cell === null) cellDiv.classList.add('grid-cell-empty');
                     cellDiv.dataset.cell = JSON.stringify(cell);
                     grid.appendChild(cellDiv);
                 }
@@ -830,7 +836,7 @@ class PokerTable {
         for (const row of cells) {
             for (const cell of row) {
                 const cellDiv = cellDivs[cellIndex++];
-                if (!cellDiv) continue;
+                if (!cellDiv || cell === null) continue;
                 const card = this._findGridCard(cards, cell);
                 this._fillCardSlots(cellDiv, card ? [card] : [], 1);
             }
@@ -1286,7 +1292,7 @@ class PokerTable {
         const button = document.createElement('button');
         const actionType = action.action_type || action.type;
         const actionTypeLower = actionType.toLowerCase();
-        
+
         button.className = `action-btn ${actionTypeLower}`;
         button.dataset.action = actionTypeLower;
 
@@ -1616,15 +1622,15 @@ class PokerTable {
 
     updateDebugPanel() {
         // Update debug information
-        document.getElementById('debug-current-player').textContent = 
+        document.getElementById('debug-current-player').textContent =
             this.store.gameState?.current_player || '-';
-        document.getElementById('debug-my-turn').textContent = 
+        document.getElementById('debug-my-turn').textContent =
             this.store.isMyTurn ? 'Yes' : 'No';
-        document.getElementById('debug-game-state').textContent = 
+        document.getElementById('debug-game-state').textContent =
             this.store.gameState?.game_state || '-';
-        
+
         // Format valid actions for display
-        const actionsDisplay = this.store.validActions.length > 0 
+        const actionsDisplay = this.store.validActions.length > 0
             ? JSON.stringify(this.store.validActions, null, 2)
             : 'None';
         document.getElementById('debug-actions').textContent = actionsDisplay;
@@ -1638,6 +1644,9 @@ class PokerTable {
 
     handleHandComplete(data) {
         console.log('DEBUG: handleHandComplete called with data:', data);
+
+        // Capture hand result for in-session history
+        this.chat.captureHandResult(data);
 
         // Store revealed hole cards for showdown display
         if (data.hand_results && data.hand_results.player_hole_cards) {
@@ -1676,6 +1685,199 @@ class PokerTable {
     // Hole/community card announcements delegated to this.chat (PokerChat)
 
     // Showdown methods delegated to this.showdown (PokerShowdown)
+
+    async showHandHistory() {
+        const content = document.getElementById('hand-history-content');
+        content.innerHTML = '<div class="hand-history-loading">Loading hand history...</div>';
+        PokerModals.showModal('hand-history-modal');
+
+        // Merge in-session history with DB history
+        let hands = [];
+        try {
+            const response = await fetch(`/api/games/tables/${this.store.tableId}/hand-history?limit=20`);
+            const data = await response.json();
+            if (data.success && data.hands) {
+                hands = data.hands;
+            }
+        } catch (err) {
+            console.error('Failed to fetch hand history:', err);
+        }
+
+        // Fill in any in-session hands not yet in DB
+        const dbHandNumbers = new Set(hands.map(h => h.hand_number));
+        for (const sessionHand of this.chat.handHistory) {
+            if (!dbHandNumbers.has(sessionHand.hand_number)) {
+                hands.unshift(this._sessionHandToDisplay(sessionHand));
+            }
+        }
+
+        // Sort by hand number descending
+        hands.sort((a, b) => b.hand_number - a.hand_number);
+
+        this.renderHandHistory(content, hands);
+    }
+
+    _sessionHandToDisplay(sessionHand) {
+        // Convert in-session captured hand to display format matching DB to_dict()
+        const results = sessionHand.hand_results || {};
+        const winners = [];
+        for (const pot of (results.pots || [])) {
+            for (const wid of (pot.winners || [])) {
+                if (!winners.includes(wid)) winners.push(wid);
+            }
+        }
+        return {
+            hand_number: sessionHand.hand_number,
+            variant: sessionHand.variant,
+            betting_structure: sessionHand.betting_structure,
+            completed_at: sessionHand.timestamp,
+            total_pot: results.total_pot || 0,
+            winners: winners,
+            results: results,
+            players: [],
+            _fromSession: true,
+        };
+    }
+
+    renderHandHistory(container, hands) {
+        if (!hands || hands.length === 0) {
+            container.innerHTML = '<div class="hand-history-empty">No hands played yet.</div>';
+            return;
+        }
+
+        let html = '<div class="hand-history-list">';
+        for (const hand of hands) {
+            const time = hand.completed_at
+                ? new Date(hand.completed_at).toLocaleTimeString()
+                : '';
+            const totalPot = hand.total_pot || 0;
+
+            // Build winner names
+            let winnerDisplay = '';
+            const winnerIds = hand.winners || [];
+            if (winnerIds.length > 0 && hand.players && hand.players.length > 0) {
+                const names = winnerIds.map(id => {
+                    const p = hand.players.find(pl => pl.user_id === id);
+                    return p ? p.username : id.substring(0, 8);
+                });
+                winnerDisplay = names.join(', ');
+            } else if (winnerIds.length > 0) {
+                // Try to get names from results winning_hands
+                const results = hand.results || {};
+                const winningHands = results.winning_hands || [];
+                if (winningHands.length > 0) {
+                    winnerDisplay = winnerIds.map(id => id.substring(0, 8)).join(', ');
+                } else {
+                    winnerDisplay = winnerIds.map(id => id.substring(0, 8)).join(', ');
+                }
+                // Check store players for names
+                for (let i = 0; i < winnerIds.length; i++) {
+                    const sp = this.store.findPlayerByUserId(winnerIds[i]);
+                    if (sp) {
+                        winnerDisplay = winnerDisplay.replace(
+                            winnerIds[i].substring(0, 8),
+                            sp.username
+                        );
+                    }
+                }
+            }
+
+            const variant = hand.variant
+                ? hand.variant.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+                : '';
+
+            html += `
+                <div class="hand-history-item" data-hand-index="${hand.hand_number}">
+                    <div class="hand-history-summary" onclick="window.pokerTable.toggleHandDetail(this)">
+                        <div class="hand-summary-left">
+                            <span class="hand-number">#${hand.hand_number}</span>
+                            <span class="hand-variant">${PokerModals.escapeHtml(variant)}</span>
+                        </div>
+                        <div class="hand-summary-right">
+                            <span class="hand-pot">Pot: $${totalPot}</span>
+                            ${winnerDisplay ? `<span class="hand-winner">Won by: ${PokerModals.escapeHtml(winnerDisplay)}</span>` : ''}
+                            <span class="hand-time">${time}</span>
+                        </div>
+                    </div>
+                    <div class="hand-history-detail" style="display: none;">
+                        ${this._renderHandDetail(hand)}
+                    </div>
+                </div>
+            `;
+        }
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    _renderHandDetail(hand) {
+        const results = hand.results || {};
+        let html = '';
+
+        // Players
+        if (hand.players && hand.players.length > 0) {
+            html += '<div class="hand-detail-section"><strong>Players:</strong><ul class="hand-detail-players">';
+            for (const p of hand.players) {
+                html += `<li>${PokerModals.escapeHtml(p.username || 'Unknown')} — $${p.stack || 0}</li>`;
+            }
+            html += '</ul></div>';
+        }
+
+        // Pots
+        const pots = results.pots || [];
+        if (pots.length > 0) {
+            html += '<div class="hand-detail-section"><strong>Pots:</strong><ul class="hand-detail-pots">';
+            for (let i = 0; i < pots.length; i++) {
+                const pot = pots[i];
+                const potLabel = i === 0 ? 'Main pot' : `Side pot ${i}`;
+                const winnerIds = pot.winners || [];
+                // Try to resolve winner names
+                let winNames = winnerIds.map(id => {
+                    if (hand.players && hand.players.length > 0) {
+                        const p = hand.players.find(pl => pl.user_id === id);
+                        if (p) return p.username;
+                    }
+                    const sp = this.store.findPlayerByUserId(id);
+                    return sp ? sp.username : id.substring(0, 8);
+                });
+                html += `<li>${potLabel}: $${pot.amount} — ${winNames.join(', ')}</li>`;
+            }
+            html += '</ul></div>';
+        }
+
+        // Winning hands
+        const winningHands = results.winning_hands || [];
+        if (winningHands.length > 0) {
+            html += '<div class="hand-detail-section"><strong>Winning hands:</strong><ul class="hand-detail-winning">';
+            for (const wh of winningHands) {
+                const playerId = wh.player_id || '';
+                let playerName = playerId.substring(0, 8);
+                if (hand.players && hand.players.length > 0) {
+                    const p = hand.players.find(pl => pl.user_id === playerId);
+                    if (p) playerName = p.username;
+                }
+                const sp = this.store.findPlayerByUserId(playerId);
+                if (sp) playerName = sp.username;
+
+                const handDesc = wh.hand_description || wh.hand_name || '';
+                const cards = (wh.cards || []).join(' ');
+                html += `<li>${PokerModals.escapeHtml(playerName)}: ${PokerModals.escapeHtml(handDesc)} ${cards ? '[' + cards + ']' : ''}</li>`;
+            }
+            html += '</ul></div>';
+        }
+
+        if (!html) {
+            html = '<div class="hand-detail-section">No details available.</div>';
+        }
+
+        return html;
+    }
+
+    toggleHandDetail(summaryEl) {
+        const detail = summaryEl.nextElementSibling;
+        if (detail) {
+            detail.style.display = detail.style.display === 'none' ? 'block' : 'none';
+        }
+    }
 }
 
 // Global functions for modal management (called from HTML)
@@ -1695,7 +1897,7 @@ style.textContent = `
         transform: scale(0.95) !important;
         opacity: 0.8 !important;
     }
-    
+
     .mobile-layout .side-panel {
         position: fixed;
         top: 0;
@@ -1706,25 +1908,25 @@ style.textContent = `
         z-index: 500;
         transition: right 0.3s ease;
     }
-    
+
     .mobile-layout .side-panel.show {
         right: 0;
     }
-    
+
     @media (max-width: 768px) {
         .action-btn {
             touch-action: manipulation;
         }
-        
+
         .bet-slider {
             height: 12px;
         }
-        
+
         .bet-slider::-webkit-slider-thumb {
             width: 24px;
             height: 24px;
         }
-        
+
         .bet-slider::-moz-range-thumb {
             width: 24px;
             height: 24px;
@@ -2183,7 +2385,7 @@ rippleStyle.textContent = `
             opacity: 0;
         }
     }
-    
+
     .ripple {
         position: absolute;
         border-radius: 50%;
@@ -2192,12 +2394,12 @@ rippleStyle.textContent = `
         animation: ripple 0.6s linear;
         pointer-events: none;
     }
-    
+
     .reduced-animations * {
         animation-duration: 0.1s !important;
         transition-duration: 0.1s !important;
     }
-    
+
     .tooltip {
         animation: fadeIn 0.3s ease;
     }

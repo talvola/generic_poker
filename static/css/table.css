@@ -255,6 +255,10 @@ body {
     justify-content: center;
 }
 
+.grid-cell-empty {
+    visibility: hidden;
+}
+
 /* Declare/Choose button layouts */
 .declare-buttons,
 .choose-buttons {
@@ -1318,10 +1322,33 @@ body {
     padding: 1rem;
 }
 
+.info-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
 .info-header h3 {
     color: white;
     font-size: 1rem;
     margin-bottom: 1rem;
+}
+
+.hand-history-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.8);
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: var(--transition);
+    margin-bottom: 1rem;
+}
+
+.hand-history-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
 }
 
 .game-stats {
@@ -1570,6 +1597,104 @@ body {
     gap: 1rem;
     padding: 1.5rem;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Hand History */
+.hand-history-loading,
+.hand-history-empty {
+    text-align: center;
+    padding: 2rem;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.hand-history-list {
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
+.hand-history-item {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.hand-history-item:last-child {
+    border-bottom: none;
+}
+
+.hand-history-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0.5rem;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.hand-history-summary:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.hand-summary-left {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.hand-number {
+    font-weight: 600;
+    color: var(--accent-color);
+    min-width: 2.5rem;
+}
+
+.hand-variant {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.85rem;
+}
+
+.hand-summary-right {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    font-size: 0.85rem;
+}
+
+.hand-pot {
+    color: var(--success-color);
+    font-weight: 500;
+}
+
+.hand-winner {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.hand-time {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.8rem;
+}
+
+.hand-history-detail {
+    padding: 0.5rem 1rem 1rem 1rem;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
+    margin: 0 0.5rem 0.5rem 0.5rem;
+    font-size: 0.85rem;
+}
+
+.hand-detail-section {
+    margin-bottom: 0.5rem;
+}
+
+.hand-detail-section strong {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.hand-detail-section ul {
+    margin: 0.25rem 0 0 1.2rem;
+    padding: 0;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.hand-detail-section li {
+    margin-bottom: 0.15rem;
 }
 
 /* Notifications */
@@ -2666,7 +2791,7 @@ tional Card Animations and Visual Feedback */
     opacity: 0.8;
 }
 
-/* 
+/*
 Player indicator styles */
 .player-indicator {
     background: var(--gold);
@@ -3079,38 +3204,38 @@ owdown Overlay Styles */
         margin: 0.5rem auto;
         padding: 0 0.5rem;
     }
-    
+
     .showdown-results-content {
         padding: 1rem;
     }
-    
+
     .showdown-results-header {
         font-size: 1.3rem;
     }
-    
+
     .showdown-hand-result {
         padding: 0.5rem;
         font-size: 0.9rem;
     }
-    
+
     .showdown-content {
         padding: 1.5rem;
         margin: 1rem;
         max-height: 90vh;
     }
-    
+
     .showdown-header {
         font-size: 1.5rem;
     }
-    
+
     .winner-name {
         font-size: 1.1rem;
     }
-    
+
     .winner-hand {
         font-size: 1rem;
     }
-    
+
     .pot-award {
         flex-direction: column;
         text-align: center;

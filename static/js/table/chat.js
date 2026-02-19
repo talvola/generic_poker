@@ -5,6 +5,7 @@ class PokerChat {
         this._store = store;
         this.holeCardsAnnounced = false;
         this.lastAnnouncedCommunityCardCount = 0;
+        this.handHistory = []; // In-session hand history captured from hand_complete events
     }
 
     resetForNewHand() {
@@ -166,5 +167,21 @@ class PokerChat {
         }
 
         this.lastAnnouncedCommunityCardCount = currentCount;
+    }
+
+    captureHandResult(data) {
+        // Store hand result from hand_complete event for in-session history
+        const entry = {
+            hand_number: data.hand_number || this.handHistory.length + 1,
+            hand_results: data.hand_results || {},
+            timestamp: new Date().toISOString(),
+            variant: this._store.gameState?.variant || '',
+            betting_structure: this._store.gameState?.betting_structure || '',
+        };
+        this.handHistory.unshift(entry); // Most recent first
+        // Keep at most 50 in-session
+        if (this.handHistory.length > 50) {
+            this.handHistory.length = 50;
+        }
     }
 }

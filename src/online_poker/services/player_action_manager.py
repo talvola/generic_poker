@@ -1057,6 +1057,9 @@ class PlayerActionManager:
             else:
                 logger.warning("WebSocket manager not available for broadcasting hand completion")
 
+            # Save hand to database
+            self._save_hand_to_database(table_id, session, results_dict, hand_number)
+
             # Process any pending leaves now that the hand is complete
             if session.pending_leaves:
                 removed_players = session.process_pending_leaves()
@@ -1082,6 +1085,83 @@ class PlayerActionManager:
 
         except Exception as e:
             logger.error(f"Failed to handle hand completion for table {table_id}: {e}")
+
+    def _save_hand_to_database(self, table_id: str, session: GameSession, results_dict: dict, hand_number: int) -> None:
+        """Save completed hand to the database for hand history.
+
+        Args:
+            table_id: ID of the table
+            session: Game session that completed
+            results_dict: Serialized hand results
+            hand_number: Hand number
+        """
+        try:
+            from ..database import db
+            from ..models.game_history import GameHistory
+            from ..services.user_manager import UserManager
+
+            user_manager = UserManager()
+
+            # Build players list with stacks
+            players_data = []
+            if session.game and hasattr(session.game, "table"):
+                for player_id, player in session.game.table.players.items():
+                    user = user_manager.get_user_by_id(player_id)
+                    players_data.append(
+                        {
+                            "user_id": player_id,
+                            "username": user.username if user else player.name,
+                            "stack": player.stack,
+                            "position": player.position,
+                        }
+                    )
+
+            # Build actions from in-memory history
+            actions_data = self.action_history.get(table_id, [])
+
+            # Extract winner IDs from results
+            winner_ids = []
+            for pot in results_dict.get("pots", []):
+                for winner_id in pot.get("winners", []):
+                    if winner_id not in winner_ids:
+                        winner_ids.append(winner_id)
+
+            # Add winners to results for the model's get_winner_ids()
+            results_with_winners = dict(results_dict)
+            results_with_winners["winners"] = winner_ids
+
+            # Get stakes from table
+            stakes = {}
+            if session.table:
+                stakes = session.table.get_stakes() if hasattr(session.table, "get_stakes") else {}
+
+            # Get variant and betting structure
+            variant = session.table.variant if session.table else "unknown"
+            betting_structure = session.table.betting_structure if session.table else "unknown"
+
+            history = GameHistory(
+                table_id=table_id,
+                hand_number=hand_number,
+                players=players_data,
+                actions=actions_data,
+                results=results_with_winners,
+                variant=variant,
+                betting_structure=betting_structure,
+                stakes=stakes,
+            )
+
+            db.session.add(history)
+            db.session.commit()
+            logger.info(f"Saved hand #{hand_number} to database for table {table_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to save hand to database for table {table_id}: {e}")
+            try:
+                from ..database import db
+
+                db.session.rollback()
+            except Exception as rollback_err:
+                logger.error(f"Failed to rollback after hand save error: {rollback_err}")
 
     def _auto_fold_pending_players(self, table_id: str, session: GameSession) -> None:
         """Auto-fold any pending-leave players who are now current to act.
