@@ -722,8 +722,10 @@ def get_hand_history(table_id: str):
         from ..database import db
         from ..models.game_history import GameHistory
 
-        limit = int(request.args.get("limit", 20))
-        limit = min(limit, 100)  # Cap at 100
+        default_limit = current_app.config.get("HAND_HISTORY_DEFAULT_LIMIT", 20)
+        max_limit = current_app.config.get("HAND_HISTORY_MAX_LIMIT", 100)
+        limit = int(request.args.get("limit", default_limit))
+        limit = min(limit, max_limit)
 
         records = (
             db.session.query(GameHistory)
@@ -757,7 +759,8 @@ def cleanup_inactive_sessions():
     try:
         from ..services.player_session_manager import PlayerSessionManager
 
-        timeout_minutes = request.json.get("timeout_minutes", 30) if request.json else 30
+        default_timeout = current_app.config.get("TABLE_INACTIVE_TIMEOUT", 30)
+        timeout_minutes = request.json.get("timeout_minutes", default_timeout) if request.json else default_timeout
         cleaned_count = PlayerSessionManager.cleanup_inactive_sessions(timeout_minutes)
 
         return jsonify(

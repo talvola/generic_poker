@@ -87,8 +87,8 @@ After gameplay works, make the frontend maintainable.
 | 3.6 | Implement draw/discard actions | DONE |
 | 3.7 | Implement card passing | DONE |
 | 3.7b | Implement expose/separate actions + card visibility | DONE |
-| 3.8 | Add hand history display | TODO |
-| 3.9 | Mobile optimization pass | TODO |
+| 3.8 | Add hand history display | DONE |
+| ~~3.9~~ | ~~Mobile optimization pass~~ | Moved to Phase 7 |
 | 3.10 | Stud game support (7-card stud UI, per-player up/down cards) | DONE (covered by 3.7b card visibility) |
 | 3.11 | Community card layout: multi-row boards (double-board, murder, scarney, kryky) | DONE |
 | 3.12 | Community card layout: branching/diamond (chowaha, omaha 321, tapiola, bidirectional) | DONE |
@@ -148,19 +148,34 @@ After gameplay works, make the frontend maintainable.
 - Tier 2 verifies draw controls (stand pat, selectable cards, multi-round draw, forced discard), declare buttons, expose phase, separate subsets, choose buttons
 - Fixes: bring-in serialization pipeline, DOM-detach resilience in action handlers, store-based completion detection
 
+**3.8 result:** Hand history feature. Backend: `_save_hand_to_database()` in PlayerActionManager saves completed hands to GameHistory model (players, actions, results, variant, stakes). API: `GET /api/games/tables/<id>/hand-history` returns last N hands. Frontend: "History" button in Game Info section opens modal with hand list. Each hand shows hand #, variant, pot total, winners, timestamp. Click to expand details (players, pot breakdown, winning hands). In-session hands captured from `hand_complete` events for immediate availability before DB query.
+
+**Phase 3 complete.** All items done except mobile (moved to Phase 7).
+
 ---
 
 ## Phase 4: Production Readiness
 
 | # | Task | Status |
 |---|------|--------|
-| 4.1 | Unify timeout systems (action, disconnect, ready) | TODO |
-| 4.2 | Make hardcoded constants configurable | TODO |
+| 4.1 | Unify timeout systems (action, disconnect, ready) | DONE |
+| 4.2 | Make hardcoded constants configurable | DONE |
 | 4.3 | Remove debug print statements from routes | DONE |
 | 4.3b | Review and reduce core engine logging (excessive debug logs accumulated over time) | DONE |
 | 4.4 | Sync game engine state with database after each hand | TODO |
 | 4.5 | Add rate limiting | TODO |
 | 4.6 | Admin interface | TODO |
+
+### Task Details
+
+**4.1 result:** Unified all timeout/duration constants into `config.py` with env-var overrides: `ACTION_TIMEOUT_ENABLED`, `ACTION_TIMEOUT_SECONDS` (30s), `DISCONNECT_AUTO_FOLD_SECONDS` (30s), `DISCONNECT_REMOVAL_MINUTES` (10m), `TABLE_INACTIVE_TIMEOUT` (30m). `disconnect_manager.py`, `player_action_manager.py`, and `game_state_manager.py` all read from Flask config instead of hardcoded values.
+
+**4.2 result:** Made remaining hardcoded constants configurable via env vars in `config.py`:
+- Auth sessions: `SESSION_TIMEOUT_HOURS` (24), `REMEMBER_ME_DAYS` (30), `RESET_TOKEN_EXPIRY_HOURS` (1) — `auth_service.py` class constants removed, now reads `current_app.config.get()` with safe defaults.
+- Cleanup routes: `game_routes.py` and `table_routes.py` cleanup endpoints now fall back to `TABLE_INACTIVE_TIMEOUT` from config instead of hardcoded `30`.
+- Time to act: `game_state_manager.py` `_get_time_to_act()` reads `ACTION_TIMEOUT_SECONDS` from Flask config.
+- Hand history: `HAND_HISTORY_DEFAULT_LIMIT` (20), `HAND_HISTORY_MAX_LIMIT` (100) — `game_routes.py` hand history endpoint reads from config.
+- **Not changed (intentionally):** Bot weights (demo-only), action history buffer (internal), min-player constants (game rules).
 
 ---
 
@@ -261,6 +276,23 @@ Features prioritized by casino relevance and games unlocked. Each unlocks multip
 **6.3.1 result:** Added Pagat.com URLs as reference objects to 42 game config JSON files. 45 total matches (3 already had Pagat refs: kryky, one_mans_trash, texas_reach_around). Remaining 147 configs have no Pagat match (community-invented or hi-lo variants of games Pagat only covers in high-only form).
 
 **6.3.2 result:** `docs/PAGAT_CROSS_REFERENCE.md` — 515-line analysis with three sections: (1) Games we support with Pagat matches (45), (2) Pagat games we don't support categorized by feasibility (~38 config-only, ~47 need features, ~57 out of scope), (3) Missing features summary prioritized by casino relevance and games unlocked.
+
+---
+
+## Phase 7: Mobile Optimization
+
+Goal: Make the app fully playable on phones and tablets. This is a large effort touching layout, controls, and touch interactions.
+
+| # | Task | Status |
+|---|------|--------|
+| 7.1 | Audit table layout on mobile viewports (phone portrait/landscape, tablet) | TODO |
+| 7.2 | Fix card/seat sizing and positioning for small screens | TODO |
+| 7.3 | Touch-friendly action buttons (sizing, spacing, tap targets) | TODO |
+| 7.4 | Touch-friendly bet slider and card selection (draw/discard/expose/separate) | TODO |
+| 7.5 | Mobile chat panel (slide-out or collapsible) | TODO |
+| 7.6 | Community card layout responsiveness (multi-row, branching, grid on small screens) | TODO |
+| 7.7 | Mobile lobby (table list, create table, join flow) | TODO |
+| 7.8 | Orientation handling and viewport meta tuning | TODO |
 
 ---
 

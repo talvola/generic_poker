@@ -156,6 +156,9 @@ class GameStateView:
     big_blind_position: int = 0
     timestamp: datetime = field(default_factory=datetime.utcnow)
 
+    # Timeout configuration
+    time_limit: int = 30
+
     # Additional game information
     table_info: dict[str, Any] = field(default_factory=dict)
     hand_history: list[dict[str, Any]] = field(default_factory=list)
@@ -185,6 +188,7 @@ class GameStateView:
             "dealer_position": self.dealer_position,
             "small_blind_position": self.small_blind_position,
             "big_blind_position": self.big_blind_position,
+            "time_limit": self.time_limit,
             "timestamp": self.timestamp.isoformat(),
             "table_info": self.table_info,
             "hand_history": self.hand_history,

@@ -150,7 +150,6 @@ class PlayerActionManager:
         self.timeout_manager = ActionTimeoutManager()
         self.action_history: dict[str, list[dict[str, Any]]] = {}  # table_id -> action history
         self.lock = Lock()
-        self.action_timeout_enabled = False  # Set to True to enable auto-fold on timeout
 
         logger.info("Player action manager initialized")
 
@@ -640,17 +639,30 @@ class PlayerActionManager:
             logger.error(f"Failed to process action for player {user_id}: {e}")
             return False, f"Processing error: {str(e)}", None
 
-    def start_action_timer(self, table_id: str, user_id: str, timeout_seconds: int = 30) -> None:
+    def start_action_timer(self, table_id: str, user_id: str, timeout_seconds: int | None = None) -> None:
         """Start an action timer for a player.
 
         Args:
             table_id: ID of the table
             user_id: ID of the player
-            timeout_seconds: Timeout in seconds
+            timeout_seconds: Timeout in seconds (defaults to Flask config ACTION_TIMEOUT_SECONDS)
         """
         try:
-            # Skip if action timeout is disabled (useful for debugging)
-            if not self.action_timeout_enabled:
+            # Read timeout settings from Flask config with safe fallback
+            try:
+                from flask import current_app
+
+                enabled = current_app.config.get("ACTION_TIMEOUT_ENABLED", False)
+                if timeout_seconds is None:
+                    timeout_seconds = current_app.config.get("ACTION_TIMEOUT_SECONDS", 30)
+            except RuntimeError:
+                # Outside Flask request context
+                enabled = False
+                if timeout_seconds is None:
+                    timeout_seconds = 30
+
+            # Skip if action timeout is disabled
+            if not enabled:
                 logger.debug(f"Action timeout disabled, skipping timer for player {user_id}")
                 return
 

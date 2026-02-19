@@ -21,9 +21,6 @@ class AuthenticationError(Exception):
 class SessionManager:
     """Manages user sessions and authentication state."""
 
-    SESSION_TIMEOUT_HOURS = 24
-    REMEMBER_ME_DAYS = 30
-
     @staticmethod
     def login_user_session(username: str, password: str, remember_me: bool = False) -> dict[str, Any]:
         """Authenticate user and create session.
@@ -46,7 +43,9 @@ class SessionManager:
                 raise AuthenticationError("Invalid username or password")
 
             # Create Flask-Login session
-            login_user(user, remember=remember_me, duration=timedelta(days=SessionManager.REMEMBER_ME_DAYS))
+            login_user(
+                user, remember=remember_me, duration=timedelta(days=current_app.config.get("REMEMBER_ME_DAYS", 30))
+            )
 
             # Store additional session data
             session["user_id"] = user.id
@@ -57,7 +56,9 @@ class SessionManager:
             # Set session timeout
             if not remember_me:
                 session.permanent = True
-                current_app.permanent_session_lifetime = timedelta(hours=SessionManager.SESSION_TIMEOUT_HOURS)
+                current_app.permanent_session_lifetime = timedelta(
+                    hours=current_app.config.get("SESSION_TIMEOUT_HOURS", 24)
+                )
 
             current_app.logger.info(f"User logged in: {user.username} (ID: {user.id})")
 
@@ -196,7 +197,9 @@ class SessionManager:
             # Check session timeout for non-persistent sessions
             if not session.permanent and "login_time" in session:
                 login_time = datetime.fromisoformat(session["login_time"])
-                if datetime.utcnow() - login_time > timedelta(hours=SessionManager.SESSION_TIMEOUT_HOURS):
+                if datetime.utcnow() - login_time > timedelta(
+                    hours=current_app.config.get("SESSION_TIMEOUT_HOURS", 24)
+                ):
                     return False
 
             # Verify user still exists and is active
@@ -210,8 +213,6 @@ class SessionManager:
 
 class PasswordResetService:
     """Handles password reset functionality."""
-
-    RESET_TOKEN_EXPIRY_HOURS = 1
 
     @staticmethod
     def generate_reset_token(email: str) -> dict[str, Any]:
@@ -238,7 +239,7 @@ class PasswordResetService:
             session[f"reset_token_{user.id}"] = {
                 "token_hash": token_hash,
                 "expires_at": (
-                    datetime.utcnow() + timedelta(hours=PasswordResetService.RESET_TOKEN_EXPIRY_HOURS)
+                    datetime.utcnow() + timedelta(hours=current_app.config.get("RESET_TOKEN_EXPIRY_HOURS", 1))
                 ).isoformat(),
                 "user_id": user.id,
             }

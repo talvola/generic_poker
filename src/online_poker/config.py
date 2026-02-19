@@ -33,7 +33,21 @@ class Config:
     # Game settings
     DEFAULT_BANKROLL = int(os.environ.get("DEFAULT_BANKROLL", "1000"))
     TABLE_INACTIVE_TIMEOUT = int(os.environ.get("TABLE_INACTIVE_TIMEOUT", "30"))  # minutes
-    PLAYER_DISCONNECT_TIMEOUT = int(os.environ.get("PLAYER_DISCONNECT_TIMEOUT", "60"))  # seconds
+
+    # Timeout settings
+    ACTION_TIMEOUT_ENABLED = os.environ.get("ACTION_TIMEOUT_ENABLED", "true").lower() == "true"
+    ACTION_TIMEOUT_SECONDS = int(os.environ.get("ACTION_TIMEOUT_SECONDS", "30"))
+    DISCONNECT_AUTO_FOLD_SECONDS = int(os.environ.get("DISCONNECT_AUTO_FOLD_SECONDS", "30"))
+    DISCONNECT_REMOVAL_MINUTES = int(os.environ.get("DISCONNECT_REMOVAL_MINUTES", "10"))
+
+    # Auth session settings
+    SESSION_TIMEOUT_HOURS = int(os.environ.get("SESSION_TIMEOUT_HOURS", "24"))
+    REMEMBER_ME_DAYS = int(os.environ.get("REMEMBER_ME_DAYS", "30"))
+    RESET_TOKEN_EXPIRY_HOURS = int(os.environ.get("RESET_TOKEN_EXPIRY_HOURS", "1"))
+
+    # Hand history settings
+    HAND_HISTORY_DEFAULT_LIMIT = int(os.environ.get("HAND_HISTORY_DEFAULT_LIMIT", "20"))
+    HAND_HISTORY_MAX_LIMIT = int(os.environ.get("HAND_HISTORY_MAX_LIMIT", "100"))
 
     # Security settings
     BCRYPT_LOG_ROUNDS = int(os.environ.get("BCRYPT_LOG_ROUNDS", "12"))
@@ -73,6 +87,9 @@ class TestingConfig(Config):
 
     # Faster password hashing for tests
     BCRYPT_LOG_ROUNDS = 4
+
+    # Disable action timeout in tests
+    ACTION_TIMEOUT_ENABLED = False
 
 
 class ProductionConfig(Config):

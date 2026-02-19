@@ -579,7 +579,8 @@ def cleanup_inactive_tables():
     """
     try:
         # This could be restricted to admin users in the future
-        timeout_minutes = request.json.get("timeout_minutes", 30) if request.json else 30
+        default_timeout = current_app.config.get("TABLE_INACTIVE_TIMEOUT", 30)
+        timeout_minutes = request.json.get("timeout_minutes", default_timeout) if request.json else default_timeout
 
         # Clean up inactive tables
         closed_tables = TableManager.close_inactive_tables(timeout_minutes)

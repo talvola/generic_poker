@@ -82,15 +82,15 @@ Flask/SocketIO multiplayer web platform.
 - DECLARE action (hi/lo declare UI for 5 games)
 - CHOOSE action (variant selection UI for paradise_road_pickem)
 - Parametrized E2E smoke tests (15 variants covering all action types and community layouts)
+- Hand history display (DB persistence, API, modal with expandable details)
 
 ### Remaining Issues
 
 | # | Issue | Priority | Description |
 |---|-------|----------|-------------|
-| 3 | Hardcoded timeouts | LOW | 30s action, 10min disconnect timeouts not configurable |
+| ~~3~~ | ~~Hardcoded timeouts~~ | ~~LOW~~ | ~~Fixed: all timeouts and limits configurable via env vars~~ |
 | 4 | Debug deck option | LOW | No way to use fixed/unseeded deck for testing |
-| 8 | Hand history display | LOW | Not implemented |
-| 9 | Mobile optimization | LOW | Chat panel toggle works but needs testing |
+| 9 | Mobile optimization | LOW | Deferred to Phase 7 |
 | 10 | Admin interface | LOW | Not implemented |
 
 ---

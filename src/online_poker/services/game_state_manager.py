@@ -89,6 +89,14 @@ class GameStateManager:
             # Get table information
             table_info = GameStateManager._get_table_info(session)
 
+            # Get time_limit from Flask config
+            try:
+                from flask import current_app
+
+                time_limit = current_app.config.get("ACTION_TIMEOUT_SECONDS", 30)
+            except RuntimeError:
+                time_limit = 30
+
             # Create game state view
             game_state_view = GameStateView(
                 table_id=table_id,
@@ -105,6 +113,7 @@ class GameStateManager:
                 dealer_position=GameStateManager._get_dealer_position(session),
                 small_blind_position=GameStateManager._get_small_blind_position(session),
                 big_blind_position=GameStateManager._get_big_blind_position(session),
+                time_limit=time_limit,
                 table_info=table_info,
             )
 
@@ -723,8 +732,13 @@ class GameStateManager:
     def _get_time_to_act(session: GameSession, user_id: str) -> int | None:
         """Get time remaining for a player to act."""
         # This would typically be managed by a timer system
-        # For now, return a default timeout - this should be implemented with actual timing logic
-        return 30  # 30 seconds default
+        # For now, return the configured timeout - this should be implemented with actual timing logic
+        try:
+            from flask import current_app
+
+            return current_app.config.get("ACTION_TIMEOUT_SECONDS", 30)
+        except RuntimeError:
+            return 30
 
     @staticmethod
     def _get_current_bet(session: GameSession, user_id: str) -> int:
