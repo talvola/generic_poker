@@ -262,14 +262,9 @@ class BettingManager(ABC):
             # Round 2: P1 bets 200 anew
             betting.place_bet("P1", 200, 900)  # Adds 200, stack becomes 700
         """
-        logger.debug(
-            f"place_bet(player_id: {player_id}, amount: {amount}, stack: {stack}, is_forced: {is_forced}, bet_type: {bet_type}, is_ante: {is_ante})"
-        )
-
         if is_ante:
             # For antes, amount_to_add is simply the ante amount
             amount_to_add = amount
-            logger.debug(f"  amount_to_add: {amount_to_add} (amount: {amount}) - ante bet")
 
             # Skip validation for forced bets
             if not is_forced and not self.validate_bet(player_id, amount, stack, bet_type):
@@ -284,21 +279,14 @@ class BettingManager(ABC):
             # Track the last actor (only for non-forced bets)
             if not is_forced:
                 self.last_actor_id = player_id
-                logger.debug(f"place_bet: Updated last_actor_id to {player_id}")
 
             # Update pot with the ante amount
             self.pot.add_bet(player_id, amount, is_all_in, stack, is_ante=True)
-
-            # Antes don't affect the current bet for betting purposes
-            logger.debug(f"After ante: current_bet={self.current_bet}, pot={self.pot.total}")
 
         else:
             # Regular betting logic
             current_bet = self.current_bets.get(player_id, PlayerBet()).amount
             amount_to_add = amount - current_bet
-
-            logger.debug(f"  current_bet: {current_bet}")
-            logger.debug(f"  amount_to_add: {amount_to_add} (amount: {amount} - current_bet: {current_bet})")
 
             # Skip validation for forced bets
             if not is_forced and not self.validate_bet(player_id, amount, stack, bet_type):
@@ -309,7 +297,6 @@ class BettingManager(ABC):
             # Track raise size if this bet is raising
             if amount > self.current_bet:
                 raise_size = amount - self.current_bet
-                logger.debug(f"Tracking raise size: {raise_size}")
                 self.last_raise_size = max(self.last_raise_size, raise_size)
 
             # Update player bet tracking
@@ -320,15 +307,11 @@ class BettingManager(ABC):
             new_bet.posted_blind = (is_forced and not is_ante) or existing_bet.posted_blind  # Preserve blind flag
             new_bet.is_all_in = is_all_in
 
-            logger.debug(f"current_bets before: {[(pid, bet.amount) for pid, bet in self.current_bets.items()]}")
-            logger.debug(f"  new_bet: {new_bet}")
             self.current_bets[player_id] = new_bet
-            logger.debug(f"current_bets after: {[(pid, bet.amount) for pid, bet in self.current_bets.items()]}")
 
             # Track the last actor (only for non-forced bets)
             if not is_forced:
                 self.last_actor_id = player_id
-                logger.debug(f"place_bet: Updated last_actor_id to {player_id}")
 
             # Update pot with the additional amount
             if amount_to_add > 0:
@@ -337,15 +320,8 @@ class BettingManager(ABC):
             # Update current bet if this is highest
             self.current_bet = max(self.current_bet, amount)
 
-            if bet_type == BetType.BRING_IN:  # Or check PlayerAction.BRING_IN depending on implementation
-                self.bring_in_posted = True  # Set flag when bring-in is posted
-
-            logger.debug(
-                f"After bet: current_bet={self.current_bet}, "
-                f"last_raise_size={self.last_raise_size}, "
-                f"pot={self.pot.total}, "
-                f"current_bets={[(pid, bet.amount, 'acted' if bet.has_acted else 'not acted', 'blind' if bet.posted_blind else 'not blind') for pid, bet in self.current_bets.items()]}"
-            )
+            if bet_type == BetType.BRING_IN:
+                self.bring_in_posted = True
 
     def get_amount_to_add(self, player_id: str, proposed_total: int) -> int:
         """
@@ -396,11 +372,6 @@ class BettingManager(ABC):
         # Antes are tracked separately and don't affect betting requirements
         required = self.current_bet - current_bet
 
-        logger.debug(
-            f"get_required_bet for {player_id}: current_bet={current_bet}, "
-            f"table_current_bet={self.current_bet}, required={required}"
-        )
-
         return max(0, required)
 
     def round_complete(self) -> bool:
@@ -416,10 +387,8 @@ class BettingManager(ABC):
         # Check that every active player has a bet entry and has acted
         for player_id in active_players:
             if player_id not in self.current_bets:
-                logger.debug(f"Round not complete - active player {player_id} has no bet entry")
                 return False
             if not self.current_bets[player_id].has_acted:
-                logger.debug(f"Round not complete - active player {player_id} has not acted")
                 return False
 
         # Check that all active players have matching bet amounts (or are all-in)
@@ -429,15 +398,7 @@ class BettingManager(ABC):
             if not self.current_bets[player_id].is_all_in
         )
 
-        logger.debug(f"Active players: {active_players}")
-        logger.debug(f"Unique bet amounts from active players: {active_bet_amounts}")
-
-        if len(active_bet_amounts) > 1:
-            logger.debug("Round not complete - active players have unequal bets")
-            return False
-
-        logger.debug("Round complete - all active players acted and have equal bets")
-        return True
+        return not len(active_bet_amounts) > 1
 
     def new_round(self, preserve_current_bet: bool = False) -> None:
         """
@@ -459,12 +420,6 @@ class BettingManager(ABC):
             self.bring_in_posted = False  # Reset at the start of each betting round
         self.current_bet = current
 
-        logger.debug(
-            f"Starting betting round {self.betting_round}: preserve_bet={preserve_current_bet}, "
-            f"current_bet={self.current_bet}, "
-            f"current_bets={[(pid, bet.amount, 'acted' if bet.has_acted else 'not acted', 'blind' if bet.posted_blind else 'not blind') for pid, bet in self.current_bets.items()]}"
-        )
-
     def new_hand(self) -> None:
         """Start a new hand."""
         self.current_bets.clear()
@@ -473,7 +428,6 @@ class BettingManager(ABC):
         self.bring_in_posted = False
         self.last_raise_size = 0  # Reset last raise size for new hand
         self.pot.new_hand()  # Reset pot for new hand
-        logger.debug("New hand started: current_bet=0, betting_round=0, current_bets cleared")
 
 
 class LimitBettingManager(BettingManager):
@@ -553,25 +507,15 @@ class LimitBettingManager(BettingManager):
         Returns:
             True if bet is valid, False otherwise
         """
-        logger.debug(
-            f"Validating limit bet in round {self.betting_round}: player={player_id}, amount={amount}, "
-            f"player_stack={player_stack},  bet_type={bet_type}"
-        )
-
-        logger.debug(f"self.current_bet={self.current_bet}")
-
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
         to_call = self.current_bet - current_bet
         bet_size = self.small_bet if bet_type == BetType.SMALL else self.big_bet
-
-        logger.debug(f"current_bet={current_bet}, to_call={to_call}, bet_size={bet_size}")
 
         if amount == 0:  # Check/fold always valid
             return True
 
         # All-in for less than call amount is valid
         if amount < self.current_bet and amount == current_bet + player_stack:
-            logger.debug(f"Valid all-in for less than call: {amount}")
             return True
 
         if amount == self.current_bet:  # Calling exact amount is valid
@@ -579,7 +523,6 @@ class LimitBettingManager(BettingManager):
 
         # Stud post-bring-in completion
         if bet_type == BetType.SMALL and amount == self.small_bet and self.betting_round <= 2:
-            logger.debug(f"Valid completion to small bet: {amount}")
             return amount <= player_stack
 
         # Standard limit betting
@@ -592,15 +535,8 @@ class LimitBettingManager(BettingManager):
         if amount == self.current_bet + bet_size:
             return amount - current_bet <= player_stack
 
-        # NEW: Allow all-in raises for less than the full raise amount
-        if amount > self.current_bet and amount == current_bet + player_stack:
-            logger.debug(f"Valid all-in raise for less than full amount: {amount}")
-            return True
-
-        logger.debug(
-            f"Invalid limit bet: {amount} not equal to current bet ({self.current_bet}) + bet unit ({bet_size}) and not all-in"
-        )
-        return False
+        # Allow all-in raises for less than the full raise amount
+        return amount > self.current_bet and amount == current_bet + player_stack
 
 
 class NoLimitBettingManager(BettingManager):
@@ -642,11 +578,6 @@ class NoLimitBettingManager(BettingManager):
         # For raising, minimum is current bet plus at least
         # the size of the previous raise (or BB if larger)
         min_raise_increment = max(self.small_bet, self.last_raise_size)
-        logger.debug(
-            f"Min Raise Calculation: Current Bet: {self.current_bet}, Small Bet: {self.small_bet}, "
-            f"Last Raise: {self.last_raise_size}, Min Increment: {min_raise_increment}"
-        )
-
         return self.current_bet + min_raise_increment
 
     def get_max_bet(self, player_id: str, bet_type: BetType, player_stack: int) -> int:
@@ -671,11 +602,6 @@ class NoLimitBettingManager(BettingManager):
         Returns:
             True if bet is valid, False otherwise
         """
-        logger.debug(
-            f"Validating NL bet: player={player_id}, amount={amount}, "
-            f"current_bet={self.current_bet}, stack={player_stack}"
-        )
-
         if amount == 0:  # Check/fold always valid
             return True
 
@@ -684,7 +610,6 @@ class NoLimitBettingManager(BettingManager):
 
         # Allow all-in bets (calls or raises) for the player's full stack
         if amount == current_bet + player_stack or amount == player_stack:
-            logger.debug(f"Player {player_id} is going all-in for {amount}")
             return True
 
         if amount == self.current_bet:  # Calling exact amount is valid
@@ -780,11 +705,6 @@ class PotLimitBettingManager(BettingManager):
         Returns:
             True if bet is valid, False otherwise
         """
-        logger.debug(
-            f"Validating PL bet: player={player_id}, amount={amount}, "
-            f"current_bet={self.current_bet}, stack={player_stack}"
-        )
-
         if amount == 0:  # Check/fold always valid
             return True
 
@@ -829,7 +749,6 @@ def create_betting_manager(
     Returns:
         Configured betting manager
     """
-    logger.debug(f"Creating betting manager: {structure}, small_bet={small_bet}, big_bet={big_bet}")
     assert small_bet is not None and small_bet > 0, "small_bet must be set"
 
     if structure == BettingStructure.LIMIT:

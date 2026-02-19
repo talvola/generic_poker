@@ -157,6 +157,7 @@ After gameplay works, make the frontend maintainable.
 | 4.1 | Unify timeout systems (action, disconnect, ready) | TODO |
 | 4.2 | Make hardcoded constants configurable | TODO |
 | 4.3 | Remove debug print statements from routes | DONE |
+| 4.3b | Review and reduce core engine logging (excessive debug logs accumulated over time) | DONE |
 | 4.4 | Sync game engine state with database after each hand | TODO |
 | 4.5 | Add rate limiting | TODO |
 | 4.6 | Admin interface | TODO |

@@ -80,7 +80,7 @@ class ShowdownManager:
 
         # If no players matched any specific condition, use default
         if not any(player_configs.values()):
-            logger.info("No players matched conditional configurations, using default")
+            logger.debug("No players matched conditional configurations, using default")
             default_configs = self._get_default_config()
             if default_configs:
                 # For default config, create a tuple and add all players
@@ -100,7 +100,7 @@ class ShowdownManager:
             config_name = config.get("name", "Hand Configuration")
             eval_type = EvaluationType(config.get("evaluationType", "high"))
 
-            logger.info(f"Evaluating {len(players)} players with config: {config_name}")
+            logger.debug(f"Evaluating {len(players)} players with config: {config_name}")
 
             # Evaluate hands for this group of players
             group_results = self._evaluate_hands_for_config(players, config, eval_type)
@@ -217,7 +217,7 @@ class ShowdownManager:
                     break  # Player matches this condition, don't check others
 
             if not assigned:
-                logger.info(f"Player {player.id} didn't match any conditional configuration")
+                logger.debug(f"Player {player.id} didn't match any conditional configuration")
 
         return player_configs, config_lookup
 
@@ -332,21 +332,21 @@ class ShowdownManager:
         if conditionalBestHands and isinstance(conditionalBestHands, list):
             for condition_rule in conditionalBestHands:
                 if self._check_best_hand_condition(condition_rule["condition"]):
-                    logger.info(
+                    logger.debug(
                         f"Using conditional best hand configuration based on matching condition: {condition_rule['condition'].get('type')}"
                     )
                     # If the condition is based on player choice, log which game type is being used
                     if condition_rule["condition"].get("type") == "player_choice":
                         game_choice = condition_rule["condition"].get("value")
-                        logger.info(f"Evaluating hands for game type: {game_choice}")
+                        logger.debug(f"Evaluating hands for game type: {game_choice}")
                     return condition_rule["bestHand"]
 
         # If no conditional rule matched, use default or standard best hands
         if hasattr(showdown_rules, "defaultBestHand") and showdown_rules.defaultBestHand:
-            logger.info("No condition matched; using default best hand configuration")
+            logger.debug("No condition matched; using default best hand configuration")
             return showdown_rules.defaultBestHand
         else:
-            logger.info("Using standard best hand configuration")
+            logger.debug("Using standard best hand configuration")
             return showdown_rules.best_hand
 
     def _initialize_showdown_tracking(self) -> tuple[dict, list, list]:
@@ -387,15 +387,15 @@ class ShowdownManager:
         awarded_portions = 0
         had_any_winners = False
 
-        logger.info(f"Showdown with {len(best_hand_configs)} possible hands to win")
+        logger.debug(f"Showdown with {len(best_hand_configs)} possible hands to win")
 
         for config in best_hand_configs:
             config_name = config.get("name", f"Configuration {len(hand_results) + 1}")
             eval_type = EvaluationType(config.get("evaluationType", "high"))
 
-            logger.info(f"  Evaluating {config_name} with evaluation type {eval_type}")
+            logger.debug(f"  Evaluating {config_name} with evaluation type {eval_type}")
             if config.get("qualifier"):
-                logger.info(f"    with qualifier {config.get('qualifier')}")
+                logger.debug(f"    with qualifier {config.get('qualifier')}")
 
             # Evaluate hands for this configuration
             config_results = self._evaluate_config_hands(active_players, config, eval_type, hand_results)
@@ -500,7 +500,6 @@ class ShowdownManager:
                 if player_id not in hand_results:
                     hand_results[player_id] = {}
                 hand_results[player_id][config_name] = result
-                logger.info(f"  Player {player_id} has {result.hand_description} for {config_name}")
 
     def _award_config_pots(
         self,
@@ -829,14 +828,14 @@ class ShowdownManager:
 
             # Check if values match
             matches = actual_value == expected_value
-            logger.info(
+            logger.debug(
                 f"Checking player choice condition: {subset}={actual_value}, expected {expected_value}, {'match' if matches else 'no match'}"
             )
 
             # Check both single value and list of values
             if not matches and isinstance(expected_value, list):
                 matches = actual_value in expected_value
-                logger.info(
+                logger.debug(
                     f"Checking player choice condition against list: {subset}={actual_value}, expected one of {expected_value}, {'match' if matches else 'no match'}"
                 )
 
@@ -858,21 +857,21 @@ class ShowdownManager:
             # Check against specific hand sizes
             if hand_sizes:
                 matches = player_hand_size in hand_sizes
-                logger.info(
+                logger.debug(
                     f"Checking hand size condition for player {player.id}: has {player_hand_size} cards, expected one of {hand_sizes}, {'match' if matches else 'no match'}"
                 )
                 return matches
 
             # Check against min/max range
             if min_hand_size is not None and player_hand_size < min_hand_size:
-                logger.info(f"Player {player.id} hand size {player_hand_size} below minimum {min_hand_size}")
+                logger.debug(f"Player {player.id} hand size {player_hand_size} below minimum {min_hand_size}")
                 return False
 
             if max_hand_size is not None and player_hand_size > max_hand_size:
-                logger.info(f"Player {player.id} hand size {player_hand_size} above maximum {max_hand_size}")
+                logger.debug(f"Player {player.id} hand size {player_hand_size} above maximum {max_hand_size}")
                 return False
 
-            logger.info(f"Player {player.id} hand size condition met: {player_hand_size} cards")
+            logger.debug(f"Player {player.id} hand size condition met: {player_hand_size} cards")
             return True
 
         elif condition_type == "community_card_value":
@@ -974,7 +973,7 @@ class ShowdownManager:
                     best_hand = hand
                     best_used_hole_cards = list(hole_combo)
 
-        logger.info(f"Best hand found: {best_hand}")
+        logger.debug(f"Best hand found: {best_hand}")
         return best_hand if best_hand else [], best_used_hole_cards
 
     def _generate_subset_combinations(
@@ -1023,8 +1022,6 @@ class ShowdownManager:
             else:
                 subset_combos = list(itertools.combinations(available_cards, count))
 
-            logger.debug(f"Generated {len(subset_combos)} combinations for subset '{subset_name}'")
-
             # For each combination from this subset, recurse to next requirement
             for subset_combo in subset_combos:
                 new_combination = current_combination + list(subset_combo)
@@ -1033,7 +1030,6 @@ class ShowdownManager:
             return combinations
 
         result = generate_combinations_recursive(0, [])
-        logger.debug(f"Generated {len(result)} total community card combinations")
         return result
 
     def handle_fold_win(self, active_players: list[Player]) -> GameResult:
@@ -1390,7 +1386,7 @@ class ShowdownManager:
 
             # Allow an empty hand to play if it has value
             if not best_hand and zero_cards_pip_value is not None:
-                logger.info(
+                logger.debug(
                     f"Player {player.name} has no valid hand for {hand_type}, but zeroCardsPipValue is set to {zero_cards_pip_value}. Assigning a default hand."
                 )
                 # Create results
@@ -1407,7 +1403,7 @@ class ShowdownManager:
                 continue
 
             if not best_hand:
-                logger.info(f"Player {player.name} has no valid hand for {hand_type}. Skipping...")
+                logger.debug(f"Player {player.name} has no valid hand for {hand_type}. Skipping...")
                 continue
 
             # Determine classification (e.g., face/butt)
@@ -1469,7 +1465,7 @@ class ShowdownManager:
             Tuple of (pot results, had_winners)
         """
 
-        logger.info(f"_award_pots_for_config for eval_type: {eval_type}, hand_config: {hand_config}")
+        logger.debug(f"_award_pots_for_config for eval_type: {eval_type}, hand_config: {hand_config}")
 
         pot_results = []
         player_hands = {player_id: result.cards for player_id, result in hand_results.items()}
@@ -1484,7 +1480,7 @@ class ShowdownManager:
         current_main_pot = self.betting.get_main_pot_amount()
         current_side_pot_count = self.betting.get_side_pot_count()
 
-        logger.info(f"    Main pot has ${current_main_pot}.   There are {current_side_pot_count} side pot(s)")
+        logger.debug(f"    Main pot has ${current_main_pot}.   There are {current_side_pot_count} side pot(s)")
 
         had_winners = False
 
@@ -1752,7 +1748,6 @@ class ShowdownManager:
                     hand_type=hand_config.get("name", "Unspecified"),
                     eligible_players=set(p.id for p in eligible_players),
                 )
-                logger.debug(f"Created pot result with hand_type: {hand_config.get('name', 'Unspecified')}")
                 pot_results.append(pot_result)
 
         return pot_results, had_winners
@@ -1776,7 +1771,6 @@ class ShowdownManager:
         def get_classification_rank(hand_result: HandResult) -> int:
             if not classification_priority:
                 return 0
-            logger.debug(f"Hand Result: {hand_result}")
             classification = hand_result.classifications.get(classification_field, "butt")
             try:
                 return classification_priority.index(classification)
@@ -1842,7 +1836,6 @@ class ShowdownManager:
                 logger.warning(f"Invalid cardState '{card_state}' for player {player.id}")
                 return []
 
-            logger.debug(f"Filtered hole cards to {card_state}: {len(hole_cards)} cards remaining")
             if not hole_cards and "minimumCards" not in showdown_rules:
                 logger.warning(f"No {card_state} cards available for player {player.id}")
                 return []
@@ -1882,10 +1875,6 @@ class ShowdownManager:
 
             # Skip if not enough cards available
             if len(hole_cards) < required_hole or len(comm_cards) < required_community:
-                logger.debug(
-                    f"Skipping combo with subset '{community_subset}': {required_hole} hole, "
-                    f"{required_community} comm (have {len(hole_cards)} hole, {len(comm_cards)} comm)"
-                )
                 continue
 
             # Generate all possible combinations for this requirement
@@ -1991,9 +1980,6 @@ class ShowdownManager:
         eval_type: EvaluationType,
     ) -> tuple[list[Card], list[Card]]:
         """Find best hand using 'anyCards' configuration."""
-        logger.debug(f"Finding hand with anyCards for player {player.id}")
-        logger.debug(f"  Hole cards: {hole_cards}, Community cards: {comm_cards}")
-
         total_cards = showdown_rules["anyCards"]
         allowed_combinations = showdown_rules.get("holeCardsAllowed", [])
         padding = showdown_rules.get("padding", False)
@@ -2107,7 +2093,6 @@ class ShowdownManager:
             comm_cards = []
             for subset in combo:
                 if subset not in community_cards:
-                    logger.debug(f"Subset '{subset}' not available for combination {combo}")
                     break
                 comm_cards.extend(community_cards[subset])
             else:  # Proceed only if all subsets were found (no break occurred)
@@ -2127,7 +2112,6 @@ class ShowdownManager:
                             best_hand = hand
                             best_used_hole_cards = list(hole_combo)
 
-        logger.debug(f"Best hand found using showdown rules: {best_hand}")
         return best_hand if best_hand else [], best_used_hole_cards
 
     def _find_hand_with_hole_and_community(
@@ -2155,11 +2139,6 @@ class ShowdownManager:
             required_community = min(max(0, total_cards_needed - required_hole), len(comm_cards))
         else:
             required_hole = int(required_hole)  # Ensure numeric for other cases
-
-        logger.debug(
-            f"Required hole cards: {required_hole}, Required community cards: {required_community} "
-            f"(have {len(hole_cards)} hole and {len(comm_cards)} community)"
-        )
 
         # Filter hole cards based on allowed subsets if specified
         if allowed_combinations:
@@ -2205,7 +2184,6 @@ class ShowdownManager:
                         best_hand = hand
                         best_used_hole_cards = list(hole_combo)
 
-        logger.debug(f"Best hand found using showdown rules: {best_hand}")
         return best_hand if best_hand else [], best_used_hole_cards
 
     def _find_hand_with_player_hand_size(
@@ -2229,7 +2207,7 @@ class ShowdownManager:
         required_hole = rule["holeCards"]
         required_community = rule["communityCards"]
 
-        logger.info(
+        logger.debug(
             f"Player has {current_hand_size} cards, using rule: {required_hole} hole + {required_community} community"
         )
 
@@ -2294,7 +2272,7 @@ class ShowdownManager:
                     best_hand = hand
                     best_used_hole_cards = list(hole_combo)
 
-        logger.info(f"Best hand found with playerHandSize: {best_hand}")
+        logger.debug(f"Best hand found with playerHandSize: {best_hand}")
         return best_hand if best_hand else [], best_used_hole_cards
 
     def _find_best_hand_for_player(
@@ -2314,7 +2292,7 @@ class ShowdownManager:
                 - best_hand: List of cards representing the player's best hand
                 - used_hole_cards: List of hole cards used in the best hand
         """
-        logger.info(f"Finding best hand for player {player.id} with eval_type '{eval_type}'")
+        logger.debug(f"Finding best hand for player {player.id} with eval_type '{eval_type}'")
 
         # Get and filter hole cards
         hole_cards = self._get_filtered_hole_cards(player, showdown_rules)
@@ -2425,9 +2403,6 @@ class ShowdownManager:
 
     def apply_wild_cards(self, player: Player, comm_cards: list[Card], wild_rules: list[dict]) -> None:
         """Apply wild card rules to the player's hand and community cards."""
-        logger.debug(
-            f"Applying wild card rules for player {player.name} with community cards: {comm_cards} and wild rules: {wild_rules}"
-        )
         for rule in wild_rules:
             rule_type = rule["type"]
             role = rule.get("role", "wild")

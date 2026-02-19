@@ -36,7 +36,6 @@ class BringInDeterminator:
         """Determine the first player to act based on visible cards."""
 
         if not players or num_cards < 1:
-            logger.debug("No players or invalid num_cards, returning None")
             return None
 
         eval_type = cls._get_dynamic_eval_type(num_cards, card_rule, rules=rules)
@@ -46,7 +45,6 @@ class BringInDeterminator:
         for player in players:
             visible_cards = [c for c in player.hand.get_cards() if c.visibility == Visibility.FACE_UP][:num_cards]
             if not visible_cards:
-                logger.debug(f"Player {player.id} has no visible cards, skipping")
                 continue
             if best_cards is None or evaluator.compare_hands(visible_cards, best_cards, eval_type) > 0:
                 best_cards = visible_cards
@@ -65,10 +63,6 @@ class BringInDeterminator:
         rules: Optional["GameRules"] = None,
     ) -> EvaluationType:
         """Construct the evaluation type based on card count and showdown rules."""
-        logger.debug(
-            f"Getting dynamic evaluation type for num_cards={num_cards}, card_rule={card_rule}, forced_bets={forced_bets}, rules={rules}"
-        )
-
         # Handle different forced_bets input types
         bring_in_eval = None
         if forced_bets:
@@ -102,7 +96,6 @@ class BringInDeterminator:
         if num_cards == 1:
             try:
                 eval_type = cls.ONE_CARD_EVALS[card_rule]
-                logger.debug(f"One card game, using eval_type: {eval_type}")
                 return eval_type
             except KeyError:
                 logger.warning(f"Invalid card_rule '{card_rule}' for one card, defaulting to 'high'")
@@ -111,8 +104,6 @@ class BringInDeterminator:
             # Multi-hand game: use bringInEval if specified, else default to first bestHand
             try:
                 if bring_in_eval:
-                    # Extract base evaluation type from bringInEval (e.g., "high" from "two_card_high")
-                    logger.debug(f"Using bringInEval: {bring_in_eval}")
                     # Parse the base evaluation type from the bringInEval
                     if "_" in bring_in_eval:
                         # For patterns like "two_card_high", we want "high"
@@ -126,17 +117,15 @@ class BringInDeterminator:
                             base_eval = "_".join(parts[1:])
                     else:
                         base_eval = bring_in_eval
-                    logger.debug(f"Extracted base evaluation: {base_eval}")
                 elif best_hands:
                     base_eval = best_hands[0]["evaluationType"]
-                    logger.debug(f"Using first bestHand evaluation: {base_eval}")
                 else:
                     # Fallback based on card rule
                     if card_rule == CardRule.LOW_CARD:
                         base_eval = "a5_low"
                     else:
                         base_eval = "high"
-                    logger.debug(f"No bringInEval or bestHand, falling back to: {base_eval}")
+                    pass
             except (AttributeError, IndexError, KeyError) as e:
                 logger.warning(f"Error getting evaluation type: {e}, defaulting based on card rule")
                 if card_rule == CardRule.LOW_CARD:

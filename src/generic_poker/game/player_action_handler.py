@@ -44,7 +44,7 @@ class PlayerActionHandler:
             List of tuples (action, min_amount, max_amount) where amounts are None if not applicable
         """
         if player_id != self.game.current_player.id:
-            logger.info(f"Not this player's turn ({player_id} vs {self.game.current_player.id})")
+            logger.debug(f"Not this player's turn ({player_id} vs {self.game.current_player.id})")
             return []
 
         step = self.game.rules.gameplay[self.game.current_step]
@@ -147,14 +147,9 @@ class PlayerActionHandler:
         self, player_id: str, bet_config: dict
     ) -> list[tuple[PlayerAction, int | None, int | None]]:
         """Helper method to get betting actions."""
-        logger.debug(
-            f"Getting betting actions for player {player_id} with bet_config: {bet_config} ({self.game.betting.bring_in_posted})"
-        )
         player = self.game.table.players[player_id]
         current_bet = self.game.betting.current_bets.get(player_id, PlayerBet()).amount
         required_bet = self.game.betting.get_required_bet(player_id)
-
-        logger.debug(f"  Current bet: {current_bet}, Required bet: {required_bet}, Player stack: {player.stack}")
 
         valid_actions = []
 
@@ -205,13 +200,6 @@ class PlayerActionHandler:
                 and acted_count <= 1
             )
 
-            logger.debug(
-                f"Player {player.name} (ID: {player_id}) is first after bring-in: {is_first_after_bring_in}, current_total: {current_total}"
-            )
-            logger.debug(
-                f"  is_stud= {is_stud}, step_type: {step_type}, bring_in_idx: {bring_in_idx}, acted_count: {acted_count}, active: {active_players[(bring_in_idx + 1) % len(active_players)].id}"
-            )
-            logger.debug(f"  bet_size: {bet_size}")
             if is_first_after_bring_in:
                 # if the previous player completed instead of bet, then allow a raise here
                 if current_total == self.game.bring_in:
@@ -222,9 +210,6 @@ class PlayerActionHandler:
                         if self.game.betting_structure == BettingStructure.LIMIT
                         else self.game.betting.get_max_bet(player_id, BetType.SMALL, player.stack)
                     )
-                    logger.debug(
-                        f"   Player {player.name} (ID: {player_id}) min_amount: {min_amount}, max_amount: {max_amount}"
-                    )
                 else:
                     action = PlayerAction.RAISE
                     min_amount = self.game.betting.get_min_raise(player_id)
@@ -232,9 +217,6 @@ class PlayerActionHandler:
                         min_amount
                         if self.game.betting_structure == BettingStructure.LIMIT
                         else self.game.betting.get_max_bet(player_id, BetType.SMALL, player.stack)
-                    )
-                    logger.debug(
-                        f"   Player {player.name} (ID: {player_id}) min_amount: {min_amount}, max_amount: {max_amount}"
                     )
             elif current_total == 0:
                 action = PlayerAction.BET
@@ -246,9 +228,6 @@ class PlayerActionHandler:
                         player_id, BetType.SMALL if step_type == "small" else BetType.BIG, player.stack
                     )
                 )
-                logger.debug(
-                    f"   Player {player.name} (ID: {player_id}) min_amount: {min_amount}, max_amount: {max_amount}"
-                )
             else:
                 action = PlayerAction.RAISE
                 min_amount = self.game.betting.get_min_raise(player_id)
@@ -256,9 +235,6 @@ class PlayerActionHandler:
                     min_amount
                     if self.game.betting_structure == BettingStructure.LIMIT
                     else self.game.betting.get_max_bet(player_id, BetType.BIG, player.stack)
-                )
-                logger.debug(
-                    f"   Player {player.name} (ID: {player_id}) min_amount: {min_amount}, max_amount: {max_amount}"
                 )
 
             if player.stack >= min_amount:
@@ -523,7 +499,7 @@ class PlayerActionHandler:
                 self.game.current_player = self.game.next_player(round_start=False)
             else:
                 # Move to next subaction
-                logger.info(f"{player.name} bet - incrementing substep")
+                logger.debug(f"{player.name} bet - incrementing substep")
                 self.current_substep += 1
                 self._update_state_for_next_subaction(subactions)
 
@@ -551,7 +527,7 @@ class PlayerActionHandler:
             if not self._handle_discard_action(player, cards):
                 return ActionResult(success=False, error="Invalid discard action")
 
-            logger.info(f"{player.name} discards {len(cards)} cards: {cards}")
+            logger.debug(f"{player.name} discards {len(cards)} cards: {cards}")
             self.player_completed_subactions[player_id].add(self.current_substep)
             # Check if all subactions are complete
             if self.current_substep == len(subactions) - 1:
@@ -569,7 +545,7 @@ class PlayerActionHandler:
                 return ActionResult(success=False, error="No cards specified")
             if not self._handle_discard_action(player, cards):  # Using discard logic for draw
                 return ActionResult(success=False, error="Invalid draw action")
-            logger.info(f"{player.name} draws {len(cards)} cards: {cards}")
+            logger.debug(f"{player.name} draws {len(cards)} cards: {cards}")
             self.player_completed_subactions[player_id].add(self.current_substep)
             if self.current_substep == len(subactions) - 1:
                 self.grouped_step_completed.add(player_id)
@@ -586,7 +562,7 @@ class PlayerActionHandler:
                 return ActionResult(success=False, error="No cards specified")
             if not self._handle_separate_action(player, cards):
                 return ActionResult(success=False, error="Invalid separation")
-            logger.info(f"{player.name} separates their cards: {cards}")
+            logger.debug(f"{player.name} separates their cards: {cards}")
             self.player_completed_subactions[player_id].add(self.current_substep)
             if self.current_substep == len(subactions) - 1:
                 self.grouped_step_completed.add(player_id)
@@ -619,7 +595,7 @@ class PlayerActionHandler:
             else:
                 # Use pending exposures
                 self.pending_exposures[player_id] = cards
-                logger.info(f"{player.name} will expose {len(cards)} cards: {cards}")
+                logger.debug(f"{player.name} will expose {len(cards)} cards: {cards}")
 
             self.player_completed_subactions[player_id].add(self.current_substep)
 
@@ -662,7 +638,7 @@ class PlayerActionHandler:
             if not self._validate_declare_action(player, declaration_data):
                 return ActionResult(success=False, error="Invalid declaration")
             self.pending_declarations[player_id] = declaration_data
-            logger.info(f"{player.name} declares: {declaration_data}")
+            logger.debug(f"{player.name} declares: {declaration_data}")
             self.player_completed_subactions[player_id].add(self.current_substep)
             if self.current_substep == len(subactions) - 1:
                 self.grouped_step_completed.add(player_id)
@@ -718,7 +694,7 @@ class PlayerActionHandler:
                 total_amount = current_bet + additional_amount
         else:  # BET or RAISE
             if amount >= player.stack + current_bet:
-                logger.info(f"{player.name} is going all-in with ${player.stack}")
+                logger.debug(f"{player.name} is going all-in with ${player.stack}")
                 additional_amount = player.stack
                 total_amount = player.stack + current_bet
             else:
@@ -862,9 +838,6 @@ class PlayerActionHandler:
             self.game.state = GameState.BETTING
             bet_config = next_subaction["bet"]
             if bet_config.get("type") not in ["antes", "blinds", "bring-in"] and not self.game.betting.round_complete():
-                logger.debug(
-                    f"Starting betting round: {next_subaction} with new_round({self.game._is_first_betting_round()})"
-                )
                 self.game.betting.new_round(self.game._is_first_betting_round())
         elif "discard" in next_key:
             self.game.state = GameState.DRAWING
@@ -894,7 +867,7 @@ class PlayerActionHandler:
             # Deal is not a player action — execute it immediately for the current player
             player_id = self.game.current_player.id if self.game.current_player else None
             self.game._handle_deal(next_subaction["deal"], player_id=player_id)
-            logger.info(
+            logger.debug(
                 f"Auto-executed deal substep for {self.game.current_player.name if self.game.current_player else 'all'}"
             )
 
@@ -996,10 +969,6 @@ class PlayerActionHandler:
         min_discard = card_config.get("min_number", 0 if is_draw else max_discard)
         subset = card_config.get("hole_subset", "default")  # Get the subset for drawing
 
-        logger.debug(
-            f"Handling discard action for player {player.name} with cards: {cards}, card_config: {card_config}"
-        )
-
         if card_config.get("rule", "none") != "matching ranks":
             if (
                 len(cards) < min_discard
@@ -1029,12 +998,7 @@ class PlayerActionHandler:
             )
             discard_ranks = {card.rank for card in discard_cards}
 
-            logger.debug(f"Player {player.name} has cards: {player.hand.get_cards()}")
-            logger.debug(f"Discarding matching ranks: {discard_ranks}")
-
             cards_to_discard = [card for card in player.hand.get_cards() if card.rank in discard_ranks]
-
-            logger.debug(f"cards to discard: {cards_to_discard}")
 
             if not cards_to_discard:
                 return True
@@ -1062,7 +1026,7 @@ class PlayerActionHandler:
             if draw_amount_config and draw_amount_config.get("relative_to") == "discard":
                 relative_amount = draw_amount_config.get("amount", 0)
                 draw_amount = draw_amount + relative_amount
-                logger.info(
+                logger.debug(
                     f"Draw amount is relative to discard: {len(cards)} discarded + {relative_amount} = {draw_amount} to draw"
                 )
 
@@ -1082,7 +1046,6 @@ class PlayerActionHandler:
                         if i < len(cards):
                             # Set new card's visibility to match the discarded card
                             new_card.visibility = cards[i].visibility
-                            logger.debug(f"Preserved {cards[i].visibility.value} state for replacement card {new_card}")
 
                 player.hand.add_cards(new_cards)
 
@@ -1091,7 +1054,7 @@ class PlayerActionHandler:
                     for card in new_cards:
                         player.hand.add_to_subset(card, subset)
 
-                logger.info(f"Player {player.name} drew {draw_amount} cards after discarding {len(cards)}")
+                logger.debug(f"Player {player.name} drew {draw_amount} cards after discarding {len(cards)}")
 
         return True
 
@@ -1325,7 +1288,7 @@ class PlayerActionHandler:
         for player_id, decl_list in self.pending_declarations.items():
             declarations[player_id] = {decl["pot_index"]: decl["declaration"] for decl in decl_list}
         self.game.declarations = declarations
-        logger.info(f"Applied declarations: {declarations}")
+        logger.debug(f"Applied declarations: {declarations}")
         self.pending_declarations.clear()
 
     def _get_eligible_pots(self, player: Player) -> list[int]:
@@ -1388,7 +1351,7 @@ class PlayerActionHandler:
         # Check conditional state - skip if condition not met
         conditional_state = config.get("conditional_state")
         if conditional_state and not self.game._check_condition(conditional_state):
-            logger.info("Skipping discard round - condition not met")
+            logger.debug("Skipping discard round - condition not met")
             # Let the game know to skip this step completely
             if self.game.auto_progress:
                 self.game._next_step()

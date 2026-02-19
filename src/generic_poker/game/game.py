@@ -238,7 +238,7 @@ class Game:
         self.state = GameState.BETTING
         self.current_player = None
 
-        logger.info("Hand started - moving to first step")
+        logger.debug("Hand started - moving to first step")
 
         # Execute first step - should this be conditioned on auto progress setting?
         self.process_current_step()
@@ -330,16 +330,16 @@ class Game:
         Returns when player input is needed or step is complete.
         """
         if self.current_step >= len(self.rules.gameplay):
-            logger.info("All steps complete - game finished")
+            logger.debug("All steps complete - game finished")
             self.state = GameState.COMPLETE
             return
 
         step = self.rules.gameplay[self.current_step]
-        logger.info(f"Processing step {self.current_step}: {step.name} {step.action_type}")
+        logger.debug(f"Processing step {self.current_step}: {step.name} {step.action_type}")
 
         # First check if this step should be skipped due to conditional state
         if self._check_and_skip_conditional_step():
-            logger.info(f"   Skipping conditional step {self.current_step}: '{step.name}'")
+            logger.debug(f"   Skipping conditional step {self.current_step}: '{step.name}'")
             return  # Step was skipped, _next_step was called, no further processing needed
 
         if step.action_type == GameActionType.GROUPED:
@@ -400,13 +400,10 @@ class Game:
             if step.action_config["type"] in ["antes", "blinds", "bring-in"]:
                 self.handle_forced_bets(step.action_config["type"])  # Use new method with bet_type
                 self.state = GameState.BETTING  # Set here for all forced bets
-                logger.info(
-                    f"DEBUG: After forced bets, current_player: {self.current_player.name if self.current_player else None}"
-                )
                 if self.auto_progress:
                     self._next_step()
             else:
-                logger.info(f"Starting betting round: {step.name}")
+                logger.debug(f"Starting betting round: {step.name}")
                 self.state = GameState.BETTING
                 first_bet_step = None
                 for i, s in enumerate(self.rules.gameplay):
@@ -424,15 +421,12 @@ class Game:
                 logger.debug(f"Starting betting round: {step.name} with new_round({preserve_bet})")
                 self.betting.new_round(preserve_bet)
                 self.current_player = self.next_player(round_start=True)
-                logger.info(
-                    f"DEBUG: Set current player for betting round to: {self.current_player.name if self.current_player else None} ({self.current_player.id if self.current_player else None})"
-                )
 
         elif step.action_type == GameActionType.DEAL:
             # Check conditional state for the deal step
             conditional_state = step.action_config.get("conditional_state")
             if conditional_state and not self._check_condition(conditional_state):
-                logger.info(f"Skipping deal step '{step.name}' - condition not met")
+                logger.debug(f"Skipping deal step '{step.name}' - condition not met")
                 if self.auto_progress:
                     self._next_step()
                 return
@@ -469,7 +463,7 @@ class Game:
             # ET: isn't this handled above?   this might be dead code
             conditional_state = step.action_config.get("conditional_state")
             if conditional_state and not self._check_condition(conditional_state):
-                logger.info(f"Skipping discard step '{step.name}' - condition not met")
+                logger.debug(f"Skipping discard step '{step.name}' - condition not met")
                 if self.auto_progress:
                     self._next_step()
                 return
@@ -536,7 +530,7 @@ class Game:
 
         condition_type = condition.get("type")
 
-        logger.info(f"Checking condition: {condition_type}")
+        logger.debug(f"Checking condition: {condition_type}")
 
         if condition_type == "all_exposed" or condition_type == "any_exposed" or condition_type == "none_exposed":
             # Original conditional states logic for exposed cards (unchanged)
@@ -561,7 +555,7 @@ class Game:
 
                 # Determine if condition is met
                 meets_condition = color_count >= min_count
-                logger.info(
+                logger.debug(
                     f"Condition check for {check_color} cards in {subset}: "
                     + f"found {color_count}, need {min_count}, condition {'met' if meets_condition else 'not met'}"
                 )
@@ -571,7 +565,7 @@ class Game:
             # New condition type for player choices
             subset = condition.get("subset")  # The choice variable name
 
-            logger.info(f"   subset: {subset}")
+            logger.debug(f"   subset: {subset}")
 
             # Check if we have game_choices dictionary
             if not hasattr(self, "game_choices"):
@@ -583,7 +577,7 @@ class Game:
                 expected_value = condition.get("value")
                 actual_value = self.game_choices.get(subset)
                 matches = actual_value == expected_value
-                logger.info(
+                logger.debug(
                     f"Checking player choice condition: {subset}={actual_value}, expected {expected_value}, {'match' if matches else 'no match'}"
                 )
                 return matches
@@ -593,7 +587,7 @@ class Game:
                 expected_values = condition.get("values", [])
                 actual_value = self.game_choices.get(subset)
                 matches = actual_value in expected_values
-                logger.info(
+                logger.debug(
                     f"Checking player choice condition: {subset}={actual_value}, expected one of {expected_values}, {'match' if matches else 'no match'}"
                 )
                 return matches
@@ -617,7 +611,7 @@ class Game:
 
             # Check the condition
             if not self._check_condition(conditional_state):
-                logger.info(f"Skipping step {self.current_step}: '{step.name}' - condition not met")
+                logger.debug(f"Skipping step {self.current_step}: '{step.name}' - condition not met")
                 self._next_step()
                 return True
 
@@ -635,7 +629,7 @@ class Game:
                 conditional_state = step.action_config["conditional_state"]
 
                 if conditional_state and not self._check_condition(conditional_state):
-                    logger.info(f"Skipping step {self.current_step}: '{step.name}' - condition not met")
+                    logger.debug(f"Skipping step {self.current_step}: '{step.name}' - condition not met")
                     self._next_step()
                     return True
 
@@ -660,10 +654,10 @@ class Game:
 
             # If condition not met skip dealing
             if not should_deal:
-                logger.info("Conditional dealing - condition not met, skipping deal/discard")
+                logger.debug("Conditional dealing - condition not met, skipping deal/discard")
                 return  # Skip dealing entirely
 
-            logger.info("Conditional dealing - condition met, continuing with deal")
+            logger.debug("Conditional dealing - condition met, continuing with deal")
 
         # Process the deal configuration
         for card_config in config["cards"]:
@@ -710,7 +704,7 @@ class Game:
                 # Fallback
                 first_player_id = next(iter(self.pending_protection_decisions.keys()))
                 self.current_player = self.table.players[first_player_id]
-            logger.info(f"Protection decisions needed - starting with {self.current_player.name}")
+            logger.debug(f"Protection decisions needed - starting with {self.current_player.name}")
 
     def _handle_post_deal_protection(self, card_config: dict, player_id: str | None, wild_card_rules: list) -> None:
         """Deal card face down first, then offer protection."""
@@ -744,7 +738,7 @@ class Game:
             # Track the order
             self.protection_decision_order.append(player.id)
 
-            logger.info(f"Dealt {card} to {player.name} face down - protection available for ${cost}")
+            logger.debug(f"Dealt {card} to {player.name} face down - protection available for ${cost}")
 
     def _complete_protection_round(self) -> None:
         """Called when all protection decisions are complete."""
@@ -764,7 +758,7 @@ class Game:
         self.state = GameState.DEALING
         self.current_player = None
 
-        logger.info("Protection round complete - all decisions made")
+        logger.debug("Protection round complete - all decisions made")
 
     def _handle_standard_deal(
         self,
@@ -827,12 +821,12 @@ class Game:
                     if card and wild_card_rules and card.rank == Rank.JOKER:
                         self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
 
-                logger.info(f"Dealt card to {current_player.name} ({state}) based on condition '{condition_type}'")
+                logger.debug(f"Dealt card to {current_player.name} ({state}) based on condition '{condition_type}'")
         else:
             state = card_config.get("state", "face down")
             # Skip if state is "none" (for conditional dealing where we don't deal)
             if state == "none":
-                logger.info("Skipping deal with 'none' state")
+                logger.debug("Skipping deal with 'none' state")
                 return False  # Signal to skip this card
 
             subsets = card_config.get("subset", "default")  # Now can be string or list
@@ -843,7 +837,7 @@ class Game:
                 if player_id:
                     # Deal to the specific player by ID
                     player_name = self.table.players[player_id].name or f"Player {player_id}"
-                    logger.info(
+                    logger.debug(
                         f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to player {player_name} ({state})"
                     )
                     for _ in range(num_cards):
@@ -853,7 +847,7 @@ class Game:
                             self._apply_wild_card_rules_to_card(card, wild_card_rules, face_up)
                 else:
                     # Deal to all active players
-                    logger.info(
+                    logger.debug(
                         f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to each player ({state}.  subset: {hole_subset}, face_up: {face_up})"
                     )
                     cards_dealt_dict = self.table.deal_hole_cards(num_cards, subset=hole_subset, face_up=face_up)
@@ -870,7 +864,7 @@ class Game:
                 if isinstance(subsets, str):
                     subsets = [subsets]
 
-                logger.info(
+                logger.debug(
                     f"Dealing {num_cards} {'card' if num_cards == 1 else 'cards'} to community subsets {subsets} ({state})"
                 )
                 cards = self.table.deal_community_cards(num_cards, subsets=subsets, face_up=face_up)
@@ -949,17 +943,17 @@ class Game:
                     if scope == "global":
                         self._make_all_existing_matching_rank_wild(target_rank, wild_card_type)
 
-                    logger.info(f"Applied last_community_card rule: {target_rank} rank is now wild")
+                    logger.debug(f"Applied last_community_card rule: {target_rank} rank is now wild")
 
                 elif match_type == "card":
                     # Only this specific card is wild
-                    logger.info(f"Applied last_community_card rule: only {card} is wild")
+                    logger.debug(f"Applied last_community_card rule: only {card} is wild")
 
                 elif match_type == "suit":
                     # Future extension: all cards of this suit are wild
                     target_suit = card.suit
                     # Implementation would go here
-                    logger.info(f"Applied last_community_card rule: {target_suit} suit is now wild")
+                    logger.debug(f"Applied last_community_card rule: {target_suit} suit is now wild")
 
                 continue
 
@@ -986,29 +980,29 @@ class Game:
                     true_role = condition.get("true_role", "wild")
                     true_wild_type = WildType.BUG if true_role == "bug" else WildType.NAMED
                     card.make_wild(true_wild_type)
-                    logger.info(f"Applied conditional wild card rule (face up): {wild_type} as {true_role}")
+                    logger.debug(f"Applied conditional wild card rule (face up): {wild_type} as {true_role}")
 
                 elif visibility_condition == "face down" and not face_up:
                     # Face down condition met
                     true_role = condition.get("true_role", "wild")
                     true_wild_type = WildType.BUG if true_role == "bug" else WildType.NAMED
                     card.make_wild(true_wild_type)
-                    logger.info(f"Applied conditional wild card rule (face down): {wild_type} as {true_role}")
+                    logger.debug(f"Applied conditional wild card rule (face down): {wild_type} as {true_role}")
 
                 else:
                     # Condition not met
                     false_role = condition.get("false_role", "wild")
                     false_wild_type = WildType.BUG if false_role == "bug" else WildType.NAMED
                     card.make_wild(false_wild_type)
-                    logger.info(f"Applied conditional wild card rule (condition not met): {wild_type} as {false_role}")
+                    logger.debug(f"Applied conditional wild card rule (condition not met): {wild_type} as {false_role}")
             else:
                 # Non-conditional wild card (for matching cards)
                 card.make_wild(wild_card_type)
-                logger.info(f"Applied wild card rule: {wild_type} as {role}")
+                logger.debug(f"Applied wild card rule: {wild_type} as {role}")
 
     def _update_player_wild_ranks(self, wild_rules: list[dict[str, Any]]) -> None:
         """Update wild ranks for all players based on their current hole cards."""
-        logger.info("Updating player wild ranks based on lowest_hole rules")
+        logger.debug("Updating player wild ranks based on lowest_hole rules")
         for rule in wild_rules:
             if rule.get("type") != "lowest_hole":
                 continue
@@ -1033,7 +1027,7 @@ class Game:
                     # Update tracking
                     self.player_wild_ranks[player.id] = new_wild_rank
 
-                    logger.info(f"Player {player.name} wild rank changed from {old_wild_rank} to {new_wild_rank}")
+                    logger.debug(f"Player {player.name} wild rank changed from {old_wild_rank} to {new_wild_rank}")
 
     def _find_player_wild_rank(self, player: Player, visibility: Visibility) -> Rank | None:
         """Find the lowest rank card for a player with the specified visibility."""
@@ -1143,7 +1137,7 @@ class Game:
         ranks = list(river_cards.values())
         # Tournament rule: if all river cards have the same rank, keep all boards
         if all(rank == ranks[0] for rank in ranks):
-            logger.info("All river cards have the same rank; no boards removed")
+            logger.debug("All river cards have the same rank; no boards removed")
             return
 
         # Use BASE_RANKS to determine the actual rank position (lower index = higher rank)
@@ -1159,7 +1153,7 @@ class Game:
         for subset in to_remove:
             if subset in self.table.community_cards:
                 del self.table.community_cards[subset]
-                logger.info(f"Removed subset {subset} due to lowest river card rank")
+                logger.debug(f"Removed subset {subset} due to lowest river card rank")
 
     def _handle_choose(self, config: dict[str, Any]) -> None:
         """
@@ -1191,11 +1185,11 @@ class Game:
             button_player = next((p for p in players if p.position and p.position.has_position(Position.BUTTON)), None)
             if button_player:
                 chooser = button_player
-                logger.info(f"Heads-up/3-handed game: Button player {button_player.name} will choose game variant")
+                logger.debug(f"Heads-up/3-handed game: Button player {button_player.name} will choose game variant")
 
         if chooser:
             self.current_player = chooser
-            logger.info(f"Player {chooser.name} to choose from {possible_values} for {value_name}")
+            logger.debug(f"Player {chooser.name} to choose from {possible_values} for {value_name}")
         else:
             logger.warning("Could not determine which player should choose")
             # Don't set a default here - wait for player_action
@@ -1231,7 +1225,7 @@ class Game:
                 if amount > 0:
                     player.stack -= amount
                     self.betting.place_bet(player.id, amount, player.stack + amount, is_forced=True, is_ante=True)
-                    logger.info(f"{player.name} posts ante of ${amount} (Remaining stack: ${player.stack})")
+                    logger.debug(f"{player.name} posts ante of ${amount} (Remaining stack: ${player.stack})")
 
         elif bet_type == "blinds":
             positions = self.table.get_position_order()
@@ -1260,14 +1254,14 @@ class Game:
                     sb_amount = min(self.small_blind, sb_player.stack)
                     sb_player.stack -= sb_amount
                     self.betting.place_bet(sb_player.id, sb_amount, sb_player.stack + sb_amount, is_forced=True)
-                    logger.info(f"{sb_player.name} posts small blind of ${sb_amount}...")
+                    logger.debug(f"{sb_player.name} posts small blind of ${sb_amount}...")
 
                 # Post big blind
                 if bb_player and self.big_blind > 0:
                     bb_amount = min(self.big_blind, bb_player.stack)
                     bb_player.stack -= bb_amount
                     self.betting.place_bet(bb_player.id, bb_amount, bb_player.stack + bb_amount, is_forced=True)
-                    logger.info(f"{bb_player.name} posts big blind of ${bb_amount}...")
+                    logger.debug(f"{bb_player.name} posts big blind of ${bb_amount}...")
 
             # Handle dealer blind + ante (New England Hold'em)
             if self.rules.betting_order.initial == "dealer" and blind_player:
@@ -1278,7 +1272,7 @@ class Game:
                     self.betting.place_bet(
                         blind_player.id, blind_amount, blind_player.stack + blind_amount, is_forced=True
                     )
-                    logger.info(f"{blind_player.name} posts {blind_name} of ${blind_amount}...")
+                    logger.debug(f"{blind_player.name} posts {blind_name} of ${blind_amount}...")
 
             # Post the ante (if configured)
             if self.ante and self.ante > 0 and ante_player:
@@ -1287,7 +1281,7 @@ class Game:
                 self.betting.place_bet(
                     ante_player.id, ante_amount, ante_player.stack + ante_amount, is_forced=True, is_ante=True
                 )
-                logger.info(f"{ante_player.name} posts ante of ${ante_amount}...")
+                logger.debug(f"{ante_player.name} posts ante of ${ante_amount}...")
 
         elif bet_type == "bring-in":
             bring_in_amount = self.bring_in or self.small_bet  # Use bring_in if set, else small_bet
@@ -1297,7 +1291,7 @@ class Game:
                 # Get all face-up cards for better logging
                 face_up_cards = [card for card in bring_in_player.hand.cards if card.visibility == Visibility.FACE_UP]
                 cards_display = ", ".join(str(card) for card in face_up_cards) if face_up_cards else "no face-up cards"
-                logger.info(f"Bring-in player: {bring_in_player.name} with face-up cards: {cards_display}")
+                logger.debug(f"Bring-in player: {bring_in_player.name} with face-up cards: {cards_display}")
             else:
                 logger.error("No bring-in player determined")
                 self.current_player = active_players[0]  # Fallback
@@ -1313,16 +1307,9 @@ class Game:
         elif bet_type in ["antes", "blinds"]:
             # For antes and blinds, no one acts after posting - game should advance to next step
             self.current_player = None
-            logger.info(f"DEBUG: After forced bets ({bet_type}), set current_player to None - ready for next step")
         else:
             # For other bet types, set first player to act
-            logger.info(
-                f"DEBUG: Before next_player call, current_player: {self.current_player.name if self.current_player else None}"
-            )
             self.current_player = self.next_player(round_start=True)
-            logger.info(
-                f"DEBUG: After next_player call, current_player: {self.current_player.name if self.current_player else None}"
-            )
 
     def _set_next_player_after(self, player_id: str) -> None:
         """Set the current player to the player after the specified player."""
@@ -1415,19 +1402,11 @@ class Game:
         current_bets = self.betting.current_bets  # {player_id: PlayerBet}
         forced_bettors = [pid for pid, bet in current_bets.items() if bet.posted_blind]
 
-        logger.debug(f"  round_start = {round_start}")
-        logger.debug(f"  is_voluntary_bet = {is_voluntary_bet}")
-        logger.debug(f"  forced_bettors = {forced_bettors}")
-        logger.debug(f"  self.betting.betting_round = {self.betting.betting_round}")
-
         # Check if this is the first voluntary bet after forced bets
         is_first_after_blinds = self.betting.betting_round == 0 and is_voluntary_bet and forced_bettors
 
         # Check if this is a continued action after player has chosen something
         is_after_choice = hasattr(self, "game_choices") and self.game_choices and self.current_player is not None
-
-        logger.debug(f"  is_first_after_blinds = {is_first_after_blinds}")
-        logger.debug(f"  is_after_choice = {is_after_choice}")
 
         if round_start:
             # In Paradise Road Pick'em, when a player chooses a game type, they should
@@ -1436,53 +1415,40 @@ class Game:
             if is_first_after_blinds:
                 # If we've just had a player make a choice, let them act first
                 if is_after_choice and self.action_handler.current_substep == 0:
-                    logger.debug(f"After game choice: keeping current player {self.current_player.name}")
+                    logger.debug(f"Next player: {self.current_player.name} (after game choice)")
                     return self.current_player
 
                 # Otherwise use standard first-after-blinds logic
                 last_forced_bettor_id = forced_bettors[-1] if forced_bettors else None
-                logger.debug(f"  last_forced_bettor_id: {last_forced_bettor_id}")
                 if last_forced_bettor_id:
                     players = self.table.get_position_order()
-                    logger.debug(f"  position_order: {[p.name for p in players]}")
                     try:
                         forced_bettor_idx = next(i for i, p in enumerate(players) if p.id == last_forced_bettor_id)
-                        logger.debug(f"  forced_bettor_idx: {forced_bettor_idx}")
                         next_idx = (forced_bettor_idx + 1) % len(players)
-                        logger.debug(f"  next_idx (before active check): {next_idx}")
                         while not players[next_idx].is_active:
-                            logger.debug(f"  player {players[next_idx].name} is not active, skipping")
                             next_idx = (next_idx + 1) % len(players)
                             if next_idx == forced_bettor_idx:  # Full circle
                                 return None
                         next_player = players[next_idx]
-                        logger.debug(f"First voluntary betting round: Starting with {next_player.name}")
+                        logger.debug(f"Next player: {next_player.name} (first voluntary round)")
                         return next_player
                     except StopIteration:
-                        logger.debug("  StopIteration - using fallback")
                         return active_players[0]  # Fallback
 
             else:
                 # Use subsequent order for all other round starts (including draw phases)
                 # Now using the conditional order evaluation
                 order_type = self._get_subsequent_order_type()
-                logger.debug(
-                    f"Using subsequent order type: {order_type} (step={self.current_step}, betting_round={self.betting.betting_round})"
-                )
 
                 if order_type == "dealer":
                     next_player = self.table.get_next_active_player(self.table.button_pos)
-                    logger.debug(f"  dealer: Starting with {next_player.name}")
                 elif order_type == "after_big_blind":
                     next_player = self.table.get_player_after_big_blind()
-                    logger.debug(f"  after_big_blind: Starting with {next_player.name}")
                 elif order_type == "bring_in":
                     next_player = self.table.get_bring_in_player(self.bring_in or self.small_bet)
-                    logger.debug(f"  bring_in: Starting with {next_player.name}")
                 elif order_type == "high_hand":
                     forced_bets = Game.get_effective_forced_bets(self, self.rules.forced_bets)
                     next_player = self.table.get_player_with_best_hand(forced_bets)
-                    logger.debug(f"  high_hand: Starting with {next_player.name}")
                 elif order_type == "last_actor":
                     # New England Hold'em: player who would have been next to act goes first
                     if self.betting.last_actor_id:
@@ -1503,44 +1469,31 @@ class Game:
                                 else:
                                     next_player = players[next_idx]
 
-                                if next_player:
-                                    logger.debug(
-                                        f"  last_actor: Last actor was {last_actor.name}, starting with {next_player.name}"
-                                    )
-                                else:
-                                    logger.debug(f"  last_actor: Could not find next player after {last_actor.name}")
+                                if not next_player:
                                     next_player = self.table.get_next_active_player(self.table.button_pos)
                             except StopIteration:
-                                logger.debug("  last_actor not found in position order, falling back to dealer")
                                 next_player = self.table.get_next_active_player(self.table.button_pos)
                         else:
                             # Fallback if last actor is no longer active
-                            logger.debug("  last_actor not active, falling back to dealer")
                             next_player = self.table.get_next_active_player(self.table.button_pos)
                     else:
                         # No last actor recorded, fallback to dealer
-                        logger.debug("  no last_actor recorded, falling back to dealer")
                         next_player = self.table.get_next_active_player(self.table.button_pos)
                 else:
                     logger.warning(f"Unsupported subsequent order '{order_type}', defaulting to dealer")
                     next_player = self.table.get_next_active_player(self.table.button_pos)
-                    logger.debug(f"  default: Starting with {next_player.name}")
                 if next_player:
+                    logger.debug(f"Next player: {next_player.name} (round start, order={order_type})")
                     return next_player
                 return active_players[0]  # Fallback
 
         # Mid-round: Move to next active player
         if self.current_player:
             players = self.table.get_position_order()
-            logger.debug(f"Position order: {[p.name for p in players]}")
-            logger.debug(f"Current player: {self.current_player.name}")
             try:
                 current_idx = next(i for i, p in enumerate(players) if p.id == self.current_player.id)
-                logger.debug(f"Current player index: {current_idx}")
                 next_idx = (current_idx + 1) % len(players)
-                logger.debug(f"Next index (before active check): {next_idx}")
                 while not players[next_idx].is_active:
-                    logger.debug(f"Player {players[next_idx].name} is not active, skipping")
                     next_idx = (next_idx + 1) % len(players)
                     if next_idx == current_idx:  # Full circle
                         return None
