@@ -36,11 +36,14 @@ class TableManager:
     UNSUPPORTED_ACTIONS = set()
 
     @staticmethod
-    def get_available_variants() -> list[dict[str, Any]]:
+    def get_available_variants(include_disabled: bool = False) -> list[dict[str, Any]]:
         """Get list of all available poker variants.
 
         Filters out variants that use unsupported actions (expose, pass,
         declare, separate, choose).
+
+        Args:
+            include_disabled: If True, include disabled variants in results
 
         Returns:
             List of variant dictionaries with name, display_name, category,
@@ -109,6 +112,16 @@ class TableManager:
                 # Log error but continue with other variants
                 current_app.logger.warning(f"Failed to load variant {config_file.stem}: {e}")
                 continue
+
+        # Filter out disabled variants (unless caller wants all)
+        if not include_disabled:
+            try:
+                from ..models.disabled_variant import DisabledVariant
+
+                disabled = {dv.variant_name for dv in db.session.query(DisabledVariant.variant_name).all()}
+                variants = [v for v in variants if v["name"] not in disabled]
+            except Exception as e:
+                current_app.logger.debug(f"Skipping disabled variant filter: {e}")
 
         # Sort variants alphabetically by display name
         variants.sort(key=lambda x: x["display_name"])

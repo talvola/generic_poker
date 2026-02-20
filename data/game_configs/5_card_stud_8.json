@@ -1,0 +1,39 @@
+{
+    "game": "5-Card Stud 8",
+    "category": "Stud",
+    "references": [
+        {"url": "https://www.pagat.com/poker/variants/5stud.html#hilo", "description": "Pagat.com - 5-Card Stud Hi-Lo"}
+    ],
+    "players": {"min": 2, "max": 8},
+    "deck": {"type": "standard", "cards": 52},
+    "bettingStructures": ["Limit"],
+    "forcedBets": {"style": "bring-in", "rule": "low card"},
+    "gamePlay": [
+        {"bet": {"type": "antes"}, "name": "Post Antes"},
+        {
+            "deal": {
+                "location": "player",
+                "cards": [{"number": 1, "state": "face down"}, {"number": 1, "state": "face up"}]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {"bet": {"type": "bring-in"}, "name": "Post Bring-In"},
+        {"bet": {"type": "small"}, "name": "Initial Bet"},
+        {"deal": {"location": "player", "cards": [{"number": 1, "state": "face up"}]}, "name": "Deal Third Street"},
+        {"bet": {"type": "small"}, "name": "Third Street Bet"},
+        {"deal": {"location": "player", "cards": [{"number": 1, "state": "face up"}]}, "name": "Deal Fourth Street"},
+        {"bet": {"type": "big"}, "name": "Fourth Street Bet"},
+        {"deal": {"location": "player", "cards": [{"number": 1, "state": "face up"}]}, "name": "Deal Fifth Street"},
+        {"bet": {"type": "big"}, "name": "Fifth Street Bet"},
+        {"showdown": {"type": "final"}, "name": "Showdown"}
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "all five cards",
+        "bestHand": [
+            {"name": "High Hand", "evaluationType": "high", "holeCards": 5, "communityCards": 0},
+            {"name": "Low Hand", "evaluationType": "a5_low", "holeCards": 5, "communityCards": 0, "qualifier": [1, 56]}
+        ]
+    }
+}

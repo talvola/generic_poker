@@ -53,6 +53,17 @@ class Config:
     BCRYPT_LOG_ROUNDS = int(os.environ.get("BCRYPT_LOG_ROUNDS", "12"))
     MAX_LOGIN_ATTEMPTS = int(os.environ.get("MAX_LOGIN_ATTEMPTS", "5"))
 
+    # Rate limiting settings
+    RATELIMIT_STORAGE_URI = "memory://"
+    RATELIMIT_DEFAULT = os.environ.get("RATELIMIT_DEFAULT", "60/minute")
+    RATELIMIT_AUTH_LOGIN = os.environ.get("RATELIMIT_AUTH_LOGIN", "5/minute")
+    RATELIMIT_AUTH_REGISTER = os.environ.get("RATELIMIT_AUTH_REGISTER", "3/hour")
+    RATELIMIT_AUTH_RESET = os.environ.get("RATELIMIT_AUTH_RESET", "3/hour")
+    RATELIMIT_TABLE_CREATE = os.environ.get("RATELIMIT_TABLE_CREATE", "10/hour")
+
+    # Session recovery settings
+    STALE_SESSION_CLEANUP_HOURS = int(os.environ.get("STALE_SESSION_CLEANUP_HOURS", "2"))
+
     # Performance settings
     MAX_CONCURRENT_TABLES = int(os.environ.get("MAX_CONCURRENT_TABLES", "100"))
     MAX_PLAYERS_PER_TABLE = int(os.environ.get("MAX_PLAYERS_PER_TABLE", "9"))
@@ -90,6 +101,9 @@ class TestingConfig(Config):
 
     # Disable action timeout in tests
     ACTION_TIMEOUT_ENABLED = False
+
+    # Disable rate limiting in tests
+    RATELIMIT_ENABLED = False
 
 
 class ProductionConfig(Config):

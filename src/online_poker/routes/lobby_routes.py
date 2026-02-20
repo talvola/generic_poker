@@ -1,10 +1,12 @@
 """Routes for the poker lobby interface."""
 
 from flask import Blueprint, current_app, jsonify, redirect, render_template, request, url_for
+from flask_limiter.util import get_remote_address
 from flask_login import current_user, login_required
 from flask_socketio import emit
 
 from ..database import db
+from ..extensions import limiter
 from ..models.table import PokerTable
 from ..models.table_access import TableAccess
 from ..services.table_access_manager import TableAccessManager
@@ -59,6 +61,10 @@ def get_tables():
 
 
 @lobby_bp.route("/api/tables", methods=["POST"])
+@limiter.limit(
+    lambda: current_app.config["RATELIMIT_TABLE_CREATE"],
+    key_func=lambda: current_user.id if current_user.is_authenticated else get_remote_address(),
+)
 def create_table():
     """Create a new poker table."""
     try:

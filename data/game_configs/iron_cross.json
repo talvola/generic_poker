@@ -1,0 +1,60 @@
+{
+    "game": "Iron Cross",
+    "category": "Hold'em",
+    "references": [
+        {"url": "https://www.pagat.com/poker/variants/ironcross.html#cross", "description": "Pagat.com - Iron Cross"}
+    ],
+    "communityCardLayout": {
+        "type": "grid",
+        "columns": 3,
+        "cells": [[null, "Column", null], ["Row", ["Row", "Column"], "Row"], [null, "Column", null]]
+    },
+    "players": {"min": 2, "max": 8},
+    "deck": {"type": "standard", "cards": 52},
+    "bettingStructures": ["Limit", "No Limit", "Pot Limit"],
+    "gamePlay": [
+        {"bet": {"type": "blinds"}, "name": "Post Blinds"},
+        {"deal": {"location": "player", "cards": [{"number": 2, "state": "face down"}]}, "name": "Deal Hole Cards"},
+        {"bet": {"type": "small"}, "name": "Pre-Flop Bet"},
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {"number": 1, "state": "face up", "subset": "Row"},
+                    {"number": 1, "state": "face up", "subset": "Column"},
+                    {"number": 1, "state": "face up", "subset": "Row"}
+                ]
+            },
+            "name": "Deal First Three"
+        },
+        {"bet": {"type": "small"}, "name": "Post-Flop Bet"},
+        {
+            "deal": {"location": "community", "cards": [{"number": 1, "state": "face up", "subset": "Column"}]},
+            "name": "Deal Fourth Card"
+        },
+        {"bet": {"type": "big"}, "name": "Turn Bet"},
+        {
+            "deal": {
+                "location": "community",
+                "cards": [{"number": 1, "state": "face up", "subset": ["Row", "Column"]}]
+            },
+            "name": "Deal Center Card"
+        },
+        {"bet": {"type": "big"}, "name": "River Bet"},
+        {"showdown": {"type": "final"}, "name": "Showdown"}
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "best 5-card hand from combinations",
+        "bestHand": [
+            {
+                "evaluationType": "high",
+                "combinations": [
+                    {"holeCards": 2, "communityCards": 3, "community_subset": "Row"},
+                    {"holeCards": 2, "communityCards": 3, "community_subset": "Column"}
+                ]
+            }
+        ]
+    }
+}

@@ -1,0 +1,33 @@
+{% extends "admin/base.html" %}
+{% set active_page = 'tables' %}
+
+{% block title %}Tables{% endblock %}
+{% block page_title %}Table Management{% endblock %}
+
+{% block content %}
+<div class="admin-table-wrapper">
+    <table class="admin-table" id="tables-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Variant</th>
+                <th>Stakes</th>
+                <th>Players</th>
+                <th>Creator</th>
+                <th>Last Activity</th>
+                <th>Private</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="tables-body">
+            <tr><td colspan="8" class="empty-row">Loading...</td></tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => adminPanel.loadTables());
+</script>
+{% endblock %}

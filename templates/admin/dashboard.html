@@ -1,0 +1,37 @@
+{% extends "admin/base.html" %}
+{% set active_page = 'dashboard' %}
+
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="stat-grid" id="stat-grid">
+    <!-- Populated by JS -->
+</div>
+
+<h2 class="section-title">Live Sessions</h2>
+<div class="admin-table-wrapper">
+    <table class="admin-table" id="sessions-table">
+        <thead>
+            <tr>
+                <th>Table</th>
+                <th>Variant</th>
+                <th>Stakes</th>
+                <th>Players</th>
+                <th>State</th>
+                <th>Hands</th>
+                <th>Started</th>
+            </tr>
+        </thead>
+        <tbody id="sessions-body">
+            <tr><td colspan="7" class="empty-row">Loading...</td></tr>
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => adminPanel.loadDashboard());
+</script>
+{% endblock %}

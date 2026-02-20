@@ -11,24 +11,24 @@ Usage:
 
 import os
 import sys
-import json
-from datetime import datetime, timedelta
 
 # Add parent directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app import create_app
-from src.online_poker.database import db
-from src.online_poker.models.user import User
-from src.online_poker.models.table import PokerTable
-from src.online_poker.models.table_access import TableAccess
-from generic_poker.config.loader import BettingStructure
 import random
 import string
 
+from app import create_app
+from src.online_poker.database import db
+from src.online_poker.models.table import PokerTable
+from src.online_poker.models.table_access import TableAccess
+from src.online_poker.models.user import User
+
+
 def generate_invite_code(length=6):
     """Generate random invite code."""
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+    return "".join(random.choices(string.ascii_uppercase + string.digits, k=length))
+
 
 def seed_database():
     """Seed database with test data."""
@@ -43,7 +43,7 @@ def seed_database():
         if existing_users > 0:
             print(f"⚠️  Database already has {existing_users} user(s).")
             response = input("Continue anyway? This will add more data. (y/n): ")
-            if response.lower() != 'y':
+            if response.lower() != "y":
                 print("Aborted.")
                 return
 
@@ -67,17 +67,20 @@ def seed_database():
                 users.append(existing)
                 continue
 
-            user = User(
-                username=username,
-                email=email,
-                password=password,
-                bankroll=bankroll
-            )
+            user = User(username=username, email=email, password=password, bankroll=bankroll)
             db.session.add(user)
             users.append(user)
             print(f"  - {username} (${bankroll})")
 
         db.session.commit()
+
+        # Make testuser an admin
+        testuser = User.query.filter_by(username="testuser").first()
+        if testuser and not testuser.is_admin:
+            testuser.is_admin = True
+            db.session.commit()
+            print("  - testuser promoted to admin")
+
         print(f"✓ Created/verified {len(users)} users")
         print()
 
@@ -142,7 +145,7 @@ def seed_database():
                 creator_id=config["creator"].id,
                 is_private=config["is_private"],
                 allow_bots=config["allow_bots"],
-                password=None  # No password protection for now
+                password=None,  # No password protection for now
             )
             db.session.add(table)
             tables.append(table)
@@ -157,7 +160,7 @@ def seed_database():
                         user_id=users[i].id,
                         is_spectator=False,
                         seat_number=i,  # Assign seats in order
-                        buy_in_amount=200
+                        buy_in_amount=200,
                     )
                     db.session.add(access)
 
@@ -185,5 +188,6 @@ ${config['stakes'].get('big_bet', config['stakes'].get('big_blind', 0))}"
             print()
         print("You can now start the server with 'python app.py'")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     seed_database()

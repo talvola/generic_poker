@@ -29,6 +29,7 @@ class User(UserMixin, db.Model):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     last_login: Mapped[datetime | None] = mapped_column(DateTime)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
 
     # Relationships
     created_tables: Mapped[list["PokerTable"]] = relationship("PokerTable", back_populates="creator")
@@ -78,6 +79,7 @@ class User(UserMixin, db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "last_login": self.last_login.isoformat() if self.last_login else None,
             "is_active": self.is_active,
+            "is_admin": self.is_admin,
         }
 
     def __repr__(self) -> str:

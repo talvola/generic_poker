@@ -1125,10 +1125,28 @@ class WebSocketManager:
                 if player["is_ready"]:
                     user = user_manager.get_user_by_id(player["user_id"])
                     username = user.username if user else "Unknown"
-                    # Get their stack from table access
+                    # Get their stack and seat from table access
                     access = TableAccessManager.get_user_access(player["user_id"], table_id)
                     buy_in = access.current_stack if access else 100
-                    session.add_player(player["user_id"], username, buy_in)
+                    seat = access.seat_number if access else None
+                    session.add_player(player["user_id"], username, buy_in, seat_number=seat)
+
+            # Restore session state from DB if this is a recovered session
+            # (e.g., after server restart). Must happen BEFORE move_button().
+            try:
+                from ..models.game_session_state import GameSessionState
+
+                saved_state = db.session.query(GameSessionState).filter_by(table_id=table_id, is_active=True).first()
+                if saved_state:
+                    session.hands_played = saved_state.hands_played
+                    if session.game:
+                        session.game.table.button_seat = saved_state.dealer_seat
+                    logger.info(
+                        f"Restored session state for table {table_id}: "
+                        f"dealer_seat={saved_state.dealer_seat}, hands={saved_state.hands_played}"
+                    )
+            except Exception as restore_err:
+                logger.error(f"Failed to restore session state for table {table_id}: {restore_err}")
 
             # Check if we can start a hand - use session.game directly
             game = session.game

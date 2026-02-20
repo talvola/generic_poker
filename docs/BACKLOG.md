@@ -162,13 +162,15 @@ After gameplay works, make the frontend maintainable.
 | 4.2 | Make hardcoded constants configurable | DONE |
 | 4.3 | Remove debug print statements from routes | DONE |
 | 4.3b | Review and reduce core engine logging (excessive debug logs accumulated over time) | DONE |
-| 4.4 | Sync game engine state with database after each hand | TODO |
-| 4.5 | Add rate limiting | TODO |
+| 4.4 | Sync game engine state with database after each hand | DONE |
+| 4.5 | Add rate limiting | DONE |
 | 4.6 | Admin interface | TODO |
 
 ### Task Details
 
 **4.1 result:** Unified all timeout/duration constants into `config.py` with env-var overrides: `ACTION_TIMEOUT_ENABLED`, `ACTION_TIMEOUT_SECONDS` (30s), `DISCONNECT_AUTO_FOLD_SECONDS` (30s), `DISCONNECT_REMOVAL_MINUTES` (10m), `TABLE_INACTIVE_TIMEOUT` (30m). `disconnect_manager.py`, `player_action_manager.py`, and `game_state_manager.py` all read from Flask config instead of hardcoded values.
+
+**4.4 result:** New `GameSessionState` model persists dealer position and hands-played count after each hand. On server restart, `_start_hand_when_ready()` restores `button_seat` and `hands_played` from DB before `move_button()`, so the dealer rotates correctly. `add_player()` now passes `seat_number` from `TableAccess` to the engine's `preferred_seat`, ensuring recovered sessions match DB seats. Startup cleanup (`_cleanup_stale_sessions` in app.py) cashes out players and deactivates sessions inactive longer than `STALE_SESSION_CLEANUP_HOURS` (default 2h, env-configurable). Session state deactivated on `remove_session()` and `cleanup_inactive_sessions()`.
 
 **4.2 result:** Made remaining hardcoded constants configurable via env vars in `config.py`:
 - Auth sessions: `SESSION_TIMEOUT_HOURS` (24), `REMEMBER_ME_DAYS` (30), `RESET_TOKEN_EXPIRY_HOURS` (1) — `auth_service.py` class constants removed, now reads `current_app.config.get()` with safe defaults.
@@ -176,6 +178,8 @@ After gameplay works, make the frontend maintainable.
 - Time to act: `game_state_manager.py` `_get_time_to_act()` reads `ACTION_TIMEOUT_SECONDS` from Flask config.
 - Hand history: `HAND_HISTORY_DEFAULT_LIMIT` (20), `HAND_HISTORY_MAX_LIMIT` (100) — `game_routes.py` hand history endpoint reads from config.
 - **Not changed (intentionally):** Bot weights (demo-only), action history buffer (internal), min-player constants (game rules).
+
+**4.5 result:** Added HTTP rate limiting using `flask-limiter` with in-memory storage. Rate limits: login 5/min per IP, register 3/hr per IP, forgot/reset-password 3-5/hr per IP, table creation 10/hr per user ID. All limits configurable via env vars (`RATELIMIT_AUTH_LOGIN`, etc.) in `config.py`. Rate limiting disabled in `TestingConfig` (`RATELIMIT_ENABLED = False`). Shared `Limiter` instance in `src/online_poker/extensions.py` avoids circular imports. 429 responses return JSON `{"success": false, "message": "Too many requests..."}`.
 
 ---
 

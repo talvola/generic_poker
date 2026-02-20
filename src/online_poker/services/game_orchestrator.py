@@ -57,13 +57,16 @@ class GameSession:
         """Create the underlying Game instance from table configuration."""
         return self.table.create_game_instance(self.game_rules)
 
-    def add_player(self, user_id: str, username: str, buy_in_amount: int) -> tuple[bool, str]:
+    def add_player(
+        self, user_id: str, username: str, buy_in_amount: int, seat_number: int | None = None
+    ) -> tuple[bool, str]:
         """Add a player to the game session.
 
         Args:
             user_id: User ID of the player
             username: Username of the player
             buy_in_amount: Amount the player is buying in with
+            seat_number: Preferred seat number (from DB), or None for auto-assign
 
         Returns:
             Tuple of (success, error_message)
@@ -78,7 +81,7 @@ class GameSession:
                 return False, "Player already in game"
 
             # Add player to the underlying Game
-            self.game.add_player(user_id, username, buy_in_amount)
+            self.game.add_player(user_id, username, buy_in_amount, preferred_seat=seat_number)
 
             # Track player in session
             self.connected_players.add(user_id)
@@ -537,6 +540,7 @@ class GameOrchestrator:
             session = self.sessions.pop(table_id, None)
             if session:
                 session.cleanup()
+                self._deactivate_session_state(table_id)
                 logger.info(f"Removed game session for table {table_id}")
                 return True
             return False
@@ -602,6 +606,7 @@ class GameOrchestrator:
                 session = self.sessions.pop(table_id, None)
                 if session:
                     session.cleanup()
+                    self._deactivate_session_state(table_id)
                     cleaned_count += 1
                     logger.info(f"Removed game session for table {table_id}")
 
@@ -609,6 +614,30 @@ class GameOrchestrator:
                 logger.info(f"Cleaned up {cleaned_count} inactive game sessions")
 
             return cleaned_count
+
+    def _deactivate_session_state(self, table_id: str) -> None:
+        """Mark the persisted session state as inactive in the database.
+
+        Args:
+            table_id: ID of the table
+        """
+        try:
+            from ..database import db
+            from ..models.game_session_state import GameSessionState
+
+            state = db.session.query(GameSessionState).filter_by(table_id=table_id).first()
+            if state:
+                state.is_active = False
+                db.session.commit()
+                logger.info(f"Deactivated session state for table {table_id}")
+        except Exception as e:
+            logger.error(f"Failed to deactivate session state for table {table_id}: {e}")
+            try:
+                from ..database import db
+
+                db.session.rollback()
+            except Exception as rollback_err:
+                logger.error(f"Failed to rollback after session state deactivation error: {rollback_err}")
 
     def get_orchestrator_stats(self) -> dict[str, Any]:
         """Get statistics about the orchestrator.

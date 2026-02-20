@@ -1072,6 +1072,9 @@ class PlayerActionManager:
             # Save hand to database
             self._save_hand_to_database(table_id, session, results_dict, hand_number)
 
+            # Save session state for recovery after server restart
+            self._save_session_state(table_id, session)
+
             # Process any pending leaves now that the hand is complete
             if session.pending_leaves:
                 removed_players = session.process_pending_leaves()
@@ -1174,6 +1177,56 @@ class PlayerActionManager:
                 db.session.rollback()
             except Exception as rollback_err:
                 logger.error(f"Failed to rollback after hand save error: {rollback_err}")
+
+    def _save_session_state(self, table_id: str, session: GameSession) -> None:
+        """Save session state to database for recovery after server restart.
+
+        Upserts a GameSessionState record with current dealer position and hands played.
+
+        Args:
+            table_id: ID of the table
+            session: Game session that just completed a hand
+        """
+        try:
+            from ..database import db
+            from ..models.game_session_state import GameSessionState
+
+            # Read current dealer seat from the game engine
+            dealer_seat = 1
+            if session.game and hasattr(session.game, "table"):
+                dealer_seat = session.game.table.button_seat
+
+            hands_played = getattr(session, "hands_played", 0)
+
+            # Upsert: find existing record or create new one
+            state = db.session.query(GameSessionState).filter_by(table_id=table_id).first()
+            if state:
+                state.dealer_seat = dealer_seat
+                state.hands_played = hands_played
+                state.is_active = True
+                state.last_activity = datetime.utcnow()
+                state.session_id = session.session_id
+            else:
+                state = GameSessionState(
+                    table_id=table_id,
+                    dealer_seat=dealer_seat,
+                    hands_played=hands_played,
+                    is_active=True,
+                    session_id=session.session_id,
+                )
+                db.session.add(state)
+
+            db.session.commit()
+            logger.info(f"Saved session state for table {table_id}: dealer_seat={dealer_seat}, hands={hands_played}")
+
+        except Exception as e:
+            logger.error(f"Failed to save session state for table {table_id}: {e}")
+            try:
+                from ..database import db
+
+                db.session.rollback()
+            except Exception as rollback_err:
+                logger.error(f"Failed to rollback after session state save error: {rollback_err}")
 
     def _auto_fold_pending_players(self, table_id: str, session: GameSession) -> None:
         """Auto-fold any pending-leave players who are now current to act.

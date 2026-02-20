@@ -3,6 +3,7 @@
 from flask import Blueprint, current_app, flash, jsonify, redirect, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
+from ..extensions import limiter
 from ..services.auth_service import AuthenticationError, PasswordResetService, SessionManager
 from ..services.user_manager import UserManager, UserValidationError
 
@@ -11,6 +12,7 @@ auth_bp = Blueprint("auth", __name__)
 
 # HTML Routes for login/logout
 @auth_bp.route("/login", methods=["GET", "POST"])
+@limiter.limit(lambda: current_app.config["RATELIMIT_AUTH_LOGIN"], methods=["POST"])
 def login():
     """HTML login page and form handler."""
     if request.method == "POST":
@@ -64,6 +66,7 @@ def login():
 
 
 @auth_bp.route("/register", methods=["GET", "POST"])
+@limiter.limit(lambda: current_app.config["RATELIMIT_AUTH_REGISTER"], methods=["POST"])
 def register_page():
     """HTML registration page and form handler."""
     if request.method == "POST":
@@ -132,6 +135,7 @@ def logout():
 
 # API Routes
 @auth_bp.route("/api/register", methods=["POST"])
+@limiter.limit(lambda: current_app.config["RATELIMIT_AUTH_REGISTER"])
 def api_register():
     """Register a new user account."""
     try:
@@ -157,6 +161,7 @@ def api_register():
 
 
 @auth_bp.route("/api/login", methods=["POST"])
+@limiter.limit(lambda: current_app.config["RATELIMIT_AUTH_LOGIN"])
 def api_login():
     """Login user and create session."""
     try:
@@ -228,6 +233,7 @@ def refresh_session():
 
 
 @auth_bp.route("/forgot-password", methods=["POST"])
+@limiter.limit(lambda: current_app.config["RATELIMIT_AUTH_RESET"])
 def forgot_password():
     """Request password reset token."""
     try:
@@ -248,6 +254,7 @@ def forgot_password():
 
 
 @auth_bp.route("/reset-password", methods=["POST"])
+@limiter.limit("5/hour")
 def reset_password():
     """Reset password using reset token."""
     try:
