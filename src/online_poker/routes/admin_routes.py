@@ -280,6 +280,52 @@ def api_tables():
     return jsonify({"success": True, "tables": table_list})
 
 
+@admin_bp.route("/api/tables/purge-all", methods=["POST"])
+@admin_required
+def api_purge_all_tables():
+    """Delete all tables, clear sessions, and reset bankrolls."""
+    from ..services.game_orchestrator import game_orchestrator
+
+    # Clear all game sessions
+    sessions_cleared = 0
+    tables = db.session.query(PokerTable).all()
+    for table in tables:
+        try:
+            if game_orchestrator.clear_session(table.id):
+                sessions_cleared += 1
+        except Exception as e:
+            current_app.logger.debug(f"Skipping session clear for {table.id}: {e}")
+
+    # Cash out all active players
+    active_accesses = db.session.query(TableAccess).filter_by(is_active=True).all()
+    for access in active_accesses:
+        if access.current_stack and access.current_stack > 0:
+            user = db.session.query(User).filter_by(id=access.user_id).first()
+            if user:
+                user.bankroll += access.current_stack
+
+    # Delete all access records and tables
+    access_deleted = db.session.query(TableAccess).delete()
+    tables_deleted = db.session.query(PokerTable).delete()
+
+    # Reset seed bankrolls
+    seed_bankrolls = {"testuser": 800, "alice": 1000, "bob": 1500, "charlie": 500, "diana": 2000}
+    for username, bankroll in seed_bankrolls.items():
+        db.session.query(User).filter_by(username=username).update({"bankroll": bankroll})
+
+    db.session.commit()
+
+    return jsonify(
+        {
+            "success": True,
+            "tables_deleted": tables_deleted,
+            "access_deleted": access_deleted,
+            "sessions_cleared": sessions_cleared,
+            "message": f"Purged {tables_deleted} tables, reset bankrolls",
+        }
+    )
+
+
 @admin_bp.route("/api/tables/<table_id>/close", methods=["POST"])
 @admin_required
 def api_close_table(table_id):

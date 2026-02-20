@@ -328,6 +328,27 @@ class AdminPanel {
         }
     }
 
+    async purgeAllTables() {
+        if (!confirm('Delete ALL tables and reset bankrolls? This cannot be undone.')) return;
+
+        try {
+            const res = await fetch('/admin/api/tables/purge-all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                this.showNotification(data.message);
+                this.loadTables();
+            } else {
+                this.showNotification(data.message, 'error');
+            }
+        } catch (err) {
+            this.showNotification('Failed to purge tables', 'error');
+        }
+    }
+
     // --- Variants ---
 
     async loadVariants() {

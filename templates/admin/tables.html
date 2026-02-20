@@ -5,6 +5,9 @@
 {% block page_title %}Table Management{% endblock %}
 
 {% block content %}
+<div style="margin-bottom: 1rem; text-align: right;">
+    <button class="btn btn-danger" onclick="adminPanel.purgeAllTables()">Purge All Tables</button>
+</div>
 <div class="admin-table-wrapper">
     <table class="admin-table" id="tables-table">
         <thead>
