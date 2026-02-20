@@ -741,6 +741,16 @@ body {
     font-size: 0.5rem;
 }
 
+.player-cards.cards-5 .card-rank,
+.player-cards.cards-6 .card-rank {
+    font-size: 0.5rem;
+}
+
+.player-cards.cards-5 .card-suit,
+.player-cards.cards-6 .card-suit {
+    font-size: 0.6rem;
+}
+
 .player-cards.cards-5,
 .player-cards.cards-6 {
     gap: 0.1rem;
@@ -753,6 +763,16 @@ body {
     height: 31px;
     font-size: 0.45rem;
     margin-left: -4px;
+}
+
+.player-cards.cards-7 .card-rank,
+.player-cards.cards-8 .card-rank {
+    font-size: 0.45rem;
+}
+
+.player-cards.cards-7 .card-suit,
+.player-cards.cards-8 .card-suit {
+    font-size: 0.55rem;
 }
 
 .player-cards.cards-7 .card:first-child,

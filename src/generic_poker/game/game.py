@@ -332,6 +332,7 @@ class Game:
         if self.current_step >= len(self.rules.gameplay):
             logger.debug("All steps complete - game finished")
             self.state = GameState.COMPLETE
+            self.current_player = None
             return
 
         step = self.rules.gameplay[self.current_step]
@@ -1521,6 +1522,7 @@ class Game:
         # Use the ShowdownManager to handle the showdown
         self.last_hand_result = self.showdown_manager.handle_showdown()
         self.state = GameState.COMPLETE
+        self.current_player = None
 
     def _handle_fold_win(self) -> None:
         """Handle case when all but one player folds."""
@@ -1529,6 +1531,7 @@ class Game:
         # Use the ShowdownManager to handle the fold win
         self.last_hand_result = self.showdown_manager.handle_fold_win(active_players)
         self.state = GameState.COMPLETE
+        self.current_player = None
 
     def get_hand_results(self) -> GameResult:
         """

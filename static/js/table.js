@@ -1370,12 +1370,9 @@ class PokerTable {
                 body: JSON.stringify(actionData)
             });
 
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
             const result = await response.json();
 
-            if (!result.success) {
+            if (!response.ok || !result.success) {
                 PokerModals.showNotification(result.error || 'Action failed', 'error');
                 // Re-enable action buttons on error
                 document.querySelectorAll('.action-btn').forEach(btn => {
