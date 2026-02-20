@@ -300,6 +300,17 @@ Goal: Make the app fully playable on phones and tablets. This is a large effort 
 
 ---
 
+## Phase 8: UI Enhancements
+
+| # | Task | Status |
+|---|------|--------|
+| 8.1 | 4-color deck option (blue diamonds, green clubs) for better card readability | TODO |
+| 8.2 | Stud games: show each player's visible cards in table chat when action order changes | TODO |
+
+**8.1 details:** Standard 2-color decks (red/black) can be hard to read with many visible cards (e.g., 7-Card Stud with 4 face-up cards per player). 4-color decks use distinct colors per suit: spades=black, hearts=red, diamonds=blue, clubs=green. Many online poker platforms offer this as a user preference toggle. Implementation: add CSS classes for `.card.blue` (diamonds) and `.card.green` (clubs), toggle via user setting stored in localStorage, add settings UI.
+
+---
+
 ## Open Bugs from Earlier Testing
 
 These are bugs found during `.kiro` testing sessions that may or may not still be relevant. Verify before working on them.

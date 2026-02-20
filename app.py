@@ -7,7 +7,7 @@ import os
 from flask import Flask, jsonify, redirect, url_for
 from flask_socketio import SocketIO
 from src.online_poker.auth import init_login_manager
-from src.online_poker.config import Config
+from src.online_poker.config import Config, get_config
 
 # Import our modules
 from src.online_poker.database import create_tables, db, init_database
@@ -185,7 +185,8 @@ def setup_logging():
 if __name__ == "__main__":
     setup_logging()
 
-    app, socketio = create_app()
+    config_class = get_config()
+    app, socketio = create_app(config_class)
 
     print("🎲 Starting Online Poker Platform...")
     print("📍 Access the lobby at: http://localhost:5000")

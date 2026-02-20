@@ -154,6 +154,11 @@ class PokerLobby {
                 this.renderTables();
             }
         });
+
+        this.socket.on('table_list_updated', (data) => {
+            // A table was created or deleted — reload the full table list
+            this.loadTables();
+        });
     }
 
     setupStakesConfiguration() {

@@ -225,7 +225,7 @@ class PlayerActionManager:
             elif action_type == PlayerAction.CALL:
                 # Get the amount to call
                 call_amount = min_amount or 0
-                display_text = f"Call {call_amount}" if call_amount > 0 else "Call"
+                display_text = f"Call ${call_amount}" if call_amount > 0 else "Call"
                 return PlayerActionOption(
                     action_type=action_type,
                     min_amount=call_amount,
@@ -353,7 +353,7 @@ class PlayerActionManager:
                     min_amount=bring_in_amount,
                     max_amount=bring_in_amount,
                     default_amount=bring_in_amount,
-                    display_text=f"Bring In {bring_in_amount}" if bring_in_amount > 0 else "Bring In",
+                    display_text=f"Bring In ${bring_in_amount}" if bring_in_amount > 0 else "Bring In",
                     button_style="primary",
                 )
 
@@ -364,7 +364,7 @@ class PlayerActionManager:
                     min_amount=complete_amount,
                     max_amount=complete_amount,
                     default_amount=complete_amount,
-                    display_text=f"Complete {complete_amount}" if complete_amount > 0 else "Complete",
+                    display_text=f"Complete ${complete_amount}" if complete_amount > 0 else "Complete",
                     button_style="warning",
                 )
 
@@ -1121,7 +1121,7 @@ class PlayerActionManager:
                         )
 
         except Exception as e:
-            logger.error(f"Failed to handle hand completion for table {table_id}: {e}")
+            logger.error(f"Failed to handle hand completion for table {table_id}: {e}", exc_info=True)
 
     def _save_hand_to_database(self, table_id: str, session: GameSession, results_dict: dict, hand_number: int) -> None:
         """Save completed hand to the database for hand history.

@@ -36,16 +36,17 @@ class DisconnectedPlayer:
         self.has_auto_folded = False
         self.is_current_player_on_disconnect = False
 
-    def start_timers(self, disconnect_manager, auto_fold_seconds: int = 30):
+    def start_timers(self, disconnect_manager, auto_fold_seconds: int = 30, auto_fold_enabled: bool = True):
         """Start auto-fold and removal timers.
 
         Args:
             disconnect_manager: Reference to the disconnect manager
             auto_fold_seconds: Seconds before auto-folding current player
+            auto_fold_enabled: Whether auto-fold is enabled (respects ACTION_TIMEOUT_ENABLED)
         """
         removal_delay = self.timeout_minutes * 60  # Convert to seconds
 
-        if self.is_current_player_on_disconnect:
+        if self.is_current_player_on_disconnect and auto_fold_enabled:
             # Start auto-fold timer for current player
             self.auto_fold_timer = Timer(
                 auto_fold_seconds, disconnect_manager._handle_auto_fold, args=[self.user_id, self.table_id]
@@ -62,9 +63,21 @@ class DisconnectedPlayer:
                 f"Started timers for disconnected player {self.user_id}: "
                 f"auto-fold in {auto_fold_seconds}s, removal in {removal_delay}s"
             )
+        elif self.is_current_player_on_disconnect and not auto_fold_enabled:
+            # Auto-fold disabled (debug mode) — only start removal timer, no auto-fold
+            self.removal_timer = Timer(
+                removal_delay, disconnect_manager._handle_auto_removal, args=[self.user_id, self.table_id]
+            )
+            self.removal_timer.start()
+
+            logger.info(
+                f"Auto-fold disabled for disconnected player {self.user_id}: "
+                f"removal in {removal_delay}s (no auto-fold)"
+            )
         else:
             # For non-current players, auto-fold immediately and start removal timer
-            disconnect_manager._handle_auto_fold(self.user_id, self.table_id)
+            if auto_fold_enabled:
+                disconnect_manager._handle_auto_fold(self.user_id, self.table_id)
 
             # Start removal timer
             self.removal_timer = Timer(
@@ -170,8 +183,16 @@ class DisconnectManager:
                 # Handle game session disconnect
                 PlayerSessionManager.handle_player_disconnect(user_id, table_id)
 
-                # Start timers for auto-fold and removal
-                disconnected_player.start_timers(self, auto_fold_seconds=auto_fold_seconds)
+                # Check if action timeouts are enabled
+                try:
+                    action_timeout_enabled = current_app.config.get("ACTION_TIMEOUT_ENABLED", True)
+                except RuntimeError:
+                    action_timeout_enabled = True
+
+                # Start timers for auto-fold and removal (skip auto-fold if timeouts disabled)
+                disconnected_player.start_timers(
+                    self, auto_fold_seconds=auto_fold_seconds, auto_fold_enabled=action_timeout_enabled
+                )
 
                 # Notify other players via WebSocket
                 ws_manager = get_websocket_manager()

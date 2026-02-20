@@ -300,6 +300,7 @@ body {
     position: relative;
     cursor: pointer;
     transition: var(--transition);
+    overflow: hidden;
 }
 
 .card:hover {
@@ -743,12 +744,12 @@ body {
 
 .player-cards.cards-5 .card-rank,
 .player-cards.cards-6 .card-rank {
-    font-size: 0.5rem;
+    font-size: 0.75rem;
 }
 
 .player-cards.cards-5 .card-suit,
 .player-cards.cards-6 .card-suit {
-    font-size: 0.6rem;
+    font-size: 0.85rem;
 }
 
 .player-cards.cards-5,
@@ -767,12 +768,12 @@ body {
 
 .player-cards.cards-7 .card-rank,
 .player-cards.cards-8 .card-rank {
-    font-size: 0.45rem;
+    font-size: 0.65rem;
 }
 
 .player-cards.cards-7 .card-suit,
 .player-cards.cards-8 .card-suit {
-    font-size: 0.55rem;
+    font-size: 0.75rem;
 }
 
 .player-cards.cards-7 .card:first-child,

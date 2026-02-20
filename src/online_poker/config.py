@@ -83,6 +83,10 @@ class DevelopmentConfig(Config):
     SESSION_COOKIE_SECURE = False
     BCRYPT_LOG_ROUNDS = 4  # Faster for development
 
+    # Disable action timeouts by default for easier debugging
+    # Override with ACTION_TIMEOUT_ENABLED=true env var if needed
+    ACTION_TIMEOUT_ENABLED = os.environ.get("ACTION_TIMEOUT_ENABLED", "false").lower() == "true"
+
 
 class TestingConfig(Config):
     """Testing configuration."""
