@@ -76,9 +76,6 @@ class DevelopmentConfig(Config):
     DEBUG = True
     TESTING = False
 
-    # Use SQLite for development
-    SQLALCHEMY_DATABASE_URI = os.environ.get("DEV_DATABASE_URL") or "sqlite:///poker_dev.db"
-
     # Less strict security for development
     SESSION_COOKIE_SECURE = False
     BCRYPT_LOG_ROUNDS = 4  # Faster for development
@@ -86,6 +83,9 @@ class DevelopmentConfig(Config):
     # Disable action timeouts by default for easier debugging
     # Override with ACTION_TIMEOUT_ENABLED=true env var if needed
     ACTION_TIMEOUT_ENABLED = os.environ.get("ACTION_TIMEOUT_ENABLED", "false").lower() == "true"
+
+    # Disable rate limiting for development
+    RATELIMIT_ENABLED = False
 
 
 class TestingConfig(Config):

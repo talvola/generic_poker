@@ -252,6 +252,11 @@
         <div class="loading-text">Connecting to table...</div>
     </div>
 
+    <script>
+        window.pokerConfig = {
+            actionTimeoutEnabled: {{ 'true' if action_timeout_enabled else 'false' }}
+        };
+    </script>
     <script src="{{ url_for('static', filename='js/table/card-utils.js') }}"></script>
     <script src="{{ url_for('static', filename='js/table/modals.js') }}"></script>
     <script src="{{ url_for('static', filename='js/table/game-state-store.js') }}"></script>

@@ -162,9 +162,12 @@ class PokerShowdown {
 
         container.style.display = 'block';
 
-        setTimeout(() => {
-            container.style.display = 'none';
-        }, 10000);
+        // Auto-dismiss after 10s in production; stay visible in dev for QA
+        if (window.pokerConfig?.actionTimeoutEnabled !== false) {
+            setTimeout(() => {
+                container.style.display = 'none';
+            }, 10000);
+        }
 
         const closeBtn = content.querySelector('.showdown-close-btn');
         if (closeBtn) {

@@ -400,7 +400,10 @@ def table_view(table_id):
     }
 
     # Render the game interface
-    return render_template("table.html", table=table_data, user_access=user_access)
+    action_timeout_enabled = current_app.config.get("ACTION_TIMEOUT_ENABLED", True)
+    return render_template(
+        "table.html", table=table_data, user_access=user_access, action_timeout_enabled=action_timeout_enabled
+    )
 
 
 # WebSocket events for lobby
