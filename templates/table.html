@@ -45,7 +45,7 @@
         <main class="game-container">
             <!-- Poker Table -->
             <div class="poker-table-container">
-                <div class="poker-table" id="poker-table" data-max-players="{{ table.max_players }}">
+                <div class="poker-table" id="poker-table" data-max-players="{{ 2 if table.max_players <= 2 else (6 if table.max_players <= 6 else 9) }}">
                     <!-- Community Cards Area (dynamically populated by JS based on layout type) -->
                     <div class="community-cards" id="community-cards"></div>
 

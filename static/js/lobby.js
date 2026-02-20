@@ -23,59 +23,59 @@ class PokerLobby {
         this.loadTables();
         this.setupStakesConfiguration();
     }
-    
+
     setupEventListeners() {
         // Action buttons
         document.getElementById('create-table-btn').addEventListener('click', () => {
             this.showModal('create-table-modal');
         });
-        
+
         document.getElementById('join-private-btn').addEventListener('click', () => {
             this.showModal('join-private-modal');
         });
-        
+
         document.getElementById('refresh-tables-btn').addEventListener('click', () => {
             this.loadTables();
         });
-        
+
         // Filter changes
         document.getElementById('variant-filter').addEventListener('change', (e) => {
             this.filters.variant = e.target.value;
             this.filterTables();
         });
-        
+
         document.getElementById('stakes-filter').addEventListener('change', (e) => {
             this.filters.stakes = e.target.value;
             this.filterTables();
         });
-        
+
         document.getElementById('structure-filter').addEventListener('change', (e) => {
             this.filters.structure = e.target.value;
             this.filterTables();
         });
-        
+
         document.getElementById('players-filter').addEventListener('change', (e) => {
             this.filters.players = e.target.value;
             this.filterTables();
         });
-        
+
         // Form submissions
         document.getElementById('create-table-form').addEventListener('submit', (e) => {
             e.preventDefault();
             this.createTable();
         });
-        
+
         document.getElementById('join-private-form').addEventListener('submit', (e) => {
             e.preventDefault();
             this.joinPrivateTable();
         });
-        
+
         // Private table checkbox
         document.getElementById('is-private').addEventListener('change', (e) => {
             const privateOptions = document.getElementById('private-options');
             privateOptions.style.display = e.target.checked ? 'block' : 'none';
         });
-        
+
         // Game variant change - update available betting structures
         document.getElementById('game-variant').addEventListener('change', (e) => {
             this.updateBettingStructureOptions(e.target.value);
@@ -85,7 +85,7 @@ class PokerLobby {
         document.getElementById('betting-structure').addEventListener('change', (e) => {
             this.updateStakesInputs(e.target.value);
         });
-        
+
         // Modal close on background click
         document.querySelectorAll('.modal').forEach(modal => {
             modal.addEventListener('click', (e) => {
@@ -94,7 +94,7 @@ class PokerLobby {
                 }
             });
         });
-        
+
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -102,50 +102,50 @@ class PokerLobby {
             }
         });
     }
-    
+
     setupSocketEvents() {
         this.socket.on('connect', () => {
             console.log('Connected to server');
             this.showNotification('Connected to server', 'success');
             this.loadTables();
         });
-        
+
         this.socket.on('disconnect', () => {
             console.log('Disconnected from server');
             this.showNotification('Disconnected from server', 'error');
         });
-        
+
         this.socket.on('table_list', (data) => {
             this.tables = data.tables || [];
             this.userTables = data.user_tables || [];  // Tables where user is seated
             this.renderTables();
         });
-        
+
         this.socket.on('table_created', (data) => {
             this.showNotification('Table created successfully!', 'success');
             this.closeModal('create-table-modal');
             this.loadTables();
-            
+
             // Optionally redirect to the table
             if (data.table_id) {
                 window.location.href = `/table/${data.table_id}`;
             }
         });
-        
+
         this.socket.on('table_joined', (data) => {
             this.showNotification('Joined table successfully!', 'success');
             this.closeAllModals();
-            
+
             // Redirect to the table
             if (data.table_id) {
                 window.location.href = `/table/${data.table_id}`;
             }
         });
-        
+
         this.socket.on('error', (data) => {
             this.showNotification(data.message || 'An error occurred', 'error');
         });
-        
+
         this.socket.on('table_updated', (data) => {
             // Update specific table in the list
             const tableIndex = this.tables.findIndex(t => t.id === data.table.id);
@@ -155,7 +155,7 @@ class PokerLobby {
             }
         });
     }
-    
+
     setupStakesConfiguration() {
         // Initialize with no-limit structure
         this.updateStakesInputs('no-limit');
@@ -260,7 +260,7 @@ class PokerLobby {
 
     updateStakesInputs(structure) {
         const stakesInputs = document.getElementById('stakes-inputs');
-        
+
         if (structure === 'limit') {
             stakesInputs.innerHTML = `
                 <div class="form-group">
@@ -289,19 +289,19 @@ class PokerLobby {
             `;
         }
     }
-    
+
     loadTables() {
         const refreshBtn = document.getElementById('refresh-tables-btn');
         refreshBtn.classList.add('loading');
-        
+
         this.socket.emit('get_table_list', {});
-        
+
         // Remove loading state after a delay
         setTimeout(() => {
             refreshBtn.classList.remove('loading');
         }, 1000);
     }
-    
+
     renderTables() {
         const tableGrid = document.getElementById('table-grid');
         const tableCount = document.getElementById('table-count');
@@ -327,25 +327,25 @@ class PokerLobby {
         // Add event listeners to table cards
         this.setupTableCardEvents();
     }
-    
+
     renderTableCard(table) {
         const isFull = table.current_players >= table.max_players;
         const statusClass = isFull ? 'full' : (table.current_players > 0 ? 'playing' : 'waiting');
         const statusText = isFull ? 'Full' : (table.current_players > 0 ? 'Playing' : 'Waiting');
-        
+
         // Generate player indicators
-        const playerDots = Array.from({ length: table.max_players }, (_, i) => 
+        const playerDots = Array.from({ length: table.max_players }, (_, i) =>
             `<div class="player-dot ${i < table.current_players ? 'filled' : ''}"></div>`
         ).join('');
-        
+
         // Format stakes display
         const stakesDisplay = this.formatStakes(table.stakes, table.betting_structure);
-        
+
         return `
-            <div class="table-card ${isFull ? 'full' : ''} ${table.is_private ? 'private' : ''} ${table.allow_bots ? 'has-bots' : ''}" 
+            <div class="table-card ${isFull ? 'full' : ''} ${table.is_private ? 'private' : ''} ${table.allow_bots ? 'has-bots' : ''}"
                  data-table-id="${table.id}">
                 ${table.is_private ? '<div class="private-indicator">Private</div>' : ''}
-                
+
                 <div class="table-header-info">
                     <div>
                         <div class="table-name">${this.escapeHtml(table.name)}</div>
@@ -355,7 +355,7 @@ class PokerLobby {
                         <div class="status-badge status-${statusClass}">${statusText}</div>
                     </div>
                 </div>
-                
+
                 <div class="table-details">
                     <div class="detail-item">
                         <div class="detail-label">Stakes</div>
@@ -377,7 +377,7 @@ class PokerLobby {
                         <div class="detail-value">$${table.minimum_buyin} - $${table.maximum_buyin}</div>
                     </div>
                 </div>
-                
+
                 <div class="table-actions">
                     ${this.userTables.includes(table.id) ? `
                         <button class="btn btn-success btn-small rejoin-table-btn"
@@ -403,7 +403,7 @@ class PokerLobby {
             </div>
         `;
     }
-    
+
     setupTableCardEvents() {
         // Join table buttons
         document.querySelectorAll('.join-table-btn').forEach(btn => {
@@ -431,7 +431,7 @@ class PokerLobby {
                 this.spectateTable(tableId);
             });
         });
-        
+
         // Details buttons
         document.querySelectorAll('.details-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -440,7 +440,7 @@ class PokerLobby {
                 this.showTableDetails(tableId);
             });
         });
-        
+
         // Table card click (show details)
         document.querySelectorAll('.table-card').forEach(card => {
             card.addEventListener('click', () => {
@@ -449,14 +449,14 @@ class PokerLobby {
             });
         });
     }
-    
+
     getFilteredTables() {
         return this.tables.filter(table => {
             // Variant filter
             if (this.filters.variant && table.variant !== this.filters.variant) {
                 return false;
             }
-            
+
             // Stakes filter
             if (this.filters.stakes) {
                 const stakes = this.getStakesCategory(table.stakes, table.betting_structure);
@@ -464,12 +464,12 @@ class PokerLobby {
                     return false;
                 }
             }
-            
+
             // Structure filter
             if (this.filters.structure && table.betting_structure !== this.filters.structure) {
                 return false;
             }
-            
+
             // Players filter
             if (this.filters.players) {
                 switch (this.filters.players) {
@@ -487,11 +487,11 @@ class PokerLobby {
                         break;
                 }
             }
-            
+
             return true;
         });
     }
-    
+
     getStakesCategory(stakes, structure) {
         let bigBlind = 0;
         const struct = (structure || '').toLowerCase();
@@ -507,7 +507,7 @@ class PokerLobby {
         if (bigBlind <= 25) return 'mid';
         return 'high';
     }
-    
+
     formatStakes(stakes, structure) {
         const struct = (structure || '').toLowerCase();
         if (struct === 'limit') {
@@ -516,7 +516,7 @@ class PokerLobby {
             return `$${stakes.small_blind || 0}/$${stakes.big_blind || 0}`;
         }
     }
-    
+
     formatVariantName(variant) {
         if (this.variantMap[variant]) {
             return this.variantMap[variant];
@@ -524,19 +524,19 @@ class PokerLobby {
         // Fallback: convert underscores to spaces and title-case
         return variant.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
-    
+
     formatStructure(structure) {
         return structure.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
     }
-    
+
     async createTable() {
         const form = document.getElementById('create-table-form');
         const formData = new FormData(form);
-        
+
         // Collect stakes data
         const bettingStructure = formData.get('betting_structure');
         const stakes = {};
-        
+
         if (bettingStructure === 'limit') {
             stakes.small_bet = parseFloat(formData.get('small_bet') || 10);
             stakes.big_bet = parseFloat(formData.get('big_bet') || 20);
@@ -545,7 +545,7 @@ class PokerLobby {
             stakes.small_blind = parseFloat(formData.get('small_blind') || 1);
             stakes.big_blind = parseFloat(formData.get('big_blind') || 2);
         }
-        
+
         const tableData = {
             name: formData.get('name'),
             variant: formData.get('variant'),
@@ -556,13 +556,13 @@ class PokerLobby {
             password: formData.get('password') || null,
             allow_bots: formData.get('allow_bots') === 'on'
         };
-        
+
         // Validate required fields
         if (!tableData.name || !tableData.variant || !tableData.betting_structure) {
             this.showNotification('Please fill in all required fields', 'error');
             return;
         }
-        
+
         // Validate stakes
         if (bettingStructure === 'limit') {
             if (stakes.small_bet <= 0 || stakes.big_bet <= 0 || stakes.big_bet <= stakes.small_bet) {
@@ -575,7 +575,7 @@ class PokerLobby {
                 return;
             }
         }
-        
+
         try {
             const response = await fetch('/api/tables', {
                 method: 'POST',
@@ -584,14 +584,14 @@ class PokerLobby {
                 },
                 body: JSON.stringify(tableData)
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 this.showNotification('Table created successfully!', 'success');
                 this.closeModal('create-table-modal');
                 this.loadTables();
-                
+
                 // Optionally redirect to the table
                 if (result.table_id) {
                     window.location.href = `/table/${result.table_id}`;
@@ -604,25 +604,25 @@ class PokerLobby {
             this.showNotification('Failed to create table', 'error');
         }
     }
-    
+
     joinTable(tableId) {
         const table = this.tables.find(t => t.id === tableId);
         if (!table) {
             this.showNotification('Table not found', 'error');
             return;
         }
-        
+
         if (table.current_players >= table.max_players) {
             this.showNotification('Table is full', 'error');
             return;
         }
-        
+
         // Check if private table
         if (table.is_private) {
             this.showNotification('This is a private table. Use the invite code to join.', 'warning');
             return;
         }
-        
+
         // Show seat selection modal
         this.showSeatSelectionModal(tableId);
     }
@@ -635,10 +635,10 @@ class PokerLobby {
     showSeatSelectionModal(tableId) {
         const table = this.tables.find(t => t.id === tableId);
         if (!table) return;
-        
+
         // Show loading modal first
         this.showLoadingSeatModal(table);
-        
+
         // Fetch actual seat data
         fetch(`/api/tables/${tableId}/seats`)
             .then(response => response.json())
@@ -656,7 +656,7 @@ class PokerLobby {
                 closeModal('seat-selection-modal');
             });
     }
-    
+
     showLoadingSeatModal(table) {
         const modalHtml = `
             <div id="seat-selection-modal" class="modal show">
@@ -676,11 +676,11 @@ class PokerLobby {
         `;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
-    
+
     showSeatSelectionModalWithData(table, seatData) {
         // Remove loading modal
         closeModal('seat-selection-modal');
-        
+
         // Create seat selection modal HTML with real data
         const modalHtml = `
             <div id="seat-selection-modal" class="modal show">
@@ -706,7 +706,7 @@ class PokerLobby {
                                         <span class="info-value">${seatData.current_players}/${seatData.max_players}</span>
                                     </div>
                                 </div>
-                                
+
                                 <div class="buy-in-section-compact">
                                     <label for="buy-in-amount">Buy-in Amount:</label>
                                     <input type="number" id="buy-in-amount" min="${seatData.minimum_buyin}" max="${seatData.maximum_buyin}" value="${seatData.minimum_buyin * 2}" step="1">
@@ -714,7 +714,7 @@ class PokerLobby {
                                         <small>$${seatData.minimum_buyin} - $${seatData.maximum_buyin}</small>
                                     </div>
                                 </div>
-                                
+
                                 <div class="seat-options">
                                     <label class="auto-assign-option" onclick="pokerLobby.selectAutoAssign()">
                                         <input type="radio" name="seat-choice" value="auto" checked>
@@ -722,7 +722,7 @@ class PokerLobby {
                                     </label>
                                 </div>
                             </div>
-                            
+
                             <div class="seat-modal-right">
                                 <div class="mini-poker-table">
                                     ${this.generateMiniPokerTable(seatData.seats, seatData.max_players)}
@@ -737,19 +737,19 @@ class PokerLobby {
                 </div>
             </div>
         `;
-        
+
         // Add modal to page
         document.body.insertAdjacentHTML('beforeend', modalHtml);
     }
-    
+
     generateSeatGridWithData(seats) {
         let seatHtml = '';
-        
+
         seats.forEach(seat => {
             const isOccupied = !seat.is_available;
             const seatClass = isOccupied ? 'seat-occupied' : 'seat-available';
             const disabled = isOccupied ? 'disabled' : '';
-            
+
             let seatContent;
             if (isOccupied) {
                 seatContent = `
@@ -763,7 +763,7 @@ class PokerLobby {
                     <div class="seat-empty">Available</div>
                 `;
             }
-            
+
             seatHtml += `
                 <div class="seat-option ${seatClass}">
                     <label>
@@ -775,25 +775,27 @@ class PokerLobby {
                 </div>
             `;
         });
-        
+
         return seatHtml;
     }
-    
+
     generateMiniPokerTable(seats, maxPlayers) {
         // Create a mini version of the poker table for seat selection
+        // Map to nearest supported CSS layout (2, 6, or 9)
+        const layoutPlayers = maxPlayers <= 2 ? 2 : maxPlayers <= 6 ? 6 : 9;
         let tableHtml = `
-            <div class="mini-table-container" data-max-players="${maxPlayers}">
+            <div class="mini-table-container" data-max-players="${layoutPlayers}">
                 <div class="mini-poker-table-felt">
                     <div class="mini-table-center">
                         <div class="mini-table-label">Select Your Seat</div>
                     </div>
                     <div class="mini-player-seats">
         `;
-        
+
         seats.forEach(seat => {
             const isOccupied = !seat.is_available;
             const seatClass = isOccupied ? 'mini-seat-occupied' : 'mini-seat-available';
-            
+
             let seatContent;
             if (isOccupied) {
                 seatContent = `
@@ -810,42 +812,42 @@ class PokerLobby {
                     </div>
                 `;
             }
-            
+
             tableHtml += `
                 <div class="mini-player-seat ${seatClass}" data-position="${seat.seat_number - 1}" data-seat="${seat.seat_number}">
                     ${seatContent}
                 </div>
             `;
         });
-        
+
         tableHtml += `
                     </div>
                 </div>
             </div>
         `;
-        
+
         return tableHtml;
     }
-    
+
     selectSeat(seatNumber) {
         // Uncheck auto-assign
         const autoRadio = document.querySelector('input[name="seat-choice"][value="auto"]');
         if (autoRadio) autoRadio.checked = false;
-        
+
         // Clear any existing seat selection
         document.querySelectorAll('.mini-player-seat.selected').forEach(seat => {
             seat.classList.remove('selected');
         });
-        
+
         // Select the clicked seat
         const seatElement = document.querySelector(`[data-seat="${seatNumber}"]`);
         if (seatElement) {
             seatElement.classList.add('selected');
         }
-        
+
         // Store the selection
         this.selectedSeat = seatNumber;
-        
+
         // Update the radio button selection (create hidden radio if needed)
         let seatRadio = document.querySelector(`input[name="seat-choice"][value="${seatNumber}"]`);
         if (!seatRadio) {
@@ -858,21 +860,21 @@ class PokerLobby {
         }
         seatRadio.checked = true;
     }
-    
+
     selectAutoAssign() {
         // Clear any seat selection
         document.querySelectorAll('.mini-player-seat.selected').forEach(seat => {
             seat.classList.remove('selected');
         });
-        
+
         // Clear stored selection
         this.selectedSeat = null;
-        
+
         // Make sure auto-assign is checked
         const autoRadio = document.querySelector('input[name="seat-choice"][value="auto"]');
         if (autoRadio) autoRadio.checked = true;
     }
-    
+
     // Keep the old method for backward compatibility
     generateSeatGrid(table) {
         let seatHtml = '';
@@ -880,7 +882,7 @@ class PokerLobby {
             const isOccupied = false; // For demo, assume all seats are available
             const seatClass = isOccupied ? 'seat-occupied' : 'seat-available';
             const disabled = isOccupied ? 'disabled' : '';
-            
+
             seatHtml += `
                 <div class="seat-option ${seatClass}">
                     <label>
@@ -895,71 +897,71 @@ class PokerLobby {
         }
         return seatHtml;
     }
-    
+
     confirmJoinTable(tableId) {
         const buyInAmount = parseInt(document.getElementById('buy-in-amount').value);
         const seatChoiceElement = document.querySelector('input[name="seat-choice"]:checked');
-        
+
         if (!seatChoiceElement) {
             this.showNotification('Please select a seat or choose auto-assign', 'error');
             return;
         }
-        
+
         const seatChoice = seatChoiceElement.value;
-        
+
         const joinData = {
             table_id: tableId,
             buy_in_amount: buyInAmount
         };
-        
+
         if (seatChoice !== 'auto') {
             joinData.seat_number = parseInt(seatChoice);
         }
-        
+
         this.socket.emit('join_table', joinData);
         closeModal('seat-selection-modal');
     }
-    
+
     spectateTable(tableId) {
         this.socket.emit('spectate_table', { table_id: tableId });
     }
-    
+
     joinPrivateTable() {
         const form = document.getElementById('join-private-form');
         const formData = new FormData(form);
-        
+
         const inviteCode = formData.get('invite_code');
         const password = formData.get('password');
-        
+
         if (!inviteCode) {
             this.showNotification('Please enter an invite code', 'error');
             return;
         }
-        
+
         this.socket.emit('join_private_table', {
             invite_code: inviteCode,
             password: password
         });
     }
-    
+
     showTableDetails(tableId) {
         const table = this.tables.find(t => t.id === tableId);
         if (!table) {
             this.showNotification('Table not found', 'error');
             return;
         }
-        
+
         const modal = document.getElementById('table-details-modal');
         const title = document.getElementById('table-details-title');
         const content = document.getElementById('table-details-content');
         const joinBtn = document.getElementById('join-table-btn');
         const spectateBtn = document.getElementById('spectate-table-btn');
-        
+
         title.textContent = table.name;
-        
+
         const stakesDisplay = this.formatStakes(table.stakes, table.betting_structure);
         const isFull = table.current_players >= table.max_players;
-        
+
         content.innerHTML = `
             <div class="table-detail-grid">
                 <div class="detail-row">
@@ -996,44 +998,44 @@ class PokerLobby {
                 </div>
             </div>
         `;
-        
+
         // Configure action buttons
         joinBtn.disabled = isFull || table.is_private;
         joinBtn.textContent = isFull ? 'Table Full' : (table.is_private ? 'Private Table' : 'Join Table');
-        
+
         joinBtn.onclick = () => {
             if (!isFull && !table.is_private) {
                 this.joinTable(tableId);
             }
         };
-        
+
         spectateBtn.onclick = () => {
             this.spectateTable(tableId);
         };
-        
+
         this.showModal('table-details-modal');
     }
-    
+
     showModal(modalId) {
         const modal = document.getElementById(modalId);
         modal.classList.add('show');
-        
+
         // Focus first input if available
         const firstInput = modal.querySelector('input, select');
         if (firstInput) {
             setTimeout(() => firstInput.focus(), 100);
         }
     }
-    
+
     closeModal(modalId) {
         const modal = document.getElementById(modalId);
         modal.classList.remove('show');
-        
+
         // Reset form if it exists
         const form = modal.querySelector('form');
         if (form) {
             form.reset();
-            
+
             // Reset stakes inputs to default
             if (modalId === 'create-table-modal') {
                 this.updateStakesInputs('no-limit');
@@ -1041,30 +1043,30 @@ class PokerLobby {
             }
         }
     }
-    
+
     closeAllModals() {
         document.querySelectorAll('.modal.show').forEach(modal => {
             this.closeModal(modal.id);
         });
     }
-    
+
     showNotification(message, type = 'info', duration = 4000) {
         const container = document.getElementById('notification-container');
-        
+
         const notification = document.createElement('div');
         notification.className = `notification ${type}`;
         notification.innerHTML = `
             ${this.escapeHtml(message)}
             <button class="notification-close" onclick="this.parentElement.remove()">&times;</button>
         `;
-        
+
         container.appendChild(notification);
-        
+
         // Animate in
         setTimeout(() => {
             notification.classList.add('show');
         }, 10);
-        
+
         // Auto-remove
         setTimeout(() => {
             if (notification.parentElement) {
@@ -1077,11 +1079,11 @@ class PokerLobby {
             }
         }, duration);
     }
-    
+
     filterTables() {
         this.renderTables();
     }
-    
+
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
@@ -1118,7 +1120,7 @@ style.textContent = `
         display: grid;
         gap: 1rem;
     }
-    
+
     .detail-row {
         display: flex;
         justify-content: space-between;
@@ -1127,7 +1129,7 @@ style.textContent = `
         background: var(--light-color, #f8f9fa);
         border-radius: 4px;
     }
-    
+
     .detail-row strong {
         color: var(--dark-color, #343a40);
     }

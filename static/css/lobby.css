@@ -1140,7 +1140,18 @@ ing seats styles */
 }
 
 /* Position seats around the mini table - PokerStars-style layout */
-/* Separate positioning for 6-max and 9-max tables to match PokerStars exactly */
+/* Separate positioning for 2-max, 6-max and 9-max tables */
+
+/* 2-max (heads-up) table seat positions */
+.mini-table-container[data-max-players="2"] .mini-player-seat[data-position="0"] {
+    top: 85%;
+    left: 50%;
+}
+
+.mini-table-container[data-max-players="2"] .mini-player-seat[data-position="1"] {
+    top: 15%;
+    left: 50%;
+}
 
 /* 6-max table seat positions - PokerStars style */
 .mini-table-container[data-max-players="6"] .mini-player-seat[data-position="0"] {
