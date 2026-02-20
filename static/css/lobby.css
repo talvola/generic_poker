@@ -231,6 +231,12 @@ body {
     font-size: 0.9rem;
 }
 
+.table-id-tag {
+    font-size: 0.75rem;
+    color: #adb5bd;
+    font-family: monospace;
+}
+
 .table-status {
     display: flex;
     align-items: center;

@@ -349,7 +349,7 @@ class PokerLobby {
                 <div class="table-header-info">
                     <div>
                         <div class="table-name">${this.escapeHtml(table.name)}</div>
-                        <div class="table-variant">${this.formatVariantName(table.variant)}</div>
+                        <div class="table-variant">${this.formatVariantName(table.variant)} <span class="table-id-tag">#${table.id.substring(0, 6)}</span></div>
                     </div>
                     <div class="table-status">
                         <div class="status-badge status-${statusClass}">${statusText}</div>
