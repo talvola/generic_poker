@@ -1297,7 +1297,7 @@ class PokerTable {
         button.dataset.action = actionTypeLower;
 
         // Use display_text if available, otherwise format the action type
-        let buttonText = action.display_text || actionType.charAt(0).toUpperCase() + actionType.slice(1).toLowerCase();
+        let buttonText = action.display_text || actionType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
         if (action.type === 'call' && (action.min_amount || action.amount)) {
             buttonText = `Call $${action.min_amount || action.amount}`;
