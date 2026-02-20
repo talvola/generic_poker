@@ -8,5 +8,43 @@ pip install -e .
 # Initialize database tables (create_app already calls create_tables)
 python -c "from app import create_app; create_app()"
 
+# Run schema migrations for columns that create_all() won't add to existing tables
+python -c "
+from app import create_app
+from src.online_poker.database import db
+from sqlalchemy import text
+
+app, _ = create_app()
+with app.app_context():
+    # Add is_admin column to users table if it doesn't exist
+    try:
+        db.session.execute(text('ALTER TABLE users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT FALSE'))
+        db.session.commit()
+        print('Added is_admin column to users table')
+    except Exception as e:
+        db.session.rollback()
+        if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+            print('is_admin column already exists')
+        else:
+            print(f'Note: {e}')
+
+    # Create disabled_variants table if it doesn't exist
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS disabled_variants (
+                id VARCHAR(36) PRIMARY KEY,
+                variant_name VARCHAR(100) UNIQUE NOT NULL,
+                reason TEXT,
+                disabled_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                disabled_by VARCHAR(36) NOT NULL REFERENCES users(id)
+            )
+        '''))
+        db.session.commit()
+        print('Ensured disabled_variants table exists')
+    except Exception as e:
+        db.session.rollback()
+        print(f'Note: {e}')
+"
+
 # Seed database with test users (pipe 'y' to handle "already seeded" prompt)
 echo "y" | python tools/seed_db.py
