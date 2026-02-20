@@ -346,13 +346,35 @@ class PlayerActionManager:
                     button_style="primary",
                 )
 
+            elif action_type == PlayerAction.BRING_IN:
+                bring_in_amount = min_amount or 0
+                return PlayerActionOption(
+                    action_type=action_type,
+                    min_amount=bring_in_amount,
+                    max_amount=bring_in_amount,
+                    default_amount=bring_in_amount,
+                    display_text=f"Bring In {bring_in_amount}" if bring_in_amount > 0 else "Bring In",
+                    button_style="primary",
+                )
+
+            elif action_type == PlayerAction.COMPLETE:
+                complete_amount = min_amount or 0
+                return PlayerActionOption(
+                    action_type=action_type,
+                    min_amount=complete_amount,
+                    max_amount=complete_amount,
+                    default_amount=complete_amount,
+                    display_text=f"Complete {complete_amount}" if complete_amount > 0 else "Complete",
+                    button_style="warning",
+                )
+
             else:
                 # Handle other action types (for future expansion)
                 return PlayerActionOption(
                     action_type=action_type,
                     min_amount=min_amount,
                     max_amount=max_amount,
-                    display_text=action_type.value.title(),
+                    display_text=action_type.value.replace("_", " ").title(),
                     button_style="default",
                 )
 
