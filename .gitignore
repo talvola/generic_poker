@@ -185,6 +185,9 @@ tests/e2e/test-results/
 # Node
 node_modules/
 
+# Generated files
+game_cards.html
+
 # Database files
 *.db
 data/hand_rankings/*.db
