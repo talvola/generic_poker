@@ -54,13 +54,34 @@ class GameStateManager:
 
             # Generate player views
             player_views = []
+            human_ids = set()
             for player_info in table_players:
                 if player_info["is_spectator"]:
                     continue  # Skip spectators in player list
 
+                human_ids.add(player_info["user_id"])
                 player_view = GameStateManager._create_player_view(player_info, session, viewer_id, is_spectator)
                 if player_view:
                     player_views.append(player_view)
+
+            # Add bot players from game session (they have no DB records)
+            from ..services.simple_bot import SimpleBot
+
+            if session.game:
+                for pid, player in session.game.table.players.items():
+                    if SimpleBot.is_bot_player(pid) and pid not in human_ids:
+                        seat_num = session.game.table.layout.get_player_seat(pid)
+                        bot_info = {
+                            "user_id": pid,
+                            "username": player.name,
+                            "seat_number": seat_num,
+                            "current_stack": player.stack,
+                            "is_spectator": False,
+                        }
+                        bot_view = GameStateManager._create_player_view(bot_info, session, viewer_id, is_spectator)
+                        if bot_view:
+                            bot_view.is_bot = True
+                            player_views.append(bot_view)
 
             # Sort players by seat number
             player_views.sort(key=lambda p: p.seat_number)

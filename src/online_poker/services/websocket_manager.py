@@ -692,6 +692,7 @@ class WebSocketManager:
                     return
 
                 from ..models.table import PokerTable
+                from ..models.table_access import TableAccess
                 from ..services.game_orchestrator import game_orchestrator
                 from ..services.simple_bot import BOT_NAMES, bot_manager
                 from ..services.table_access_manager import TableAccessManager
@@ -717,7 +718,29 @@ class WebSocketManager:
                         emit("error", {"message": f"Failed to create game session: {message}"})
                         return
 
-                # Get occupied seats from the session
+                # Add human players to game session first (they may only exist in DB)
+                from ..services.user_manager import UserManager
+
+                human_accesses = (
+                    db.session.query(TableAccess)
+                    .filter(
+                        TableAccess.table_id == table_id,
+                        TableAccess.is_active == True,
+                        TableAccess.is_spectator == False,
+                    )
+                    .all()
+                )
+                user_manager = UserManager()
+                for access in human_accesses:
+                    if access.user_id not in session.connected_players:
+                        user = user_manager.get_user_by_id(access.user_id)
+                        username = user.username if user else "Unknown"
+                        session.add_player(
+                            access.user_id, username, access.current_stack, seat_number=access.seat_number
+                        )
+                        session.connected_players.add(access.user_id)
+
+                # Get occupied seats (now includes human players)
                 occupied_seats = set()
                 if session.game:
                     occupied_seats = set(session.game.table.layout.get_occupied_seats())
