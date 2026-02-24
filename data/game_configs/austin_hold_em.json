@@ -1,0 +1,141 @@
+{
+  "game": "Austin Hold'em",
+  "category": "Hold'em",
+  "references": [
+    "https://www.ichabod801.com/poker_db/"
+  ],
+  "players": {
+    "min": 2,
+    "max": 9
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 2,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Pre-Flop Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal First Community Card"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "First Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 2,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Second and Third Community Cards"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Second Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Fourth Community Card"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Third Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Fifth Community Card"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "any combination of hole and community cards",
+    "bestHand": [
+      {
+        "evaluationType": "high_wild_bug",
+        "anyCards": 5,
+        "wildCards": [
+          {
+            "type": "lowest_community",
+            "role": "wild"
+          }
+        ]
+      }
+    ]
+  }
+}

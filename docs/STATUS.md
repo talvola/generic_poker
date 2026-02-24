@@ -1,13 +1,13 @@
 # Project Status
 
 > Single source of truth for project state. Updated as work progresses.
-> Last updated: 2026-02-19
+> Last updated: 2026-02-23
 
 ## Architecture Overview
 
 ### Core Engine (`src/generic_poker/`)
 
-Rule-driven poker engine where variants are defined by JSON configs, not code. Supports 192+ variants.
+Rule-driven poker engine where variants are defined by JSON configs, not code. Supports 246+ variants.
 
 | Component | File | Purpose |
 |-----------|------|---------|
@@ -32,6 +32,7 @@ Flask/SocketIO multiplayer web platform.
 | PlayerActionManager | `services/player_action_manager.py` | 8/10 | Solid, minor timeout config issues |
 | DisconnectManager | `services/disconnect_manager.py` | 8/10 | Uses RLock to prevent deadlocks |
 | TableAccessManager | `services/table_access_manager.py` | 9/10 | Clean, mostly complete |
+| BotActionService | `services/bot_action_service.py` | 8/10 | Background bot loop, per-table locking |
 | TableManager | `services/table_manager.py` | 9/10 | Clean |
 
 ### Frontend
@@ -51,7 +52,8 @@ Flask/SocketIO multiplayer web platform.
 
 ### Working
 
-- Core poker engine (192+ variants, hand evaluation, betting logic)
+- Core poker engine (246+ variants, hand evaluation, betting logic, all 3 forced bet styles verified)
+- Antes-only "flip" game support (9-Card Omaha)
 - User authentication and session management
 - Table creation and lobby (browse, filter, join)
 - WebSocket real-time communication
@@ -72,7 +74,7 @@ Flask/SocketIO multiplayer web platform.
 - Centralized game state store (GameStateStore)
 - Error notifications for failed fetch calls
 - Turn timer countdown visible on active player's seat (all players see it)
-- All 192 game variants available in lobby (dynamically loaded, grouped by category)
+- All 246 game variants available in lobby (dynamically loaded, grouped by category)
 - Game config `category` field for UI grouping (8 families)
 - Data-driven community card layout (linear, multi-row, branching, grid)
 - Multi-row layout for double board, scarney, kryky games (~12 configs)
@@ -83,6 +85,7 @@ Flask/SocketIO multiplayer web platform.
 - CHOOSE action (variant selection UI for paradise_road_pickem)
 - Parametrized E2E smoke tests (15 variants covering all action types and community layouts)
 - Hand history display (DB persistence, API, modal with expandable details)
+- Bot support: "Fill with Bot Players" fills empty seats, bots handle all 246 variants (all action types)
 
 ### Remaining Issues
 
@@ -91,28 +94,28 @@ Flask/SocketIO multiplayer web platform.
 | ~~3~~ | ~~Hardcoded timeouts~~ | ~~LOW~~ | ~~Fixed: all timeouts and limits configurable via env vars~~ |
 | 4 | Debug deck option | LOW | No way to use fixed/unseeded deck for testing |
 | 9 | Mobile optimization | LOW | Deferred to Phase 7 |
-| 10 | Admin interface | LOW | Not implemented |
+| ~~10~~ | ~~Admin interface~~ | ~~LOW~~ | ~~Implemented: dashboard, user/table/variant management~~ |
 
 ---
 
 ## Testing
 
-### Test Counts (2026-02-19)
+### Test Counts (2026-02-23)
 
 | Layer | Tests | Status |
 |-------|-------|--------|
-| Python unit + integration | 668 | All passing |
-| Smoke test (all 192 variants) | 384 | All passing (0 unsupported, 0 xfail) |
+| Python unit + integration | 724 | All passing |
+| Smoke test (all 246 variants) | 492 | All passing (0 unsupported, 0 xfail) |
 | Playwright E2E | 57 | All passing (9 spec files) |
-| **Total** | **~1,109** | **All passing** |
+| **Total** | **~1,452** | **All passing** |
 
 ### Test Layers
 
 ```
-Layer 0: Smoke Tests (all 192 variants)
+Layer 0: Smoke Tests (all 246 variants)
   - Parametrized: loads each config, creates game, plays a hand passively
   - Catches crashes, infinite loops, missing implementations
-  - All 192 games pass (0 unsupported, 0 xfail)
+  - All 246 games pass (0 unsupported, 0 xfail)
   - tests/game/test_all_variants_smoke.py
 
 Layer 1: Python Integration Tests (engine + services)
@@ -187,11 +190,11 @@ Fixes applied:
 
 ### Unsupported Games
 
-None — all 192 game variants are now fully supported. All action types (expose, pass, declare, separate, choose) implemented.
+None — all 246 game variants are now fully supported. All action types (expose, pass, declare, separate, choose) implemented.
 
 ### Pagat.com Cross-Reference (2026-02-18)
 
-Cross-referenced our 192 configs against 352 Pagat.com poker variants. See `docs/PAGAT_CROSS_REFERENCE.md`.
+Cross-referenced our configs against 352 Pagat.com poker variants. See `docs/PAGAT_CROSS_REFERENCE.md`.
 
 - **45 of our games** match Pagat variants (42 had Pagat URLs added to their references)
 - **~38 Pagat games** could be added with config-only changes (no engine modifications)

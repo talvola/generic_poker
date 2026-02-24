@@ -1,0 +1,100 @@
+{
+    "game": "2-7 Double Draw",
+    "category": "Draw",
+    "references": [
+        {
+            "url": "https://www.pagat.com/poker/variants/lowball.html",
+            "description": "Pagat.com - Lowball Draw"
+        }
+    ],
+    "players": {
+        "min": 2,
+        "max": 8
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Pre-Draw Bet"
+        },
+        {
+            "draw": {
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "First Draw"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Post-Draw Bet #1"
+        },
+        {
+            "draw": {
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Second Draw"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Post-Draw Bet #2"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "all cards",
+        "bestHand": [
+            {
+                "evaluationType": "27_low",
+                "anyCards": 5
+            }
+        ]
+    }
+}

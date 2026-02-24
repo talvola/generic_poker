@@ -1,0 +1,120 @@
+{
+  "game": "St. Louis Flops",
+  "category": "Hold'em",
+  "references": [
+    {
+      "url": "https://www.pagat.com/poker/variants/texasholdem.html",
+      "description": "Pagat.com - Hold'em Variants"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 9
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 2,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Pre-Flop Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 3,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Flop"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Post-Flop Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 2,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Turn"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Turn Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal River"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "River Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "any combination of hole and community cards",
+    "bestHand": [
+      {
+        "evaluationType": "high",
+        "anyCards": 5
+      }
+    ]
+  }
+}

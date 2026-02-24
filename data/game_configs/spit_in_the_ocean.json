@@ -1,0 +1,115 @@
+{
+  "game": "Spit in the Ocean",
+  "category": "Draw",
+  "references": [
+    {
+      "url": "https://www.pagat.com/poker/variants/cincinnati.html#ocean",
+      "description": "Pagat.com - Spit in the Ocean"
+    },
+    {
+      "url": "https://www.pokermike.com/",
+      "description": "pokermike.com - Spit in the Ocean"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 9
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 4,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ],
+        "wildCards": [
+          {
+            "type": "last_community_card",
+            "role": "wild",
+            "scope": "global",
+            "match": "rank"
+          }
+        ]
+      },
+      "name": "Spit Card"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Initial Bet"
+    },
+    {
+      "draw": {
+        "cards": [
+          {
+            "number": 3,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Draw Cards"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "any combination of hole and community cards",
+    "bestHand": [
+      {
+        "evaluationType": "high_wild_bug",
+        "anyCards": 5,
+        "wildCards": [
+          {
+            "type": "last_community_card",
+            "role": "wild",
+            "scope": "global",
+            "match": "rank"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "game": "Cold Omaha",
+  "category": "Omaha",
+  "references": [
+    "https://www.pagat.com/poker/variants/invented/shared.html"
+  ],
+  "players": {
+    "min": 2,
+    "max": 9
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 4,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Pre-Flop Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 5,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal All Community Cards"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Post-Board Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "two hole cards, three community cards",
+    "bestHand": [
+      {
+        "evaluationType": "high",
+        "holeCards": 2,
+        "communityCards": 3
+      }
+    ]
+  }
+}

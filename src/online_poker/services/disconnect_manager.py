@@ -71,8 +71,7 @@ class DisconnectedPlayer:
             self.removal_timer.start()
 
             logger.info(
-                f"Auto-fold disabled for disconnected player {self.user_id}: "
-                f"removal in {removal_delay}s (no auto-fold)"
+                f"Auto-fold disabled for disconnected player {self.user_id}: removal in {removal_delay}s (no auto-fold)"
             )
         else:
             # For non-current players, auto-fold immediately and start removal timer

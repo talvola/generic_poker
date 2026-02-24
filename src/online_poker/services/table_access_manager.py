@@ -370,6 +370,9 @@ class TableAccessManager:
     def get_ready_status(table_id: str) -> dict[str, Any]:
         """Get ready status of all players at a table.
 
+        Includes both human players (from TableAccess) and bot players
+        (from GameSession). Bots are always counted as ready.
+
         Args:
             table_id: ID of table
 
@@ -386,8 +389,10 @@ class TableAccessManager:
             )
 
             players = []
-            all_ready = len(access_records) >= 2  # Need at least 2 players
+            all_ready = True  # Will be set to False if any player isn't ready
 
+            # Add human players from DB
+            human_ids = set()
             for access in access_records:
                 user_manager = UserManager()
                 user = user_manager.get_user_by_id(access.user_id)
@@ -398,13 +403,38 @@ class TableAccessManager:
                     "is_ready": access.is_ready,
                 }
                 players.append(player_info)
+                human_ids.add(access.user_id)
 
                 if not access.is_ready:
                     all_ready = False
 
+            # Add bot players from game session (bots are always ready)
+            try:
+                from ..services.game_orchestrator import game_orchestrator
+                from ..services.simple_bot import SimpleBot
+
+                session = game_orchestrator.get_session(table_id)
+                if session and session.game:
+                    for pid, player in session.game.table.players.items():
+                        if SimpleBot.is_bot_player(pid) and pid not in human_ids:
+                            players.append(
+                                {
+                                    "user_id": pid,
+                                    "username": player.name,
+                                    "seat_number": player.seat,
+                                    "is_ready": True,
+                                }
+                            )
+            except Exception as bot_err:
+                current_app.logger.debug(f"Could not check bot players: {bot_err}")
+
+            # Need at least 2 total players
+            if len(players) < 2:
+                all_ready = False
+
             return {
                 "players": players,
-                "player_count": len(access_records),
+                "player_count": len(players),
                 "all_ready": all_ready,
                 "ready_count": sum(1 for p in players if p["is_ready"]),
                 "min_players": 2,

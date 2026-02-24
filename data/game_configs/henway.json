@@ -1,0 +1,100 @@
+{
+  "game": "Henway",
+  "category": "Stud",
+  "references": [
+    {
+      "url": "https://www.pagat.com/poker/variants/two.html#henway",
+      "description": "Pagat.com - Henway"
+    },
+    {
+      "url": "https://ichabod801.pythonanywhere.com/",
+      "description": "ichabod801 - Poker Variants"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 9
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit"
+  ],
+  "forcedBets": {
+    "style": "bring-in",
+    "rule": "low card"
+  },
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "antes"
+      },
+      "name": "Post Antes"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down"
+          },
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "bring-in"
+      },
+      "name": "Post Bring-In"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Betting Round"
+    },
+    {
+      "declare": {
+        "type": "declare",
+        "options": ["high", "low", "high_low"],
+        "per_pot": true,
+        "simultaneous": true
+      },
+      "name": "Declare High/Low"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all cards",
+    "declaration_mode": "declare",
+    "bestHand": [
+      {
+        "name": "High Hand",
+        "evaluationType": "two_card_high",
+        "holeCards": 2,
+        "communityCards": 0
+      },
+      {
+        "name": "Low Hand",
+        "evaluationType": "two_card_a5_low",
+        "holeCards": 2,
+        "communityCards": 0
+      }
+    ]
+  }
+}

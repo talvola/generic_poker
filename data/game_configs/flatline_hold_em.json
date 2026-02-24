@@ -1,0 +1,172 @@
+{
+  "game": "Flatline Hold'em",
+  "category": "Hold'em",
+  "references": [
+    {
+      "url": "https://www.pagat.com/poker/variants/texasholdem.html",
+      "description": "Pagat.com - Hold'em Variants"
+    }
+  ],
+  "communityCardLayout": {
+    "type": "grid",
+    "columns": 5,
+    "cells": [
+      [null, null, ["Line"], null, null],
+      [null, null, ["Line"], null, null],
+      [["Flat"], ["Flat"], ["Flat", "Line"], ["Flat"], ["Flat"]],
+      [null, null, ["Line"], null, null],
+      [null, null, ["Line"], null, null]
+    ]
+  },
+  "players": {
+    "min": 2,
+    "max": 6
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 2,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Pre-Flop Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up",
+            "subset": "Flat"
+          },
+          {
+            "number": 1,
+            "state": "face up",
+            "subset": "Flat"
+          },
+          {
+            "number": 1,
+            "state": "face up",
+            "subset": "Line"
+          },
+          {
+            "number": 1,
+            "state": "face up",
+            "subset": "Line"
+          }
+        ]
+      },
+      "name": "Deal Outer Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Outer Cards Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up",
+            "subset": "Flat"
+          },
+          {
+            "number": 1,
+            "state": "face up",
+            "subset": "Flat"
+          },
+          {
+            "number": 1,
+            "state": "face up",
+            "subset": "Line"
+          },
+          {
+            "number": 1,
+            "state": "face up",
+            "subset": "Line"
+          }
+        ]
+      },
+      "name": "Deal Inner Cards"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Inner Cards Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up",
+            "subset": ["Flat", "Line"]
+          }
+        ]
+      },
+      "name": "Deal Center Card"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "any combination of hole and community cards per line",
+    "bestHand": [
+      {
+        "name": "Flat",
+        "evaluationType": "high",
+        "anyCards": 5,
+        "community_subset": "Flat"
+      },
+      {
+        "name": "Line",
+        "evaluationType": "high",
+        "anyCards": 5,
+        "community_subset": "Line"
+      }
+    ]
+  }
+}

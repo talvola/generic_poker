@@ -1,0 +1,111 @@
+{
+  "game": "Five and Ten Draw",
+  "category": "Draw",
+  "references": [
+    {
+      "url": "https://www.pokermike.com/",
+      "description": "pokermike.com - Five and Ten Draw"
+    },
+    {
+      "url": "https://rjspoker.com/",
+      "description": "RJ's Poker Variants"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 6
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ],
+        "wildCards": [
+          {
+            "type": "rank",
+            "rank": "5",
+            "role": "wild"
+          },
+          {
+            "type": "rank",
+            "rank": "T",
+            "role": "wild"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Initial Bet"
+    },
+    {
+      "draw": {
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Draw Cards"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all cards",
+    "bestHand": [
+      {
+        "evaluationType": "high_wild_bug",
+        "anyCards": 5,
+        "wildCards": [
+          {
+            "type": "rank",
+            "rank": "5",
+            "role": "wild"
+          },
+          {
+            "type": "rank",
+            "rank": "T",
+            "role": "wild"
+          }
+        ]
+      }
+    ]
+  }
+}

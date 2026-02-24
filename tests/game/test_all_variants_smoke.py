@@ -5,13 +5,13 @@ and plays a hand to completion (everyone checks/calls/stands pat).
 Catches crashes, infinite loops, and missing implementations.
 """
 
-import pytest
 from pathlib import Path
-from typing import List
 
-from generic_poker.config.loader import GameRules, BettingStructure
+import pytest
+
+from generic_poker.config.loader import BettingStructure, GameRules
+from generic_poker.core.card import Visibility
 from generic_poker.game.game import Game, GameState, PlayerAction
-from generic_poker.core.card import Card, Visibility
 
 # ── Config Discovery ──────────────────────────────────────────────────────────
 
@@ -23,8 +23,7 @@ UNSUPPORTED_GAMES = set()
 # Games that have known engine bugs (evaluation errors, showdown crashes, etc.)
 # These should be fixed eventually. Marked xfail so the test suite stays green.
 # All 13 previously-buggy games fixed as of 2026-02-17.
-KNOWN_ENGINE_BUGS = {
-}
+KNOWN_ENGINE_BUGS = {}
 
 
 def get_all_config_files():
@@ -45,16 +44,16 @@ def get_supported_config_files():
         if name in UNSUPPORTED_GAMES:
             continue
         if name in KNOWN_ENGINE_BUGS:
-            result.append(pytest.param(
-                *p.values, id=name,
-                marks=pytest.mark.xfail(reason=KNOWN_ENGINE_BUGS[name], strict=False)
-            ))
+            result.append(
+                pytest.param(*p.values, id=name, marks=pytest.mark.xfail(reason=KNOWN_ENGINE_BUGS[name], strict=False))
+            )
         else:
             result.append(p)
     return result
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def create_smoke_game(rules: GameRules) -> Game:
     """Create a game with minimum players and reasonable betting params."""
@@ -83,6 +82,8 @@ def create_smoke_game(rules: GameRules) -> Game:
         if structure == BettingStructure.LIMIT:
             kwargs["small_bet"] = 10
             kwargs["big_bet"] = 20
+    elif rules.forced_bets.style == "antes_only":
+        kwargs["ante"] = 5
 
     game = Game(**kwargs)
 
@@ -92,14 +93,13 @@ def create_smoke_game(rules: GameRules) -> Game:
     return game
 
 
-def _take_action(game: Game, player_id: str, action: PlayerAction,
-                  amount=None, cards=None):
+def _take_action(game: Game, player_id: str, action: PlayerAction, amount=None, cards=None):
     """Take an action and advance if the round completes."""
     kwargs = {}
     if amount is not None:
-        kwargs['amount'] = amount
+        kwargs["amount"] = amount
     if cards is not None:
-        kwargs['cards'] = cards
+        kwargs["cards"] = cards
     result = game.player_action(player_id, action, **kwargs)
     if result and result.advance_step:
         game._next_step()
@@ -165,8 +165,7 @@ def play_hand_passively(game: Game, max_actions: int = 500) -> int:
                     for subset_cards in game.table.community_cards.values():
                         all_community.extend(subset_cards)
                     to_replace = all_community[:num_replace]
-                    _take_action(game, player_id, PlayerAction.REPLACE_COMMUNITY,
-                                 amount=num_replace, cards=to_replace)
+                    _take_action(game, player_id, PlayerAction.REPLACE_COMMUNITY, amount=num_replace, cards=to_replace)
                 elif PlayerAction.PASS in action_map:
                     num_pass, _ = action_map[PlayerAction.PASS]
                     hand_cards = list(game.table.players[player_id].hand.cards)
@@ -190,8 +189,7 @@ def play_hand_passively(game: Game, max_actions: int = 500) -> int:
                 elif PlayerAction.DECLARE in action_map:
                     # Always declare "high"
                     result = game.player_action(
-                        player_id, PlayerAction.DECLARE,
-                        declaration_data=[{"pot_index": -1, "declaration": "high"}]
+                        player_id, PlayerAction.DECLARE, declaration_data=[{"pot_index": -1, "declaration": "high"}]
                     )
                     if result and result.advance_step:
                         game._next_step()
@@ -232,6 +230,7 @@ def play_hand_passively(game: Game, max_actions: int = 500) -> int:
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.parametrize("basename,config_path", get_supported_config_files())
 def test_variant_loads_and_plays(basename: str, config_path: Path):
     """Each supported game variant can load, start a hand, and complete it."""
@@ -249,8 +248,7 @@ def test_variant_loads_and_plays(basename: str, config_path: Path):
     total_chips = sum(p.stack for p in game.table.players.values())
     expected_chips = 500 * rules.min_players
     assert total_chips == expected_chips, (
-        f"{basename}: chip conservation failed — "
-        f"expected {expected_chips}, got {total_chips}"
+        f"{basename}: chip conservation failed — " f"expected {expected_chips}, got {total_chips}"
     )
 
 

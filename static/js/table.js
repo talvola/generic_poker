@@ -253,6 +253,9 @@ class PokerTable {
 
         // Request initial ready status
         this.requestReadyStatus();
+
+        // If table allows bots, request to fill empty seats with bots
+        this.socket.emit('fill_bots', { table_id: this.store.tableId });
     }
 
     // Ready system methods

@@ -1,0 +1,105 @@
+{
+  "game": "Hurricane",
+  "category": "Draw",
+  "references": [
+    {
+      "url": "https://www.pokermike.com/poker/hurricane.html",
+      "description": "PokerMike - Hurricane"
+    },
+    {
+      "url": "https://www.pagat.com/poker/variants/two.html#hurricane",
+      "description": "Pagat.com - Hurricane"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 9
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 2,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Initial Bet"
+    },
+    {
+      "draw": {
+        "cards": [
+          {
+            "number": 2,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Draw Cards"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "declare": {
+        "type": "declare",
+        "options": ["high", "low", "high_low"],
+        "per_pot": true,
+        "simultaneous": true
+      },
+      "name": "Declare High/Low"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all cards",
+    "declaration_mode": "declare",
+    "bestHand": [
+      {
+        "name": "High Hand",
+        "evaluationType": "two_card_high",
+        "holeCards": 2,
+        "communityCards": 0
+      },
+      {
+        "name": "Low Hand",
+        "evaluationType": "two_card_a5_low",
+        "holeCards": 2,
+        "communityCards": 0
+      }
+    ]
+  }
+}

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from threading import Lock
 from typing import Any
 
-from generic_poker.config.loader import GameRules
+from generic_poker.config.loader import GameActionType, GameRules
 from generic_poker.game.game import Game
 from generic_poker.game.game_state import GameState, PlayerAction
 
@@ -638,6 +638,33 @@ class GameOrchestrator:
                 db.session.rollback()
             except Exception as rollback_err:
                 logger.error(f"Failed to rollback after session state deactivation error: {rollback_err}")
+
+    @staticmethod
+    def advance_through_non_player_steps(game) -> None:
+        """Advance past dealing/empty-betting states until player input is needed.
+
+        Used after processing a player action with advance_step=True, or after
+        starting a hand. Skips DEALING steps (unless CHOOSE) and BETTING steps
+        with no current player.
+
+        Args:
+            game: The Game instance to advance
+        """
+        while game.state != GameState.COMPLETE:
+            if game.current_step >= len(game.rules.gameplay):
+                break
+            # DEALING state — auto-advance unless it's a CHOOSE step
+            if game.state == GameState.DEALING:
+                current_step = game.rules.gameplay[game.current_step]
+                if current_step.action_type == GameActionType.CHOOSE:
+                    break  # Wait for player choice
+                game._next_step()
+            # BETTING state with no current player — round complete, advance
+            elif game.state == GameState.BETTING and game.current_player is None:
+                game._next_step()
+            else:
+                # Player input required (BETTING/DRAWING with current_player set)
+                break
 
     def get_orchestrator_stats(self) -> dict[str, Any]:
         """Get statistics about the orchestrator.

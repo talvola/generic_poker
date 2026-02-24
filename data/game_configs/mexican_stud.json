@@ -1,0 +1,196 @@
+{
+  "game": "Mexican Stud",
+  "category": "Stud",
+  "references": [
+    {
+      "url": "https://www.pagat.com/poker/variants/rollyourown.html",
+      "description": "Pagat.com - Roll Your Own"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 9
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit"
+  ],
+  "forcedBets": {
+    "style": "bring-in",
+    "rule": "high card"
+  },
+  "bettingOrder": {
+    "initial": "bring_in",
+    "subsequent": "high_hand"
+  },
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "antes"
+      },
+      "name": "Post Antes"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down"
+          },
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Initial Cards"
+    },
+    {
+      "bet": {
+        "type": "bring-in"
+      },
+      "name": "Post Bring-In"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "First Betting Round"
+    },
+    {
+      "groupedActions": [
+        {
+          "expose": {
+            "cards": [
+              {
+                "number": 1,
+                "min_number": 0,
+                "state": "face down",
+                "immediate": true
+              }
+            ]
+          }
+        },
+        {
+          "deal": {
+            "location": "player",
+            "cards": [
+              {
+                "number": 1
+              }
+            ],
+            "conditional_state": {
+              "type": "all_exposed",
+              "true_state": "face down",
+              "false_state": "face up"
+            }
+          }
+        }
+      ],
+      "name": "Expose and Deal Third Card"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Second Betting Round"
+    },
+    {
+      "groupedActions": [
+        {
+          "expose": {
+            "cards": [
+              {
+                "number": 1,
+                "min_number": 0,
+                "state": "face down",
+                "immediate": true
+              }
+            ]
+          }
+        },
+        {
+          "deal": {
+            "location": "player",
+            "cards": [
+              {
+                "number": 1
+              }
+            ],
+            "conditional_state": {
+              "type": "all_exposed",
+              "true_state": "face down",
+              "false_state": "face up"
+            }
+          }
+        }
+      ],
+      "name": "Expose and Deal Fourth Card"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Third Betting Round"
+    },
+    {
+      "groupedActions": [
+        {
+          "expose": {
+            "cards": [
+              {
+                "number": 1,
+                "min_number": 0,
+                "state": "face down",
+                "immediate": true
+              }
+            ]
+          }
+        },
+        {
+          "deal": {
+            "location": "player",
+            "cards": [
+              {
+                "number": 1
+              }
+            ],
+            "conditional_state": {
+              "type": "all_exposed",
+              "true_state": "face down",
+              "false_state": "face up"
+            }
+          }
+        }
+      ],
+      "name": "Expose and Deal Fifth Card"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Betting Round"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all five cards",
+    "bestHand": [
+      {
+        "evaluationType": "high",
+        "anyCards": 5
+      }
+    ]
+  }
+}

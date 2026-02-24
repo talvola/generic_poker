@@ -1,0 +1,134 @@
+{
+    "game": "9-Card Omaha",
+    "category": "Omaha",
+    "references": [
+        "https://forumserver.twoplustwo.com/21/other-poker-games/bored-now-invent-novel-poker-variant-1475/",
+        {
+            "url": "https://en.wikipedia.org/wiki/I_Bet_You",
+            "description": "I Bet You TV show (2008) featuring 9-Card Omaha"
+        }
+    ],
+    "players": {
+        "min": 2,
+        "max": 5
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "forcedBets": {
+        "style": "antes_only"
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "antes"
+            },
+            "name": "Post Antes"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 9,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "discard": {
+                "cards": [
+                    {
+                        "number": 2,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Discard Two"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Flop"
+        },
+        {
+            "discard": {
+                "cards": [
+                    {
+                        "number": 2,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Discard Two"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Turn"
+        },
+        {
+            "discard": {
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Discard One"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal River"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "two hole cards, three community cards",
+        "bestHand": [
+            {
+                "evaluationType": "high",
+                "holeCards": 2,
+                "communityCards": 3
+            }
+        ]
+    }
+}

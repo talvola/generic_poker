@@ -224,6 +224,19 @@ class WebSocketManager:
                     else:
                         logger.info(f"User {user_id} left table {table_id}")
 
+                # Check if last human left — clean up bots
+                if session:
+                    from ..services.simple_bot import SimpleBot, bot_manager
+
+                    human_players = [pid for pid in session.connected_players if not SimpleBot.is_bot_player(pid)]
+                    if not human_players:
+                        # Remove all bots from session and bot manager
+                        bot_ids = [pid for pid in list(session.connected_players) if SimpleBot.is_bot_player(pid)]
+                        for bot_id in bot_ids:
+                            session.remove_player(bot_id, "Last human left")
+                            bot_manager.remove_bot(bot_id)
+                        logger.info(f"Removed {len(bot_ids)} bots after last human left table {table_id}")
+
                 # Broadcast updated game state to remaining players
                 if session:
                     self.broadcast_game_state_update(table_id)
@@ -345,51 +358,10 @@ class WebSocketManager:
                         if game and game.state != GameState.COMPLETE:
                             logger.info("Betting round complete, advancing to next step")
 
-                            # Track community cards for phase change detection
-                            prev_community_count = (
-                                len(game.table.community_cards) if hasattr(game.table, "community_cards") else 0
-                            )
-
                             game._next_step()
-                            # Continue advancing through dealing/non-player-input steps
-                            # Check for DEALING state (doesn't require player input) OR no current player
-                            while game.state != GameState.COMPLETE:
-                                if game.current_step >= len(game.rules.gameplay):
-                                    break
+                            from ..services.game_orchestrator import game_orchestrator
 
-                                # Check for new community cards and emit phase change
-                                curr_community_count = (
-                                    len(game.table.community_cards) if hasattr(game.table, "community_cards") else 0
-                                )
-                                if curr_community_count > prev_community_count:
-                                    community_cards = game.table.community_cards
-                                    cards_str = " ".join(str(c) for c in community_cards)
-                                    if curr_community_count == 3:
-                                        self.broadcast_game_action_chat(table_id, f"*** FLOP *** [{cards_str}]", "deal")
-                                    elif curr_community_count == 4:
-                                        community_cards[-1]
-                                        self.broadcast_game_action_chat(table_id, f"*** TURN *** [{cards_str}]", "deal")
-                                    elif curr_community_count == 5:
-                                        community_cards[-1]
-                                        self.broadcast_game_action_chat(
-                                            table_id, f"*** RIVER *** [{cards_str}]", "deal"
-                                        )
-                                    prev_community_count = curr_community_count
-
-                                # DEALING state - auto advance unless it's a CHOOSE step
-                                if game.state == GameState.DEALING:
-                                    from generic_poker.config.loader import GameActionType
-
-                                    current_step = game.rules.gameplay[game.current_step]
-                                    if current_step.action_type == GameActionType.CHOOSE:
-                                        break  # Wait for player choice
-                                    game._next_step()
-                                # BETTING state with no current player - round complete, advance
-                                elif game.state == GameState.BETTING and game.current_player is None:
-                                    game._next_step()
-                                else:
-                                    # Player input required
-                                    break
+                            game_orchestrator.advance_through_non_player_steps(game)
                             logger.info(
                                 f"Game advanced to step {game.current_step}, state {game.state}, current_player: {game.current_player.name if game.current_player else None}"
                             )
@@ -448,6 +420,12 @@ class WebSocketManager:
                         # Hand still in progress - check if new current player is pending leave
                         if session and session.pending_leaves:
                             self._auto_fold_pending_players(table_id, session)
+
+                        # Trigger bot actions if next player is a bot
+                        if game and game.state != GS.COMPLETE:
+                            from ..services.bot_action_service import BotActionService
+
+                            BotActionService.trigger_bot_actions_if_needed(table_id)
 
                     emit("action_result", {"success": True, "message": message})
                 else:
@@ -703,6 +681,103 @@ class WebSocketManager:
             except Exception as e:
                 logger.error(f"Request ready status error: {e}")
                 emit("error", {"message": "Failed to get ready status"})
+
+        @self.socketio.on("fill_bots")
+        def handle_fill_bots(data):
+            """Fill empty seats with bot players."""
+            try:
+                table_id = data.get("table_id")
+                if not table_id:
+                    emit("error", {"message": "Table ID required"})
+                    return
+
+                from ..models.table import PokerTable
+                from ..services.game_orchestrator import game_orchestrator
+                from ..services.simple_bot import BOT_NAMES, bot_manager
+                from ..services.table_access_manager import TableAccessManager
+
+                # Verify table exists and allows bots
+                table = db.session.query(PokerTable).filter(PokerTable.id == table_id).first()
+                if not table:
+                    emit("error", {"message": "Table not found"})
+                    return
+
+                if not table.allow_bots:
+                    emit("error", {"message": "Table does not allow bots"})
+                    return
+
+                # Get or create game session
+                session = game_orchestrator.get_session(table_id)
+                if session and not session.is_active:
+                    game_orchestrator.remove_session(table_id)
+                    session = None
+                if not session:
+                    success, message, session = game_orchestrator.create_session(table_id)
+                    if not success or not session:
+                        emit("error", {"message": f"Failed to create game session: {message}"})
+                        return
+
+                # Get occupied seats from the session
+                occupied_seats = set()
+                if session.game:
+                    for _pid, player in session.game.table.players.items():
+                        occupied_seats.add(player.seat)
+
+                # Calculate how many bots to add
+                max_seats = table.max_players
+                empty_seats = []
+                for seat in range(1, max_seats + 1):
+                    if seat not in occupied_seats:
+                        empty_seats.append(seat)
+
+                if not empty_seats:
+                    logger.info(f"No empty seats at table {table_id}, no bots needed")
+                    emit("fill_bots_result", {"success": True, "bots_added": 0})
+                    return
+
+                # Add bots to empty seats
+                table_short = table_id[:8]
+                buy_in = table.get_minimum_buyin()
+                bots_added = 0
+
+                for i, seat in enumerate(empty_seats):
+                    bot_id = f"bot_{table_short}_{i}"
+                    bot_name = BOT_NAMES[i % len(BOT_NAMES)]
+
+                    # Create the bot in the bot manager
+                    bot_manager.create_bot(bot_id, bot_name)
+
+                    # Add to game session
+                    session.add_player(bot_id, bot_name, buy_in, seat_number=seat)
+
+                    # Track bot as connected
+                    session.connected_players.add(bot_id)
+
+                    bots_added += 1
+                    logger.info(f"Added bot {bot_name} ({bot_id}) to seat {seat} at table {table_id}")
+
+                logger.info(f"Added {bots_added} bots to table {table_id}")
+
+                # Broadcast updated game state
+                self.broadcast_game_state_update(table_id)
+
+                # Broadcast updated ready status (bots count as ready)
+                ready_status = TableAccessManager.get_ready_status(table_id)
+                self.broadcast_to_table(
+                    table_id,
+                    GameEvent.READY_STATUS_UPDATE,
+                    {
+                        "table_id": table_id,
+                        "ready_status": ready_status,
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
+                    },
+                )
+
+                emit("fill_bots_result", {"success": True, "bots_added": bots_added})
+
+            except Exception as e:
+                logger.error(f"Fill bots error: {e}", exc_info=True)
+                emit("error", {"message": "Failed to add bots"})
 
     def join_table_room(self, user_id: str, table_id: str) -> bool:
         """Join a user to a table room.
@@ -1209,6 +1284,11 @@ class WebSocketManager:
                         "timestamp": datetime.utcnow().isoformat() + "Z",
                     },
                 )
+
+                # Trigger bot actions if first player to act is a bot
+                from ..services.bot_action_service import BotActionService
+
+                BotActionService.trigger_bot_actions_if_needed(table_id)
             else:
                 player_count = len(game.table.players) if game else 0
                 logger.warning(f"Cannot start hand at table {table_id} - only {player_count} players")

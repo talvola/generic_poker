@@ -614,24 +614,7 @@ class PlayerActionManager:
                     if game and game.state != GameState.COMPLETE:
                         logger.info("Betting round complete, advancing to next step")
                         game._next_step()
-                        # Continue advancing through dealing/non-player-input steps
-                        from generic_poker.config.loader import GameActionType
-
-                        while game.state != GameState.COMPLETE:
-                            if game.current_step >= len(game.rules.gameplay):
-                                break
-                            # DEALING state - auto advance unless it's a CHOOSE step needing player input
-                            if game.state == GameState.DEALING:
-                                current_step = game.rules.gameplay[game.current_step]
-                                if current_step.action_type == GameActionType.CHOOSE:
-                                    break  # Wait for player choice
-                                game._next_step()
-                            # BETTING state with no current player - round complete, advance
-                            elif game.state == GameState.BETTING and game.current_player is None:
-                                game._next_step()
-                            else:
-                                # Player input required
-                                break
+                        game_orchestrator.advance_through_non_player_steps(game)
                         logger.info(
                             f"Game advanced to step {game.current_step}, state {game.state}, current_player: {game.current_player.name if game.current_player else None}"
                         )
@@ -652,6 +635,12 @@ class PlayerActionManager:
 
                 # Start timeout for next player if needed
                 self._start_next_player_timeout(session)
+
+                # Trigger bot actions if next player is a bot
+                if session.game and session.game.state != GameState.COMPLETE:
+                    from ..services.bot_action_service import BotActionService
+
+                    BotActionService.trigger_bot_actions_if_needed(table_id)
 
                 logger.info(f"Processed action {action.value} for player {user_id} at table {table_id}")
 

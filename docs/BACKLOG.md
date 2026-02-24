@@ -1,7 +1,7 @@
 # Backlog
 
 > Prioritized task list. Work top-to-bottom within each phase.
-> Last updated: 2026-02-19
+> Last updated: 2026-02-23
 
 ---
 
@@ -139,7 +139,7 @@ After gameplay works, make the frontend maintainable.
 
 **3.15 result:** Connected engine CHOOSE action through online platform. Added `ActionType.CHOOSE` to view models. CHOOSE step uses DEALING state with current_player set — fixed auto-advance loops in player_action_manager and websocket_manager to stop when DEALING has a current_player (needs input). Frontend renders variant buttons from metadata options. Fixed tuple unpacking for 4-element CHOOSE tuples. Fixed showdown guard for empty best_hand_configs. 1 game now playable: paradise_road_pickem.
 
-**Net result of 3.11-3.15:** All 192 game configs now supported (0 unsupported, 0 xfails). 384 smoke tests pass. `UNSUPPORTED_ACTIONS` in table_manager.py emptied. 27 game configs got `communityCardLayout` fields.
+**Net result of 3.11-3.15:** All 192 game configs now supported (0 unsupported, 0 xfails). 384 smoke tests pass. `UNSUPPORTED_ACTIONS` in table_manager.py emptied. 27 game configs got `communityCardLayout` fields. (Count later grew to 223 in Phase 6.1.)
 
 **3.16 result:** Built parametrized Playwright E2E tests covering 15 representative game variants and 8 Tier 2 UI verification tests. Expanded E2E suite from 26 tests (4 spec files) to 57 tests (9 spec files).
 - New spec files: `variant-smoke.spec.ts` (15 tests), `draw-actions.spec.ts` (4 tests), `special-actions.spec.ts` (4 tests)
@@ -164,7 +164,7 @@ After gameplay works, make the frontend maintainable.
 | 4.3b | Review and reduce core engine logging (excessive debug logs accumulated over time) | DONE |
 | 4.4 | Sync game engine state with database after each hand | DONE |
 | 4.5 | Add rate limiting | DONE |
-| 4.6 | Admin interface | TODO |
+| 4.6 | Admin interface | DONE |
 
 ### Task Details
 
@@ -181,6 +181,10 @@ After gameplay works, make the frontend maintainable.
 
 **4.5 result:** Added HTTP rate limiting using `flask-limiter` with in-memory storage. Rate limits: login 5/min per IP, register 3/hr per IP, forgot/reset-password 3-5/hr per IP, table creation 10/hr per user ID. All limits configurable via env vars (`RATELIMIT_AUTH_LOGIN`, etc.) in `config.py`. Rate limiting disabled in `TestingConfig` (`RATELIMIT_ENABLED = False`). Shared `Limiter` instance in `src/online_poker/extensions.py` avoids circular imports. 429 responses return JSON `{"success": false, "message": "Too many requests..."}`.
 
+**4.6 result:** Full admin interface with dashboard (stats, live sessions), user management (search, sort, pagination, bankroll adjust, toggle active), table management (list, force-close, purge all), and variant management (enable/disable with reason). Protected by `@admin_required` decorator checking `User.is_admin`. Templates in `templates/admin/`, JS in `static/js/admin.js` (AdminPanel class, 514 lines), CSS in `static/css/admin.css`. CLI tool `tools/make_admin.py` to grant admin access.
+
+**Phase 4 complete.** All items done.
+
 ---
 
 ## Phase 5: Game Engine Validation
@@ -190,21 +194,28 @@ for adding new variants. See `docs/GAME_VALIDATION.md` for full details.
 
 | # | Task | Key Files | Status |
 |---|------|-----------|--------|
-| 5.1 | Create parametrized smoke test for all 192 variants | `tests/game/` | DONE |
+| 5.1 | Create parametrized smoke test for all variants | `tests/game/` | DONE |
 | 5.1b | Migrate inline config tests to file-based loading | `tests/game/` | DONE |
-| 5.2 | Add tests for rare-feature games (roll_die, choose, remove) | `tests/game/` | TODO |
+| 5.1c | Verify `antes_only` forced bet style (unit test + smoke test) | `tests/unit/`, `tests/game/` | DONE |
+| 5.2 | Add tests for rare-feature games (roll_die, choose, remove) | `tests/game/` | DONE |
 | 5.3 | Implement `all_exposed`/`any_exposed`/`none_exposed` conditions | `game.py:531` | TODO |
 | 5.4 | Implement `separate.hand_comparison` if needed | `player_action_handler.py` | TODO |
 | 5.5 | Build "can this game be implemented?" assessment skill | `.claude/` | TODO |
 | 5.6 | Build "implement new game variant" skill | `.claude/` | TODO |
 | 5.7 | Fix known engine bugs (13 games, see STATUS.md) | `showdown_manager.py`, `evaluator.py` | DONE |
 
-**5.1 result:** `tests/game/test_all_variants_smoke.py` — parametrized smoke test for all 192 configs.
-Two test functions: `test_variant_config_loads` (all 192 parse correctly) and `test_variant_loads_and_plays`
-(all 192 games play a hand to completion passively). 0 unsupported, 0 xfail. Total: 384 passed.
+**5.1 result:** `tests/game/test_all_variants_smoke.py` — parametrized smoke test for all configs.
+Two test functions: `test_variant_config_loads` and `test_variant_loads_and_plays`
+(all games play a hand to completion passively). 0 unsupported, 0 xfail. Originally 192, now 246 configs.
 
 **5.1b result:** Migrated 12 test files from inline JSON game configs to `load_rules_from_file()`.
 Removed 1,307 lines of duplicated config data. All tests pass with file-based loading.
+
+**5.1c result:** The `antes_only` forced bet style was recognized by the schema/loader but never exercised by any game config or test. Added unit test (`test_dealer_blind_ante.py::test_ante_only_mode`) verifying all players post antes, pot tracks correctly, and game progresses through deal → showdown. Fixed smoke test `create_smoke_game()` to provide `ante` param for `antes_only` games (was crashing on `min(None, stack)`). Converted `9_card_omaha.json` from blinds-with-betting-streets to authentic "flip" format: antes only, no voluntary betting rounds, just deal → discard → community → discard → showdown. Per TwoPlusTwo, this matches how the game is traditionally played ("everyone puts up some wager then the hand proceeds with no additional betting").
+
+**5.2 result:** Added dedicated integration tests for the 3 rarest game features:
+- `tests/game/test_binglaha.py` (7 tests): Tests `roll_die` action + conditional hi/hi-lo showdown. Controls die value via patched `_handle_roll_die`. Covers die values 1-6, boundary values 3/4, Die community card structure, hi-lo dual evaluation (High Hand + Low Hand), and high-only single winner.
+- `tests/game/test_oklahoma.py` (6 tests): Tests `remove` action (board removal based on lowest river card across 3 boards). Uses 3 deck factories: distinct rivers (1 board removed), same rivers (none removed), two tied lowest (both removed). Verifies board removal, surviving board cards, chip conservation.
 
 **5.7 result:** All 13 engine bugs fixed. Zero xfails remaining. Key fixes:
 - `showdown_manager.py`: List handling for holeCards/communityCards in odd-chip logic (2 games)
@@ -224,26 +235,68 @@ Removed 1,307 lines of duplicated config data. All tests pass with file-based lo
 
 ## Phase 6: Pagat.com Variant Expansion
 
-Goal: Expand game library based on cross-reference with Pagat.com poker variants.
-See `docs/PAGAT_CROSS_REFERENCE.md` for the full analysis (352 Pagat variants vs our 192 configs).
+Goal: Expand game library based on cross-reference with Pagat.com and Ichabod801 analysis.
+See `docs/PAGAT_CROSS_REFERENCE.md` for the full analysis (352 Pagat variants vs our configs).
 
-### 6.1 Config-Only New Games (~38 games, no engine changes needed)
+### 6.1 Config-Only New Games (no engine changes needed)
 
 These games use existing engine features and only need a new JSON config file.
 
+**Batch 1 (19 games) — DONE:** Added Kansas Hold'em, Dublin Hold'em, Party Girl Hold'em, Reverse Flop,
+Triple Flop Hold'em, St. Louis Flops, Three Card Hold'em, Poppyha, Nebraska II, Oklahoma Omaha,
+Stud Hold'em, Double Omaha, Flatline Hold'em, Grodnikonda, Anaconda, Ben Franklin, Mexican Stud,
+Down in the Delta, Manila. Library grew from 192 → 211 configs. All pass smoke tests.
+
+**Batch 2 (6 games) — DONE:** Added Sviten Special (Dramaha variant with optional draw),
+7-Card Draw, 2-7 Double Draw, Blind Hold'em, Blind Omaha, Round the World (Cincinnati variant).
+4 items (6.1.1, 6.1.3, 6.1.4, 6.1.5) already existed as configs. Iron Cross (6.1.2) deferred —
+requires evaluation constraint for horizontal/vertical community card line selection. Library at 223 configs.
+Also converted 9-Card Omaha to `antes_only` flip format (no betting streets). All pass smoke tests.
+
+**Batch 3 (23 games) — DONE:** Added from Pagat/Ichabod801 analysis: Alabama Hold'em, Austin Hold'em,
+Cold Omaha, Cool Hand Luke, Dr. Pepper, Five and Ten Draw, Fort Worth Hold'em, Four Card Draw,
+Henway, Hold Me, Houston Hold'em, Hurricane, Lame Brain Pete, Pistol Pete, Short Deck Hold'em,
+Spit in the Ocean, Super Eight, Three Card Draw, Woolworth Stud, Yogi Hold'em,
+5-Card Draw Deuces Wild, 5-Card Straight, 5-Card Stud Lowball. Library grew from 223 → 246 configs.
+Fixed 2 configs (Henway, Hurricane) that needed `two_card_a5_low` eval type for 2-card low hands.
+All pass smoke tests.
+
 | # | Task | Status |
 |---|------|--------|
-| 6.1.1 | Tahoe / Wichita Hold'em (3 hole cards, use 2) | TODO |
-| 6.1.2 | Iron Cross (community in + shape) | TODO |
-| 6.1.3 | Low Chicago (lowest spade wins half) | TODO |
-| 6.1.4 | 5-Card Stud Hi-Lo | TODO |
-| 6.1.5 | Royal Hold'em (T-A only, short deck) | TODO |
-| 6.1.6 | Sviten Special (Scandinavian Dramaha variant) | TODO |
-| 6.1.7 | 7-Card Draw | TODO |
-| 6.1.8 | Double Draw Lowball (2-draw variant) | TODO |
-| 6.1.9 | Blind Hold'em / Blind Omaha (all face-down community) | TODO |
-| 6.1.10 | Round the World (Cincinnati variant) | TODO |
-| 6.1.11 | Remaining ~28 config-only games from Pagat analysis | TODO |
+| 6.1.1 | Tahoe / Wichita Hold'em (3 hole cards, use 2) | DONE (already existed) |
+| 6.1.2 | Iron Cross (community in + shape) | DEFERRED (may need engine changes for line-selection rule) |
+| 6.1.3 | Low Chicago (lowest spade wins half) | DONE (already existed) |
+| 6.1.4 | 5-Card Stud Hi-Lo | DONE (already existed) |
+| 6.1.5 | Royal Hold'em (T-A only, short deck) | DONE (already existed) |
+| 6.1.6 | Sviten Special (Scandinavian Dramaha variant) | DONE |
+| 6.1.7 | 7-Card Draw | DONE |
+| 6.1.8 | Double Draw Lowball (2-draw variant) | DONE |
+| 6.1.9 | Blind Hold'em / Blind Omaha (all face-down community) | DONE |
+| 6.1.10 | Round the World (Cincinnati variant) | DONE |
+| 6.1.11 | Remaining config-only games from Pagat/Ichabod801 analysis | IN PROGRESS (23 of ~38 done) |
+
+### 6.5 Bot Support (DONE)
+
+Goal: Simple bots that let a single human player try any of the 246 game variants.
+
+| # | Task | Status |
+|---|------|--------|
+| 6.5.1 | Extend SimpleBot for all action types (draw, expose, pass, separate, declare, choose, bring-in, complete) | DONE |
+| 6.5.2 | Bot action loop service (background task, per-table locking, shared advance helper) | DONE |
+| 6.5.3 | "Fill with Bot Players" feature (fill_bots socket handler, ready system, bot cleanup) | DONE |
+| 6.5.4 | Unit tests (26) and integration tests (6) | DONE |
+
+**6.5.1 result:** Added `BotDecision` dataclass and `choose_action_full()` to `SimpleBot`. Handles all action types: DRAW/DISCARD (random cards from hand), EXPOSE (face-down cards only), PASS (exact count), SEPARATE (shuffle all), DECLARE (always "high"), CHOOSE (first option), BRING_IN/COMPLETE (minimum amount). Fixed variable-length tuple handling (index access instead of destructuring). Added `BOT_NAMES` list and `remove_all_bots_for_table()` to BotManager.
+
+**6.5.2 result:** Created `bot_action_service.py` with `BotActionService`. `trigger_bot_actions_if_needed()` checks if current player is a bot, starts `socketio.start_background_task()`. Loop processes bot actions with 1.5s delay, per-table Lock prevents concurrent processing, re-reads game state each iteration. Extracted `advance_through_non_player_steps()` into `GameOrchestrator` (shared by websocket_manager, player_action_manager, and bot_action_service). Bot trigger integrated at 3 points: after hand start, after human action, after action processing.
+
+**6.5.3 result:** Added `fill_bots` socket handler in websocket_manager.py — fills empty seats with bot players (bot IDs: `bot_{table_id_short}_{i}`, names from BOT_NAMES). Modified `get_ready_status()` in table_access_manager.py to include bot players (always counted as ready). Frontend emits `fill_bots` on table connect. Bot cleanup when last human leaves. Relabeled lobby checkbox to "Fill with Bot Players".
+
+**6.5.4 result:** Extended `tests/unit/test_simple_bot.py` to 26 tests covering all action types, edge cases (empty hand, no face-down cards), BotDecision dataclass, and bot identification. Created `tests/integration/test_bot_integration.py` with 6 Layer 1 tests: 2-bot Hold'em hand, chip conservation, 4-bot hand, 5-card draw, 7-card stud (Limit+ante), and 500-iteration no-fold regression test.
+
+Key files: `simple_bot.py` (extended), `bot_action_service.py` (new), `game_orchestrator.py` (shared helper), `websocket_manager.py` (fill_bots + triggers), `player_action_manager.py` (trigger), `table_access_manager.py` (bot ready status), `table.js` (fill_bots emit), `lobby.html` (relabeled checkbox).
+
+---
 
 ### 6.2 New Engine Features
 
