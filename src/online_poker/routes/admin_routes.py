@@ -366,6 +366,48 @@ def api_close_table(table_id):
     return jsonify({"success": True, "message": f"Table '{table.name}' closed"})
 
 
+@admin_bp.route("/api/tables/<table_id>/delete", methods=["POST"])
+@admin_required
+def api_delete_table(table_id):
+    """Delete a table and all associated records."""
+    table = db.session.query(PokerTable).filter_by(id=table_id).first()
+    if not table:
+        return jsonify({"success": False, "message": "Table not found"}), 404
+
+    table_name = table.name
+
+    # Clear game session if active
+    try:
+        from ..services.game_orchestrator import game_orchestrator
+
+        game_orchestrator.clear_session(table_id)
+    except Exception as e:
+        current_app.logger.warning(f"Failed to clear session for table {table_id}: {e}")
+
+    # Cash out active players
+    active_accesses = db.session.query(TableAccess).filter_by(table_id=table_id, is_active=True).all()
+    for access in active_accesses:
+        if access.current_stack and access.current_stack > 0:
+            user = db.session.query(User).filter_by(id=access.user_id).first()
+            if user:
+                user.bankroll += access.current_stack
+                transaction = Transaction(
+                    user_id=access.user_id,
+                    amount=access.current_stack,
+                    transaction_type=Transaction.TYPE_CASHOUT,
+                    description=f"Admin deleted table '{table_name}'",
+                    table_id=table_id,
+                )
+                db.session.add(transaction)
+
+    # Delete all access records for this table, then the table itself
+    db.session.query(TableAccess).filter_by(table_id=table_id).delete()
+    db.session.delete(table)
+    db.session.commit()
+
+    return jsonify({"success": True, "message": f"Table '{table_name}' deleted"})
+
+
 @admin_bp.route("/api/variants")
 @admin_required
 def api_variants():

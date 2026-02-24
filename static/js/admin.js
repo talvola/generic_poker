@@ -302,6 +302,7 @@ class AdminPanel {
                 <td>${t.is_private ? '<span class="badge badge-warning">Private</span>' : 'Public'}</td>
                 <td>
                     <button class="btn btn-sm btn-danger" onclick="adminPanel.closeTable('${t.id}', '${this.escapeHtml(t.name)}')">Close</button>
+                    <button class="btn btn-sm btn-danger" style="margin-left:4px" onclick="adminPanel.deleteTable('${t.id}', '${this.escapeHtml(t.name)}')">Delete</button>
                 </td>
             </tr>
         `).join('');
@@ -325,6 +326,27 @@ class AdminPanel {
             }
         } catch (err) {
             this.showNotification('Failed to close table', 'error');
+        }
+    }
+
+    async deleteTable(tableId, tableName) {
+        if (!confirm(`Delete table "${tableName}"? This will cash out players and remove the table permanently.`)) return;
+
+        try {
+            const res = await fetch(`/admin/api/tables/${tableId}/delete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                this.showNotification(data.message);
+                this.loadTables();
+            } else {
+                this.showNotification(data.message, 'error');
+            }
+        } catch (err) {
+            this.showNotification('Failed to delete table', 'error');
         }
     }
 
