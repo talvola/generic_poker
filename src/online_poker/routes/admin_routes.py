@@ -400,7 +400,18 @@ def api_delete_table(table_id):
                 )
                 db.session.add(transaction)
 
-    # Delete all access records for this table, then the table itself
+    # Clear FK references before deleting the table
+    from ..models.chat import ChatMessage, ChatModerationAction
+    from ..models.game_history import GameHistory
+    from ..models.game_session_state import GameSessionState
+
+    # Null out transaction references (keep audit trail)
+    db.session.query(Transaction).filter_by(table_id=table_id).update({"table_id": None})
+    # Delete related records
+    db.session.query(ChatMessage).filter_by(table_id=table_id).delete()
+    db.session.query(ChatModerationAction).filter_by(table_id=table_id).delete()
+    db.session.query(GameHistory).filter_by(table_id=table_id).delete()
+    db.session.query(GameSessionState).filter_by(table_id=table_id).delete()
     db.session.query(TableAccess).filter_by(table_id=table_id).delete()
     db.session.delete(table)
     db.session.commit()
