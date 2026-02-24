@@ -1227,6 +1227,12 @@ class PlayerActionManager:
                 )
                 db.session.add(state)
 
+            # Persist mixed game rotation state
+            if session.mixed_game_config:
+                state.current_variant_index = session.current_variant_index
+                state.hands_in_current_variant = session.hands_in_current_variant
+                state.orbit_size = session.orbit_size
+
             db.session.commit()
             logger.info(f"Saved session state for table {table_id}: dealer_seat={dealer_seat}, hands={hands_played}")
 

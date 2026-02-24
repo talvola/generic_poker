@@ -27,6 +27,11 @@ class GameSessionState(db.Model):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     session_id: Mapped[str | None] = mapped_column(String(36))
 
+    # Mixed game rotation state (nullable for non-mixed games)
+    current_variant_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hands_in_current_variant: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    orbit_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     table: Mapped["PokerTable"] = relationship("PokerTable")
 
     def __repr__(self) -> str:

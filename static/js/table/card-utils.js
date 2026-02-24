@@ -36,8 +36,7 @@ class PokerCardUtils {
             'spades': '\u2660'
         };
 
-        const isRed = card.suit === 'h' || card.suit === 'hearts' || card.suit === 'd' || card.suit === 'diamonds';
-        const colorClass = isRed ? 'red' : 'black';
+        const colorClass = PokerCardUtils.getCardColorClass(card.suit);
         const winningClass = isWinning ? ' winning-hand-card' : '';
 
         return `
@@ -51,6 +50,26 @@ class PokerCardUtils {
     static isCardInWinningHand(cardStr, winningCards) {
         if (!winningCards || !cardStr) return false;
         return winningCards.allCards.includes(cardStr);
+    }
+
+    static isFourColorDeck() {
+        return localStorage.getItem('fourColorDeck') === 'true';
+    }
+
+    static setFourColorDeck(enabled) {
+        localStorage.setItem('fourColorDeck', enabled ? 'true' : 'false');
+    }
+
+    static getCardColorClass(suit) {
+        const s = suit.toLowerCase();
+        if (PokerCardUtils.isFourColorDeck()) {
+            if (s === 'h' || s === 'hearts') return 'red';
+            if (s === 'd' || s === 'diamonds') return 'blue';
+            if (s === 'c' || s === 'clubs') return 'green';
+            return 'black'; // spades
+        }
+        const isRed = s === 'h' || s === 'hearts' || s === 'd' || s === 'diamonds';
+        return isRed ? 'red' : 'black';
     }
 
     static formatCardsForDisplay(cards) {

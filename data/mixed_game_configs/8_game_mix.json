@@ -1,0 +1,19 @@
+{
+  "name": "8_game_mix",
+  "displayName": "8-Game Mix",
+  "category": "Mixed",
+  "minPlayers": 2,
+  "maxPlayers": 7,
+  "rotationType": "orbit",
+  "bettingStructures": ["Limit", "No Limit", "Pot Limit"],
+  "rotation": [
+    {"variant": "27_triple_draw", "bettingStructure": "Limit", "letter": "T"},
+    {"variant": "hold_em", "bettingStructure": "Limit", "letter": "H"},
+    {"variant": "omaha_8", "bettingStructure": "Limit", "letter": "O"},
+    {"variant": "razz", "bettingStructure": "Limit", "letter": "R"},
+    {"variant": "7_card_stud", "bettingStructure": "Limit", "letter": "S"},
+    {"variant": "7_card_stud_8", "bettingStructure": "Limit", "letter": "E"},
+    {"variant": "hold_em", "bettingStructure": "No Limit", "letter": "N"},
+    {"variant": "omaha", "bettingStructure": "Pot Limit", "letter": "P"}
+  ]
+}

@@ -24,7 +24,9 @@ def get_variants():
     """
     try:
         variants = TableManager.get_available_variants()
-        return jsonify({"success": True, "variants": variants, "count": len(variants)})
+        mixed_games = TableManager.get_available_mixed_games()
+        all_variants = variants + mixed_games
+        return jsonify({"success": True, "variants": all_variants, "count": len(all_variants)})
     except Exception as e:
         current_app.logger.error(f"Failed to get variants: {e}")
         return jsonify({"success": False, "error": "Failed to load poker variants"}), 500

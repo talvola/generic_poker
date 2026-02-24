@@ -135,6 +135,8 @@ def create_app(config_class=Config):
             "7_card_stud_8": "7-Card Stud Hi-Lo",
             "razz": "Razz",
             "mexican_poker": "Mexican Poker",
+            "horse": "HORSE",
+            "8_game_mix": "8-Game Mix",
         }
         return variants.get(variant, variant.replace("_", " ").title())
 

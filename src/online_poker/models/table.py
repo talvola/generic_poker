@@ -37,6 +37,9 @@ class PokerTable(db.Model):
     # Bot settings
     allow_bots: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
+    # Mixed game flag
+    is_mixed_game: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     last_activity: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
@@ -153,6 +156,7 @@ class PokerTable(db.Model):
             "current_players": active_players,
             "spectators": active_spectators,
             "is_private": self.is_private,
+            "is_mixed_game": self.is_mixed_game,
             "allow_bots": self.allow_bots,
             "created_at": self.created_at.isoformat(),
             "last_activity": self.last_activity.isoformat(),
@@ -218,6 +222,67 @@ class PokerTable(db.Model):
                 {
                     "small_blind": stakes_dict.get("small_blind"),
                     "big_blind": stakes_dict.get("big_blind"),
+                    "ante": stakes_dict.get("ante", 0),
+                }
+            )
+
+        return Game(**game_params)
+
+    def create_game_instance_for_variant(self, rules: GameRules, betting_structure_str: str) -> Game:
+        """Create a Game instance with a specific betting structure override.
+
+        Used by mixed game rotation where different variants use different structures
+        (e.g., 8-Game Mix: NL Hold'em vs Limit Stud).
+
+        Args:
+            rules: GameRules for the current variant in the rotation
+            betting_structure_str: Betting structure string ("Limit", "No Limit", "Pot Limit")
+
+        Returns:
+            Game instance configured for this variant
+        """
+        from generic_poker.game.betting import BettingStructure
+
+        structure_mapping = {
+            "no-limit": "No Limit",
+            "pot-limit": "Pot Limit",
+            "limit": "Limit",
+            "No Limit": "No Limit",
+            "Pot Limit": "Pot Limit",
+            "Limit": "Limit",
+            "No-Limit": "No Limit",
+            "Pot-Limit": "Pot Limit",
+        }
+
+        structure_value = structure_mapping.get(betting_structure_str, betting_structure_str)
+        betting_structure = BettingStructure(structure_value)
+        stakes_dict = self.get_stakes()
+
+        game_params = {
+            "rules": rules,
+            "structure": betting_structure,
+            "min_buyin": self.get_minimum_buyin(),
+            "max_buyin": self.get_maximum_buyin(),
+            "auto_progress": False,
+        }
+
+        if betting_structure == BettingStructure.LIMIT:
+            game_params.update(
+                {
+                    "small_bet": stakes_dict.get("small_bet"),
+                    "big_bet": stakes_dict.get("big_bet"),
+                    "ante": stakes_dict.get("ante", 0),
+                    "bring_in": stakes_dict.get("bring_in"),
+                }
+            )
+        else:
+            # For NL/PL in mixed games, derive blinds from limit stakes
+            # Convention: small_blind = small_bet/2, big_blind = small_bet
+            small_bet = stakes_dict.get("small_bet", stakes_dict.get("small_blind", 1) * 2)
+            game_params.update(
+                {
+                    "small_blind": stakes_dict.get("small_blind", small_bet // 2),
+                    "big_blind": stakes_dict.get("big_blind", small_bet),
                     "ante": stakes_dict.get("ante", 0),
                 }
             )

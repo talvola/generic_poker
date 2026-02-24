@@ -6,6 +6,7 @@ from typing import Any
 from flask import current_app
 
 from generic_poker.config.loader import GameActionType, GameRules
+from generic_poker.config.mixed_game_loader import MixedGameConfig
 from generic_poker.game.betting import BettingStructure
 
 from ..database import db
@@ -31,6 +32,9 @@ class TableManager:
 
     # Cache for loaded game rules to avoid repeated file I/O
     _rules_cache: dict[str, GameRules] = {}
+
+    # Cache for loaded mixed game configs
+    _mixed_game_cache: dict[str, MixedGameConfig] = {}
 
     # Actions not yet supported in the online platform — all actions now supported
     UNSUPPORTED_ACTIONS = set()
@@ -153,6 +157,81 @@ class TableManager:
             return None
 
     @staticmethod
+    def get_mixed_game_config(name: str) -> MixedGameConfig | None:
+        """Get a mixed game rotation config by name.
+
+        Args:
+            name: Config name (e.g. "horse", "8_game_mix")
+
+        Returns:
+            MixedGameConfig or None if not found
+        """
+        if name in TableManager._mixed_game_cache:
+            return TableManager._mixed_game_cache[name]
+
+        config_file = Path(f"data/mixed_game_configs/{name}.json")
+        if not config_file.exists():
+            return None
+
+        try:
+            config = MixedGameConfig.from_file(config_file)
+            TableManager._mixed_game_cache[name] = config
+            return config
+        except Exception as e:
+            current_app.logger.error(f"Failed to load mixed game config {name}: {e}")
+            return None
+
+    @staticmethod
+    def get_available_mixed_games() -> list[dict[str, Any]]:
+        """Get list of available mixed game rotations.
+
+        Returns:
+            List of mixed game info dicts with name, display_name, etc.
+        """
+        mixed_games = []
+        config_dir = Path("data/mixed_game_configs")
+
+        if not config_dir.exists():
+            return mixed_games
+
+        for config_file in config_dir.glob("*.json"):
+            try:
+                name = config_file.stem
+                config = TableManager.get_mixed_game_config(name)
+                if config:
+                    # Build rotation display names
+                    rotation_display = []
+                    for v in config.rotation:
+                        rules = TableManager.get_variant_rules(v.variant)
+                        display = rules.game if rules else v.variant
+                        rotation_display.append(display)
+
+                    mixed_games.append(
+                        {
+                            "name": config.name,
+                            "display_name": config.display_name,
+                            "category": "Mixed",
+                            "min_players": config.min_players,
+                            "max_players": config.max_players,
+                            "betting_structures": config.betting_structures,
+                            "is_mixed": True,
+                            "rotation": rotation_display,
+                            "rotation_letters": [v.letter for v in config.rotation],
+                        }
+                    )
+            except Exception as e:
+                current_app.logger.warning(f"Failed to load mixed game {config_file.stem}: {e}")
+                continue
+
+        mixed_games.sort(key=lambda x: x["display_name"])
+        return mixed_games
+
+    @staticmethod
+    def is_mixed_game(variant_name: str) -> bool:
+        """Check if a variant name refers to a mixed game config."""
+        return Path(f"data/mixed_game_configs/{variant_name}.json").exists()
+
+    @staticmethod
     def validate_table_config(config: TableConfig) -> None:
         """Validate table configuration against variant rules.
 
@@ -162,6 +241,25 @@ class TableManager:
         Raises:
             TableValidationError: If configuration is invalid
         """
+        # Check if this is a mixed game
+        mixed_config = TableManager.get_mixed_game_config(config.variant)
+        if mixed_config:
+            # Validate player count
+            if config.max_players < mixed_config.min_players:
+                raise TableValidationError(
+                    f"Maximum players ({config.max_players}) is less than variant minimum ({mixed_config.min_players})"
+                )
+            if config.max_players > mixed_config.max_players:
+                raise TableValidationError(
+                    f"Maximum players ({config.max_players}) exceeds variant maximum ({mixed_config.max_players})"
+                )
+            # Validate all sub-variants exist
+            for v in mixed_config.rotation:
+                sub_rules = TableManager.get_variant_rules(v.variant)
+                if not sub_rules:
+                    raise TableValidationError(f"Mixed game references unknown variant: {v.variant}")
+            return
+
         # Get variant rules
         rules = TableManager.get_variant_rules(config.variant)
         if not rules:

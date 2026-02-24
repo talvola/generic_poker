@@ -1,0 +1,16 @@
+{
+  "name": "horse",
+  "displayName": "HORSE",
+  "category": "Mixed",
+  "minPlayers": 2,
+  "maxPlayers": 7,
+  "rotationType": "orbit",
+  "bettingStructures": ["Limit"],
+  "rotation": [
+    {"variant": "hold_em", "bettingStructure": "Limit", "letter": "H"},
+    {"variant": "omaha_8", "bettingStructure": "Limit", "letter": "O"},
+    {"variant": "razz", "bettingStructure": "Limit", "letter": "R"},
+    {"variant": "7_card_stud", "bettingStructure": "Limit", "letter": "S"},
+    {"variant": "7_card_stud_8", "bettingStructure": "Limit", "letter": "E"}
+  ]
+}

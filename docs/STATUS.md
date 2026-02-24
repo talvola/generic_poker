@@ -87,6 +87,8 @@ Flask/SocketIO multiplayer web platform.
 - Hand history display (DB persistence, API, modal with expandable details)
 - Bot support: "Fill with Bot Players" fills empty seats, bots handle all 293 variants (all action types)
 - Game rules display: visual game cards (timeline, tags, descriptions) in lobby modal + standalone HTML tool
+- 4-color deck option (blue diamonds, green clubs) toggled in table settings, persisted in localStorage
+- Mixed game rotation: HORSE and 8-Game Mix with orbit-based variant rotation, frontend tracker, state persistence
 
 ### Remaining Issues
 
@@ -101,14 +103,14 @@ Flask/SocketIO multiplayer web platform.
 
 ## Testing
 
-### Test Counts (2026-02-23)
+### Test Counts (2026-02-24)
 
 | Layer | Tests | Status |
 |-------|-------|--------|
-| Python unit + integration | 724 | All passing |
+| Python unit + integration | 736 | All passing |
 | Smoke test (all 293 variants) | 586 | All passing (0 unsupported, 0 xfail) |
 | Playwright E2E | 57 | All passing (9 spec files) |
-| **Total** | **~1,546** | **All passing** |
+| **Total** | **~1,558** | **All passing** |
 
 ### Test Layers
 

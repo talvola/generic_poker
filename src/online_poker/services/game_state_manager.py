@@ -567,6 +567,10 @@ class GameStateManager:
                 "max_players": session.table.max_players,
                 "is_private": session.table.is_private,
             }
+            # Add mixed game rotation info if applicable
+            mixed_info = session.get_mixed_game_info()
+            if mixed_info:
+                table_info["mixed_game"] = mixed_info
             return table_info
 
         except Exception as e:

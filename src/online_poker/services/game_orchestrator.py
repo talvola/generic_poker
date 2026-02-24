@@ -7,6 +7,7 @@ from threading import Lock
 from typing import Any
 
 from generic_poker.config.loader import GameActionType, GameRules
+from generic_poker.config.mixed_game_loader import MixedGameConfig
 from generic_poker.game.game import Game
 from generic_poker.game.game_state import GameState, PlayerAction
 
@@ -50,6 +51,12 @@ class GameSession:
         # Hand tracking
         self.hands_played = 0
         self.current_hand_id = None
+
+        # Mixed game rotation state
+        self.mixed_game_config: MixedGameConfig | None = None
+        self.current_variant_index: int = 0
+        self.hands_in_current_variant: int = 0
+        self.orbit_size: int = 0  # Number of hands per orbit (= player count at rotation start)
 
         logger.info(f"Created game session {self.session_id} for table {table.id}")
 
@@ -381,6 +388,7 @@ class GameSession:
                 if self.game.state == GameState.COMPLETE:
                     self.hands_played += 1
                     self.current_hand_id = None
+                    self.increment_variant_hand_count()
 
                     # Update player chip stacks in database
                     self._update_player_stacks()
@@ -460,6 +468,106 @@ class GameSession:
             "last_activity": self.last_activity.isoformat(),
         }
 
+    # --- Mixed game rotation ---
+
+    def should_rotate(self) -> bool:
+        """Check if it's time to rotate to the next variant in a mixed game.
+
+        Returns True when the current variant has completed a full orbit
+        (one hand per player at the table when the variant started).
+        """
+        if not self.mixed_game_config:
+            return False
+        if self.orbit_size <= 0:
+            return False
+        return self.hands_in_current_variant >= self.orbit_size
+
+    def rotate_variant(self) -> str:
+        """Advance to the next variant in the rotation.
+
+        Preserves player stacks, seats, and dealer button position.
+
+        Returns:
+            Display name of the new variant.
+        """
+        if not self.mixed_game_config:
+            return ""
+
+        # Advance index (wrap around)
+        self.current_variant_index = (self.current_variant_index + 1) % len(self.mixed_game_config.rotation)
+        self.hands_in_current_variant = 0
+        # Recalculate orbit size based on current player count
+        self.orbit_size = len(self.game.table.players)
+
+        self._swap_game_for_variant()
+
+        new_rules = self.game_rules
+        logger.info(f"Session {self.session_id} rotated to variant {self.current_variant_index}: {new_rules.game}")
+        return new_rules.game
+
+    def _swap_game_for_variant(self) -> None:
+        """Create a new Game instance for the current variant in the rotation.
+
+        Preserves players (IDs, names, stacks, seats) and dealer button position.
+        """
+        mixed_variant = self.mixed_game_config.rotation[self.current_variant_index]
+
+        # Load new rules
+        new_rules = TableManager.get_variant_rules(mixed_variant.variant)
+        if not new_rules:
+            logger.error(f"Cannot load rules for variant {mixed_variant.variant}")
+            return
+
+        # Save current state
+        player_data = {}
+        for pid, player in self.game.table.players.items():
+            player_data[pid] = {
+                "name": player.name,
+                "stack": player.stack,
+                "seat": player.position,
+            }
+        button_seat = self.game.table.button_seat
+
+        # Update rules and create new game
+        self.game_rules = new_rules
+        self.game = self.table.create_game_instance_for_variant(new_rules, mixed_variant.betting_structure)
+
+        # Restore players
+        for pid, data in player_data.items():
+            self.game.add_player(pid, data["name"], data["stack"], preferred_seat=data["seat"])
+
+        # Restore dealer button
+        self.game.table.button_seat = button_seat
+
+    def increment_variant_hand_count(self) -> None:
+        """Increment the hand counter for the current variant in a mixed game."""
+        if self.mixed_game_config:
+            self.hands_in_current_variant += 1
+
+    def get_mixed_game_info(self) -> dict[str, Any] | None:
+        """Get rotation info for the frontend.
+
+        Returns:
+            Dict with rotation state, or None if not a mixed game.
+        """
+        if not self.mixed_game_config:
+            return None
+
+        rotation_display = []
+        for v in self.mixed_game_config.rotation:
+            rules = TableManager.get_variant_rules(v.variant)
+            rotation_display.append(rules.game if rules else v.variant)
+
+        return {
+            "name": self.mixed_game_config.display_name,
+            "current_variant": self.game_rules.game,
+            "current_variant_index": self.current_variant_index,
+            "rotation_variants": rotation_display,
+            "rotation_letters": [v.letter for v in self.mixed_game_config.rotation],
+            "hands_until_rotation": max(0, self.orbit_size - self.hands_in_current_variant),
+            "orbit_size": self.orbit_size,
+        }
+
     def cleanup(self) -> None:
         """Clean up the game session."""
         self.is_active = False
@@ -483,6 +591,8 @@ class GameOrchestrator:
     def create_session(self, table_id: str) -> tuple[bool, str, GameSession | None]:
         """Create a new game session for a table.
 
+        Handles both single-variant tables and mixed game tables (HORSE, 8-Game Mix).
+
         Args:
             table_id: ID of the table to create session for
 
@@ -500,13 +610,35 @@ class GameOrchestrator:
                 if not table:
                     return False, "Table not found", None
 
-                # Get game rules
-                game_rules = TableManager.get_variant_rules(table.variant)
-                if not game_rules:
-                    return False, f"Game rules not found for variant {table.variant}", None
+                # Check if this is a mixed game
+                mixed_config = TableManager.get_mixed_game_config(table.variant)
+                if mixed_config:
+                    # Load the first variant in the rotation
+                    first_variant = mixed_config.rotation[0]
+                    game_rules = TableManager.get_variant_rules(first_variant.variant)
+                    if not game_rules:
+                        return (
+                            False,
+                            f"Game rules not found for variant {first_variant.variant}",
+                            None,
+                        )
 
-                # Create the session
-                session = GameSession(table, game_rules)
+                    session = GameSession(table, game_rules)
+                    session.mixed_game_config = mixed_config
+                    session.current_variant_index = 0
+                    session.hands_in_current_variant = 0
+                    # orbit_size set when first hand starts (need player count)
+                else:
+                    # Standard single-variant table
+                    game_rules = TableManager.get_variant_rules(table.variant)
+                    if not game_rules:
+                        return (
+                            False,
+                            f"Game rules not found for variant {table.variant}",
+                            None,
+                        )
+                    session = GameSession(table, game_rules)
+
                 self.sessions[table_id] = session
 
                 logger.info(f"Created game session for table {table_id}")

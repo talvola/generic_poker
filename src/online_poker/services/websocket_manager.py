@@ -1216,12 +1216,61 @@ class WebSocketManager:
                     session.hands_played = saved_state.hands_played
                     if session.game:
                         session.game.table.button_seat = saved_state.dealer_seat
+                    # Restore mixed game rotation state
+                    if session.mixed_game_config and saved_state.current_variant_index is not None:
+                        session.current_variant_index = saved_state.current_variant_index
+                        session.hands_in_current_variant = saved_state.hands_in_current_variant or 0
+                        session.orbit_size = saved_state.orbit_size or 0
+                        # Swap to the correct variant if not the first one
+                        if session.current_variant_index > 0:
+                            session._swap_game_for_variant()
+                            # Re-add players after swap
+                            for player in ready_status["players"]:
+                                if player["is_ready"]:
+                                    user = user_manager.get_user_by_id(player["user_id"])
+                                    username = user.username if user else "Unknown"
+                                    access = TableAccessManager.get_user_access(player["user_id"], table_id)
+                                    buy_in = access.current_stack if access else 100
+                                    seat = access.seat_number if access else None
+                                    session.add_player(player["user_id"], username, buy_in, seat_number=seat)
                     logger.info(
                         f"Restored session state for table {table_id}: "
                         f"dealer_seat={saved_state.dealer_seat}, hands={saved_state.hands_played}"
                     )
             except Exception as restore_err:
                 logger.error(f"Failed to restore session state for table {table_id}: {restore_err}")
+
+            # Initialize orbit size for mixed games on first hand
+            if session.mixed_game_config and session.orbit_size == 0:
+                session.orbit_size = len(session.game.table.players)
+                logger.info(f"Mixed game orbit size set to {session.orbit_size} for table {table_id}")
+
+            # Check if mixed game needs to rotate variants
+            if session.should_rotate():
+                new_variant = session.rotate_variant()
+                logger.info(f"Mixed game rotated to {new_variant} at table {table_id}")
+                # Re-add players that may not have been in the session yet
+                for player in ready_status["players"]:
+                    if player["is_ready"]:
+                        user = user_manager.get_user_by_id(player["user_id"])
+                        username = user.username if user else "Unknown"
+                        access = TableAccessManager.get_user_access(player["user_id"], table_id)
+                        buy_in = access.current_stack if access else 100
+                        seat = access.seat_number if access else None
+                        session.add_player(player["user_id"], username, buy_in, seat_number=seat)
+                # Announce variant change in chat
+                mixed_info = session.get_mixed_game_info()
+                if mixed_info:
+                    self.broadcast_game_action_chat(
+                        table_id,
+                        f"*** NOW PLAYING: {mixed_info['current_variant']} ***",
+                        "phase_change",
+                    )
+                    self.broadcast_to_table(
+                        table_id,
+                        "variant_changed",
+                        {"mixed_game": mixed_info},
+                    )
 
             # Check if we can start a hand - use session.game directly
             game = session.game

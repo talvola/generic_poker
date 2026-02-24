@@ -190,7 +190,7 @@ class PokerLobby {
 
     populateVariantDropdowns() {
         // Group variants by category
-        const categoryOrder = ["Hold'em", 'Omaha', 'Stud', 'Draw', 'Pineapple', 'Dramaha', 'Straight', 'Other'];
+        const categoryOrder = ['Mixed', "Hold'em", 'Omaha', 'Stud', 'Draw', 'Pineapple', 'Dramaha', 'Straight', 'Other'];
         const grouped = {};
         for (const v of this.variants) {
             const cat = v.category || 'Other';

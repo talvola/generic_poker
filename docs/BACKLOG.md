@@ -313,14 +313,22 @@ Features prioritized by casino relevance and games unlocked. Each unlocks multip
 
 | # | Feature | Games Unlocked | Casino Relevance | Difficulty | Status |
 |---|---------|---------------|-----------------|------------|--------|
-| 6.2.1 | Mixed Game Rotation (HORSE, 8 Game Mix, Dealer's Choice) | ~10 | Very High | Medium | TODO |
+| 6.2.1 | Mixed Game Rotation (HORSE, 8 Game Mix, Dealer's Choice) | ~10 | Very High | Medium | DONE (HORSE + 8-Game Mix) |
 | 6.2.2 | Buy Your Card (pay chips to acquire/replace cards) | ~19 | Medium | Medium-Hard | TODO |
 | 6.2.3 | Dynamic Wild Cards (event-triggered wild changes) | ~12 | Medium | Hard | TODO |
 | 6.2.4 | Enhanced Pass Mechanics (multi-round, accept/reject) | ~8 | Low-Medium | Easy-Medium | TODO |
 | 6.2.5 | No Peek Mechanic (blind card reveal game mode) | ~4 | Low | Hard | TODO |
 | 6.2.6 | Inverted Visibility / Indian Poker (cards visible to opponents only) | ~2 | Very Low | Medium | TODO |
 
-**6.2.1 details:** Orchestration layer above Game that rotates through configs (e.g., HORSE = Hold'em → Omaha 8 → Razz → 7-Stud → 7-Stud 8). Handles blind/ante transitions between variants. All individual games already work.
+**6.2.1 result:** Implemented HORSE and 8-Game Mix rotation. Zero core engine changes — all rotation logic lives in `GameSession` (online platform layer).
+- **Config system:** New `data/mixed_game_configs/` directory with `horse.json` and `8_game_mix.json`. `MixedGameConfig` dataclass in `src/generic_poker/config/mixed_game_loader.py` loads rotation definitions.
+- **Rotation logic:** `GameSession` tracks `mixed_game_config`, `current_variant_index`, `hands_in_current_variant`, `orbit_size`. `should_rotate()` triggers after each dealer orbit. `rotate_variant()` calls `_swap_game_for_variant()` which saves player stacks/seats/button, loads new `GameRules`, creates new `Game`, and restores players.
+- **Blind/ante transitions:** Handled automatically — `create_game_instance_for_variant()` on `PokerTable` maps stakes to the correct forced bet style per variant. 8-Game Mix derives NL/PL blinds from Limit stakes (`small_blind = small_bet/2`).
+- **Frontend:** Rotation tracker (H-O-R-S-E pills with active highlight) in table header. `variant_changed` WebSocket event shows notification on game change. `updateGameInfo()` updates header variant text.
+- **Persistence:** `GameSessionState` stores rotation state (`current_variant_index`, `hands_in_current_variant`, `orbit_size`) for server restart recovery.
+- **DB:** `PokerTable.is_mixed_game` boolean column. Lobby variants API includes mixed games in "Mixed" category.
+- **Tests:** 12 integration tests (config loading, rotation order, all 5 HORSE variants play to completion, stack preservation, NL/PL variants, orbit tracking).
+- Dealer's Choice deferred — needs additional UI for dealer to pick variant each orbit.
 
 **6.2.2 details:** New `PlayerAction.BUY` action. Config schema: `{"buy": {"cost": "fixed", "amount": 50, "trigger": "rank", "ranks": ["3"]}}`. Fixed-cost buys are easiest; auction variants need bidding sub-rounds.
 
@@ -367,7 +375,7 @@ Goal: Make the app fully playable on phones and tablets. This is a large effort 
 | # | Task | Status |
 |---|------|--------|
 | 8.1 | Game rules display (visual game cards from JSON configs) | DONE |
-| 8.2 | 4-color deck option (blue diamonds, green clubs) for better card readability | TODO |
+| 8.2 | 4-color deck option (blue diamonds, green clubs) for better card readability | DONE |
 | 8.3 | Stud games: show each player's visible cards in table chat when action order changes | TODO |
 
 **8.1 result:** Visual game description cards inspired by abby99 Mixed Game Cards format. Each card shows game name, subtitle tags (Blinds/Antes, Split Pot, Qualifier, Wild Cards, Max Players), a visual timeline with card stacks (I=individual, C=community), bet chips, and color-coded action boxes (draw=blue, discard=red, expose=green, pass=purple, separate=orange, declare=pink), plus Final Hand description and Split Pot info.
@@ -377,7 +385,7 @@ Three components:
 - **Standalone tool** `tools/generate_game_cards.py` — generates a single HTML file with all 293 game cards (filterable, print-friendly). Usage: `python tools/generate_game_cards.py [output.html] [--filter PATTERN]`
 - **Lobby integration** — "View Rules" link appears next to variant selector in create-table form; opens modal with visual game card via `/api/tables/variants/<id>/rules` API endpoint
 
-**8.1 details:** Standard 2-color decks (red/black) can be hard to read with many visible cards (e.g., 7-Card Stud with 4 face-up cards per player). 4-color decks use distinct colors per suit: spades=black, hearts=red, diamonds=blue, clubs=green. Many online poker platforms offer this as a user preference toggle. Implementation: add CSS classes for `.card.blue` (diamonds) and `.card.green` (clubs), toggle via user setting stored in localStorage, add settings UI.
+**8.2 result:** 4-color deck option. Spades=black, hearts=red, diamonds=blue, clubs=green. CSS variables `--card-blue` and `--card-green` with `.card.blue` and `.card.green` classes. `PokerCardUtils.getCardColorClass()` checks `localStorage.fourColorDeck`. Settings toggle checkbox in table side panel. Instant re-render on toggle via `refreshCards()`. Changes: `table.css` (4 lines CSS vars + 8 lines classes + 30 lines settings section), `card-utils.js` (3 new static methods), `table.js` (toggle event + refreshCards + updateGameInfo), `table.html` (settings section in side panel).
 
 ---
 

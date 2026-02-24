@@ -96,6 +96,16 @@ class PokerTable {
             this.showHandHistory();
         });
 
+        // 4-color deck toggle
+        const fourColorToggle = document.getElementById('four-color-deck-toggle');
+        if (fourColorToggle) {
+            fourColorToggle.checked = PokerCardUtils.isFourColorDeck();
+            fourColorToggle.addEventListener('change', () => {
+                PokerCardUtils.setFourColorDeck(fourColorToggle.checked);
+                this.refreshCards();
+            });
+        }
+
         // Debug toggle
         document.getElementById('debug-toggle').addEventListener('click', () => {
             this.toggleDebugPanel();
@@ -240,6 +250,17 @@ class PokerTable {
         this.socket.on('game_state_update', (data) => {
             console.log('DEBUG: Game state update received:', data);
             this.updateGameState(data);
+        });
+
+        this.socket.on('variant_changed', (data) => {
+            console.log('DEBUG: Variant changed:', data);
+            const mixed = data.mixed_game;
+            if (mixed) {
+                PokerModals.showNotification(
+                    `Now playing: ${mixed.current_variant}`, 'info', 3000
+                );
+                this.updateRotationTracker(mixed);
+            }
         });
     }
 
@@ -417,6 +438,11 @@ class PokerTable {
         } else {
             this.timer.stop();
         }
+    }
+
+    refreshCards() {
+        this.renderPlayers();
+        this.renderCommunityCards(this.store.gameState?.community_cards);
     }
 
     async fetchAndDisplayHandResults() {
@@ -1518,6 +1544,42 @@ class PokerTable {
         document.getElementById('hand-number').textContent = this.store.handNumber;
         document.getElementById('player-count').textContent =
             `${Object.keys(this.store.players).length}/${this.store.gameState?.max_players || 9}`;
+
+        // Update mixed game variant display
+        const mixedGame = this.store.gameState?.table_info?.mixed_game;
+        const variantEl = document.querySelector('.table-details .variant');
+        if (mixedGame && variantEl) {
+            variantEl.textContent = `${mixedGame.name} - ${mixedGame.current_variant}`;
+            variantEl.title = mixedGame.rotation_variants.join(' \u2192 ');
+        }
+
+        // Update rotation tracker if present
+        this.updateRotationTracker(mixedGame);
+    }
+
+    updateRotationTracker(mixedGame) {
+        let tracker = document.getElementById('rotation-tracker');
+        if (!mixedGame) {
+            if (tracker) tracker.style.display = 'none';
+            return;
+        }
+
+        if (!tracker) {
+            // Create tracker element
+            tracker = document.createElement('div');
+            tracker.id = 'rotation-tracker';
+            tracker.className = 'rotation-tracker';
+            const tableDetails = document.querySelector('.table-details');
+            if (tableDetails) tableDetails.appendChild(tracker);
+        }
+        tracker.style.display = 'flex';
+
+        const letters = mixedGame.rotation_letters || [];
+        const currentIdx = mixedGame.current_variant_index;
+        tracker.innerHTML = letters.map((letter, i) =>
+            `<span class="rotation-letter${i === currentIdx ? ' active' : ''}" ` +
+            `title="${mixedGame.rotation_variants[i]}">${letter}</span>`
+        ).join('');
     }
 
     handlePlayerJoined(data) {

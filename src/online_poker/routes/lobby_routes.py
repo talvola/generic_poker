@@ -123,6 +123,12 @@ def create_table():
         table = table_manager.create_table(current_user.id, config)
 
         if table:
+            # Mark as mixed game if applicable
+            if table_manager.is_mixed_game(data["variant"]):
+                table.is_mixed_game = True
+                from ..database import db
+
+                db.session.commit()
             return jsonify({"success": True, "table_id": table.id, "message": "Table created successfully"})
         else:
             return jsonify({"success": False, "error": "Failed to create table"}), 500
