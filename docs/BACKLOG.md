@@ -366,8 +366,16 @@ Goal: Make the app fully playable on phones and tablets. This is a large effort 
 
 | # | Task | Status |
 |---|------|--------|
-| 8.1 | 4-color deck option (blue diamonds, green clubs) for better card readability | TODO |
-| 8.2 | Stud games: show each player's visible cards in table chat when action order changes | TODO |
+| 8.1 | Game rules display (visual game cards from JSON configs) | DONE |
+| 8.2 | 4-color deck option (blue diamonds, green clubs) for better card readability | TODO |
+| 8.3 | Stud games: show each player's visible cards in table chat when action order changes | TODO |
+
+**8.1 result:** Visual game description cards inspired by abby99 Mixed Game Cards format. Each card shows game name, subtitle tags (Blinds/Antes, Split Pot, Qualifier, Wild Cards, Max Players), a visual timeline with card stacks (I=individual, C=community), bet chips, and color-coded action boxes (draw=blue, discard=red, expose=green, pass=purple, separate=orange, declare=pink), plus Final Hand description and Split Pot info.
+
+Three components:
+- **Shared module** `src/generic_poker/config/game_description.py` — extracts display data from game config JSONs (subtitle tags, timeline, hand descriptions, wild cards, split pot info)
+- **Standalone tool** `tools/generate_game_cards.py` — generates a single HTML file with all 293 game cards (filterable, print-friendly). Usage: `python tools/generate_game_cards.py [output.html] [--filter PATTERN]`
+- **Lobby integration** — "View Rules" link appears next to variant selector in create-table form; opens modal with visual game card via `/api/tables/variants/<id>/rules` API endpoint
 
 **8.1 details:** Standard 2-color decks (red/black) can be hard to read with many visible cards (e.g., 7-Card Stud with 4 face-up cards per player). 4-color decks use distinct colors per suit: spades=black, hearts=red, diamonds=blue, clubs=green. Many online poker platforms offer this as a user preference toggle. Implementation: add CSS classes for `.card.blue` (diamonds) and `.card.green` (clubs), toggle via user setting stored in localStorage, add settings UI.
 

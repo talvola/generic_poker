@@ -240,6 +240,12 @@ Can all game mechanics be expressed with existing config features?
    pytest tests/game/test_new_game.py -v
    ```
 
+5. **Verify the game card** renders correctly
+   ```bash
+   python tools/generate_game_cards.py --filter "new_game"
+   ```
+   Open the generated HTML file to confirm the visual timeline and descriptions are correct.
+
 ### Requires Code Changes
 
 1. **Identify the gap** (new action type, evaluation type, etc.)

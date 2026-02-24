@@ -127,7 +127,9 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="game-variant">Game Variant:</label>
+                        <label for="game-variant">Game Variant:
+                            <a href="#" id="view-rules-link" style="font-weight: normal; font-size: 0.85em; margin-left: 8px; display: none;" onclick="showVariantRules(); return false;">View Rules</a>
+                        </label>
                         <select id="game-variant" name="variant" required>
                             <option value="">Select a variant</option>
                             <!-- Populated dynamically from API -->
@@ -249,6 +251,26 @@
                 </button>
                 <button id="spectate-table-btn" class="btn btn-outline">
                     Spectate
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Rules Modal -->
+    <div id="game-rules-modal" class="modal">
+        <div class="modal-content" style="max-width: 520px;">
+            <div class="modal-header">
+                <h3 id="game-rules-title">Game Rules</h3>
+                <button class="modal-close" onclick="closeModal('game-rules-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="game-rules-content">
+                    <!-- Game rules card will be populated here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('game-rules-modal')">
+                    Close
                 </button>
             </div>
         </div>

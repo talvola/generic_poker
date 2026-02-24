@@ -86,6 +86,7 @@ Flask/SocketIO multiplayer web platform.
 - Parametrized E2E smoke tests (15 variants covering all action types and community layouts)
 - Hand history display (DB persistence, API, modal with expandable details)
 - Bot support: "Fill with Bot Players" fills empty seats, bots handle all 293 variants (all action types)
+- Game rules display: visual game cards (timeline, tags, descriptions) in lobby modal + standalone HTML tool
 
 ### Remaining Issues
 

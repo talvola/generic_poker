@@ -30,6 +30,76 @@ def get_variants():
         return jsonify({"success": False, "error": "Failed to load poker variants"}), 500
 
 
+@table_bp.route("/variants/<variant_id>/rules", methods=["GET"])
+@login_required
+def get_variant_rules(variant_id: str):
+    """Get game rules/description card for a variant.
+
+    Args:
+        variant_id: Filename stem of the variant config (e.g., 'hold_em')
+
+    Returns:
+        JSON response with game card data for display
+    """
+    try:
+        from pathlib import Path
+
+        config_dir = Path(__file__).parent.parent.parent.parent / "data" / "game_configs"
+        config_path = config_dir / f"{variant_id}.json"
+
+        if not config_path.exists():
+            return jsonify({"success": False, "error": "Variant not found"}), 404
+
+        import json
+
+        with open(config_path) as f:
+            config = json.load(f)
+
+        from generic_poker.config.game_description import (
+            build_timeline,
+            get_final_hand_description,
+            get_split_pot_description,
+            get_subtitle_tags,
+            get_wild_cards_info,
+        )
+
+        card_data = {
+            "game": config.get("game", variant_id),
+            "category": config.get("category", "Other"),
+            "tags": get_subtitle_tags(config),
+            "timeline": [],
+            "final_hands": get_final_hand_description(config),
+            "split_pot": get_split_pot_description(config),
+            "wild_cards": get_wild_cards_info(config),
+            "max_players": config.get("players", {}).get("max", 9),
+            "min_players": config.get("players", {}).get("min", 2),
+            "betting_structures": config.get("bettingStructures", []),
+        }
+
+        # Serialize timeline for frontend
+        for elem in build_timeline(config):
+            entry = {"type": elem[0]}
+            if len(elem) > 1 and elem[0] != "bet":
+                entry["label"] = elem[1]
+            if elem[0] == "community":
+                entry["count"] = elem[1]
+            if elem[0] == "individual" and len(elem) > 2:
+                cards_list = elem[2]
+                has_up = any(c.get("state") == "face up" for c in cards_list)
+                has_down = any(c.get("state", "face down") == "face down" for c in cards_list)
+                total = sum(c.get("number", 1) for c in cards_list)
+                entry["has_up"] = has_up
+                entry["has_down"] = has_down
+                entry["total_cards"] = total
+            card_data["timeline"].append(entry)
+
+        return jsonify({"success": True, "rules": card_data})
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to get variant rules: {e}")
+        return jsonify({"success": False, "error": "Failed to get variant rules"}), 500
+
+
 @table_bp.route("/betting-structures", methods=["GET"])
 @login_required
 def get_betting_structures():
