@@ -417,11 +417,12 @@ class TableAccessManager:
                 if session and session.game:
                     for pid, player in session.game.table.players.items():
                         if SimpleBot.is_bot_player(pid) and pid not in human_ids:
+                            seat_num = session.game.table.layout.get_player_seat(pid)
                             players.append(
                                 {
                                     "user_id": pid,
                                     "username": player.name,
-                                    "seat_number": player.seat,
+                                    "seat_number": seat_num,
                                     "is_ready": True,
                                 }
                             )
