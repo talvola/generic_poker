@@ -28,6 +28,32 @@ with app.app_context():
         else:
             print(f'Note: {e}')
 
+    # Add is_mixed_game column to poker_tables if it doesn't exist
+    try:
+        db.session.execute(text('ALTER TABLE poker_tables ADD COLUMN is_mixed_game BOOLEAN NOT NULL DEFAULT FALSE'))
+        db.session.commit()
+        print('Added is_mixed_game column to poker_tables')
+    except Exception as e:
+        db.session.rollback()
+        if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+            print('is_mixed_game column already exists')
+        else:
+            print(f'Note: {e}')
+
+    # Add mixed game rotation columns to game_session_state if they don't exist
+    for col in ['current_variant_index INTEGER', 'hands_in_current_variant INTEGER', 'orbit_size INTEGER']:
+        col_name = col.split()[0]
+        try:
+            db.session.execute(text(f'ALTER TABLE game_session_state ADD COLUMN {col}'))
+            db.session.commit()
+            print(f'Added {col_name} column to game_session_state')
+        except Exception as e:
+            db.session.rollback()
+            if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+                print(f'{col_name} column already exists')
+            else:
+                print(f'Note: {e}')
+
     # Create disabled_variants table if it doesn't exist
     try:
         db.session.execute(text('''
