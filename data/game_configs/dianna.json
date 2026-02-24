@@ -1,0 +1,134 @@
+{
+  "game": "Dianna's Game",
+  "category": "Other",
+  "references": [
+    {
+      "url": "https://ichabod801.pythonanywhere.com/",
+      "description": "ichabod801 - Poker Variants"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 9
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 3,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "First Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal First Community Card"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Second Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Second Community Card"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Third Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ],
+        "wildCards": [
+          {
+            "type": "last_community_card",
+            "role": "wild",
+            "scope": "global",
+            "match": "rank"
+          }
+        ]
+      },
+      "name": "Deal Third Community Card (Wild)"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Fourth Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "best five cards from hole and community",
+    "bestHand": [
+      {
+        "evaluationType": "high_wild_bug",
+        "anyCards": 5,
+        "wildCards": [
+          {
+            "type": "last_community_card",
+            "role": "wild",
+            "scope": "global",
+            "match": "rank"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "game": "Fifty Two Draw",
+  "category": "Draw",
+  "references": [
+    {
+      "url": "https://www.pagat.com/poker/variants/5draw.html",
+      "description": "Pagat.com - Five Card Draw variants"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 6
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "First Bet"
+    },
+    {
+      "draw": {
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "First Draw"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Second Bet"
+    },
+    {
+      "draw": {
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Second Draw"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all cards",
+    "bestHand": [
+      {
+        "evaluationType": "high",
+        "anyCards": 5
+      }
+    ]
+  }
+}

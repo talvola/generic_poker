@@ -1,0 +1,81 @@
+{
+  "game": "7-Card 2-7 Single Draw",
+  "category": "Draw",
+  "references": [
+    {
+      "url": "https://www.pagat.com/poker/variants/lowball.html#kansas",
+      "description": "Pagat.com - 2-7 Lowball variants"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 4
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "No Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 7,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Initial Bet"
+    },
+    {
+      "draw": {
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Draw Cards"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all cards",
+    "bestHand": [
+      {
+        "evaluationType": "27_low",
+        "anyCards": 5
+      }
+    ]
+  }
+}

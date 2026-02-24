@@ -1,0 +1,117 @@
+{
+  "game": "Pig Poker",
+  "category": "Other",
+  "references": [
+    {
+      "url": "https://www.pagat.com/poker/variants/stud.html",
+      "description": "Pagat.com - Stud Poker variants"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 7
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 3,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "First Bet"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Fourth Street"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Second Bet"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Fifth Street"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Third Bet"
+    },
+    {
+      "draw": {
+        "cards": [
+          {
+            "number": 3,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Draw Cards"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all cards",
+    "bestHand": [
+      {
+        "evaluationType": "high",
+        "anyCards": 5
+      }
+    ]
+  }
+}

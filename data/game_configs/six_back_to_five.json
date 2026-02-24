@@ -1,0 +1,94 @@
+{
+  "game": "Six Back to Five",
+  "category": "Draw",
+  "references": [
+    {
+      "url": "https://www.pagat.com/poker/variants/5draw.html",
+      "description": "Pagat.com - Five Card Draw variants"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 6
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 6,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "discard": {
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Discard One"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Initial Bet"
+    },
+    {
+      "draw": {
+        "cards": [
+          {
+            "number": 3,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Draw Cards"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all cards",
+    "bestHand": [
+      {
+        "evaluationType": "high",
+        "anyCards": 5
+      }
+    ]
+  }
+}

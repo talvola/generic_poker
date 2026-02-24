@@ -1,0 +1,178 @@
+{
+  "game": "Texas League Baseball",
+  "category": "Hold'em",
+  "references": [
+    {
+      "url": "https://ichabod801.pythonanywhere.com/",
+      "description": "ichabod801 - Poker Variants"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 9
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 2,
+            "state": "face down"
+          }
+        ],
+        "wildCards": [
+          {
+            "type": "rank",
+            "rank": "3",
+            "role": "wild"
+          },
+          {
+            "type": "rank",
+            "rank": "9",
+            "role": "wild"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Pre-Flop Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 3,
+            "state": "face up"
+          }
+        ],
+        "wildCards": [
+          {
+            "type": "rank",
+            "rank": "3",
+            "role": "wild"
+          },
+          {
+            "type": "rank",
+            "rank": "9",
+            "role": "wild"
+          }
+        ]
+      },
+      "name": "Deal Flop"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Post-Flop Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ],
+        "wildCards": [
+          {
+            "type": "rank",
+            "rank": "3",
+            "role": "wild"
+          },
+          {
+            "type": "rank",
+            "rank": "9",
+            "role": "wild"
+          }
+        ]
+      },
+      "name": "Deal Turn"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Turn Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ],
+        "wildCards": [
+          {
+            "type": "rank",
+            "rank": "3",
+            "role": "wild"
+          },
+          {
+            "type": "rank",
+            "rank": "9",
+            "role": "wild"
+          }
+        ]
+      },
+      "name": "Deal River"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "River Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "any combination of hole and community cards",
+    "bestHand": [
+      {
+        "evaluationType": "high_wild_bug",
+        "anyCards": 5,
+        "wildCards": [
+          {
+            "type": "rank",
+            "rank": "3",
+            "role": "wild"
+          },
+          {
+            "type": "rank",
+            "rank": "9",
+            "role": "wild"
+          }
+        ]
+      }
+    ]
+  }
+}

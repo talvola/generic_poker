@@ -1,0 +1,154 @@
+{
+  "game": "Seven Card Mutual",
+  "category": "Hold'em",
+  "references": [
+    {
+      "url": "https://ichabod801.pythonanywhere.com/",
+      "description": "ichabod801 poker variant collection"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 9
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 2,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Pre-Flop Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal First Community Card"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "First Community Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Second Community Card"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Second Community Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Third Community Card"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Third Community Bet"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Fourth Community Card"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Fourth Community Bet"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Final Hole Card"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "any combination of hole and community cards",
+    "bestHand": [
+      {
+        "evaluationType": "high",
+        "anyCards": 5
+      }
+    ]
+  }
+}

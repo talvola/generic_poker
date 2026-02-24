@@ -1,0 +1,221 @@
+{
+  "game": "Eighty Eight",
+  "category": "Stud",
+  "references": [
+    {
+      "url": "https://ichabod801.pythonanywhere.com/",
+      "description": "ichabod801 - Poker Variants"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 6
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 2,
+            "state": "face down"
+          }
+        ],
+        "wildCards": [
+          {
+            "type": "rank",
+            "rank": "8",
+            "role": "wild"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "First Bet"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ],
+        "wildCards": [
+          {
+            "type": "rank",
+            "rank": "8",
+            "role": "wild"
+          }
+        ]
+      },
+      "name": "Deal Third Street"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Third Street Bet"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ],
+        "wildCards": [
+          {
+            "type": "rank",
+            "rank": "8",
+            "role": "wild"
+          }
+        ]
+      },
+      "name": "Deal Fourth Street"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Fourth Street Bet"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ],
+        "wildCards": [
+          {
+            "type": "rank",
+            "rank": "8",
+            "role": "wild"
+          }
+        ]
+      },
+      "name": "Deal Fifth Street"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Fifth Street Bet"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ],
+        "wildCards": [
+          {
+            "type": "rank",
+            "rank": "8",
+            "role": "wild"
+          }
+        ]
+      },
+      "name": "Deal Sixth Street"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Sixth Street Bet"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down"
+          }
+        ],
+        "wildCards": [
+          {
+            "type": "rank",
+            "rank": "8",
+            "role": "wild"
+          }
+        ]
+      },
+      "name": "Deal Seventh Street"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Seventh Street Bet"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down"
+          }
+        ],
+        "wildCards": [
+          {
+            "type": "rank",
+            "rank": "8",
+            "role": "wild"
+          }
+        ]
+      },
+      "name": "Deal Eighth Street"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Eighth Street Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all five cards",
+    "bestHand": [
+      {
+        "evaluationType": "high_wild_bug",
+        "anyCards": 5
+      }
+    ]
+  }
+}

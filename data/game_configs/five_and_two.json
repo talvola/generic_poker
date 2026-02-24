@@ -1,0 +1,95 @@
+{
+  "game": "Five and Two",
+  "category": "Other",
+  "references": [
+    {
+      "url": "https://ichabod801.pythonanywhere.com/",
+      "description": "ichabod801 poker variant collection"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 6
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "deal": {
+        "location": "community",
+        "cards": [
+          {
+            "number": 2,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Community Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Initial Bet"
+    },
+    {
+      "draw": {
+        "cards": [
+          {
+            "number": 3,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Draw Cards"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "any combination of hole and community cards",
+    "bestHand": [
+      {
+        "evaluationType": "high",
+        "anyCards": 5
+      }
+    ]
+  }
+}

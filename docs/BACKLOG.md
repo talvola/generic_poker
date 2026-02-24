@@ -206,7 +206,7 @@ for adding new variants. See `docs/GAME_VALIDATION.md` for full details.
 
 **5.1 result:** `tests/game/test_all_variants_smoke.py` — parametrized smoke test for all configs.
 Two test functions: `test_variant_config_loads` and `test_variant_loads_and_plays`
-(all games play a hand to completion passively). 0 unsupported, 0 xfail. Originally 192, now 246 configs.
+(all games play a hand to completion passively). 0 unsupported, 0 xfail. Originally 192, now 293 configs.
 
 **5.1b result:** Migrated 12 test files from inline JSON game configs to `load_rules_from_file()`.
 Removed 1,307 lines of duplicated config data. All tests pass with file-based loading.
@@ -261,6 +261,15 @@ Spit in the Ocean, Super Eight, Three Card Draw, Woolworth Stud, Yogi Hold'em,
 Fixed 2 configs (Henway, Hurricane) that needed `two_card_a5_low` eval type for 2-card low hands.
 All pass smoke tests.
 
+**Batch 4 (47 games) — DONE:** Systematic expansion from Ichabod801/Pagat analysis across all families:
+- **Stud deal patterns (8):** Blind Stud, Last Card Down, Alligator Stud, Zanetti Sound, Nine Card Stud, Satan, Beelzebub, One Three One
+- **Wild card stud (6):** Three Thirty Three, Three Forty Five, Eighty Eight, Four Forty Four, Four Forty Two, Ninety Nine
+- **Anaconda variants (9):** Screwy Louie, Orchids, Show Five, Shawnahoma, Anaconda High, Australian Anaconda, Nasty Anaconda, Bisexual Anaconda, Rich's Revenge
+- **Stud hi/lo + expose (5):** Low Todd, Australian Stud, Five Stud Hi/Lo Declare, Pineapple Stud, Seven Card Reverse
+- **Community card (13):** Turbo Hold'em, Spanish Hold'em, Drunken Monkey Hold'em, Denton, Seven Card Mutual, Padre, Five and Two, Dianna, Forty Four, Texas League Baseball, Oklahoma Lowball, Outhouse, River Poker
+- **Draw variants (6):** Six Back to Five, A-5 Draw Hi-Lo 8, 7-Card 2-7 Single Draw, Jacks or Better, Fifty Two Draw, Pig Poker
+Library grew from 246 → 293 configs. All pass smoke tests.
+
 | # | Task | Status |
 |---|------|--------|
 | 6.1.1 | Tahoe / Wichita Hold'em (3 hole cards, use 2) | DONE (already existed) |
@@ -273,11 +282,11 @@ All pass smoke tests.
 | 6.1.8 | Double Draw Lowball (2-draw variant) | DONE |
 | 6.1.9 | Blind Hold'em / Blind Omaha (all face-down community) | DONE |
 | 6.1.10 | Round the World (Cincinnati variant) | DONE |
-| 6.1.11 | Remaining config-only games from Pagat/Ichabod801 analysis | IN PROGRESS (23 of ~38 done) |
+| 6.1.11 | Remaining config-only games from Pagat/Ichabod801 analysis | DONE (70 of ~100 added across batches 3-4) |
 
 ### 6.5 Bot Support (DONE)
 
-Goal: Simple bots that let a single human player try any of the 246 game variants.
+Goal: Simple bots that let a single human player try any of the 293 game variants.
 
 | # | Task | Status |
 |---|------|--------|

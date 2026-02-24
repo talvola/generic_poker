@@ -1,0 +1,167 @@
+{
+  "game": "Show Five",
+  "category": "Other",
+  "references": [
+    {
+      "url": "https://ichabod801.pythonanywhere.com/",
+      "description": "ichabod801 poker variant collection"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 7
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit"
+  ],
+  "forcedBets": {
+    "style": "bring-in",
+    "rule": "high card"
+  },
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "antes"
+      },
+      "name": "Post Antes"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 7,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Cards"
+    },
+    {
+      "bet": {
+        "type": "bring-in"
+      },
+      "name": "Post Bring-In"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "First Bet"
+    },
+    {
+      "discard": {
+        "cards": [
+          {
+            "number": 2,
+            "min_number": 2,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Discard Two"
+    },
+    {
+      "expose": {
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Expose First Card"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Second Bet"
+    },
+    {
+      "expose": {
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Expose Second Card"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Third Bet"
+    },
+    {
+      "expose": {
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Expose Third Card"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Fourth Bet"
+    },
+    {
+      "expose": {
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Expose Fourth Card"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Fifth Bet"
+    },
+    {
+      "expose": {
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Expose Fifth Card"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all five cards",
+    "bestHand": [
+      {
+        "name": "Best Hand",
+        "evaluationType": "high",
+        "holeCards": 5,
+        "communityCards": 0
+      }
+    ]
+  }
+}

@@ -1,0 +1,192 @@
+{
+  "game": "Outhouse",
+  "category": "Stud",
+  "references": [
+    {
+      "url": "https://ichabod801.pythonanywhere.com/",
+      "description": "ichabod801 - Poker Variants"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 7
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 2,
+            "state": "face down"
+          },
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Third Street Bet"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Fourth Street"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Fourth Street Bet"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Fifth Street"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Fifth Street Bet"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face up"
+          }
+        ]
+      },
+      "name": "Deal Sixth Street"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Sixth Street Bet"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Seventh Street"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Seventh Street Bet"
+    },
+    {
+      "separate": {
+        "cards": [
+          {
+            "hole_subset": "Five Card Hand",
+            "number": 5
+          },
+          {
+            "hole_subset": "Two Card Hand",
+            "number": 2
+          }
+        ],
+        "visibility_requirements": [
+          {
+            "hole_subset": "Five Card Hand",
+            "min_face_down": 1
+          },
+          {
+            "hole_subset": "Two Card Hand",
+            "min_face_down": 1
+          }
+        ],
+        "hand_comparison": {
+          "subsets": [
+            {
+              "hole_subset": "Five Card Hand",
+              "evaluationType": "high"
+            },
+            {
+              "hole_subset": "Two Card Hand",
+              "evaluationType": "two_card_high"
+            }
+          ],
+          "comparison_rule": "greater_than"
+        }
+      },
+      "name": "Separate Cards"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "best five and two cards",
+    "bestHand": [
+      {
+        "name": "Five Card Hand",
+        "evaluationType": "high",
+        "holeCards": 5,
+        "hole_subset": "Five Card Hand"
+      },
+      {
+        "name": "Two Card Hand",
+        "evaluationType": "two_card_high",
+        "holeCards": 2,
+        "hole_subset": "Two Card Hand"
+      }
+    ]
+  }
+}

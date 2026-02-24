@@ -7,7 +7,7 @@
 
 ### Core Engine (`src/generic_poker/`)
 
-Rule-driven poker engine where variants are defined by JSON configs, not code. Supports 246+ variants.
+Rule-driven poker engine where variants are defined by JSON configs, not code. Supports 293+ variants.
 
 | Component | File | Purpose |
 |-----------|------|---------|
@@ -52,7 +52,7 @@ Flask/SocketIO multiplayer web platform.
 
 ### Working
 
-- Core poker engine (246+ variants, hand evaluation, betting logic, all 3 forced bet styles verified)
+- Core poker engine (293+ variants, hand evaluation, betting logic, all 3 forced bet styles verified)
 - Antes-only "flip" game support (9-Card Omaha)
 - User authentication and session management
 - Table creation and lobby (browse, filter, join)
@@ -74,7 +74,7 @@ Flask/SocketIO multiplayer web platform.
 - Centralized game state store (GameStateStore)
 - Error notifications for failed fetch calls
 - Turn timer countdown visible on active player's seat (all players see it)
-- All 246 game variants available in lobby (dynamically loaded, grouped by category)
+- All 293 game variants available in lobby (dynamically loaded, grouped by category)
 - Game config `category` field for UI grouping (8 families)
 - Data-driven community card layout (linear, multi-row, branching, grid)
 - Multi-row layout for double board, scarney, kryky games (~12 configs)
@@ -85,7 +85,7 @@ Flask/SocketIO multiplayer web platform.
 - CHOOSE action (variant selection UI for paradise_road_pickem)
 - Parametrized E2E smoke tests (15 variants covering all action types and community layouts)
 - Hand history display (DB persistence, API, modal with expandable details)
-- Bot support: "Fill with Bot Players" fills empty seats, bots handle all 246 variants (all action types)
+- Bot support: "Fill with Bot Players" fills empty seats, bots handle all 293 variants (all action types)
 
 ### Remaining Issues
 
@@ -105,17 +105,17 @@ Flask/SocketIO multiplayer web platform.
 | Layer | Tests | Status |
 |-------|-------|--------|
 | Python unit + integration | 724 | All passing |
-| Smoke test (all 246 variants) | 492 | All passing (0 unsupported, 0 xfail) |
+| Smoke test (all 293 variants) | 586 | All passing (0 unsupported, 0 xfail) |
 | Playwright E2E | 57 | All passing (9 spec files) |
-| **Total** | **~1,452** | **All passing** |
+| **Total** | **~1,546** | **All passing** |
 
 ### Test Layers
 
 ```
-Layer 0: Smoke Tests (all 246 variants)
+Layer 0: Smoke Tests (all 293 variants)
   - Parametrized: loads each config, creates game, plays a hand passively
   - Catches crashes, infinite loops, missing implementations
-  - All 246 games pass (0 unsupported, 0 xfail)
+  - All 293 games pass (0 unsupported, 0 xfail)
   - tests/game/test_all_variants_smoke.py
 
 Layer 1: Python Integration Tests (engine + services)
@@ -190,7 +190,7 @@ Fixes applied:
 
 ### Unsupported Games
 
-None — all 246 game variants are now fully supported. All action types (expose, pass, declare, separate, choose) implemented.
+None — all 293 game variants are now fully supported. All action types (expose, pass, declare, separate, choose) implemented.
 
 ### Pagat.com Cross-Reference (2026-02-18)
 

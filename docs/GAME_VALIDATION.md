@@ -12,8 +12,8 @@ The game engine supports 12+ gameplay action types defined in the JSON schema. H
 
 | Feature | Implemented | Test Coverage | Games Using | Notes |
 |---------|:-----------:|:-------------:|:-----------:|-------|
-| **bet** | YES | Extensive | 246 (100%) | All forced bet styles: blinds, bring-in, antes_only (all 3 verified with tests) |
-| **deal** | YES | Extensive | 246 (100%) | Player + community, face up/down, subsets |
+| **bet** | YES | Extensive | 293 (100%) | All forced bet styles: blinds, bring-in, antes_only (all 3 verified with tests) |
+| **deal** | YES | Extensive | 293 (100%) | Player + community, face up/down, subsets |
 | **draw** | YES | High (41 tests) | 41 (21%) | Discard/draw, preserve state, min/max constraints |
 | **discard** | YES | High | 44 (21%) | Implicit in draw tests |
 | **expose** | YES | Good (11 tests) | 11 (5%) | 7_card_flip, showmaha, studaha, grodnikonda, anaconda, etc. |
@@ -24,15 +24,15 @@ The game engine supports 12+ gameplay action types defined in the JSON schema. H
 | **remove** | Partial | Good (6 tests) | 3 (2%) | Only `lowest_river_card_unless_all_same` criteria |
 | **roll_die** | YES | Good (7 tests) | 1 (0.5%) | binglaha only |
 | **choose** | YES | Minimal | 2 (1%) | paradise_road_pickem, related variants |
-| **showdown** | YES | Extensive | 246 (100%) | All 21+ evaluation types, qualifiers, conditionals |
+| **showdown** | YES | Extensive | 293 (100%) | All 21+ evaluation types, qualifiers, conditionals |
 
 ### Showdown Features
 
 | Feature | Implemented | Games Using |
 |---------|:-----------:|:-----------:|
-| bestHand (standard) | YES | 240 |
+| bestHand (standard) | YES | 287 |
 | conditionalBestHands | YES | 6 |
-| declaration_mode | YES | 11 |
+| declaration_mode | YES | 23 |
 | classification_priority (face/butt) | YES | 2 |
 | defaultActions (no qualifier) | YES | ~30 |
 | globalDefaultAction | YES | ~5 |
@@ -76,13 +76,13 @@ These are defined in the JSON schema (`data/schemas/game.json`) but not implemen
 
 | Layer | What | Count | Coverage |
 |-------|------|:-----:|----------|
-| Schema validation | All configs load and pass JSON schema | 246/246 | `tests/integration/test_game_config.py` |
-| Game-specific tests | Predetermined deck, step-by-step assertions | 68/246 | `tests/game/test_*.py` |
-| **Gap** | **Configs with no end-to-end test** | **~178** | **No test plays a hand** |
+| Schema validation | All configs load and pass JSON schema | 293/293 | `tests/integration/test_game_config.py` |
+| Game-specific tests | Predetermined deck, step-by-step assertions | 68/293 | `tests/game/test_*.py` |
+| **Gap** | **Configs with no end-to-end test** | **~225** | **No test plays a hand** |
 
 ### What `test_game_config.py` Validates
 
-For all 246 configs:
+For all 293 configs:
 - JSON schema compliance
 - GameRules parsing succeeds
 - Betting sequence is valid (forced bets come before voluntary bets)
@@ -311,7 +311,7 @@ def test_new_game_basic_flow():
 
 ## Games Without Dedicated Tests
 
-68 of 246 configs have tests in `tests/game/`. The remaining ~178 pass schema validation
+68 of 293 configs have tests in `tests/game/`. The remaining ~225 pass schema validation
 but have no end-to-end test. Priority for adding tests:
 
 ### High Priority (use uncommon features)
