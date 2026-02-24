@@ -720,8 +720,7 @@ class WebSocketManager:
                 # Get occupied seats from the session
                 occupied_seats = set()
                 if session.game:
-                    for _pid, player in session.game.table.players.items():
-                        occupied_seats.add(player.seat)
+                    occupied_seats = set(session.game.table.layout.get_occupied_seats())
 
                 # Calculate how many bots to add
                 max_seats = table.max_players
