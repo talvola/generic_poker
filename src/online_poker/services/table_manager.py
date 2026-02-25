@@ -406,9 +406,6 @@ class TableManager:
         """
         # Public tables are always accessible
         if not table.is_private:
-            # Check password if table has one
-            if table.password_hash and not table.check_password(password or ""):
-                return False, "Incorrect table password"
             return True, ""
 
         # Private tables require invite code or creator access

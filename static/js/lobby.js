@@ -562,7 +562,7 @@ class PokerLobby {
             max_players: parseInt(formData.get('max_players')),
             stakes: stakes,
             is_private: formData.get('is_private') === 'on',
-            password: formData.get('password') || null,
+            password: formData.get('is_private') === 'on' ? (formData.get('password') || null) : null,
             allow_bots: formData.get('allow_bots') === 'on'
         };
 

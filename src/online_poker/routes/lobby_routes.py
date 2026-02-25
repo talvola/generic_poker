@@ -115,7 +115,7 @@ def create_table():
             stakes=stakes,
             max_players=data["max_players"],
             is_private=data.get("is_private", False),
-            password=data.get("password"),
+            password=data.get("password") if data.get("is_private") else None,
             allow_bots=data.get("allow_bots", False),
         )
 
