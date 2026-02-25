@@ -35,7 +35,7 @@ class Config:
     TABLE_INACTIVE_TIMEOUT = int(os.environ.get("TABLE_INACTIVE_TIMEOUT", "30"))  # minutes
 
     # Timeout settings
-    ACTION_TIMEOUT_ENABLED = os.environ.get("ACTION_TIMEOUT_ENABLED", "true").lower() == "true"
+    ACTION_TIMEOUT_ENABLED = os.environ.get("ACTION_TIMEOUT_ENABLED", "false").lower() == "true"
     ACTION_TIMEOUT_SECONDS = int(os.environ.get("ACTION_TIMEOUT_SECONDS", "30"))
     DISCONNECT_AUTO_FOLD_SECONDS = int(os.environ.get("DISCONNECT_AUTO_FOLD_SECONDS", "30"))
     DISCONNECT_REMOVAL_MINUTES = int(os.environ.get("DISCONNECT_REMOVAL_MINUTES", "10"))

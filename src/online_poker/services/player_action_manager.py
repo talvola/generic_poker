@@ -839,7 +839,7 @@ class PlayerActionManager:
             elif action == PlayerAction.CHECK:
                 action_msg = f"{username} checks"
             elif action == PlayerAction.CALL:
-                action_msg = f"{username} calls${amount}" if amount else f"{username} calls"
+                action_msg = f"{username} calls ${amount}" if amount else f"{username} calls"
             elif action == PlayerAction.BET:
                 action_msg = f"{username} bets ${amount}"
             elif action == PlayerAction.RAISE:

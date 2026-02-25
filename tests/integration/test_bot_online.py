@@ -528,3 +528,273 @@ class TestPlayerActionWithBots:
         success, message, _result = session.process_player_action("nonexistent_player", PlayerAction.FOLD, 0)
         assert not success
         assert "not in game" in message.lower()
+
+
+class TestBotGameplayFlow:
+    """Test full hand gameplay with bots: start → play → showdown → next hand."""
+
+    def _setup_and_start_hand(self, app, socketio, player1, bot_table_2seat):
+        """Helper: join table, fill bots, start hand."""
+        from generic_poker.game.game_state import GameState
+
+        table_id = str(bot_table_2seat.id)
+        http1, sio1 = _login_and_connect(app, socketio, player1)
+        http1.post(f"/api/tables/{table_id}/join", json={"buy_in_amount": 100, "seat_number": 1})
+
+        sio1.get_received()
+        sio1.emit("connect_to_table_room", {"table_id": table_id})
+        sio1.get_received()
+
+        sio1.emit("fill_bots", {"table_id": table_id})
+        sio1.get_received()
+
+        session = game_orchestrator.get_session(table_id)
+        assert len(session.game.table.players) == 2
+
+        # Start hand directly (bypass ready panel for test simplicity)
+        session.game.table.move_button()
+        session.game.start_hand(shuffle_deck=True)
+
+        # Advance through dealing steps until a player needs to act
+        while session.game.current_player is None and session.game.state != GameState.COMPLETE:
+            session.game._next_step()
+            if session.game.current_step >= len(session.game.rules.gameplay):
+                break
+
+        assert session.game.current_player is not None, "Should have a current player after dealing"
+        return table_id, session, sio1
+
+    def test_full_hand_fold_win(self, app, socketio, player1, bot_table_2seat):
+        """Play a hand where human folds → bot wins → hand completes."""
+        from generic_poker.game.game_state import GameState, PlayerAction
+        from online_poker.services.simple_bot import SimpleBot, bot_manager
+
+        table_id, session, sio1 = self._setup_and_start_hand(app, socketio, player1, bot_table_2seat)
+        game = session.game
+
+        initial_hands_played = session.hands_played
+
+        # Play through the hand: each player either folds (human) or calls/checks (bot)
+        max_actions = 20
+        for _ in range(max_actions):
+            if game.state == GameState.COMPLETE:
+                break
+
+            cp = game.current_player
+            if cp is None:
+                # Advance through non-player steps
+                if game.current_step < len(game.rules.gameplay):
+                    game._next_step()
+                    from online_poker.services.game_orchestrator import GameOrchestrator
+
+                    GameOrchestrator.advance_through_non_player_steps(game)
+                continue
+
+            if cp.id == player1.id:
+                # Human folds
+                success, msg, result = session.process_player_action(player1.id, PlayerAction.FOLD, 0)
+                assert success, f"Human fold failed: {msg}"
+            elif SimpleBot.is_bot_player(cp.id):
+                bot = bot_manager.get_bot(cp.id)
+                valid_actions = game.get_valid_actions(cp.id)
+                decision = bot.choose_action_full(valid_actions, game, cp.id)
+                success, msg, result = session.process_player_action(
+                    cp.id, decision.action, decision.amount or 0, cards=decision.cards
+                )
+                assert success, f"Bot action failed: {msg}"
+
+            # Advance if needed
+            if result and hasattr(result, "advance_step") and result.advance_step:
+                if game.state != GameState.COMPLETE:
+                    game._next_step()
+                    from online_poker.services.game_orchestrator import GameOrchestrator
+
+                    GameOrchestrator.advance_through_non_player_steps(game)
+
+        # Hand should be complete
+        assert game.state == GameState.COMPLETE, f"Hand should be COMPLETE but is {game.state}"
+        assert session.hands_played == initial_hands_played + 1
+
+        # Hand results should exist
+        hand_results = game.get_hand_results()
+        assert hand_results is not None
+        assert hand_results.is_complete
+
+    def test_full_hand_to_showdown(self, app, socketio, player1, bot_table_2seat):
+        """Play a hand all the way to showdown (nobody folds)."""
+        from generic_poker.game.game_state import GameState, PlayerAction
+
+        table_id, session, sio1 = self._setup_and_start_hand(app, socketio, player1, bot_table_2seat)
+        game = session.game
+
+        # Play through the entire hand: everyone checks/calls (no folding)
+        max_actions = 50
+        for _ in range(max_actions):
+            if game.state == GameState.COMPLETE:
+                break
+
+            cp = game.current_player
+            if cp is None:
+                if game.current_step < len(game.rules.gameplay):
+                    game._next_step()
+                    from online_poker.services.game_orchestrator import GameOrchestrator
+
+                    GameOrchestrator.advance_through_non_player_steps(game)
+                else:
+                    break
+                continue
+
+            # Both human and bot play passively (check or call)
+            valid_actions = game.get_valid_actions(cp.id)
+            action, amount = None, 0
+            for va in valid_actions:
+                if va[0] == PlayerAction.CHECK:
+                    action = PlayerAction.CHECK
+                    break
+                elif va[0] == PlayerAction.CALL:
+                    action = PlayerAction.CALL
+                    amount = va[1] if len(va) > 1 and va[1] else 0
+                    break
+            if action is None:
+                # Fallback to first valid action
+                action = valid_actions[0][0]
+                amount = valid_actions[0][1] if len(valid_actions[0]) > 1 else 0
+
+            success, msg, result = session.process_player_action(cp.id, action, amount or 0)
+            assert success, f"Action {action.value} failed for {cp.name}: {msg}"
+
+            if result and hasattr(result, "advance_step") and result.advance_step:
+                if game.state != GameState.COMPLETE:
+                    game._next_step()
+                    from online_poker.services.game_orchestrator import GameOrchestrator
+
+                    GameOrchestrator.advance_through_non_player_steps(game)
+
+        assert game.state == GameState.COMPLETE, f"Hand should reach COMPLETE but is {game.state}"
+
+        # Verify showdown results
+        hand_results = game.get_hand_results()
+        assert hand_results is not None
+        assert hand_results.is_complete
+        assert len(hand_results.pots) > 0
+        assert hand_results.total_pot > 0
+
+        # Verify both players have hands evaluated
+        assert len(hand_results.hands) >= 1  # At least one player has evaluated hands
+        assert len(hand_results.winning_hands) >= 1
+
+    def test_second_hand_starts_with_bots(self, app, socketio, player1, bot_table_2seat):
+        """After first hand completes, bots should still be present for the next hand."""
+        from generic_poker.game.game_state import GameState, PlayerAction
+        from online_poker.services.simple_bot import SimpleBot, bot_manager
+
+        table_id, session, sio1 = self._setup_and_start_hand(app, socketio, player1, bot_table_2seat)
+        game = session.game
+
+        # Quick fold to end hand 1
+        max_actions = 20
+        for _ in range(max_actions):
+            if game.state == GameState.COMPLETE:
+                break
+            cp = game.current_player
+            if cp is None:
+                if game.current_step < len(game.rules.gameplay):
+                    game._next_step()
+                    from online_poker.services.game_orchestrator import GameOrchestrator
+
+                    GameOrchestrator.advance_through_non_player_steps(game)
+                continue
+
+            if cp.id == player1.id:
+                success, msg, result = session.process_player_action(player1.id, PlayerAction.FOLD, 0)
+            else:
+                bot = bot_manager.get_bot(cp.id)
+                valid_actions = game.get_valid_actions(cp.id)
+                decision = bot.choose_action_full(valid_actions, game, cp.id)
+                success, msg, result = session.process_player_action(
+                    cp.id, decision.action, decision.amount or 0, cards=decision.cards
+                )
+            assert success, f"Action failed: {msg}"
+            if result and hasattr(result, "advance_step") and result.advance_step:
+                if game.state != GameState.COMPLETE:
+                    game._next_step()
+                    from online_poker.services.game_orchestrator import GameOrchestrator
+
+                    GameOrchestrator.advance_through_non_player_steps(game)
+
+        assert game.state == GameState.COMPLETE, "Hand 1 should be complete"
+
+        # Verify both players still in session
+        assert len(session.game.table.players) == 2
+        assert player1.id in session.connected_players
+
+        # Both players should have non-zero stacks (one won, one lost blind)
+        for _pid, player in game.table.players.items():
+            assert player.stack >= 0, f"Player {player.name} has negative stack"
+
+        # Start hand 2
+        game.table.move_button()
+        game.start_hand(shuffle_deck=True)
+
+        # Advance through dealing
+        while game.current_player is None and game.state != GameState.COMPLETE:
+            game._next_step()
+            if game.current_step >= len(game.rules.gameplay):
+                break
+
+        # Hand 2 should have started successfully with same players
+        assert game.current_player is not None, "Hand 2 should have a current player"
+        assert len(game.table.players) == 2, "Hand 2 should still have 2 players"
+
+        # Verify bot is still functional
+        bot_id = [pid for pid in game.table.players if SimpleBot.is_bot_player(pid)][0]
+        assert bot_id in session.connected_players
+        bot = bot_manager.get_bot(bot_id)
+        assert bot is not None
+
+    def test_ready_status_after_hand_complete(self, app, socketio, player1, bot_table_2seat):
+        """After hand completes, bots should show as ready in ready_status."""
+        from generic_poker.game.game_state import GameState, PlayerAction
+        from online_poker.services.table_access_manager import TableAccessManager
+
+        table_id, session, sio1 = self._setup_and_start_hand(app, socketio, player1, bot_table_2seat)
+        game = session.game
+
+        # Fold to end hand quickly
+        cp = game.current_player
+        if cp.id == player1.id:
+            session.process_player_action(player1.id, PlayerAction.FOLD, 0)
+        else:
+            session.process_player_action(cp.id, PlayerAction.FOLD, 0)
+
+        # The fold should end the hand (2 players, 1 folds)
+        if game.state != GameState.COMPLETE:
+            # Advance if needed
+            while game.current_player is None and game.state != GameState.COMPLETE:
+                game._next_step()
+                if game.current_step >= len(game.rules.gameplay):
+                    break
+
+        # Reset ready status (as _start_hand_when_ready does)
+        TableAccessManager.reset_all_ready(table_id)
+
+        # Check ready status
+        ready_status = TableAccessManager.get_ready_status(table_id)
+
+        # Bot should be ready, human should not
+        bot_players = [p for p in ready_status["players"] if p["user_id"].startswith("bot_")]
+        human_players = [p for p in ready_status["players"] if p["user_id"] == player1.id]
+
+        assert len(bot_players) == 1, f"Should have 1 bot in ready status, got {len(bot_players)}"
+        assert bot_players[0]["is_ready"] is True
+
+        assert len(human_players) == 1, f"Should have 1 human in ready status, got {len(human_players)}"
+        assert human_players[0]["is_ready"] is False
+
+        # all_ready should be False (human not ready)
+        assert ready_status["all_ready"] is False
+
+        # After human clicks ready, all_ready should be True
+        TableAccessManager.set_player_ready(player1.id, table_id, True)
+        ready_status = TableAccessManager.get_ready_status(table_id)
+        assert ready_status["all_ready"] is True
