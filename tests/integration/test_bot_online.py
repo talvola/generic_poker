@@ -454,3 +454,77 @@ class TestBotSeatAssignment:
             if SimpleBot.is_bot_player(pid)
         )
         assert bot_seats == [1, 2, 3, 5, 6]
+
+
+class TestPlayerActionWithBots:
+    """Test that player actions work correctly in bot games."""
+
+    def test_action_works_after_disconnect_reconnect(self, app, socketio, player1, bot_table_2seat):
+        """Player dropped from connected_players should still be able to act
+        if they are in game.table.players (e.g., after a brief disconnect)."""
+        table_id = str(bot_table_2seat.id)
+
+        http1, sio1 = _login_and_connect(app, socketio, player1)
+        http1.post(f"/api/tables/{table_id}/join", json={"buy_in_amount": 100, "seat_number": 1})
+
+        sio1.get_received()
+        sio1.emit("connect_to_table_room", {"table_id": table_id})
+        sio1.get_received()
+
+        sio1.emit("fill_bots", {"table_id": table_id})
+        sio1.get_received()
+
+        session = game_orchestrator.get_session(table_id)
+        assert session is not None
+
+        # Verify human is in both connected_players and game.table.players
+        assert player1.id in session.connected_players
+        assert player1.id in session.game.table.players
+
+        # Simulate disconnect: remove from connected_players (like handle_player_disconnect does)
+        session.connected_players.discard(player1.id)
+        session.disconnected_players[player1.id] = __import__("datetime").datetime.utcnow()
+        assert player1.id not in session.connected_players
+        assert player1.id in session.game.table.players
+
+        # process_player_action should re-add to connected_players and succeed
+        from generic_poker.game.game_state import PlayerAction
+
+        # Start a hand first so we can test actions
+        session.game.table.move_button()
+        session.game.start_hand(shuffle_deck=True)
+
+        # Advance through dealing steps
+        while session.game.current_player is None and session.game.state.name != "COMPLETE":
+            session.game._next_step()
+            if session.game.current_step >= len(session.game.rules.gameplay):
+                break
+
+        # Try to fold (should work even though player was removed from connected_players)
+        if session.game.current_player and session.game.current_player.id == player1.id:
+            success, message, result = session.process_player_action(player1.id, PlayerAction.FOLD, 0)
+            assert success, f"Action should succeed but failed: {message}"
+            assert player1.id in session.connected_players, "Player should be re-added to connected_players"
+
+    def test_action_fails_for_truly_absent_player(self, app, socketio, player1, bot_table_2seat):
+        """Player not in connected_players AND not in game.table.players should fail."""
+        table_id = str(bot_table_2seat.id)
+
+        http1, sio1 = _login_and_connect(app, socketio, player1)
+        http1.post(f"/api/tables/{table_id}/join", json={"buy_in_amount": 100, "seat_number": 1})
+
+        sio1.get_received()
+        sio1.emit("connect_to_table_room", {"table_id": table_id})
+        sio1.get_received()
+
+        sio1.emit("fill_bots", {"table_id": table_id})
+        sio1.get_received()
+
+        session = game_orchestrator.get_session(table_id)
+
+        # Action from a non-existent player should fail
+        from generic_poker.game.game_state import PlayerAction
+
+        success, message, _result = session.process_player_action("nonexistent_player", PlayerAction.FOLD, 0)
+        assert not success
+        assert "not in game" in message.lower()

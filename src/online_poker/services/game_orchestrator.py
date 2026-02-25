@@ -376,7 +376,14 @@ class GameSession:
                 return False, "Game is not active", None
 
             if user_id not in self.connected_players:
-                return False, "Player not in game", None
+                # Check if player is actually in the game engine (e.g., added by fill_bots
+                # but dropped from connected_players by a brief disconnect/reconnect cycle)
+                if self.game and user_id in self.game.table.players:
+                    self.connected_players.add(user_id)
+                    self.disconnected_players.pop(user_id, None)
+                    logger.info(f"Re-added player {user_id} to connected_players (found in game.table.players)")
+                else:
+                    return False, "Player not in game", None
 
             # Process action through the underlying Game
             result = self.game.player_action(user_id, action, amount, cards=cards, declaration_data=declaration_data)

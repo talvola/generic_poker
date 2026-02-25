@@ -193,7 +193,7 @@ class BotActionService:
         elif action.value == "check":
             return f"{username} checks"
         elif action.value == "call":
-            return f"{username} calls${amount}" if amount else f"{username} calls"
+            return f"{username} calls ${amount}" if amount else f"{username} calls"
         elif action.value == "bet":
             return f"{username} bets ${amount}"
         elif action.value == "raise":
