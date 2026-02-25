@@ -530,6 +530,9 @@ class GameStateManager:
 
             if game_state == GameState.WAITING:
                 return GamePhase.WAITING
+            elif game_state == GameState.DEALING and session.game.current_step == -1:
+                # Game has enough players but no hand started yet
+                return GamePhase.WAITING
             elif game_state == GameState.DEALING:
                 return GamePhase.DEALING
             elif game_state == GameState.BETTING:
