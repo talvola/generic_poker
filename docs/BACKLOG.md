@@ -1,7 +1,7 @@
 # Backlog
 
 > Prioritized task list. Work top-to-bottom within each phase.
-> Last updated: 2026-02-23
+> Last updated: 2026-02-24
 
 ---
 
@@ -304,6 +304,30 @@ Goal: Simple bots that let a single human player try any of the 293 game variant
 **6.5.4 result:** Extended `tests/unit/test_simple_bot.py` to 26 tests covering all action types, edge cases (empty hand, no face-down cards), BotDecision dataclass, and bot identification. Created `tests/integration/test_bot_integration.py` with 6 Layer 1 tests: 2-bot Hold'em hand, chip conservation, 4-bot hand, 5-card draw, 7-card stud (Limit+ante), and 500-iteration no-fold regression test.
 
 Key files: `simple_bot.py` (extended), `bot_action_service.py` (new), `game_orchestrator.py` (shared helper), `websocket_manager.py` (fill_bots + triggers), `player_action_manager.py` (trigger), `table_access_manager.py` (bot ready status), `table.js` (fill_bots emit), `lobby.html` (relabeled checkbox).
+
+### 6.5b Bot Online Deployment Fixes (DONE)
+
+Bugs found during first Render deployment testing of bot support.
+
+| # | Bug | Fix | Status |
+|---|-----|-----|--------|
+| 6.5b.1 | `player.seat` AttributeError (2 locations) | Use `table.layout.get_player_seat()` | DONE |
+| 6.5b.2 | Bots invisible in game state | Fixed bot creation to add to `game.table.players` | DONE |
+| 6.5b.3 | Bots assigned to human's seat | Skip occupied seats in assignment | DONE |
+| 6.5b.4 | game_phase "dealing" before hand starts | Fixed phase detection | DONE |
+| 6.5b.5 | "Player not in game" after brief disconnect | Re-add from `game.table.players` fallback | DONE |
+| 6.5b.6 | Chat spacing: "calls$10" (3 code paths) | Added missing spaces | DONE |
+| 6.5b.7 | Auto-fold 30s in production | `ACTION_TIMEOUT_ENABLED` default → false | DONE |
+| 6.5b.8 | Public table "Incorrect table password" | Frontend + backend + access check fix | DONE |
+| 6.5b.9 | Bot loop "Working outside of application context" | Wrap background task in `app.app_context()` | DONE |
+
+**6.5b.5 result:** When player briefly disconnects (WebSocket reconnect), `handle_player_disconnect()` removes them from `connected_players` but NOT from `game.table.players`. On next action, `process_player_action` found them missing from `connected_players` and rejected. Fix: fallback check against `game.table.players` and re-add to `connected_players`.
+
+**6.5b.8 result:** Password managers auto-fill the hidden password `<input>` in the create-table form. `FormData` includes it even when hidden. Server hashed it → public table got `password_hash`. On join, `can_access_table()` checked password for public tables. Three-layer fix: (1) frontend only sends password when `is_private` checked, (2) backend ignores password for public tables, (3) `can_access_table` skips password check for non-private tables.
+
+**6.5b.9 result:** `socketio.start_background_task()` creates a thread without Flask app context. `broadcast_game_state_update` needs DB (via `TableAccessManager.get_table_players`), which requires app context. Fix: capture `current_app._get_current_object()` in the request handler and pass to background task, which wraps execution in `app.app_context()`. This was the critical blocker — without it, the human player never received game state updates during bot turns and showdown never displayed.
+
+**Bot gameplay fully verified** with 4 dedicated integration tests: full hand fold-win, full hand to showdown, second hand with persistent bots, and ready status after hand completion. 16 bot-specific tests total (752 all tests).
 
 ---
 

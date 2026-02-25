@@ -1,7 +1,7 @@
 # Project Status
 
 > Single source of truth for project state. Updated as work progresses.
-> Last updated: 2026-02-23
+> Last updated: 2026-02-24
 
 ## Architecture Overview
 
@@ -32,7 +32,7 @@ Flask/SocketIO multiplayer web platform.
 | PlayerActionManager | `services/player_action_manager.py` | 8/10 | Solid, minor timeout config issues |
 | DisconnectManager | `services/disconnect_manager.py` | 8/10 | Uses RLock to prevent deadlocks |
 | TableAccessManager | `services/table_access_manager.py` | 9/10 | Clean, mostly complete |
-| BotActionService | `services/bot_action_service.py` | 8/10 | Background bot loop, per-table locking |
+| BotActionService | `services/bot_action_service.py` | 8/10 | Background bot loop, per-table locking, app context fix |
 | TableManager | `services/table_manager.py` | 9/10 | Clean |
 
 ### Frontend
@@ -99,6 +99,22 @@ Flask/SocketIO multiplayer web platform.
 | 9 | Mobile optimization | LOW | Deferred to Phase 7 |
 | ~~10~~ | ~~Admin interface~~ | ~~LOW~~ | ~~Implemented: dashboard, user/table/variant management~~ |
 
+### Online Bot Testing Bugs (2026-02-24, all fixed)
+
+Bugs found during first Render deployment testing of bot support:
+
+| Bug | Description | Fix |
+|-----|-------------|-----|
+| B001 | `player.seat` AttributeError in 2 locations | Fixed seat lookup via `table.layout.get_player_seat()` |
+| B002 | Bots invisible in game state (not in `game.table.players`) | Fixed bot player creation to properly add to game table |
+| B003 | Bots assigned to human's seat | Fixed seat assignment to skip occupied seats |
+| B004 | game_phase "dealing" before hand starts | Fixed phase detection for pre-hand state |
+| B005 | "Player not in game" after brief disconnect | `process_player_action` now re-adds player from `game.table.players` |
+| B006 | Chat "calls$10" missing space (3 code paths) | Fixed in `bot_action_service.py`, `player_action_manager.py`, `websocket_manager.py` |
+| B007 | Auto-fold after 30s in production | Changed `ACTION_TIMEOUT_ENABLED` default to `false` |
+| B008 | Public table gets "Incorrect table password" | Password managers auto-fill hidden field; fixed frontend + backend + access check |
+| B009 | Bot state updates fail: "Working outside of application context" | Bot background task now wraps in `app.app_context()` |
+
 ---
 
 ## Testing
@@ -107,10 +123,11 @@ Flask/SocketIO multiplayer web platform.
 
 | Layer | Tests | Status |
 |-------|-------|--------|
-| Python unit + integration | 736 | All passing |
+| Python unit + integration | 752 | All passing |
 | Smoke test (all 293 variants) | 586 | All passing (0 unsupported, 0 xfail) |
+| Other game tests | 153 | All passing |
 | Playwright E2E | 57 | All passing (9 spec files) |
-| **Total** | **~1,558** | **All passing** |
+| **Total** | **~1,548** | **All passing** |
 
 ### Test Layers
 
