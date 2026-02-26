@@ -3,6 +3,7 @@
 import contextlib
 import logging
 import os
+import time
 
 from flask import Flask, jsonify, redirect, url_for
 from flask_socketio import SocketIO
@@ -122,6 +123,13 @@ def create_app(config_class=Config):
 
     # Initialize WebSocket manager
     init_websocket_manager(socketio)
+
+    # Cache-busting: provide asset version to all templates
+    _asset_version = str(int(time.time()))
+
+    @app.context_processor
+    def inject_asset_version():
+        return {"asset_version": _asset_version}
 
     # Register template filters
     @app.template_filter("format_variant")

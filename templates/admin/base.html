@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Admin{% endblock %} - Generic Poker Platform</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/lobby.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/lobby.css') }}?v={{ asset_version }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}?v={{ asset_version }}">
 </head>
 <body class="admin-body">
     <div class="admin-layout">
@@ -48,7 +48,7 @@
     <!-- Notification container -->
     <div id="notification-container" class="notification-container"></div>
 
-    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/admin.js') }}?v={{ asset_version }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

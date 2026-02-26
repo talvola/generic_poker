@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Poker Table - {{ table.name }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/table.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/table.css') }}?v={{ asset_version }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 </head>
 <body>
@@ -270,14 +270,14 @@
             actionTimeoutEnabled: {{ 'true' if action_timeout_enabled else 'false' }}
         };
     </script>
-    <script src="{{ url_for('static', filename='js/table/card-utils.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/table/modals.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/table/game-state-store.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/table/chat.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/table/timer.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/table/bet-controls.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/table/responsive.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/table/showdown.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/table.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/table/card-utils.js') }}?v={{ asset_version }}"></script>
+    <script src="{{ url_for('static', filename='js/table/modals.js') }}?v={{ asset_version }}"></script>
+    <script src="{{ url_for('static', filename='js/table/game-state-store.js') }}?v={{ asset_version }}"></script>
+    <script src="{{ url_for('static', filename='js/table/chat.js') }}?v={{ asset_version }}"></script>
+    <script src="{{ url_for('static', filename='js/table/timer.js') }}?v={{ asset_version }}"></script>
+    <script src="{{ url_for('static', filename='js/table/bet-controls.js') }}?v={{ asset_version }}"></script>
+    <script src="{{ url_for('static', filename='js/table/responsive.js') }}?v={{ asset_version }}"></script>
+    <script src="{{ url_for('static', filename='js/table/showdown.js') }}?v={{ asset_version }}"></script>
+    <script src="{{ url_for('static', filename='js/table.js') }}?v={{ asset_version }}"></script>
 </body>
 </html>
