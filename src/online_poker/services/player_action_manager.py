@@ -1027,6 +1027,7 @@ class PlayerActionManager:
                     "winners": pot.winners,
                     "split": pot.split,
                     "pot_type": pot.pot_type,
+                    "hand_type": pot.hand_type,
                     "side_pot_index": pot.side_pot_index,
                     "eligible_players": list(pot.eligible_players) if pot.eligible_players else [],
                     "amount_per_player": pot.amount // len(pot.winners) if pot.winners else 0,

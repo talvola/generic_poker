@@ -15,6 +15,11 @@ class PokerShowdown {
     resetForNewHand() {
         this.winningCards = null;
         this.showdownHoleCards = null;
+        // Hide the showdown overlay from previous hand
+        const container = document.getElementById('showdown-results-container');
+        if (container) {
+            container.style.display = 'none';
+        }
     }
 
     _findPlayer(userId) {
@@ -99,14 +104,17 @@ class PokerShowdown {
         if (handResults.pots) {
             handResults.pots.forEach((pot, index) => {
                 const potType = pot.pot_type === 'main' ? 'Main pot' : `Side pot-${pot.side_pot_index + 1}`;
+                const handTypeLabel = pot.hand_type && pot.hand_type !== 'Hand' && pot.hand_type !== 'Best Hand'
+                    ? ` [${pot.hand_type}]`
+                    : '';
                 const winnerNames = pot.winners.map(winnerId => this._getPlayerName(winnerId));
 
                 let potMessage;
                 if (pot.split) {
                     const amountPerPlayer = Math.floor(pot.amount / pot.winners.length);
-                    potMessage = `${winnerNames.join(' and ')} split the ${potType.toLowerCase()} ($${pot.amount}) - $${amountPerPlayer} each`;
+                    potMessage = `${winnerNames.join(' and ')} split the ${potType.toLowerCase()}${handTypeLabel} ($${pot.amount}) - $${amountPerPlayer} each`;
                 } else {
-                    potMessage = `${winnerNames.join(' and ')} collected $${pot.amount} from ${potType.toLowerCase()}`;
+                    potMessage = `${winnerNames.join(' and ')} collected $${pot.amount} from ${potType.toLowerCase()}${handTypeLabel}`;
                 }
 
                 this._displayChatMessage({
@@ -188,10 +196,13 @@ class PokerShowdown {
         if (handResults.winning_hands && handResults.winning_hands.length > 0) {
             handResults.winning_hands.forEach(winningHand => {
                 const playerName = this._getPlayerName(winningHand.player_id);
+                const handTypeLabel = winningHand.hand_type && winningHand.hand_type !== 'Hand' && winningHand.hand_type !== 'Best Hand'
+                    ? ` (${PokerModals.escapeHtml(winningHand.hand_type)})`
+                    : '';
 
                 content += `
                     <div class="showdown-hand-result showdown-winner">
-                        <strong>${PokerModals.escapeHtml(playerName)}</strong> wins with <strong>${PokerModals.escapeHtml(winningHand.hand_description)}</strong>
+                        <strong>${PokerModals.escapeHtml(playerName)}</strong> wins${handTypeLabel} with <strong>${PokerModals.escapeHtml(winningHand.hand_description)}</strong>
                         <br>
                         <span style="font-family: monospace;">${PokerCardUtils.formatCardsForDisplay(winningHand.cards)}</span>
                     </div>
@@ -223,9 +234,12 @@ class PokerShowdown {
                 const winnerNames = pot.winners.map(winnerId => this._getPlayerName(winnerId));
 
                 const potType = pot.pot_type === 'main' ? 'Main pot' : `Side pot`;
+                const handTypeLabel = pot.hand_type && pot.hand_type !== 'Hand' && pot.hand_type !== 'Best Hand'
+                    ? ` (${PokerModals.escapeHtml(pot.hand_type)})`
+                    : '';
                 content += `
                     <div style="margin-bottom: 0.5rem;">
-                        <strong>${potType}: $${pot.amount}</strong> \u2192 ${winnerNames.join(', ')}
+                        <strong>${potType}${handTypeLabel}: $${pot.amount}</strong> \u2192 ${winnerNames.join(', ')}
                     </div>
                 `;
             });
@@ -244,10 +258,14 @@ class PokerShowdown {
             content += '<div class="winning-hands">';
             handResults.winning_hands.forEach(winningHand => {
                 const playerName = this._getPlayerName(winningHand.player_id);
+                const handTypeLabel = winningHand.hand_type && winningHand.hand_type !== 'Hand' && winningHand.hand_type !== 'Best Hand'
+                    ? `<div class="winner-type">${PokerModals.escapeHtml(winningHand.hand_type)}</div>`
+                    : '';
 
                 content += `
                     <div class="winning-hand">
                         <div class="winner-name">${PokerModals.escapeHtml(playerName)}</div>
+                        ${handTypeLabel}
                         <div class="winner-hand">${PokerModals.escapeHtml(winningHand.hand_description)}</div>
                         <div class="winner-cards">${PokerCardUtils.formatCardsForDisplay(winningHand.cards)}</div>
                     </div>
@@ -260,11 +278,14 @@ class PokerShowdown {
             content += '<div class="pot-distribution">';
             handResults.pots.forEach(pot => {
                 const winnerNames = pot.winners.map(winnerId => this._getPlayerName(winnerId));
+                const handTypeLabel = pot.hand_type && pot.hand_type !== 'Hand' && pot.hand_type !== 'Best Hand'
+                    ? ` (${PokerModals.escapeHtml(pot.hand_type)})`
+                    : '';
 
                 content += `
                     <div class="pot-award">
                         <span class="pot-winners">${PokerModals.escapeHtml(winnerNames.join(', '))}</span>
-                        <span class="pot-amount">$${pot.amount}</span>
+                        <span class="pot-amount">${handTypeLabel} $${pot.amount}</span>
                     </div>
                 `;
             });

@@ -183,6 +183,14 @@ body {
     gap: 1rem;
     padding: 1rem;
     min-height: 0;
+    overflow: hidden;
+}
+
+/* Main content area (poker table + action panel) */
+.game-container > main {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
 }
 
 /* Poker Table */
@@ -1068,6 +1076,8 @@ body {
     margin-top: 1rem;
     border: 1px solid rgba(255, 255, 255, 0.1);
     min-height: 80px;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .action-buttons {

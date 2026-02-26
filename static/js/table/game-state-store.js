@@ -31,7 +31,7 @@ class GameStateStore {
             action_type: a.action_type || a.type
         }));
         this.potAmount = data.pot_info?.total_pot || data.pot_amount || 0;
-        this.handNumber = data.hand_number || 1;
+        this.handNumber = data.hand_number != null ? data.hand_number : this.handNumber;
     }
 
     findPlayerByUserId(userId) {
