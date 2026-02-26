@@ -72,5 +72,21 @@ with app.app_context():
         print(f'Note: {e}')
 "
 
+# Pre-convert hand ranking CSVs to SQLite for memory-efficient evaluation
+python -c "
+from pathlib import Path
+from generic_poker.evaluation.cache import HandRankingsCache
+cache = HandRankingsCache()
+csv_dir = Path('data/hand_rankings')
+for csv_file in sorted(csv_dir.glob('all_card_hands_ranked_*.csv')):
+    db_path = csv_file.with_suffix('.db')
+    if not db_path.exists():
+        print(f'Converting {csv_file.name}...')
+        cache._convert_csv_to_sqlite(csv_file, db_path)
+    else:
+        print(f'Already exists: {db_path.name}')
+print('Hand ranking conversion complete')
+"
+
 # Seed database with test users (pipe 'y' to handle "already seeded" prompt)
 echo "y" | python tools/seed_db.py

@@ -101,13 +101,16 @@ class StandardHandEvaluator(BaseEvaluator):
         Returns:
             HandRanking: Sample hand for the specified rank and ordered rank
         """
-        # Find a sample hand for the specified rank and ordered_rank
-        ranking = None
-        for _hand_str, ranking in self.rankings.items():
-            if ranking.rank == rank and ranking.ordered_rank == ordered_rank:
-                break
-
-        if not ranking:
+        # Use efficient SQLite lookup if available
+        if hasattr(self.rankings, "find_by_rank"):
+            result = self.rankings.find_by_rank(rank, ordered_rank)
+            if result:
+                return result
             raise ValueError(f"No sample hand found for rank {rank} and ordered_rank {ordered_rank}")
 
-        return _hand_str
+        # Fallback for dict-based rankings
+        for _hand_str, ranking in self.rankings.items():
+            if ranking.rank == rank and ranking.ordered_rank == ordered_rank:
+                return _hand_str
+
+        raise ValueError(f"No sample hand found for rank {rank} and ordered_rank {ordered_rank}")
