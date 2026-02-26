@@ -120,10 +120,15 @@ class PokerTable(db.Model):
         timeout = timedelta(minutes=timeout_minutes)
         return datetime.utcnow() - self.last_activity > timeout
 
+    def _is_nl_or_pl(self) -> bool:
+        """Check if this table uses No-Limit or Pot-Limit betting."""
+        bs = self.betting_structure.lower().replace(" ", "-")
+        return bs in ("no-limit", "pot-limit")
+
     def get_minimum_buyin(self) -> int:
         """Get minimum buy-in amount based on stakes."""
         stakes_dict = self.get_stakes()
-        if self.betting_structure in ["No-Limit", "Pot-Limit"]:
+        if self._is_nl_or_pl():
             return stakes_dict.get("big_blind", 2) * 20  # 20 big blinds minimum
         else:
             return stakes_dict.get("big_bet", 4) * 10  # 10 big bets for limit
@@ -131,7 +136,7 @@ class PokerTable(db.Model):
     def get_maximum_buyin(self) -> int:
         """Get maximum buy-in amount based on stakes."""
         stakes_dict = self.get_stakes()
-        if self.betting_structure in ["No-Limit", "Pot-Limit"]:
+        if self._is_nl_or_pl():
             return stakes_dict.get("big_blind", 2) * 200  # 200 big blinds maximum
         else:
             return stakes_dict.get("big_bet", 4) * 50  # 50 big bets for limit

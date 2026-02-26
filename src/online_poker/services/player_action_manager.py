@@ -1138,7 +1138,7 @@ class PlayerActionManager:
                             "user_id": player_id,
                             "username": user.username if user else player.name,
                             "stack": player.stack,
-                            "position": player.position,
+                            "position": player.position.value if player.position else "NA",
                         }
                     )
 
