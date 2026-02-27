@@ -1291,6 +1291,62 @@ body {
     height: 70px;
 }
 
+.action-bar.showdown-active {
+    height: auto;
+    min-height: 70px;
+}
+
+/* Showdown results in action bar */
+.showdown-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.5rem;
+    padding: 0.5rem 0;
+    color: white;
+    position: relative;
+    padding-right: 2rem;
+}
+
+.showdown-bar-winner {
+    color: var(--gold);
+    font-size: 0.95rem;
+}
+
+.showdown-bar-trophy {
+    margin-right: 0.25rem;
+}
+
+.showdown-bar-pots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+}
+
+.showdown-bar-pot {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.showdown-bar .showdown-close-btn {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.showdown-bar .showdown-close-btn:hover {
+    color: white;
+    background: rgba(255, 255, 255, 0.1);
+}
+
 /* Chat Widget (floating, bottom-left of table area) */
 .chat-widget {
     position: absolute;
@@ -2884,15 +2940,7 @@ ame Action Messages in Chat */
 }
 /* Showdown Results Container (overlay on table) */
 .showdown-results-container {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 50;
-    width: 90%;
-    max-width: 700px;
-    padding: 0 1rem;
-    animation: slideDown 0.5s ease-out;
+    display: none !important;
 }
 
 .showdown-results-content {

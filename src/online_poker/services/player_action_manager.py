@@ -995,6 +995,10 @@ class PlayerActionManager:
             session: Game session that completed
         """
         try:
+            # Increment hand counter (single point for all completion paths:
+            # fold-win, showdown via human action, showdown via bot action)
+            session.hands_played += 1
+            session.increment_variant_hand_count()
             logger.info(f"Hand completed for table {table_id}, processing showdown results")
 
             # Get hand results from the game engine

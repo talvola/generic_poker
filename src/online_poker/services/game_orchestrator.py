@@ -391,11 +391,11 @@ class GameSession:
             if result.success:
                 self.update_activity()
 
-                # Check if hand completed
+                # Check if hand completed (cleanup only; hands_played and
+                # variant hand count are incremented in _handle_hand_completion
+                # which is the single point for all completion paths)
                 if self.game.state == GameState.COMPLETE:
-                    self.hands_played += 1
                     self.current_hand_id = None
-                    self.increment_variant_hand_count()
 
                     # Update player chip stacks in database
                     self._update_player_stacks()

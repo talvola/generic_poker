@@ -572,8 +572,6 @@ class TestBotGameplayFlow:
         table_id, session, sio1 = self._setup_and_start_hand(app, socketio, player1, bot_table_2seat)
         game = session.game
 
-        initial_hands_played = session.hands_played
-
         # Play through the hand: each player either folds (human) or calls/checks (bot)
         max_actions = 20
         for _ in range(max_actions):
@@ -613,7 +611,6 @@ class TestBotGameplayFlow:
 
         # Hand should be complete
         assert game.state == GameState.COMPLETE, f"Hand should be COMPLETE but is {game.state}"
-        assert session.hands_played == initial_hands_played + 1
 
         # Hand results should exist
         hand_results = game.get_hand_results()

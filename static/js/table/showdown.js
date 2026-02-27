@@ -15,7 +15,12 @@ class PokerShowdown {
     resetForNewHand() {
         this.winningCards = null;
         this.showdownHoleCards = null;
-        // Hide the showdown overlay from previous hand
+        // Remove showdown from action bar
+        const actionBar = document.getElementById('action-bar');
+        if (actionBar) {
+            actionBar.classList.remove('showdown-active');
+        }
+        // Hide the legacy table overlay if visible
         const container = document.getElementById('showdown-results-container');
         if (container) {
             container.style.display = 'none';
@@ -58,8 +63,8 @@ class PokerShowdown {
             console.log('DEBUG: Calling displayShowdownInChat');
             this._displayShowdownInChat(handResults);
 
-            console.log('DEBUG: Calling showShowdownOverlay');
-            this._showShowdownOverlay(handResults);
+            console.log('DEBUG: Calling showShowdownInActionBar');
+            this._showShowdownInActionBar(handResults);
 
             console.log('DEBUG: Showdown display completed successfully');
         } catch (error) {
@@ -157,42 +162,37 @@ class PokerShowdown {
         }
     }
 
-    _showShowdownOverlay(handResults) {
-        const container = document.getElementById('showdown-results-container');
-        const content = document.getElementById('showdown-results-content');
+    _showShowdownInActionBar(handResults) {
+        const actionBar = document.getElementById('action-bar');
+        const actionPanel = document.getElementById('action-panel');
 
-        if (!container || !content) {
-            console.error('Showdown results container not found');
+        if (!actionBar || !actionPanel) {
+            console.error('Action bar not found for showdown display');
             return;
         }
 
-        content.innerHTML = this._createShowdownContainerContent(handResults);
-
-        container.style.display = 'block';
+        actionPanel.innerHTML = this._createActionBarShowdownContent(handResults);
+        actionBar.classList.add('showdown-active');
 
         // Auto-dismiss after 10s in production; stay visible in dev for QA
         if (window.pokerConfig?.actionTimeoutEnabled !== false) {
             setTimeout(() => {
-                container.style.display = 'none';
+                actionBar.classList.remove('showdown-active');
             }, 10000);
         }
 
-        const closeBtn = content.querySelector('.showdown-close-btn');
+        const closeBtn = actionPanel.querySelector('.showdown-close-btn');
         if (closeBtn) {
             closeBtn.addEventListener('click', () => {
-                container.style.display = 'none';
+                actionBar.classList.remove('showdown-active');
             });
         }
     }
 
-    _createShowdownContainerContent(handResults) {
-        const players = this._store.players;
-        let content = `
-            <button class="showdown-close-btn" title="Close">&times;</button>
-            <div class="showdown-results-header">Showdown Results</div>
-            <div class="showdown-results-body">
-        `;
+    _createActionBarShowdownContent(handResults) {
+        let html = '<div class="showdown-bar">';
 
+        // Winners section
         if (handResults.winning_hands && handResults.winning_hands.length > 0) {
             handResults.winning_hands.forEach(winningHand => {
                 const playerName = this._getPlayerName(winningHand.player_id);
@@ -200,101 +200,32 @@ class PokerShowdown {
                     ? ` (${PokerModals.escapeHtml(winningHand.hand_type)})`
                     : '';
 
-                content += `
-                    <div class="showdown-hand-result showdown-winner">
-                        <strong>${PokerModals.escapeHtml(playerName)}</strong> wins${handTypeLabel} with <strong>${PokerModals.escapeHtml(winningHand.hand_description)}</strong>
-                        <br>
-                        <span style="font-family: monospace;">${PokerCardUtils.formatCardsForDisplay(winningHand.cards)}</span>
+                html += `
+                    <div class="showdown-bar-winner">
+                        <span class="showdown-bar-trophy">\u2605</span>
+                        <strong>${PokerModals.escapeHtml(playerName)}</strong> wins${handTypeLabel} with
+                        <strong>${PokerModals.escapeHtml(winningHand.hand_description)}</strong>
                     </div>
                 `;
             });
         }
 
-        if (handResults.hands) {
-            Object.entries(handResults.hands).forEach(([playerId, playerHands]) => {
-                const playerName = this._getPlayerName(playerId);
-
-                const isWinner = handResults.winning_hands && handResults.winning_hands.some(w => w.player_id === playerId);
-                if (!isWinner && playerHands && playerHands.length > 0) {
-                    const hand = playerHands[0];
-                    content += `
-                        <div class="showdown-hand-result">
-                            <strong>${PokerModals.escapeHtml(playerName)}</strong>: ${PokerModals.escapeHtml(hand.hand_description)}
-                            <br>
-                            <span style="font-family: monospace;">${PokerCardUtils.formatCardsForDisplay(hand.cards)}</span>
-                        </div>
-                    `;
-                }
-            });
-        }
-
+        // Pot section
         if (handResults.pots && handResults.pots.length > 0) {
-            content += '<div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.3);">';
+            html += '<div class="showdown-bar-pots">';
             handResults.pots.forEach(pot => {
                 const winnerNames = pot.winners.map(winnerId => this._getPlayerName(winnerId));
-
-                const potType = pot.pot_type === 'main' ? 'Main pot' : `Side pot`;
+                const potType = pot.pot_type === 'main' ? 'Pot' : 'Side pot';
                 const handTypeLabel = pot.hand_type && pot.hand_type !== 'Hand' && pot.hand_type !== 'Best Hand'
                     ? ` (${PokerModals.escapeHtml(pot.hand_type)})`
                     : '';
-                content += `
-                    <div style="margin-bottom: 0.5rem;">
-                        <strong>${potType}${handTypeLabel}: $${pot.amount}</strong> \u2192 ${winnerNames.join(', ')}
-                    </div>
-                `;
+                html += `<span class="showdown-bar-pot">${potType}${handTypeLabel}: $${pot.amount} \u2192 ${winnerNames.join(', ')}</span>`;
             });
-            content += '</div>';
+            html += '</div>';
         }
 
-        content += '</div>';
-        return content;
-    }
-
-    createShowdownOverlayContent(handResults) {
-        let content = '<div class="showdown-content">';
-        content += '<div class="showdown-header">Showdown Results</div>';
-
-        if (handResults.winning_hands && handResults.winning_hands.length > 0) {
-            content += '<div class="winning-hands">';
-            handResults.winning_hands.forEach(winningHand => {
-                const playerName = this._getPlayerName(winningHand.player_id);
-                const handTypeLabel = winningHand.hand_type && winningHand.hand_type !== 'Hand' && winningHand.hand_type !== 'Best Hand'
-                    ? `<div class="winner-type">${PokerModals.escapeHtml(winningHand.hand_type)}</div>`
-                    : '';
-
-                content += `
-                    <div class="winning-hand">
-                        <div class="winner-name">${PokerModals.escapeHtml(playerName)}</div>
-                        ${handTypeLabel}
-                        <div class="winner-hand">${PokerModals.escapeHtml(winningHand.hand_description)}</div>
-                        <div class="winner-cards">${PokerCardUtils.formatCardsForDisplay(winningHand.cards)}</div>
-                    </div>
-                `;
-            });
-            content += '</div>';
-        }
-
-        if (handResults.pots && handResults.pots.length > 0) {
-            content += '<div class="pot-distribution">';
-            handResults.pots.forEach(pot => {
-                const winnerNames = pot.winners.map(winnerId => this._getPlayerName(winnerId));
-                const handTypeLabel = pot.hand_type && pot.hand_type !== 'Hand' && pot.hand_type !== 'Best Hand'
-                    ? ` (${PokerModals.escapeHtml(pot.hand_type)})`
-                    : '';
-
-                content += `
-                    <div class="pot-award">
-                        <span class="pot-winners">${PokerModals.escapeHtml(winnerNames.join(', '))}</span>
-                        <span class="pot-amount">${handTypeLabel} $${pot.amount}</span>
-                    </div>
-                `;
-            });
-            content += '</div>';
-        }
-
-        content += '<div class="showdown-close">Click to close</div>';
-        content += '</div>';
-
-        return content;
+        html += '<button class="showdown-close-btn" title="Close">&times;</button>';
+        html += '</div>';
+        return html;
     }
 }
