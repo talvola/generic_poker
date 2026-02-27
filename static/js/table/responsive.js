@@ -121,11 +121,4 @@ class PokerResponsive {
         });
     }
 
-    toggleMobilePanel(panelType) {
-        const sidePanel = document.getElementById('side-panel');
-
-        if (this.isMobile) {
-            sidePanel.classList.toggle('mobile-visible');
-        }
-    }
 }

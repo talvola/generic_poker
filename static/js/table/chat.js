@@ -6,6 +6,7 @@ class PokerChat {
         this.holeCardsAnnounced = false;
         this.lastAnnouncedCommunityCardCount = 0;
         this.handHistory = []; // In-session hand history captured from hand_complete events
+        this._unreadCount = 0;
     }
 
     resetForNewHand() {
@@ -73,11 +74,38 @@ class PokerChat {
 
         messagesContainer.appendChild(messageElement);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+        // Update unread badge if widget is collapsed
+        const widget = document.getElementById('chat-widget');
+        if (widget && widget.classList.contains('collapsed')) {
+            this._unreadCount++;
+            this._updateUnreadBadge();
+        }
     }
 
     toggleChat() {
-        const chatSection = document.getElementById('chat-section');
-        chatSection.classList.toggle('collapsed');
+        const widget = document.getElementById('chat-widget');
+        if (widget) {
+            widget.classList.toggle('collapsed');
+            if (!widget.classList.contains('collapsed')) {
+                this._unreadCount = 0;
+                this._updateUnreadBadge();
+                // Scroll to bottom when opening
+                const messages = document.getElementById('chat-messages');
+                if (messages) messages.scrollTop = messages.scrollHeight;
+            }
+        }
+    }
+
+    _updateUnreadBadge() {
+        const badge = document.getElementById('chat-unread-badge');
+        if (!badge) return;
+        if (this._unreadCount > 0) {
+            badge.textContent = this._unreadCount > 99 ? '99+' : this._unreadCount;
+            badge.style.display = '';
+        } else {
+            badge.style.display = 'none';
+        }
     }
 
     announceHoleCards() {

@@ -29,6 +29,8 @@
                             {% endif %}
                         </span>
                         <span class="structure">{{ table.betting_structure | format_structure }}</span>
+                        <span class="hand-number-badge">Hand #<span id="hand-number">1</span></span>
+                        <span class="player-count-badge" id="player-count">{{ table.current_players }}/{{ table.max_players }}</span>
                     </div>
                 </div>
             </div>
@@ -37,7 +39,10 @@
                     <span class="username">{{ current_user.username }}</span>
                     <span class="bankroll">${{ current_user.bankroll }}</span>
                 </div>
-                <button id="leave-table-btn" class="btn btn-secondary">Leave Table</button>
+                <button id="hand-history-btn" class="header-icon-btn" title="Hand History">&#x1f4cb;</button>
+                <button id="settings-btn" class="header-icon-btn" title="Settings">&#x2699;</button>
+                <button id="debug-btn" class="header-icon-btn" title="Debug Info" style="display: none;">&#x1f41b;</button>
+                <button id="leave-table-btn" class="btn btn-secondary btn-sm">Leave</button>
             </div>
         </header>
 
@@ -83,29 +88,49 @@
                     <!-- Dealer Button -->
                     <div class="dealer-button" id="dealer-button">D</div>
                 </div>
-            </div>
 
-            <!-- Showdown Results -->
-            <div class="showdown-results-container" id="showdown-results-container" style="display: none;">
-                <div class="showdown-results-content" id="showdown-results-content">
-                    <!-- Showdown results will be displayed here -->
-                </div>
-            </div>
-
-            <!-- Ready Panel (shown when no game is active) -->
-            <div class="ready-panel" id="ready-panel">
-                <div class="ready-status" id="ready-status">
-                    <div class="ready-info">
-                        <span class="ready-count" id="ready-count">0/0 players ready</span>
-                        <span class="ready-hint">Need at least 2 players to start</span>
-                    </div>
-                    <div class="ready-players" id="ready-players">
-                        <!-- Player ready indicators will be shown here -->
+                <!-- Showdown Results (overlay on table) -->
+                <div class="showdown-results-container" id="showdown-results-container" style="display: none;">
+                    <div class="showdown-results-content" id="showdown-results-content">
+                        <!-- Showdown results will be displayed here -->
                     </div>
                 </div>
-                <button class="btn btn-primary ready-btn" id="ready-btn">Ready</button>
-            </div>
 
+                <!-- Ready Panel (overlay on table, shown when no game is active) -->
+                <div class="ready-panel" id="ready-panel">
+                    <div class="ready-status" id="ready-status">
+                        <div class="ready-info">
+                            <span class="ready-count" id="ready-count">0/0 players ready</span>
+                            <span class="ready-hint">Need at least 2 players to start</span>
+                        </div>
+                        <div class="ready-players" id="ready-players">
+                            <!-- Player ready indicators will be shown here -->
+                        </div>
+                    </div>
+                    <button class="btn btn-primary ready-btn" id="ready-btn">Ready</button>
+                </div>
+
+                <!-- Chat Widget (floating, bottom-left) -->
+                <div class="chat-widget collapsed" id="chat-widget">
+                    <div class="chat-widget-header" id="chat-widget-header">
+                        <span>Chat</span>
+                        <span class="chat-unread-badge" id="chat-unread-badge" style="display: none;">0</span>
+                    </div>
+                    <div class="chat-widget-body">
+                        <div class="chat-messages" id="chat-messages">
+                            <!-- Chat messages will be displayed here -->
+                        </div>
+                        <div class="chat-input-container">
+                            <input type="text" id="chat-input" class="chat-input" placeholder="Type a message..." maxlength="200">
+                            <button id="send-chat" class="send-chat-btn">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Action Bar (full-width bottom bar) -->
+        <div class="action-bar" id="action-bar">
             <!-- Action Panel -->
             <div class="action-panel" id="action-panel">
                 <div class="action-buttons" id="action-buttons">
@@ -128,95 +153,8 @@
                     </div>
                 </div>
             </div>
-        </main>
-
-        <!-- Side Panel -->
-        <aside class="side-panel" id="side-panel">
-            <!-- Chat -->
-            <div class="chat-section" id="chat-section">
-                <div class="chat-header">
-                    <h3>Table Chat</h3>
-                    <button id="chat-toggle" class="chat-toggle" title="Toggle Chat">💬</button>
-                </div>
-                <div class="chat-messages" id="chat-messages">
-                    <!-- Chat messages will be displayed here -->
-                </div>
-                <div class="chat-input-container">
-                    <input type="text" id="chat-input" class="chat-input" placeholder="Type a message..." maxlength="200">
-                    <button id="send-chat" class="send-chat-btn">Send</button>
-                </div>
-            </div>
-
-            <!-- Game Info -->
-            <div class="game-info-section">
-                <div class="info-header">
-                    <h3>Game Info</h3>
-                    <button id="hand-history-btn" class="hand-history-btn" title="Hand History">History</button>
-                </div>
-                <div class="game-stats">
-                    <div class="stat-item">
-                        <span class="stat-label">Hand #</span>
-                        <span class="stat-value" id="hand-number">1</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Players</span>
-                        <span class="stat-value" id="player-count">
-                            {{ table.current_players }}/{{ table.max_players }}
-                        </span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-label">Time Bank</span>
-                        <span class="stat-value" id="time-bank">30s</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Settings -->
-            <div class="settings-section">
-                <div class="info-header">
-                    <h3>Settings</h3>
-                </div>
-                <div class="settings-list">
-                    <label class="setting-toggle">
-                        <input type="checkbox" id="four-color-deck-toggle">
-                        <span>4-Color Deck</span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- Debug Info -->
-            <div class="debug-info-section" id="debug-info-section">
-                <div class="info-header">
-                    <h3>Debug Info</h3>
-                    <button id="debug-toggle" class="debug-toggle" title="Toggle Debug">🐛</button>
-                </div>
-                <div class="debug-content" id="debug-content">
-                    <div class="debug-item">
-                        <span class="debug-label">Current Player:</span>
-                        <span class="debug-value" id="debug-current-player">-</span>
-                    </div>
-                    <div class="debug-item">
-                        <span class="debug-label">My Turn:</span>
-                        <span class="debug-value" id="debug-my-turn">-</span>
-                    </div>
-                    <div class="debug-item">
-                        <span class="debug-label">Valid Actions:</span>
-                        <div class="debug-actions" id="debug-actions">-</div>
-                    </div>
-                    <div class="debug-item">
-                        <span class="debug-label">Game State:</span>
-                        <span class="debug-value" id="debug-game-state">-</span>
-                    </div>
-                </div>
-            </div>
-        </aside>
-
-        <!-- Mobile Action Bar -->
-        <div class="mobile-action-bar" id="mobile-action-bar">
-            <button id="mobile-chat-toggle" class="mobile-btn">💬</button>
-            <button id="mobile-info-toggle" class="mobile-btn">ℹ️</button>
-            <button id="mobile-settings-toggle" class="mobile-btn">⚙️</button>
         </div>
+
     </div>
 
     <!-- Modals -->
@@ -252,6 +190,52 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" onclick="closeModal('hand-history-modal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3>Settings</h3>
+                <button class="modal-close" onclick="closeModal('settings-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <label class="setting-toggle">
+                    <input type="checkbox" id="four-color-deck-toggle">
+                    <span>4-Color Deck</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Debug Modal -->
+    <div id="debug-modal" class="modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3>Debug Info</h3>
+                <button class="modal-close" onclick="closeModal('debug-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="debug-content" id="debug-content">
+                    <div class="debug-item">
+                        <span class="debug-label">Current Player:</span>
+                        <span class="debug-value" id="debug-current-player">-</span>
+                    </div>
+                    <div class="debug-item">
+                        <span class="debug-label">My Turn:</span>
+                        <span class="debug-value" id="debug-my-turn">-</span>
+                    </div>
+                    <div class="debug-item">
+                        <span class="debug-label">Valid Actions:</span>
+                        <div class="debug-actions" id="debug-actions">-</div>
+                    </div>
+                    <div class="debug-item">
+                        <span class="debug-label">Game State:</span>
+                        <span class="debug-value" id="debug-game-state">-</span>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

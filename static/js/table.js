@@ -58,7 +58,7 @@ class PokerTable {
             this.chat.sendChatMessage();
         });
 
-        document.getElementById('chat-toggle').addEventListener('click', () => {
+        document.getElementById('chat-widget-header').addEventListener('click', () => {
             this.chat.toggleChat();
         });
 
@@ -78,23 +78,24 @@ class PokerTable {
             });
         });
 
-        // Mobile action bar
-        document.getElementById('mobile-chat-toggle').addEventListener('click', () => {
-            this.responsive.toggleMobilePanel('chat');
-        });
-
-        document.getElementById('mobile-info-toggle').addEventListener('click', () => {
-            this.responsive.toggleMobilePanel('info');
-        });
-
-        document.getElementById('mobile-settings-toggle').addEventListener('click', () => {
-            this.responsive.toggleMobilePanel('settings');
-        });
-
         // Hand History button
         document.getElementById('hand-history-btn').addEventListener('click', () => {
             this.showHandHistory();
         });
+
+        // Settings modal button
+        document.getElementById('settings-btn').addEventListener('click', () => {
+            PokerModals.showModal('settings-modal');
+        });
+
+        // Debug modal button
+        const debugBtn = document.getElementById('debug-btn');
+        if (debugBtn) {
+            debugBtn.style.display = window.pokerConfig?.debug ? '' : 'none';
+            debugBtn.addEventListener('click', () => {
+                PokerModals.showModal('debug-modal');
+            });
+        }
 
         // 4-color deck toggle
         const fourColorToggle = document.getElementById('four-color-deck-toggle');
@@ -105,11 +106,6 @@ class PokerTable {
                 this.refreshCards();
             });
         }
-
-        // Debug toggle
-        document.getElementById('debug-toggle').addEventListener('click', () => {
-            this.toggleDebugPanel();
-        });
 
         // Ready button
         const readyBtn = document.getElementById('ready-btn');
@@ -363,13 +359,16 @@ class PokerTable {
     showReadyPanel(show) {
         const readyPanel = document.getElementById('ready-panel');
         const actionPanel = document.getElementById('action-panel');
+        const actionBar = document.getElementById('action-bar');
 
         if (show) {
             readyPanel.classList.remove('hidden');
             actionPanel.style.display = 'none';
+            actionBar.style.display = 'none';
         } else {
             readyPanel.classList.add('hidden');
-            actionPanel.style.display = 'block';
+            actionPanel.style.display = 'flex';
+            actionBar.style.display = '';
         }
     }
 
@@ -1958,21 +1957,6 @@ style.textContent = `
     .touch-active {
         transform: scale(0.95) !important;
         opacity: 0.8 !important;
-    }
-
-    .mobile-layout .side-panel {
-        position: fixed;
-        top: 0;
-        right: -100%;
-        height: 100vh;
-        width: 300px;
-        background: rgba(0, 0, 0, 0.95);
-        z-index: 500;
-        transition: right 0.3s ease;
-    }
-
-    .mobile-layout .side-panel.show {
-        right: 0;
     }
 
     @media (max-width: 768px) {
