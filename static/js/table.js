@@ -359,16 +359,13 @@ class PokerTable {
     showReadyPanel(show) {
         const readyPanel = document.getElementById('ready-panel');
         const actionPanel = document.getElementById('action-panel');
-        const actionBar = document.getElementById('action-bar');
 
         if (show) {
             readyPanel.classList.remove('hidden');
             actionPanel.style.display = 'none';
-            actionBar.style.display = 'none';
         } else {
             readyPanel.classList.add('hidden');
             actionPanel.style.display = 'flex';
-            actionBar.style.display = '';
         }
     }
 
