@@ -346,6 +346,23 @@ class PlayerActionManager:
                     button_style="primary",
                 )
 
+            elif action_type == PlayerAction.BUY:
+                cost = max_amount or 0
+                if min_amount == 0 and cost > 0:
+                    display_text = f"Buy Card (${cost})"
+                elif cost == 0:
+                    display_text = "Stand Pat"
+                else:
+                    display_text = f"Buy Card (${cost})"
+                return PlayerActionOption(
+                    action_type=action_type,
+                    min_amount=min_amount or 0,
+                    max_amount=cost,
+                    default_amount=cost,
+                    display_text=display_text,
+                    button_style="primary",
+                )
+
             elif action_type == PlayerAction.BRING_IN:
                 bring_in_amount = min_amount or 0
                 return PlayerActionOption(
@@ -867,6 +884,11 @@ class PlayerActionManager:
                 action_msg = f"{username} separates their cards"
             elif action == PlayerAction.DECLARE:
                 action_msg = f"{username} declares"
+            elif action == PlayerAction.BUY:
+                if amount and amount > 0:
+                    action_msg = f"{username} buys a card for ${amount}"
+                else:
+                    action_msg = f"{username} stands pat"
             elif action == PlayerAction.CHOOSE:
                 action_msg = f"{username} chooses"
             else:

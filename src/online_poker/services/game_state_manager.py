@@ -479,6 +479,7 @@ class GameStateManager:
                 PlayerAction.SEPARATE: ActionType.SEPARATE,
                 PlayerAction.DECLARE: ActionType.DECLARE,
                 PlayerAction.CHOOSE: ActionType.CHOOSE,
+                PlayerAction.BUY: ActionType.BUY,
             }
 
             action_type = action_type_map.get(action_option.action_type, ActionType.FOLD)

@@ -153,6 +153,11 @@ class SimpleBot:
             if first_action_type == PlayerAction.CHOOSE:
                 return BotDecision(action=PlayerAction.CHOOSE, amount=0)
 
+            # BUY — always buy if we can afford it
+            if first_action_type == PlayerAction.BUY:
+                max_amt = valid_actions[0][2] if len(valid_actions[0]) > 2 else 0
+                return BotDecision(action=PlayerAction.BUY, amount=max_amt or 0)
+
             # BRING_IN / COMPLETE — take minimum amount
             if first_action_type == PlayerAction.BRING_IN:
                 min_amt = valid_actions[0][1] if len(valid_actions[0]) > 1 else 0

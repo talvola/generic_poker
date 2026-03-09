@@ -34,3 +34,4 @@ class PlayerAction(Enum):
     PROTECT_CARD = "protect_card"
     DECLINE_PROTECTION = "decline_protection"
     REPLACE_COMMUNITY = "replace_community"  # New action for replacing community cards
+    BUY = "buy"  # Pay chips to pot for a replacement card

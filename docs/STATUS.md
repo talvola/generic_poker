@@ -1,7 +1,7 @@
 # Project Status
 
 > Single source of truth for project state. Updated as work progresses.
-> Last updated: 2026-02-24
+> Last updated: 2026-02-26
 
 ## Architecture Overview
 
@@ -39,11 +39,11 @@ Flask/SocketIO multiplayer web platform.
 
 | File | Lines | Quality | Notes |
 |------|-------|---------|-------|
-| `static/js/table.js` | 1,577 | 8/10 | Core module, uses GameStateStore + 7 extracted modules |
+| `static/js/table.js` | ~1,530 | 8/10 | Core module, uses GameStateStore + 7 extracted modules |
 | `static/js/table/` | ~850 | 8/10 | 7 modules: card-utils, modals, chat, timer, bet-controls, responsive, showdown |
 | `static/js/table/game-state-store.js` | ~35 | 9/10 | Centralized state management |
 | `static/js/lobby.js` | 1,033 | 8/10 | Clean, well-organized |
-| `static/css/table.css` | ~2,950 | 9/10 | Well-organized, good responsive design |
+| `static/css/table.css` | ~2,750 | 9/10 | Single-viewport layout, no side panel |
 | `static/css/lobby.css` | 1,817 | 8/10 | Clean |
 
 ---
@@ -89,6 +89,7 @@ Flask/SocketIO multiplayer web platform.
 - Game rules display: visual game cards (timeline, tags, descriptions) in lobby modal + standalone HTML tool
 - 4-color deck option (blue diamonds, green clubs) toggled in table settings, persisted in localStorage
 - Mixed game rotation: HORSE and 8-Game Mix with orbit-based variant rotation, frontend tracker, state persistence
+- Single-viewport table layout: no scrolling, full-width action bar at bottom, floating chat widget, showdown in action bar, settings/debug in header modals
 
 ### Remaining Issues
 
@@ -98,6 +99,20 @@ Flask/SocketIO multiplayer web platform.
 | 4 | Debug deck option | LOW | No way to use fixed/unseeded deck for testing |
 | 9 | Mobile optimization | LOW | Deferred to Phase 7 |
 | ~~10~~ | ~~Admin interface~~ | ~~LOW~~ | ~~Implemented: dashboard, user/table/variant management~~ |
+| 11 | Duplicate tables in Render DB | LOW | seed_db.py ran multiple times across deploys; many duplicate seeded tables |
+| ~~12~~ | ~~Table creation doesn't auto-join creator~~ | ~~MEDIUM~~ | ~~Fixed: seat selection modal auto-opens after creation~~ |
+
+### Layout Testing Bugs (2026-02-27, all fixed)
+
+Bugs found during first Render user testing of Phase 8.3 layout redesign:
+
+| Bug | Description | Fix |
+|-----|-------------|-----|
+| L001 | Lobby completely broken (no tables, no variants, buttons do nothing) | Missing `</script>` tag in lobby.html from cache-busting commit |
+| L002 | Action bar height shifts between "Waiting" and action buttons | Changed `min-height: 60px` → `height: 70px` on `.action-bar` |
+| L003 | Showdown overlay covers table (can't see board + results) | Moved showdown display to compact strip in action bar |
+| L004 | Hand counter stuck at #1 | `hands_played` only incremented for fold-win; moved to `_handle_hand_completion()` |
+| L005 | Action bar hidden during ready panel, causing table shift | `showReadyPanel()` now only hides `action-panel` content, not the bar |
 
 ### Online Bot Testing Bugs (2026-02-24, all fixed)
 

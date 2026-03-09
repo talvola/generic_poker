@@ -37,6 +37,7 @@ class GameActionType(Enum):
     ROLL_DIE = auto()
     CHOOSE = auto()  # New action type for player choices
     REPLACE_COMMUNITY = auto()  # New action type for community card replacement
+    BUY = auto()  # Pay chips to pot for a replacement card
 
 
 @dataclass

@@ -39,6 +39,7 @@ class ActionType(Enum):
     SEPARATE = "separate"
     DECLARE = "declare"
     CHOOSE = "choose"
+    BUY = "buy"
 
 
 @dataclass

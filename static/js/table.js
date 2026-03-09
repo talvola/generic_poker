@@ -970,6 +970,15 @@ class PokerTable {
             return;
         }
 
+        // Check for buy action
+        const buyAction = this.store.validActions.find(a => a.type === 'buy');
+        if (buyAction) {
+            this.drawAction = null;
+            this._renderBuyControls(actionButtons, buyAction);
+            betControls.style.display = 'none';
+            return;
+        }
+
         // Check for declare action
         const declareAction = this.store.validActions.find(a => a.type === 'declare');
         if (declareAction) {
@@ -1250,6 +1259,50 @@ class PokerTable {
                 this._renderSeparateControls(actionButtons, this.drawAction);
             });
         });
+    }
+
+    _renderBuyControls(container, buyAction) {
+        const cost = buyAction.max_amount || 0;
+        const canBuy = cost > 0;
+        const isOptional = (buyAction.min_amount || 0) === 0;
+
+        let buttonsHtml = '';
+        if (canBuy) {
+            buttonsHtml += `<button class="action-btn primary buy-btn" data-amount="${cost}">Buy Card ($${cost})</button>`;
+        }
+        if (isOptional || !canBuy) {
+            buttonsHtml += `<button class="action-btn secondary stand-pat-btn" data-amount="0">Stand Pat</button>`;
+        }
+        // Check for fold option (mandatory buy the player can't afford)
+        const foldAction = this.store.validActions.find(a => a.type === 'fold');
+        if (foldAction) {
+            buttonsHtml += `<button class="action-btn danger fold-btn">Fold</button>`;
+        }
+
+        container.innerHTML = `
+            <div class="draw-controls">
+                <div class="draw-info">${canBuy ? `Buy a replacement card for $${cost}?` : 'Cannot afford to buy'}</div>
+                <div class="buy-buttons">${buttonsHtml}</div>
+            </div>
+        `;
+
+        container.querySelectorAll('.buy-btn, .stand-pat-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const amount = parseInt(btn.dataset.amount);
+                this.sendPlayerAction({ action: 'buy', amount: amount });
+                container.querySelectorAll('button').forEach(b => b.disabled = true);
+                this.timer.stop();
+            });
+        });
+
+        const foldBtn = container.querySelector('.fold-btn');
+        if (foldBtn) {
+            foldBtn.addEventListener('click', () => {
+                this.sendPlayerAction({ action: 'fold' });
+                container.querySelectorAll('button').forEach(b => b.disabled = true);
+                this.timer.stop();
+            });
+        }
     }
 
     _renderDeclareControls(container, declareAction) {

@@ -1,7 +1,7 @@
 # Backlog
 
 > Prioritized task list. Work top-to-bottom within each phase.
-> Last updated: 2026-02-24
+> Last updated: 2026-02-26
 
 ---
 
@@ -400,7 +400,8 @@ Goal: Make the app fully playable on phones and tablets. This is a large effort 
 |---|------|--------|
 | 8.1 | Game rules display (visual game cards from JSON configs) | DONE |
 | 8.2 | 4-color deck option (blue diamonds, green clubs) for better card readability | DONE |
-| 8.3 | Stud games: show each player's visible cards in table chat when action order changes | TODO |
+| 8.3 | Table layout redesign: single-viewport, no side panel, full-width action bar | DONE |
+| 8.4 | Stud games: show each player's visible cards in table chat when action order changes | TODO |
 
 **8.1 result:** Visual game description cards inspired by abby99 Mixed Game Cards format. Each card shows game name, subtitle tags (Blinds/Antes, Split Pot, Qualifier, Wild Cards, Max Players), a visual timeline with card stacks (I=individual, C=community), bet chips, and color-coded action boxes (draw=blue, discard=red, expose=green, pass=purple, separate=orange, declare=pink), plus Final Hand description and Split Pot info.
 
@@ -408,6 +409,8 @@ Three components:
 - **Shared module** `src/generic_poker/config/game_description.py` — extracts display data from game config JSONs (subtitle tags, timeline, hand descriptions, wild cards, split pot info)
 - **Standalone tool** `tools/generate_game_cards.py` — generates a single HTML file with all 293 game cards (filterable, print-friendly). Usage: `python tools/generate_game_cards.py [output.html] [--filter PATTERN]`
 - **Lobby integration** — "View Rules" link appears next to variant selector in create-table form; opens modal with visual game card via `/api/tables/variants/<id>/rules` API endpoint
+
+**8.3 result:** Complete table layout redesign eliminating the side panel. Layout now fits in one viewport with zero scrolling, matching industry poker clients (PokerStars, GGPoker). Changes: viewport locked to `100vh`, action bar full-width at bottom, chat converted to floating collapsible widget (bottom-left) with unread badge, game info (hand#, player count) moved to header, settings/debug moved to icon-triggered modals in header, ready panel and showdown display as centered table overlays, side panel removed entirely (~200 lines dead CSS). All element IDs preserved for JS/E2E test compatibility. Files: `table.html`, `table.css`, `table.js`, `chat.js`, `responsive.js`. **Deployed to Render, awaiting user testing.**
 
 **8.2 result:** 4-color deck option. Spades=black, hearts=red, diamonds=blue, clubs=green. CSS variables `--card-blue` and `--card-green` with `.card.blue` and `.card.green` classes. `PokerCardUtils.getCardColorClass()` checks `localStorage.fourColorDeck`. Settings toggle checkbox in table side panel. Instant re-render on toggle via `refreshCards()`. Changes: `table.css` (4 lines CSS vars + 8 lines classes + 30 lines settings section), `card-utils.js` (3 new static methods), `table.js` (toggle event + refreshCards + updateGameInfo), `table.html` (settings section in side panel).
 

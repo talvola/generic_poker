@@ -132,6 +132,8 @@ class PlayerActionHandler:
             elif hasattr(self.game, "current_replace_community_config"):
                 cards_to_replace = self.game.current_replace_community_config.get("cardsToReplace", 2)
                 return [(PlayerAction.REPLACE_COMMUNITY, cards_to_replace, cards_to_replace)]
+            elif hasattr(self.game, "current_buy_config"):
+                return self._get_buy_actions(player_id)
 
         if self.game.state == GameState.PROTECTION_DECISION:
             pending = self.game.pending_protection_decisions.get(player_id)
@@ -355,6 +357,17 @@ class PlayerActionHandler:
             logger.info(f"{player.name} replaces {len(cards)} community cards: {cards}")
             self.game.current_player = self.game.next_player(round_start=False)
             if self._check_replace_community_round_complete():
+                return ActionResult(success=True, advance_step=True)
+            return ActionResult(success=True)
+
+        if action == PlayerAction.BUY:
+            if self.game.state != GameState.DRAWING or not hasattr(self.game, "current_buy_config"):
+                return ActionResult(success=False, error="Cannot buy in current state")
+            result = self._handle_buy_action(player, amount)
+            if not result:
+                return ActionResult(success=False, error="Invalid buy action")
+            self.game.current_player = self.game.next_player(round_start=False)
+            if self._check_buy_round_complete():
                 return ActionResult(success=True, advance_step=True)
             return ActionResult(success=True)
 
@@ -662,6 +675,21 @@ class PlayerActionHandler:
                 self.current_substep += 1
             self._update_state_for_next_subaction(subactions)
 
+        elif "buy" in subaction_key and action == PlayerAction.BUY:
+            if self.game.state != GameState.DRAWING:
+                return ActionResult(success=False, error="Cannot buy in current state")
+            if not self._handle_buy_action(player, amount):
+                return ActionResult(success=False, error="Invalid buy action")
+            logger.debug(f"{player.name} buy action amount={amount}")
+            self.player_completed_subactions[player_id].add(self.current_substep)
+            if self.current_substep == len(subactions) - 1:
+                self.grouped_step_completed.add(player_id)
+                self.current_substep = 0
+                self.game.current_player = self.game.next_player(round_start=False)
+            else:
+                self.current_substep += 1
+            self._update_state_for_next_subaction(subactions)
+
         else:
             return ActionResult(success=False, error=f"Invalid action {action} for substep {subaction_key}")
 
@@ -863,6 +891,10 @@ class PlayerActionHandler:
             self.game.state = GameState.DECLARING
             self.setup_declare_round(next_subaction["declare"])
             # DON'T change current_player here - keep the same player for grouped actions
+        elif "buy" in next_key:
+            self.game.state = GameState.DRAWING
+            self.setup_buy_round(next_subaction["buy"])
+            # DON'T change current_player here - keep the same player for grouped actions
         elif "deal" in next_key:
             # Deal is not a player action — execute it immediately for the current player
             player_id = self.game.current_player.id if self.game.current_player else None
@@ -884,7 +916,7 @@ class PlayerActionHandler:
                 # Re-setup first subaction's state for the next player
                 first_sub = subactions[0]
                 first_key = list(first_sub.keys())[0]
-                if any(k in first_key for k in ["expose", "draw", "discard", "separate", "pass"]):
+                if any(k in first_key for k in ["expose", "draw", "discard", "separate", "pass", "buy"]):
                     self.game.state = GameState.DRAWING
                 elif "bet" in first_key:
                     self.game.state = GameState.BETTING
@@ -1384,8 +1416,120 @@ class PlayerActionHandler:
         self.game.current_pass_config = config
 
     def setup_declare_round(self, config: dict) -> None:
-        """Set up a pass round."""
+        """Set up a declare round."""
         self.game.current_declare_config = config
+
+    def setup_buy_round(self, config: dict) -> None:
+        """Set up a buy round."""
+        self.game.current_buy_config = config
+
+    def _get_buy_actions(self, player_id: str) -> list[tuple]:
+        """Get valid buy actions for a player."""
+        config = self.game.current_buy_config
+        card_config = config["cards"][0]
+        cost = self._resolve_buy_cost(card_config)
+        player = self.game.table.players[player_id]
+        is_optional = card_config.get("optional", True)
+
+        if player.stack <= 0:
+            # All-in players auto-stand-pat
+            return [(PlayerAction.BUY, 0, 0)]
+        elif player.stack < cost:
+            if is_optional:
+                return [(PlayerAction.BUY, 0, 0)]  # Can only stand pat
+            else:
+                return [(PlayerAction.FOLD, None, None)]  # Must fold if can't afford mandatory buy
+        else:
+            if is_optional:
+                # min=0 means stand pat allowed, max=cost means buy
+                return [(PlayerAction.BUY, 0, cost)]
+            else:
+                return [(PlayerAction.BUY, cost, cost), (PlayerAction.FOLD, None, None)]
+
+    def _resolve_buy_cost(self, card_config: dict) -> int:
+        """Resolve the cost of buying a card from config."""
+        cost_config = card_config.get("cost", {})
+        cost_type = cost_config.get("type", "fixed")
+
+        if cost_type == "fixed":
+            amount = cost_config.get("amount", 0)
+            # Support named amounts
+            if isinstance(amount, str):
+                if amount == "small_bet":
+                    return self.game.small_bet or 0
+                elif amount == "big_bet":
+                    return self.game.big_bet or 0
+                elif amount == "ante":
+                    return self.game.ante or 0
+                elif amount == "small_blind":
+                    return self.game.small_blind or 0
+                elif amount == "big_blind":
+                    return self.game.big_blind or 0
+                else:
+                    # Try named_bets
+                    named_bets = getattr(self.game, "named_bets", {})
+                    return named_bets.get(amount, 0)
+            return int(amount)
+        elif cost_type == "match_pot":
+            return self.game.betting.pot.total
+        else:
+            return int(cost_config.get("amount", 0))
+
+    def _handle_buy_action(self, player: Player, amount: int) -> bool:
+        """Handle a buy action. amount=0 means stand pat, amount>0 means buy."""
+        if amount == 0:
+            # Stand pat - do nothing
+            logger.info(f"{player.name} stands pat (declines to buy)")
+            return True
+
+        config = self.game.current_buy_config
+        card_config = config["cards"][0]
+        cost = self._resolve_buy_cost(card_config)
+
+        if amount != cost:
+            logger.warning(f"{player.name} tried to buy with wrong amount: {amount} (expected {cost})")
+            return False
+
+        if player.stack < cost:
+            logger.warning(f"{player.name} cannot afford to buy (stack={player.stack}, cost={cost})")
+            return False
+
+        # Pay the cost directly to pot (like an ante, not a bet)
+        player.stack -= cost
+        self.game.betting.place_bet(player.id, cost, player.stack + cost, is_forced=True, is_ante=True)
+        logger.info(f"{player.name} pays ${cost} to buy a card")
+
+        # Deal replacement card
+        num_cards = card_config.get("number", 1)
+        face_up = card_config.get("state", "face down") == "face up"
+        discard_first = card_config.get("discard_first", False)
+
+        if discard_first and num_cards == 1:
+            # For replacement buys: discard worst card (or random) then draw
+            # The player doesn't choose which card to discard in buy - it's automatic
+            # Some variants may want player selection, but for simplicity auto-discard oldest
+            cards_in_hand = player.hand.get_cards()
+            if cards_in_hand:
+                # Remove last card (could be made smarter)
+                discard_card = cards_in_hand[-1]
+                player.hand.remove_card(discard_card)
+                self.game.table.deck.discard(discard_card)
+
+        # Draw new card(s)
+        for _ in range(num_cards):
+            new_card = self.game.table.deck.deal_card()
+            if new_card:
+                new_card.visibility = Visibility.FACE_UP if face_up else Visibility.FACE_DOWN
+                player.hand.add_card(new_card)
+                logger.info(f"{player.name} receives {new_card}")
+
+        return True
+
+    def _check_buy_round_complete(self) -> bool:
+        """Check if the buy round is complete."""
+        if self.first_player_in_round is None:
+            return False
+        return self.game.current_player.id == self.first_player_in_round
 
     def setup_replace_community_round(self, config: dict) -> None:
         """Set up a community card replacement round."""

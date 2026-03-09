@@ -271,6 +271,7 @@ class Game:
             GameActionType.DRAW,
             GameActionType.EXPOSE,
             GameActionType.BET,
+            GameActionType.BUY,
         ]:
             if isinstance(step.action_config, dict) and "conditional_state" in step.action_config:
                 conditional_state = step.action_config["conditional_state"]
@@ -319,6 +320,7 @@ class Game:
                 "current_expose_config",
                 "current_pass_config",
                 "current_declare_config",
+                "current_buy_config",
             ]:
                 if hasattr(self, attr):
                     delattr(self, attr)
@@ -385,6 +387,10 @@ class Game:
             elif "declare" in first_subaction:
                 self.state = GameState.DRAWING
                 self.action_handler.setup_declare_round(first_subaction["declare"])
+                self.current_player = self.next_player(round_start=True)
+            elif "buy" in first_subaction:
+                self.state = GameState.DRAWING
+                self.action_handler.setup_buy_round(first_subaction["buy"])
                 self.current_player = self.next_player(round_start=True)
             # not sure if we ever see 'deal' here - need to test GROUPED combinations of actions more to validate
             elif "deal" in first_subaction:
@@ -510,6 +516,12 @@ class Game:
             self.current_player = self.next_player(round_start=True)
             self.action_handler.first_player_in_round = self.current_player.id
 
+        elif step.action_type == GameActionType.BUY:
+            self.state = GameState.DRAWING
+            self.action_handler.setup_buy_round(step.action_config)
+            self.current_player = self.next_player(round_start=True)
+            self.action_handler.first_player_in_round = self.current_player.id
+
         elif step.action_type == GameActionType.SHOWDOWN:
             logger.info("Moving to showdown")
             self.state = GameState.SHOWDOWN
@@ -623,6 +635,7 @@ class Game:
             GameActionType.DRAW,
             GameActionType.EXPOSE,
             GameActionType.BET,
+            GameActionType.BUY,
         ]:
             conditional_state = None
 
