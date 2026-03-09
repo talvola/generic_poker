@@ -127,43 +127,19 @@ export async function createTable(page: Page, config: TableConfig = {}): Promise
   const createButton = page.locator('#create-table-modal .modal-footer button[type="submit"]');
   await expect(createButton).toBeVisible();
 
-  // Set up navigation promise before clicking
-  const navigationPromise = page.waitForURL(/\/table\//, { timeout: 15000 }).catch(() => null);
-
   await createButton.click();
 
-  // Wait for navigation OR check for error notification
-  const navigation = await navigationPromise;
+  // After creation, seat selection modal auto-opens on the lobby page
+  const seatModal = page.locator('#seat-selection-modal');
+  await expect(seatModal).toBeVisible({ timeout: 10000 });
 
-  if (!navigation) {
-    // Check if there's an error notification
-    const errorNotification = page.locator('.notification.error, .notification-error');
-    if (await errorNotification.isVisible({ timeout: 1000 }).catch(() => false)) {
-      const errorText = await errorNotification.textContent();
-      throw new Error(`Table creation failed: ${errorText}`);
-    }
+  // Click Join Table button in the seat selection modal
+  const joinTableBtn = seatModal.locator('button:has-text("Join Table")');
+  await expect(joinTableBtn).toBeVisible({ timeout: 5000 });
+  await joinTableBtn.click();
 
-    // Check if we're still on the lobby - try to find the created table and join it
-    const tableCard = page.locator('.table-card', { hasText: tableName });
-    if (await tableCard.isVisible({ timeout: 3000 }).catch(() => false)) {
-      // Table was created but we weren't redirected - click Join
-      const joinBtn = tableCard.locator('.join-table-btn, button:has-text("Join")');
-      await joinBtn.click();
-
-      // Wait for seat selection modal
-      const seatModal = page.locator('#seat-selection-modal');
-      await expect(seatModal).toBeVisible({ timeout: 10000 });
-
-      // Click Join Table button
-      const joinTableBtn = seatModal.locator('button:has-text("Join Table")');
-      await joinTableBtn.click();
-
-      // Wait for navigation to table
-      await page.waitForURL(/\/table\//, { timeout: 15000 });
-    } else {
-      throw new Error('Table creation did not navigate and table card not found');
-    }
-  }
+  // Wait for navigation to table page
+  await page.waitForURL(/\/table\//, { timeout: 15000 });
 
   // Wait for poker table to render
   await expect(page.locator('.poker-table')).toBeVisible({ timeout: 10000 });

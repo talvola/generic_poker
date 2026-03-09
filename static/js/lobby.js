@@ -601,9 +601,22 @@ class PokerLobby {
                 this.closeModal('create-table-modal');
                 this.loadTables();
 
-                // Optionally redirect to the table
+                // Auto-open seat selection so creator can join their table
                 if (result.table_id) {
-                    window.location.href = `/table/${result.table_id}`;
+                    // Build a temporary table object from the form data for the modal
+                    const createdTable = {
+                        id: result.table_id,
+                        name: tableData.name,
+                        variant: tableData.variant,
+                        betting_structure: tableData.betting_structure,
+                        stakes: tableData.stakes,
+                        max_players: tableData.max_players,
+                        current_players: 0,
+                        is_private: tableData.is_private
+                    };
+                    // Add to tables array so showSeatSelectionModal can find it
+                    this.tables.push(createdTable);
+                    this.showSeatSelectionModal(result.table_id);
                 }
             } else {
                 this.showNotification(result.error || 'Failed to create table', 'error');
