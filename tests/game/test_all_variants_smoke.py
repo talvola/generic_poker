@@ -184,8 +184,19 @@ def play_hand_passively(game: Game, max_actions: int = 500) -> int:
                 elif PlayerAction.SEPARATE in action_map:
                     total, _ = action_map[PlayerAction.SEPARATE]
                     hand_cards = list(game.table.players[player_id].hand.cards)
-                    # Just assign cards in order to satisfy the total count
-                    _take_action(game, player_id, PlayerAction.SEPARATE, cards=hand_cards[:total])
+                    # Try all combinations of which cards go in first subset vs second
+                    from itertools import combinations
+
+                    sep_config = getattr(game, "current_separate_config", {}).get("cards", [])
+                    first_size = sep_config[0]["number"] if sep_config else total
+                    for combo in combinations(range(len(hand_cards)), first_size):
+                        rest = [i for i in range(len(hand_cards)) if i not in combo]
+                        trial = [hand_cards[i] for i in combo] + [hand_cards[i] for i in rest]
+                        result = game.player_action(player_id, PlayerAction.SEPARATE, cards=trial)
+                        if result and result.success:
+                            if result.advance_step:
+                                game._next_step()
+                            break
                 elif PlayerAction.DECLARE in action_map:
                     # Always declare "high"
                     result = game.player_action(

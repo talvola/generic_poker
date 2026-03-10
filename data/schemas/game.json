@@ -1132,6 +1132,34 @@
         "required": ["cards"],
         "additionalProperties": false
     },
+    "buy": {
+      "type": "object",
+      "properties": {
+        "cards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "number": { "type": "integer", "description": "Number of cards to buy" },
+              "state": { "type": "string", "enum": ["face up", "face down"] },
+              "optional": { "type": "boolean", "description": "Whether buying is optional (can stand pat)" },
+              "cost": {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "enum": ["fixed", "match_pot"], "description": "Cost calculation method" },
+                  "amount": { "description": "Fixed cost amount (number or named bet string)" }
+                },
+                "required": ["type"]
+              },
+              "discard_first": { "type": "boolean", "description": "Auto-discard a card before dealing replacement" }
+            },
+            "required": ["number", "state", "cost"]
+          }
+        }
+      },
+      "required": ["cards"],
+      "additionalProperties": false
+    },
     "declare": {
       "type": "object",
       "properties": {
@@ -1318,6 +1346,7 @@
                 "replaceCommunity": { "$ref": "#/definitions/replaceCommunity" },
                 "declare": { "$ref": "#/definitions/declare" },
                 "separate": { "$ref": "#/definitions/separate" },
+                "buy": { "$ref": "#/definitions/buy" },
                 "showdown": { "$ref": "#/definitions/showdown" },
                 "roll_die": { "$ref": "#/definitions/roll_die" }
               },
@@ -1334,6 +1363,7 @@
           "replaceCommunity": { "$ref": "#/definitions/replaceCommunity" },
           "declare": { "$ref": "#/definitions/declare" },
           "separate": { "$ref": "#/definitions/separate" },
+          "buy": { "$ref": "#/definitions/buy" },
           "showdown": { "$ref": "#/definitions/showdown" },
           "roll_die": { "$ref": "#/definitions/roll_die" },
           "choose": { "$ref": "#/definitions/choose" }

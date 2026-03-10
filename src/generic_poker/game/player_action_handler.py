@@ -1147,16 +1147,35 @@ class PlayerActionHandler:
             eval_type1 = EvaluationType(subsets[0]["evaluationType"])
             eval_type2 = EvaluationType(subsets[1]["evaluationType"])
 
-            from generic_poker.evaluation.evaluator import EvaluationType
-
-            result = evaluator.compare_hands_with_offset(hand1, hand2, eval_type1, eval_type2)
+            try:
+                result = evaluator.compare_hands_with_offset(hand1, hand2, eval_type1, eval_type2)
+            except (ValueError, KeyError, TypeError) as e:
+                logger.warning(f"Hand comparison error for {player.name}: {e} — accepting arrangement")
+                return True
 
             if comparison_rule == "greater_than" and result <= 0:
+                # Track failed attempts — if player has exhausted options, accept arrangement
+                attempt_key = f"_separate_attempts_{player.id}"
+                attempts = getattr(self.game, attempt_key, 0) + 1
+                setattr(self.game, attempt_key, attempts)
+
+                if attempts >= 21:  # C(7,5) = 21 — all combos tried
+                    logger.warning(
+                        f"Player {player.name} has no valid arrangement after {attempts} attempts — accepting current arrangement"
+                    )
+                    delattr(self.game, attempt_key)
+                    return True
+
                 logger.warning(
-                    f"Player {player.name}'s {subsets[0]['hole_subset']} ({hand1}) is not better than their {subsets[1]['hole_subset']} ({hand2})"
+                    f"Player {player.name}'s {subsets[0]['hole_subset']} ({hand1}) is not better than their {subsets[1]['hole_subset']} ({hand2}) (attempt {attempts})"
                 )
                 player.hand.clear_subsets()
                 return False
+
+            # Reset attempt counter on success
+            attempt_key = f"_separate_attempts_{player.id}"
+            if hasattr(self.game, attempt_key):
+                delattr(self.game, attempt_key)
 
         return True
 
