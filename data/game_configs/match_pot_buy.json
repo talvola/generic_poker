@@ -1,0 +1,88 @@
+{
+  "game": "Match Pot Buy",
+  "category": "Draw",
+  "references": [
+    {
+      "url": "https://www.pagat.com/poker/variants/buyyourcard.html",
+      "description": "Pagat.com - Buy Your Card variants"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 6
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "First Bet"
+    },
+    {
+      "buy": {
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down",
+            "optional": true,
+            "cost": {
+              "type": "match_pot"
+            },
+            "discard_first": true
+          }
+        ]
+      },
+      "name": "Buy a Card (Match Pot)"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all cards",
+    "bestHand": [
+      {
+        "evaluationType": "high",
+        "anyCards": 5
+      }
+    ]
+  }
+}

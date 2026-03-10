@@ -1,0 +1,112 @@
+{
+  "game": "Buy Your Card",
+  "category": "Draw",
+  "references": [
+    {
+      "url": "https://www.pagat.com/poker/variants/buyyourcard.html#buyyourcard",
+      "description": "Pagat.com - Buy Your Card / Substitution"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 6
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "First Bet"
+    },
+    {
+      "buy": {
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down",
+            "optional": true,
+            "cost": {
+              "type": "fixed",
+              "amount": "small_bet"
+            },
+            "discard_first": true
+          }
+        ]
+      },
+      "name": "First Buy Round"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Second Bet"
+    },
+    {
+      "buy": {
+        "cards": [
+          {
+            "number": 1,
+            "state": "face down",
+            "optional": true,
+            "cost": {
+              "type": "fixed",
+              "amount": "big_bet"
+            },
+            "discard_first": true
+          }
+        ]
+      },
+      "name": "Second Buy Round"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Final Bet"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all cards",
+    "bestHand": [
+      {
+        "evaluationType": "high",
+        "anyCards": 5
+      }
+    ]
+  }
+}
