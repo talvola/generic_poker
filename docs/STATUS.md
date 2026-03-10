@@ -1,13 +1,13 @@
 # Project Status
 
 > Single source of truth for project state. Updated as work progresses.
-> Last updated: 2026-02-26
+> Last updated: 2026-03-10
 
 ## Architecture Overview
 
 ### Core Engine (`src/generic_poker/`)
 
-Rule-driven poker engine where variants are defined by JSON configs, not code. Supports 293+ variants.
+Rule-driven poker engine where variants are defined by JSON configs, not code. Supports 302 variants.
 
 | Component | File | Purpose |
 |-----------|------|---------|

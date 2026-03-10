@@ -132,6 +132,10 @@ class Game:
 
         self.dynamic_wild_rank = None  # Store rank that becomes wild due to last card dealt
 
+        # Follow-card wild tracking (e.g., Follow the Queen)
+        self.follow_trigger_pending = False  # True when trigger card seen, waiting for next face-up
+        self.follow_card_wild_rank: Rank | None = None  # Current wild rank from follow mechanic
+
         self.player_wild_ranks: dict[str, Rank | None] = {}  # player_id -> wild_rank
 
         self.named_bets = named_bets or {}
@@ -237,6 +241,12 @@ class Game:
         self.current_step = 0
         self.state = GameState.BETTING
         self.current_player = None
+
+        # Reset dynamic wild card state
+        self.dynamic_wild_rank = None
+        self.follow_trigger_pending = False
+        self.follow_card_wild_rank = None
+        self.player_wild_ranks.clear()
 
         logger.debug("Hand started - moving to first step")
 
@@ -944,6 +954,32 @@ class Game:
                 # For other types, use MATCHING or NATURAL as appropriate
                 wild_card_type = WildType.MATCHING
 
+            # Handle follow_card type (e.g., Follow the Queen)
+            # When a trigger card is dealt face-up, the next face-up card's rank becomes wild.
+            # If the last face-up card is a trigger, no cards are wild from this rule.
+            if wild_type == "follow_card":
+                if not face_up:
+                    continue  # Only face-up cards participate in follow mechanic
+
+                trigger_rank = Rank(rule.get("trigger_rank", "Q"))
+
+                if card.rank == trigger_rank:
+                    # Trigger card seen — clear previous follow wild and wait for next card
+                    if self.follow_card_wild_rank:
+                        self._remove_all_follow_card_wilds(self.follow_card_wild_rank)
+                    self.follow_card_wild_rank = None
+                    self.follow_trigger_pending = True
+                    logger.debug(f"Follow-card trigger seen: {card}. Waiting for next face-up card.")
+                elif self.follow_trigger_pending:
+                    # This card follows a trigger — its rank becomes wild
+                    self.follow_card_wild_rank = card.rank
+                    self.follow_trigger_pending = False
+                    card.make_wild(wild_card_type)
+                    self._make_all_existing_matching_rank_wild(card.rank, wild_card_type)
+                    logger.debug(f"Follow-card wild set: all {card.rank} cards are now wild")
+
+                continue
+
             # Handle the new last_community_card type
             if wild_type == "last_community_card":
                 # Always make this specific card wild
@@ -1073,6 +1109,20 @@ class Game:
             if card.rank == rank and not card.is_wild:
                 card.make_wild(wild_type)
                 logger.debug(f"Made {card} wild for player {player.name}")
+
+    def _remove_all_follow_card_wilds(self, rank: Rank) -> None:
+        """Remove wild status from all cards of a specific rank (for follow-card reset)."""
+        for player in self.table.players.values():
+            for card in player.hand.get_cards():
+                if card.rank == rank and card.is_wild:
+                    card.clear_wild()
+                    logger.debug(f"Removed follow-card wild from {card} for player {player.name}")
+
+        for _subset_name, cards in self.table.community_cards.items():
+            for card in cards:
+                if card.rank == rank and card.is_wild:
+                    card.clear_wild()
+                    logger.debug(f"Removed follow-card wild from community card {card}")
 
     def _make_all_existing_matching_rank_wild(self, target_rank: Rank, wild_card_type: WildType) -> None:
         """Make all existing cards of a specific rank wild (not cards still in deck)."""

@@ -1,7 +1,7 @@
 # Backlog
 
 > Prioritized task list. Work top-to-bottom within each phase.
-> Last updated: 2026-02-26
+> Last updated: 2026-03-10
 
 ---
 
@@ -338,8 +338,8 @@ Features prioritized by casino relevance and games unlocked. Each unlocks multip
 | # | Feature | Games Unlocked | Casino Relevance | Difficulty | Status |
 |---|---------|---------------|-----------------|------------|--------|
 | 6.2.1 | Mixed Game Rotation (HORSE, 8 Game Mix, Dealer's Choice) | ~10 | Very High | Medium | DONE (HORSE + 8-Game Mix) |
-| 6.2.2 | Buy Your Card (pay chips to acquire/replace cards) | ~19 | Medium | Medium-Hard | TODO |
-| 6.2.3 | Dynamic Wild Cards (event-triggered wild changes) | ~12 | Medium | Hard | TODO |
+| 6.2.2 | Buy Your Card (pay chips to acquire/replace cards) | ~19 | Medium | Medium-Hard | DONE |
+| 6.2.3 | Dynamic Wild Cards (event-triggered wild changes) | ~12 | Medium | Hard | DONE |
 | 6.2.4 | Enhanced Pass Mechanics (multi-round, accept/reject) | ~8 | Low-Medium | Easy-Medium | TODO |
 | 6.2.5 | No Peek Mechanic (blind card reveal game mode) | ~4 | Low | Hard | TODO |
 | 6.2.6 | Inverted Visibility / Indian Poker (cards visible to opponents only) | ~2 | Very Low | Medium | TODO |
@@ -354,9 +354,9 @@ Features prioritized by casino relevance and games unlocked. Each unlocks multip
 - **Tests:** 12 integration tests (config loading, rotation order, all 5 HORSE variants play to completion, stack preservation, NL/PL variants, orbit tracking).
 - Dealer's Choice deferred — needs additional UI for dealer to pick variant each orbit.
 
-**6.2.2 details:** New `PlayerAction.BUY` action. Config schema: `{"buy": {"cost": "fixed", "amount": 50, "trigger": "rank", "ranks": ["3"]}}`. Fixed-cost buys are easiest; auction variants need bidding sub-rounds.
+**6.2.2 result:** Implemented BUY action: players pay chips directly to pot for card replacement/addition. Supports fixed cost, big_bet/small_bet cost, and match_pot (pay current pot size). Optional discard-before-buy. 5 new game configs: english_stud, english_stud_8, buy_your_card, progressive_badugi_buy, match_pot_buy. 10 tests in `tests/game/test_buy_action.py`.
 
-**6.2.3 details:** Wild cards currently static (set at game start). Need event hooks on card deals, per-player wild tracking ("low hole wild"), re-evaluation when wilds change. Config: `{"wildCardRule": {"type": "follow", "trigger": "queen"}}`.
+**6.2.3 result:** Implemented `follow_card` wild card type for Follow the Queen pattern: trigger card (e.g., queen) dealt face-up makes the next face-up card's rank wild globally. Resets when new trigger appears. If last face-up card is trigger, no wilds. Also created configs for existing wild types: low_hole_wild (lowest_hole), deuces_and_jacks (multi-rank static). 4 new game configs: follow_the_queen, follow_the_king, low_hole_wild, deuces_and_jacks. 13 tests in `tests/game/test_follow_card_wild.py`.
 
 **6.2.4 details:** Our PASS action exists but may need: configurable pass count per round, multi-round sequences (pass 3→2→1), accept/reject mechanics, pass to specific player.
 

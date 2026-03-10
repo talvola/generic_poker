@@ -2440,6 +2440,20 @@ class ShowdownManager:
                     logger.debug(f"Showdown conditional: {card} is {chosen_role} (face_up={is_face_up})")
                 continue
 
+            if rule_type == "follow_card":
+                # Follow-card wild: use the stored follow_card_wild_rank from the game
+                if hasattr(self.game, "follow_card_wild_rank") and self.game.follow_card_wild_rank:
+                    target_rank = self.game.follow_card_wild_rank
+                    wild_type = WildType.BUG if role == "bug" else WildType.NAMED
+
+                    for card in player.hand.get_cards() + comm_cards:
+                        if card.rank == target_rank and not card.is_wild:
+                            card.make_wild(wild_type)
+                            logger.debug(f"Made {card} wild due to follow_card_wild_rank={target_rank}")
+                else:
+                    logger.debug("No follow_card wild rank set (trigger was last face-up card or no trigger seen)")
+                continue
+
             if rule_type == "last_community_card":
                 match_type = rule.get("match", "rank")
 
