@@ -1,0 +1,143 @@
+{
+    "game": "Dramaha Dugi 2.0",
+    "category": "Dramaha",
+    "references": [
+        {
+            "url": "https://www.cardplayer.com/cardplayer-poker-magazines/1640134-alex-foxen-39-4/articles/1641317-spice-up-your-home-game-the-badugi-dramahas",
+            "description": "Card Player Magazine - Spice Up Your Home Game: The Badugi Dramahas"
+        }
+    ],
+    "players": {
+        "min": 2,
+        "max": 6
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Pre-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Flop"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Post-Flop Bet"
+        },
+        {
+            "draw": {
+                "cards": [
+                    {
+                        "number": 5,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Draw"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Turn"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Turn Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal River"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "River Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "two hole cards, three community cards",
+        "bestHand": [
+            {
+                "name": "Omaha High",
+                "evaluationType": "high",
+                "holeCards": 2,
+                "communityCards": 3
+            },
+            {
+                "name": "Low Badugi",
+                "evaluationType": "badugi",
+                "holeCards": 4
+            },
+            {
+                "name": "High Badugi",
+                "evaluationType": "hidugi",
+                "holeCards": 4
+            }
+        ]
+    }
+}

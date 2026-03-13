@@ -383,13 +383,14 @@ class ShowdownManager:
         if not best_hand_configs:
             logger.warning("No best hand configurations available for showdown")
             return (0, False)
-        pot_percentage = 1.0 / len(best_hand_configs)
+        num_configs = len(best_hand_configs)
+        pot_percentage = 1.0 / num_configs
         awarded_portions = 0
         had_any_winners = False
 
-        logger.debug(f"Showdown with {len(best_hand_configs)} possible hands to win")
+        logger.debug(f"Showdown with {num_configs} possible hands to win")
 
-        for config in best_hand_configs:
+        for config_index, config in enumerate(best_hand_configs):
             config_name = config.get("name", f"Configuration {len(hand_results) + 1}")
             eval_type = EvaluationType(config.get("evaluationType", "high"))
 
@@ -414,6 +415,8 @@ class ShowdownManager:
                 original_side_pots,
                 pot_results,
                 winning_hands,
+                config_index=config_index,
+                num_configs=num_configs,
             )
 
             # Handle case where no winners due to qualifier
@@ -512,10 +515,20 @@ class ShowdownManager:
         original_side_pots: list[int],
         pot_results: list,
         winning_hands: list,
+        config_index: int = 0,
+        num_configs: int = 2,
     ) -> bool:
         """Award pots for a specific configuration and return whether there were winners."""
         pot_winners, had_winners = self._award_pots_for_config(
-            active_players, config_results, eval_type, config, pot_percentage, original_main_pot, original_side_pots
+            active_players,
+            config_results,
+            eval_type,
+            config,
+            pot_percentage,
+            original_main_pot,
+            original_side_pots,
+            config_index=config_index,
+            num_configs=num_configs,
         )
 
         if had_winners:
@@ -877,22 +890,29 @@ class ShowdownManager:
         elif condition_type == "community_card_value":
             subset = condition.get("subset")
             values = condition.get("values", [])
+            use_sum = condition.get("sum", False)
 
             # Check if the specified subset exists
             if subset not in self.table.community_cards or not self.table.community_cards[subset]:
                 logger.debug(f"Condition check failed: subset '{subset}' not found or empty")
                 return False
 
-            # Get the first card in the subset (for die rolls, it's a single card)
-            card = self.table.community_cards[subset][0]
-
-            # Get the card value and check if it's in the specified values
-            try:
-                # Try to get numeric value first
-                card_value = int(card.rank.value)
-            except ValueError:
-                # If not numeric, use the rank value directly
-                card_value = card.rank.value
+            if use_sum:
+                # Sum all card values in the subset (for multi-dice rolls)
+                card_value = 0
+                for card in self.table.community_cards[subset]:
+                    try:
+                        card_value += int(card.rank.value)
+                    except ValueError:
+                        logger.warning(f"Non-numeric card in sum: {card.rank.value}")
+                        return False
+            else:
+                # Get the first card in the subset (for single die rolls)
+                card = self.table.community_cards[subset][0]
+                try:
+                    card_value = int(card.rank.value)
+                except ValueError:
+                    card_value = card.rank.value
 
             logger.debug(f"Checking if card value {card_value} is in condition values {values}")
             return card_value in values
@@ -1448,6 +1468,8 @@ class ShowdownManager:
         pot_percentage: float,
         original_main_pot: int,
         original_side_pots: list[int],
+        config_index: int = 0,
+        num_configs: int = 2,
     ) -> tuple[list[PotResult], bool]:
         """
         Award pots for a specific hand configuration.
@@ -1460,6 +1482,8 @@ class ShowdownManager:
             pot_percentage: Percentage of the pot to award for this config
             original_main_pot: Original main pot amount
             original_side_pots: Original side pot amounts
+            config_index: Index of this config in the best_hand_configs list
+            num_configs: Total number of configs (for remainder distribution)
 
         Returns:
             Tuple of (pot results, had_winners)
@@ -1513,10 +1537,18 @@ class ShowdownManager:
                 winners = self._find_winners(qualified_players, hand_results, eval_type, self.rules.showdown)
                 if winners:
                     had_winners = True
-                    # Calculate pot amount based on ORIGINAL side pot
-                    pot_amount = int(original_side_pots[i] * pot_percentage)
+                    # Calculate pot amount using integer division with remainder distribution
+                    side_pot_total = original_side_pots[i]
+                    if num_configs <= 2:
+                        # For 2-way splits, use truncating division; traditional odd chip rules below handle remainder
+                        pot_amount = side_pot_total // num_configs
+                    else:
+                        # For 3+ way splits, distribute remainder chips to earlier configs
+                        pot_amount = side_pot_total // num_configs + (
+                            1 if config_index < side_pot_total % num_configs else 0
+                        )
 
-                    # For high-low games, handle odd chips
+                    # For high-low (2-way) games, handle odd chips with traditional rules
                     if len(self.rules.showdown.best_hand) == 2:
                         # Get card counts for the two hand types to determine which gets the odd chip
                         card_counts = {}
@@ -1645,10 +1677,17 @@ class ShowdownManager:
             winners = self._find_winners(qualified_players, hand_results, eval_type, self.rules.showdown)
             if winners:
                 had_winners = True
-                # Calculate pot amount based on ORIGINAL main pot
-                pot_amount = int(original_main_pot * pot_percentage)
+                # Calculate pot amount using integer division with remainder distribution
+                if num_configs <= 2:
+                    # For 2-way splits, use truncating division; traditional odd chip rules below handle remainder
+                    pot_amount = original_main_pot // num_configs
+                else:
+                    # For 3+ way splits, distribute remainder chips to earlier configs
+                    pot_amount = original_main_pot // num_configs + (
+                        1 if config_index < original_main_pot % num_configs else 0
+                    )
 
-                # For high-low games, handle odd chips
+                # For high-low (2-way) games, handle odd chips with traditional rules
                 if len(self.rules.showdown.best_hand) == 2:
                     # Get card counts for the two hand types to determine which gets the odd chip
                     card_counts = {}

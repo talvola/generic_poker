@@ -1,0 +1,176 @@
+{
+    "game": "Squid Game",
+    "category": "Omaha",
+    "references": [
+        {
+            "url": "https://www.cardplayer.com/cardplayer-poker-magazines/1640134-alex-foxen-39-4/articles/1641317-spice-up-your-home-game-the-variety-pack",
+            "description": "Card Player Magazine - Spice Up Your Home Game: The Variety Pack"
+        }
+    ],
+    "communityCardLayout": {
+        "type": "multi-row",
+        "rows": [
+            {"label": "Board 1", "subsets": ["Board 1"]},
+            {"label": "Board 2", "subsets": ["Board 2"]},
+            {"label": "Board 3", "subsets": ["Board 3"]}
+        ]
+    },
+    "players": {
+        "min": 2,
+        "max": 9
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 4,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Pre-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Board 1"
+                    },
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Board 2"
+                    },
+                    {
+                        "number": 3,
+                        "state": "face up",
+                        "subset": "Board 3"
+                    }
+                ]
+            },
+            "name": "Deal Flop"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Post-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 1"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 2"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 3"
+                    }
+                ]
+            },
+            "name": "Deal Turn"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Turn Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 1"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 2"
+                    },
+                    {
+                        "number": 1,
+                        "state": "face up",
+                        "subset": "Board 3"
+                    }
+                ]
+            },
+            "name": "Deal River"
+        },
+        {
+            "remove": {
+                "type": "subset",
+                "criteria": "lowest_river_card_unless_all_same",
+                "subsets": ["Board 1", "Board 2", "Board 3"]
+            },
+            "name": "Eliminate Board with Lowest River Card"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "River Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "two hole cards, three community cards",
+        "bestHand": [
+            {
+                "name": "High",
+                "evaluationType": "high",
+                "holeCards": 2,
+                "communityCards": 3,
+                "communityCardCombinations": [
+                    ["Board 1"],
+                    ["Board 2"],
+                    ["Board 3"]
+                ]
+            }
+        ]
+    }
+}

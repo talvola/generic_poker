@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Poker Table - {{ table.name }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/table.css') }}?v={{ asset_version }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
@@ -14,7 +14,7 @@
             <div class="header-left">
                 <a href="{{ url_for('index') }}" class="back-btn">
                     <span class="back-icon">←</span>
-                    Back to Lobby
+                    <span class="back-text">Back to Lobby</span>
                 </a>
                 <div class="table-info">
                     <h1 class="table-name">{{ table.name }}</h1>

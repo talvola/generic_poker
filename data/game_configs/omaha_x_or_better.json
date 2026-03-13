@@ -1,0 +1,332 @@
+{
+    "game": "Omaha X-or-Better",
+    "category": "Omaha",
+    "references": [
+        {
+            "url": "https://www.cardplayer.com/cardplayer-poker-magazines/1640134-alex-foxen-39-4/articles/1641317-spice-up-your-home-game-the-variety-pack",
+            "description": "Card Player Magazine - Spice Up Your Home Game: The Variety Pack"
+        }
+    ],
+    "players": {
+        "min": 2,
+        "max": 9
+    },
+    "deck": {
+        "type": "standard",
+        "cards": 52
+    },
+    "bettingStructures": [
+        "Limit",
+        "No Limit",
+        "Pot Limit"
+    ],
+    "gamePlay": [
+        {
+            "bet": {
+                "type": "blinds"
+            },
+            "name": "Post Blinds"
+        },
+        {
+            "deal": {
+                "location": "player",
+                "cards": [
+                    {
+                        "number": 4,
+                        "state": "face down"
+                    }
+                ]
+            },
+            "name": "Deal Hole Cards"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Pre-Flop Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 3,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Flop"
+        },
+        {
+            "bet": {
+                "type": "small"
+            },
+            "name": "Post-Flop Bet"
+        },
+        {
+            "roll_die": {
+                "dice": 2,
+                "subset": "Dice"
+            },
+            "name": "Roll Dice for Low Qualifier"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal Turn"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "Turn Bet"
+        },
+        {
+            "deal": {
+                "location": "community",
+                "cards": [
+                    {
+                        "number": 1,
+                        "state": "face up"
+                    }
+                ]
+            },
+            "name": "Deal River"
+        },
+        {
+            "bet": {
+                "type": "big"
+            },
+            "name": "River Bet"
+        },
+        {
+            "showdown": {
+                "type": "final"
+            },
+            "name": "Showdown"
+        }
+    ],
+    "showdown": {
+        "order": "clockwise",
+        "startingFrom": "dealer",
+        "cardsRequired": "two hole cards, three community cards",
+        "conditionalBestHands": [
+            {
+                "condition": {
+                    "type": "community_card_value",
+                    "subset": "Dice",
+                    "sum": true,
+                    "values": [2, 3, 4]
+                },
+                "bestHand": [
+                    {
+                        "name": "High Hand",
+                        "evaluationType": "high",
+                        "holeCards": 2,
+                        "communityCards": 3
+                    }
+                ]
+            },
+            {
+                "condition": {
+                    "type": "community_card_value",
+                    "subset": "Dice",
+                    "sum": true,
+                    "values": [5]
+                },
+                "bestHand": [
+                    {
+                        "name": "High Hand",
+                        "evaluationType": "high",
+                        "holeCards": 2,
+                        "communityCards": 3
+                    },
+                    {
+                        "name": "Low Hand (5-or-Better)",
+                        "evaluationType": "a5_low",
+                        "holeCards": 2,
+                        "communityCards": 3,
+                        "qualifier": [1, 1]
+                    }
+                ]
+            },
+            {
+                "condition": {
+                    "type": "community_card_value",
+                    "subset": "Dice",
+                    "sum": true,
+                    "values": [6]
+                },
+                "bestHand": [
+                    {
+                        "name": "High Hand",
+                        "evaluationType": "high",
+                        "holeCards": 2,
+                        "communityCards": 3
+                    },
+                    {
+                        "name": "Low Hand (6-or-Better)",
+                        "evaluationType": "a5_low",
+                        "holeCards": 2,
+                        "communityCards": 3,
+                        "qualifier": [1, 6]
+                    }
+                ]
+            },
+            {
+                "condition": {
+                    "type": "community_card_value",
+                    "subset": "Dice",
+                    "sum": true,
+                    "values": [7]
+                },
+                "bestHand": [
+                    {
+                        "name": "High Hand",
+                        "evaluationType": "high",
+                        "holeCards": 2,
+                        "communityCards": 3
+                    },
+                    {
+                        "name": "Low Hand (7-or-Better)",
+                        "evaluationType": "a5_low",
+                        "holeCards": 2,
+                        "communityCards": 3,
+                        "qualifier": [1, 21]
+                    }
+                ]
+            },
+            {
+                "condition": {
+                    "type": "community_card_value",
+                    "subset": "Dice",
+                    "sum": true,
+                    "values": [8]
+                },
+                "bestHand": [
+                    {
+                        "name": "High Hand",
+                        "evaluationType": "high",
+                        "holeCards": 2,
+                        "communityCards": 3
+                    },
+                    {
+                        "name": "Low Hand (8-or-Better)",
+                        "evaluationType": "a5_low",
+                        "holeCards": 2,
+                        "communityCards": 3,
+                        "qualifier": [1, 56]
+                    }
+                ]
+            },
+            {
+                "condition": {
+                    "type": "community_card_value",
+                    "subset": "Dice",
+                    "sum": true,
+                    "values": [9]
+                },
+                "bestHand": [
+                    {
+                        "name": "High Hand",
+                        "evaluationType": "high",
+                        "holeCards": 2,
+                        "communityCards": 3
+                    },
+                    {
+                        "name": "Low Hand (9-or-Better)",
+                        "evaluationType": "a5_low",
+                        "holeCards": 2,
+                        "communityCards": 3,
+                        "qualifier": [1, 126]
+                    }
+                ]
+            },
+            {
+                "condition": {
+                    "type": "community_card_value",
+                    "subset": "Dice",
+                    "sum": true,
+                    "values": [10]
+                },
+                "bestHand": [
+                    {
+                        "name": "High Hand",
+                        "evaluationType": "high",
+                        "holeCards": 2,
+                        "communityCards": 3
+                    },
+                    {
+                        "name": "Low Hand (10-or-Better)",
+                        "evaluationType": "a5_low",
+                        "holeCards": 2,
+                        "communityCards": 3,
+                        "qualifier": [1, 252]
+                    }
+                ]
+            },
+            {
+                "condition": {
+                    "type": "community_card_value",
+                    "subset": "Dice",
+                    "sum": true,
+                    "values": [11]
+                },
+                "bestHand": [
+                    {
+                        "name": "High Hand",
+                        "evaluationType": "high",
+                        "holeCards": 2,
+                        "communityCards": 3
+                    },
+                    {
+                        "name": "Low Hand (J-or-Better)",
+                        "evaluationType": "a5_low",
+                        "holeCards": 2,
+                        "communityCards": 3,
+                        "qualifier": [1, 462]
+                    }
+                ]
+            },
+            {
+                "condition": {
+                    "type": "community_card_value",
+                    "subset": "Dice",
+                    "sum": true,
+                    "values": [12]
+                },
+                "bestHand": [
+                    {
+                        "name": "High Hand",
+                        "evaluationType": "high",
+                        "holeCards": 2,
+                        "communityCards": 3
+                    },
+                    {
+                        "name": "Low Hand (Q-or-Better)",
+                        "evaluationType": "a5_low",
+                        "holeCards": 2,
+                        "communityCards": 3,
+                        "qualifier": [1, 792]
+                    }
+                ]
+            }
+        ],
+        "defaultBestHand": [
+            {
+                "name": "High Hand",
+                "evaluationType": "high",
+                "holeCards": 2,
+                "communityCards": 3
+            }
+        ],
+        "declaration_mode": "cards_speak"
+    }
+}

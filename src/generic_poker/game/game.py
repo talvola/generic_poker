@@ -1143,25 +1143,26 @@ class Game:
 
     def _handle_roll_die(self, config: dict[str, Any]) -> None:
         """Handle a die roll action."""
-        # Create a special "die" deck
-        die_deck = Deck(include_jokers=0, deck_type="die")
-        die_deck.shuffle()
+        num_dice = config.get("dice", 1)
+        die_subset = config.get("subset", "Die")
 
-        # "Deal" a single die face
-        die_card = die_deck.deal_card(face_up=True)
-        if die_card:
-            # Store the result in a special community subset
-            die_subset = config.get("subset", "Die")
-            if die_subset not in self.table.community_cards:
-                self.table.community_cards[die_subset] = []
-            self.table.community_cards[die_subset].append(die_card)
+        if die_subset not in self.table.community_cards:
+            self.table.community_cards[die_subset] = []
 
-            # Store the game mode based on the die value
-            die_value = int(die_card.rank.value)
-            # Store the mode generically - could be used by games other than Binglaha
-            self.die_determined_game_mode = "high_low" if die_value <= 3 else "high_only"
+        total = 0
+        for _ in range(num_dice):
+            die_deck = Deck(include_jokers=0, deck_type="die")
+            die_deck.shuffle()
+            die_card = die_deck.deal_card(face_up=True)
+            if die_card:
+                self.table.community_cards[die_subset].append(die_card)
+                total += int(die_card.rank.value)
 
-            logger.info(f"Rolled die: {die_value} - Game mode set to: {self.die_determined_game_mode}")
+        # Store the game mode based on the die value (legacy single-die behavior)
+        if num_dice == 1:
+            self.die_determined_game_mode = "high_low" if total <= 3 else "high_only"
+
+        logger.info(f"Rolled {num_dice} {'die' if num_dice == 1 else 'dice'}: total {total}")
 
     def _handle_remove(self, config: dict[str, Any]) -> None:
         """Handle a remove action by removing board subsets based on river card ranks."""

@@ -343,6 +343,16 @@ Features prioritized by casino relevance and games unlocked. Each unlocks multip
 | 6.2.4 | Enhanced Pass Mechanics (multi-round, accept/reject) | ~8 | Low-Medium | Easy-Medium | TODO |
 | 6.2.5 | No Peek Mechanic (blind card reveal game mode) | ~4 | Low | Hard | TODO |
 | 6.2.6 | Inverted Visibility / Indian Poker (cards visible to opponents only) | ~2 | Very Low | Medium | TODO |
+| 6.2.7 | Two-Dice Roll (2d6 sum, range 2-12) for Omaha X-or-Better | 1+ | Low | Easy-Medium | DONE |
+| 6.2.8 | Tommy Tutone "867-5309" sequence evaluation type | 1 | Very Low | Medium | TODO |
+| 6.2.9 | Single-Color evaluation (best poker hand from 5 cards of one color) for Dramaha Red/Black | 1 | Very Low | Medium | TODO |
+| 6.2.10 | Bomb Pot mechanic (everyone antes, no preflop action, deal straight to flop) | 3+ | Medium-High | Medium | TODO |
+| 6.2.11 | Cross-Board evaluation for Ultimate Bomb Pot / "Best Best" (best hand across any board) | 1+ | Low-Medium | Medium | TODO |
+| 6.2.12 | Captain mechanic (asymmetric dealing: button pays extra, gets extra cards, must discard) | 3+ | Low | Medium-Hard | TODO |
+| 6.2.13 | Betting cap (maximum loss per hand, configurable per table) | N/A | Medium | Easy-Medium | TODO |
+| 6.2.14 | Single-Color Low evaluation (best low hand from 5 cards of one color) for Red/Black Draw variants | 3+ | Very Low | Medium | TODO |
+| 6.2.15 | Ten-to-Ace Highball evaluation type (mirror of A-5 low: highest unpaired low card wins) | 1+ | Very Low | Medium | TODO |
+| 6.2.16 | Pass the Pips (board-matching discard, pip-count hi-lo, neighbor card passing) | 1 | Very Low | Very Hard | TODO |
 
 **6.2.1 result:** Implemented HORSE and 8-Game Mix rotation. Zero core engine changes — all rotation logic lives in `GameSession` (online platform layer).
 - **Config system:** New `data/mixed_game_configs/` directory with `horse.json` and `8_game_mix.json`. `MixedGameConfig` dataclass in `src/generic_poker/config/mixed_game_loader.py` loads rotation definitions.
@@ -357,6 +367,26 @@ Features prioritized by casino relevance and games unlocked. Each unlocks multip
 **6.2.2 result:** Implemented BUY action: players pay chips directly to pot for card replacement/addition. Supports fixed cost, big_bet/small_bet cost, and match_pot (pay current pot size). Optional discard-before-buy. 5 new game configs: english_stud, english_stud_8, buy_your_card, progressive_badugi_buy, match_pot_buy. 10 tests in `tests/game/test_buy_action.py`.
 
 **6.2.3 result:** Implemented `follow_card` wild card type for Follow the Queen pattern: trigger card (e.g., queen) dealt face-up makes the next face-up card's rank wild globally. Resets when new trigger appears. If last face-up card is trigger, no wilds. Also created configs for existing wild types: low_hole_wild (lowest_hole), deuces_and_jacks (multi-rank static). 4 new game configs: follow_the_queen, follow_the_king, low_hole_wild, deuces_and_jacks. 13 tests in `tests/game/test_follow_card_wild.py`.
+
+**6.2.7 result:** Extended `_handle_roll_die` in `game.py` to support `"dice": N` config — rolls N independent dice and stores each as a card in the subset. Added `"sum": true` option to `community_card_value` conditions in `showdown_manager.py` — sums all card values in the subset instead of reading just the first. Created `omaha_x_or_better.json` with 9 conditional branches: dice sum 2-4 = high only, 5 = 5-or-better `[1,1]`, 6 = `[1,6]`, 7 = `[1,21]`, 8 = `[1,56]`, 9 = `[1,126]`, 10 = `[1,252]`, 11 = `[1,462]`, 12 = Q-or-better `[1,792]`. Updated JSON schema to allow `dice` property on `roll_die`.
+
+**6.2.8 details:** Tommy Tutone (Card Player Magazine, Feb 2026) — split-pot 7-card stud where half the pot goes to best high hand and half to whoever can "dial" furthest into the phone number 867-5309. Needs a new evaluation type that scores hands based on matching the sequence 8→6→7→5→3→0(ten)→9, where longest prefix match wins and ties broken by having more of the sequence. No existing evaluator handles ordered-sequence matching. Would need new hand rankings CSV or algorithmic evaluator.
+
+**6.2.9 details:** Dramaha Red/Black (Card Player Magazine, Apr 2025) — Dramaha variant where the Draw side is won by the best poker hand using 5 cards of a single color (all red or all black). If no one has 5 of a color, best 4-card single-color hand wins. Among single-color hands, standard poker rankings apply (flushes, straights, two pair — but NOT trips/full house since 3-of-a-kind requires 3 suits). Needs a new evaluation type that: (a) filters each player's 5 cards to find the longest single-color subset, (b) evaluates that subset using standard high rankings, (c) uses subset length as primary tiebreaker (5-card > 4-card). ~5% chance of being dealt a pat 5-card hand; ~50% to complete when starting with 4 of a color.
+
+**6.2.10 details:** Bomb Pot (Card Player Magazine, Feb 2026) — everyone antes a fixed amount (no blinds), no preflop betting round, deal proceeds straight to flop. Popular in cardrooms as a "dealer change" game. Needs: (a) new forced bet style `"bomb"` that collects a fixed ante from all players with no subsequent preflop action, (b) game flow skip from ante directly to flop deal. Can be combined with existing double-board infrastructure for Double Board Bomb Pot. The basic structure is: ante → deal hole cards → deal flop (no bet) → post-flop bet → turn → bet → river → bet → showdown. Currently our `"antes_only"` style posts antes but still expects a betting round after the deal.
+
+**6.2.11 details:** Ultimate Bomb Pot / "Best Best" (Card Player Magazine, Feb 2026) — double-board bomb pot where the pot splits between best HIGH across either board and best LOW across either board (not per-board like regular double-board). Needs a new showdown mode: `"communityCardCombinations"` with a `"cross_board"` option that evaluates each player's best hand considering all boards and picks the single best high and single best low. Currently our multi-board showdown splits the pot per-board independently. Depends on 6.2.10 (bomb pot mechanic).
+
+**6.2.12 details:** Captain (Card Player Magazine, Feb 2026) — Dramaha variant where the button ("captain") pays a premium ante (e.g., 5x the blind), receives one extra card, and must discard at least one before/during the draw. Other players match the captain's ante or fold (no raising). Needs: (a) asymmetric dealing — `"deal"` step config option to give one position extra cards, (b) new forced bet type for captain's premium with match-or-fold for others, (c) minimum discard constraint on specific position. Can be applied to any Dramaha variant (high = "Lieutenant", low-dugi = "General", etc.).
+
+**6.2.13 details:** Betting Cap (Card Player Magazine, Feb 2026) — maximum amount a player can lose per hand, commonly set to 10x the limit big bet (e.g., $400 at $20/$40). When a player's losses in a hand reach the cap, they are effectively all-in. Needs: (a) `"cap"` field in table/betting config (absolute amount or multiplier of big bet), (b) BettingManager tracks cumulative bets per player per hand and enforces cap as an artificial stack limit. This is a table-level setting, not a game config setting. Common in mixed games to make NL/PL variants acceptable to limit players.
+
+**6.2.14 details:** Single-Color Low evaluation (Card Player Magazine, Jan 2026) — for Red/Black variants of draw lowball. Players must show down 5 cards of a single color (all red or all black) for the best low. Five-card single-color beats four-card; within same length, standard low rankings apply. For 2-7 Red/Black, use 2-7 low ranking among single-color cards. For A-5 Red/Black, use A-5 low ranking. Shares the color-filtering logic with 6.2.9 (Dramaha Red/Black) but applies low evaluation instead of high. Could be implemented as a modifier/wrapper on existing low evaluators rather than a fully separate eval type.
+
+**6.2.15 details:** Ten-to-Ace Highball (Card Player Magazine, Jan 2026) — triple draw game where the goal is the highest unpaired hand with the highest low card. Best hand: A-K-Q-J-T. It's a mirror of A-5 lowball read upside down: K-Q-J-T-9 ("straight nine") beats A-K-Q-J-8 ("eight perfect"), just as in A-5 low 2-3-4-5-6 beats A-2-3-4-7. Needs a new evaluation type `"highball"` or `"ta_high"` — could potentially be implemented by inverting A-5 low rankings (best A-5 low = worst highball, and vice versa) or by generating new rankings CSV. Straights and flushes do NOT count against you (same as A-5 low ignoring them). Pairs are bad (same as in lowball).
+
+**6.2.16 details:** Pass the Pips (Card Player Magazine, Jan 2026) — highly unusual split-pot game with multiple novel mechanics: (a) **Neighbor passing:** before first bet, each player passes one card to each neighbor (left and right). Our existing PASS action only handles pass-left; would need bidirectional passing. (b) **Board-matching forced discard:** when community cards match hole cards by rank, those hole cards must be revealed and removed. If all 5 hole cards are matched, player auto-wins entire pot. Needs new step type or post-deal trigger. (c) **Non-pairing board:** if a board card pairs, dealer replaces it — needs replacement logic in deal step. (d) **Pip-count hi-lo split:** high = most points, low = least points. Face cards (K/Q/J/T) = 10 pts, 2-9 = face value, A = 1 for low / 11 for high (dual value). We have `"49"` and `"zero"` eval types for pip counting, but need dual-value ace and the 10-point face card rule. (e) **White chip tracking:** visual indicator of remaining card count — UI feature. This is the most complex single variant in the backlog; probably not worth implementing until all individual mechanics are needed by other games too.
 
 **6.2.4 details:** Our PASS action exists but may need: configurable pass count per round, multi-round sequences (pass 3→2→1), accept/reject mechanics, pass to specific player.
 
@@ -379,18 +409,26 @@ Features prioritized by casino relevance and games unlocked. Each unlocks multip
 
 ## Phase 7: Mobile Optimization
 
-Goal: Make the app fully playable on phones and tablets. This is a large effort touching layout, controls, and touch interactions.
+Goal: Make the app fully playable on phones and tablets.
 
 | # | Task | Status |
 |---|------|--------|
-| 7.1 | Audit table layout on mobile viewports (phone portrait/landscape, tablet) | TODO |
-| 7.2 | Fix card/seat sizing and positioning for small screens | TODO |
-| 7.3 | Touch-friendly action buttons (sizing, spacing, tap targets) | TODO |
-| 7.4 | Touch-friendly bet slider and card selection (draw/discard/expose/separate) | TODO |
-| 7.5 | Mobile chat panel (slide-out or collapsible) | TODO |
-| 7.6 | Community card layout responsiveness (multi-row, branching, grid on small screens) | TODO |
-| 7.7 | Mobile lobby (table list, create table, join flow) | TODO |
-| 7.8 | Orientation handling and viewport meta tuning | TODO |
+| 7.1 | iPhone portrait optimization (375-430px breakpoint) | DONE |
+| 7.2 | Visual tuning of seat transforms per layout (2/6/9-max) on actual iPhone | TODO |
+| 7.3 | Touch-friendly card selection (draw/discard/expose/separate) on phone | TODO |
+| 7.4 | Tablet optimization (768-1024px landscape) | TODO |
+
+**7.1 result:** New `@media (max-width: 430px)` breakpoint targeting iPhone SE (375px) through iPhone Pro Max (430px). Key changes:
+- Table clamp minimum lowered from 500px to 280px, phone table uses `calc(100vw - 10px)` width
+- Viewport meta: `viewport-fit=cover` for notch/safe area support
+- Seats: 58x70px with 50px min-width player info, 0.6rem names with ellipsis truncation
+- Cards: 24x34px player cards, 30x42px community cards, progressive scaling for 5-8 card hands
+- Header: back button text hidden (arrow only), username hidden, 28px icon buttons
+- Action bar: `height: auto` with `env(safe-area-inset-bottom)`, vertically stacked bet controls
+- Seat transforms qualified by `data-max-players` for 2/6/9-max layouts
+- responsive.js: 3-tier card sizing (phone/mobile/desktop), `isPhone` property, `phone-layout` class
+- Lobby: 430px breakpoint for mini-table (280x180px), compact seat selection
+- Files: `table.css`, `lobby.css`, `responsive.js`, `table.html`, `lobby.html`
 
 ---
 

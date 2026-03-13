@@ -231,7 +231,7 @@ body {
 
 .poker-table {
     position: relative;
-    width: clamp(500px, 65vw, 800px);
+    width: clamp(280px, 65vw, 800px);
     height: clamp(320px, 42vh, 500px);
     background: radial-gradient(ellipse at center, var(--felt-green) 0%, var(--felt-dark) 100%);
     border: 8px solid #8b4513;
@@ -2164,6 +2164,503 @@ body {
 
     .pot-amount {
         font-size: 1rem;
+    }
+}
+
+/* iPhone / small phone breakpoint (375-430px) */
+@media (max-width: 430px) {
+    /* Table sizing — fill viewport width */
+    .poker-table-container {
+        padding: 30px 5px;
+    }
+
+    .poker-table {
+        width: calc(100vw - 10px);
+        height: clamp(220px, 38vh, 320px);
+        border-width: 4px;
+        border-radius: 120px;
+    }
+
+    /* Header compaction */
+    .table-header {
+        padding: 0.25rem 0.5rem;
+        gap: 0.25rem;
+    }
+
+    .header-left {
+        gap: 0.5rem;
+    }
+
+    .back-text {
+        display: none;
+    }
+
+    .back-btn {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.9rem;
+    }
+
+    .table-name {
+        font-size: 0.85rem;
+    }
+
+    .table-details {
+        font-size: 0.7rem;
+        gap: 0.25rem;
+    }
+
+    .variant,
+    .stakes,
+    .structure,
+    .hand-number-badge,
+    .player-count-badge {
+        padding: 0.15rem 0.4rem;
+    }
+
+    .user-info .username {
+        display: none;
+    }
+
+    .header-right {
+        gap: 0.5rem;
+    }
+
+    .header-icon-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 0.8rem;
+    }
+
+    .btn-sm {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.7rem;
+    }
+
+    /* Rotation tracker */
+    .rotation-tracker {
+        gap: 2px;
+        padding: 0.15rem 0.3rem;
+    }
+
+    .rotation-letter {
+        width: 18px;
+        height: 18px;
+        font-size: 0.6rem;
+    }
+
+    /* Seat sizing */
+    .player-seat {
+        width: 58px;
+        height: 70px;
+        gap: 0.15rem;
+    }
+
+    .player-info {
+        padding: 0.15rem;
+        min-width: 50px;
+        border-width: 1px;
+    }
+
+    .player-name {
+        font-size: 0.6rem;
+        max-width: 54px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .player-chips {
+        font-size: 0.55rem;
+    }
+
+    .player-action {
+        font-size: 0.5rem;
+    }
+
+    .player-bet {
+        font-size: 0.6rem;
+        padding: 0.15rem 0.3rem;
+        top: -14px;
+    }
+
+    .player-indicator {
+        font-size: 0.5rem;
+    }
+
+    .position-indicators {
+        gap: 0.1rem;
+        margin-top: 0.1rem;
+    }
+
+    .position-indicator {
+        font-size: 0.5rem;
+        padding: 0.1rem 0.2rem;
+    }
+
+    /* Player cards on phone */
+    .player-cards {
+        gap: 0.1rem;
+        margin-top: 0.2rem;
+    }
+
+    .player-cards .card {
+        width: 24px;
+        height: 34px;
+        font-size: 0.55rem;
+        border-radius: 4px;
+        padding: 0.1rem;
+    }
+
+    .player-cards .card .card-rank {
+        font-size: 0.6rem;
+    }
+
+    .player-cards .card .card-suit {
+        font-size: 0.7rem;
+    }
+
+    /* Many cards — progressively smaller */
+    .player-cards.many-cards .card {
+        width: 20px;
+        height: 28px;
+        font-size: 0.45rem;
+    }
+
+    .player-cards.cards-5 .card,
+    .player-cards.cards-6 .card {
+        width: 18px;
+        height: 25px;
+        font-size: 0.4rem;
+    }
+
+    .player-cards.cards-7 .card,
+    .player-cards.cards-8 .card {
+        width: 16px;
+        height: 22px;
+        font-size: 0.35rem;
+        margin-left: -3px;
+    }
+
+    /* Community cards */
+    .community-cards .card {
+        width: 30px;
+        height: 42px;
+    }
+
+    .community-cards .card .card-rank {
+        font-size: 0.7rem;
+    }
+
+    .community-cards .card .card-suit {
+        font-size: 0.85rem;
+    }
+
+    .cards-container {
+        gap: 0.25rem;
+    }
+
+    .card-slot {
+        width: 30px;
+        height: 42px;
+    }
+
+    /* Multi-row / branching / grid layouts */
+    .board-row {
+        gap: 0.25rem;
+        margin-bottom: 0.15rem;
+    }
+
+    .board-row-label {
+        font-size: 0.55rem;
+        min-width: 35px;
+    }
+
+    .branching-row {
+        gap: 0.5rem;
+        margin-bottom: 0.15rem;
+    }
+
+    .subset-group-label {
+        font-size: 0.5rem;
+    }
+
+    .grid-layout {
+        gap: 0.25rem;
+    }
+
+    .board-label {
+        font-size: 0.65rem;
+    }
+
+    /* Pot info */
+    .pot-info {
+        padding: 0.3rem 0.75rem;
+    }
+
+    .pot-label {
+        font-size: 0.6rem;
+    }
+
+    .pot-amount {
+        font-size: 0.85rem;
+    }
+
+    .side-pots {
+        font-size: 0.6rem;
+    }
+
+    /* Dealer button */
+    .dealer-button {
+        width: 20px;
+        height: 20px;
+        font-size: 0.65rem;
+    }
+
+    /* Action bar */
+    .action-bar {
+        height: auto;
+        min-height: 70px;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    .action-panel {
+        padding: 0 0.5rem;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .action-buttons {
+        min-height: 44px;
+    }
+
+    .action-btn {
+        min-width: 60px;
+        min-height: 44px;
+        font-size: 0.75rem;
+        padding: 0.5rem 0.5rem;
+    }
+
+    /* Bet controls — stack vertically */
+    .bet-controls {
+        flex-direction: column;
+        width: 100%;
+        padding-left: 0;
+        border-left: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.15);
+        padding-top: 0.5rem;
+        gap: 0.5rem;
+    }
+
+    .bet-slider-container {
+        width: 100%;
+    }
+
+    .bet-slider {
+        width: 100%;
+    }
+
+    .bet-amount-display {
+        min-width: 70px;
+    }
+
+    .bet-amount-input {
+        font-size: 0.8rem;
+        padding: 0.4rem 0.5rem;
+    }
+
+    .quick-bet-buttons {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .quick-bet-btn {
+        flex: 1;
+        padding: 0.4rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    /* Showdown bar */
+    .showdown-bar {
+        gap: 0.25rem 0.75rem;
+        padding: 0.25rem 0;
+        font-size: 0.8rem;
+    }
+
+    .showdown-bar-winner {
+        font-size: 0.8rem;
+    }
+
+    .showdown-bar-pot {
+        font-size: 0.7rem;
+    }
+
+    /* Ready panel */
+    .ready-panel {
+        width: 85%;
+        padding: 1rem;
+    }
+
+    .ready-count {
+        font-size: 1rem;
+    }
+
+    .ready-hint {
+        font-size: 0.75rem;
+    }
+
+    .ready-btn {
+        padding: 0.6rem 1.5rem;
+        font-size: 0.95rem;
+    }
+
+    .ready-player-indicator {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    /* Chat widget */
+    .chat-widget {
+        width: 160px;
+        bottom: 5px;
+        left: 5px;
+    }
+
+    .chat-widget-header {
+        padding: 0.3rem 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    .chat-widget-body {
+        height: 120px;
+    }
+
+    .chat-input {
+        font-size: 0.75rem;
+        padding: 0.3rem;
+    }
+
+    .send-chat-btn {
+        font-size: 0.7rem;
+        padding: 0.3rem 0.5rem;
+    }
+
+    /* Modals */
+    .modal-content {
+        width: 95%;
+        max-height: 85vh;
+    }
+
+    .modal-header,
+    .modal-body,
+    .modal-footer {
+        padding: 0.75rem;
+    }
+
+    /* Game container */
+    .game-container {
+        padding: 0;
+    }
+
+    /* Waiting message */
+    .waiting-message {
+        font-size: 0.8rem;
+    }
+
+    /* 2-max seat positions for phone */
+    .poker-table[data-max-players="2"] .player-seat[data-position="0"] {
+        transform: translate(-50%, -60px);
+    }
+
+    .poker-table[data-max-players="2"] .player-seat[data-position="1"] {
+        transform: translate(-50%, -10px);
+    }
+
+    /* 6-max seat positions for phone */
+    .poker-table[data-max-players="6"] .player-seat[data-position="0"] {
+        transform: translate(-10px, -50%);
+    }
+
+    .poker-table[data-max-players="6"] .player-seat[data-position="1"] {
+        transform: translate(-5px, -50%);
+    }
+
+    .poker-table[data-max-players="6"] .player-seat[data-position="2"] {
+        transform: translate(-50%, -10px);
+    }
+
+    .poker-table[data-max-players="6"] .player-seat[data-position="3"] {
+        transform: translate(-50%, -10px);
+    }
+
+    .poker-table[data-max-players="6"] .player-seat[data-position="4"] {
+        transform: translate(-55px, -50%);
+    }
+
+    .poker-table[data-max-players="6"] .player-seat[data-position="5"] {
+        transform: translate(-55px, -50%);
+    }
+
+    /* 9-max seat positions for phone */
+    .poker-table[data-max-players="9"] .player-seat[data-position="0"] {
+        transform: translate(-50%, -60px);
+    }
+
+    .poker-table[data-max-players="9"] .player-seat[data-position="1"] {
+        transform: translate(-5px, -50%);
+    }
+
+    .poker-table[data-max-players="9"] .player-seat[data-position="2"] {
+        transform: translate(-5px, -50%);
+    }
+
+    .poker-table[data-max-players="9"] .player-seat[data-position="3"] {
+        transform: translate(-50%, -10px);
+    }
+
+    .poker-table[data-max-players="9"] .player-seat[data-position="4"] {
+        transform: translate(-50%, -10px);
+    }
+
+    .poker-table[data-max-players="9"] .player-seat[data-position="5"] {
+        transform: translate(-50%, -10px);
+    }
+
+    .poker-table[data-max-players="9"] .player-seat[data-position="6"] {
+        transform: translate(-55px, -50%);
+    }
+
+    .poker-table[data-max-players="9"] .player-seat[data-position="7"] {
+        transform: translate(-55px, -50%);
+    }
+
+    .poker-table[data-max-players="9"] .player-seat[data-position="8"] {
+        transform: translate(-50%, -60px);
+    }
+
+    /* Folded indicator */
+    .folded-indicator {
+        font-size: 0.5rem;
+        padding: 0.1rem 0.3rem;
+    }
+
+    /* Turn timer */
+    .turn-timer-text {
+        font-size: 0.5rem;
+        top: -14px;
+    }
+
+    /* Empty seat */
+    .empty-seat {
+        padding: 0.15rem;
+        min-width: 50px;
+        min-height: 40px;
+    }
+
+    .seat-label {
+        font-size: 0.6rem;
+    }
+
+    .join-hint {
+        font-size: 0.5rem;
     }
 }
 

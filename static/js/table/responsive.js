@@ -3,6 +3,7 @@ class PokerResponsive {
     constructor(onQuickAction, store) {
         this._onQuickAction = onQuickAction;
         this._store = store;
+        this.isPhone = window.innerWidth <= 430;
         this.isMobile = window.innerWidth <= 768;
         this.isLandscape = window.innerHeight < window.innerWidth;
     }
@@ -66,10 +67,12 @@ class PokerResponsive {
     }
 
     handleResize() {
+        const wasPhone = this.isPhone;
         const wasMobile = this.isMobile;
+        this.isPhone = window.innerWidth <= 430;
         this.isMobile = window.innerWidth <= 768;
 
-        if (wasMobile !== this.isMobile) {
+        if (wasPhone !== this.isPhone || wasMobile !== this.isMobile) {
             this.updateResponsiveLayout();
             this.adjustCardSizes();
 
@@ -94,9 +97,14 @@ class PokerResponsive {
     updateResponsiveLayout() {
         const app = document.getElementById('app');
 
-        if (this.isMobile) {
+        if (this.isPhone) {
+            app.classList.add('phone-layout');
+            app.classList.add('mobile-layout');
+        } else if (this.isMobile) {
+            app.classList.remove('phone-layout');
             app.classList.add('mobile-layout');
         } else {
+            app.classList.remove('phone-layout');
             app.classList.remove('mobile-layout');
         }
     }
@@ -104,7 +112,10 @@ class PokerResponsive {
     adjustCardSizes() {
         const root = document.documentElement;
 
-        if (this.isMobile) {
+        if (this.isPhone) {
+            root.style.setProperty('--card-width', '30px');
+            root.style.setProperty('--card-height', '42px');
+        } else if (this.isMobile) {
             root.style.setProperty('--card-width', '45px');
             root.style.setProperty('--card-height', '63px');
         } else {

@@ -1,0 +1,137 @@
+{
+  "game": "777",
+  "category": "Other",
+  "references": [
+    {
+      "url": "https://www.cardplayer.com/cardplayer-poker-magazines/1640134-alex-foxen-39-4/articles/1641317-spice-up-your-home-game-the-variety-pack",
+      "description": "Card Player Magazine - Spice Up Your Home Game: Archie And Its Variants"
+    }
+  ],
+  "players": {
+    "min": 2,
+    "max": 8
+  },
+  "deck": {
+    "type": "standard",
+    "cards": 52
+  },
+  "bettingStructures": [
+    "Limit",
+    "No Limit",
+    "Pot Limit"
+  ],
+  "gamePlay": [
+    {
+      "bet": {
+        "type": "blinds"
+      },
+      "name": "Post Blinds"
+    },
+    {
+      "deal": {
+        "location": "player",
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Deal Hole Cards"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Pre-Draw Bet"
+    },
+    {
+      "draw": {
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "First Draw"
+    },
+    {
+      "bet": {
+        "type": "small"
+      },
+      "name": "Post-Draw Bet #1"
+    },
+    {
+      "draw": {
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Second Draw"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Post-Draw Bet #2"
+    },
+    {
+      "draw": {
+        "cards": [
+          {
+            "number": 5,
+            "state": "face down"
+          }
+        ]
+      },
+      "name": "Third Draw"
+    },
+    {
+      "bet": {
+        "type": "big"
+      },
+      "name": "Post-Draw Bet #3"
+    },
+    {
+      "showdown": {
+        "type": "final"
+      },
+      "name": "Showdown"
+    }
+  ],
+  "showdown": {
+    "order": "clockwise",
+    "startingFrom": "dealer",
+    "cardsRequired": "all cards",
+    "bestHand": [
+      {
+        "name": "High",
+        "evaluationType": "high",
+        "anyCards": 5,
+        "qualifier": [7, 528]
+      },
+      {
+        "name": "Low",
+        "evaluationType": "a5_low",
+        "anyCards": 5,
+        "qualifier": [1, 21]
+      },
+      {
+        "name": "Badugi",
+        "evaluationType": "badugi",
+        "anyCards": 4,
+        "qualifier": [1, 35]
+      }
+    ],
+    "globalDefaultAction": {
+      "condition": "no_qualifier_met",
+      "action": {
+        "type": "split_pot"
+      }
+    }
+  }
+}

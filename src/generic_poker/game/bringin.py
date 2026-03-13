@@ -46,8 +46,18 @@ class BringInDeterminator:
             visible_cards = [c for c in player.hand.get_cards() if c.visibility == Visibility.FACE_UP][:num_cards]
             if not visible_cards:
                 continue
-            if best_cards is None or evaluator.compare_hands(visible_cards, best_cards, eval_type) > 0:
-                best_cards = visible_cards
+            # Strip wild status for bring-in evaluation — bring-in uses natural card ranks
+            # regardless of whether a card has been marked wild by game mechanics
+            eval_cards = []
+            for c in visible_cards:
+                if c.is_wild:
+                    clone = Card(c.rank, c.suit)
+                    clone.visibility = c.visibility
+                    eval_cards.append(clone)
+                else:
+                    eval_cards.append(c)
+            if best_cards is None or evaluator.compare_hands(eval_cards, best_cards, eval_type) > 0:
+                best_cards = eval_cards
                 best_player = player
 
         if best_player is None:

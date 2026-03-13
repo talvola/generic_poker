@@ -857,10 +857,16 @@
         "subset": {
           "type": "string",
           "description": "The community card subset where the die result will be stored"
+        },
+        "dice": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 6,
+          "description": "Number of dice to roll (default 1). Multiple dice results are stored as separate cards in the subset."
         }
       },
       "additionalProperties": false,
-      "description": "Configuration for rolling a die and storing the result as a card"
+      "description": "Configuration for rolling dice and storing the result as cards"
     },
     "discard": {
       "type": "object",
