@@ -8,6 +8,15 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 </head>
 <body>
+    <!-- Portrait orientation prompt (mobile only) -->
+    <div id="rotate-prompt" class="rotate-prompt">
+        <div class="rotate-prompt-content">
+            <div class="rotate-icon">&#x21BB;</div>
+            <div class="rotate-message">Rotate your device for the best experience</div>
+            <button class="rotate-dismiss-btn" onclick="document.getElementById('rotate-prompt').classList.add('dismissed')">Continue in portrait</button>
+        </div>
+    </div>
+
     <div id="app" class="poker-app">
         <!-- Header -->
         <header class="table-header">
