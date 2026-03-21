@@ -6,6 +6,8 @@ class PokerResponsive {
         this.isPhone = window.innerWidth <= 430;
         this.isMobile = window.innerWidth <= 768;
         this.isLandscape = window.innerHeight < window.innerWidth;
+        this._headerAutoHideTimer = null;
+        this._headerAutoHidden = false;
     }
 
     setupTouchSupport() {
@@ -64,6 +66,8 @@ class PokerResponsive {
         if (this.isMobile) {
             this.optimizeTouchTargets();
         }
+
+        this._updateHeaderAutoHide();
     }
 
     handleResize() {
@@ -71,6 +75,7 @@ class PokerResponsive {
         const wasMobile = this.isMobile;
         this.isPhone = window.innerWidth <= 430;
         this.isMobile = window.innerWidth <= 768;
+        this.isLandscape = window.innerHeight < window.innerWidth;
 
         if (wasPhone !== this.isPhone || wasMobile !== this.isMobile) {
             this.updateResponsiveLayout();
@@ -80,6 +85,8 @@ class PokerResponsive {
                 this.optimizeTouchTargets();
             }
         }
+
+        this._updateHeaderAutoHide();
     }
 
     handleOrientationChange() {
@@ -89,9 +96,80 @@ class PokerResponsive {
         if (this.isMobile && this.isLandscape) {
             const table = document.querySelector('.poker-table');
             if (table) {
-                table.style.height = '250px';
+                table.style.height = '';  // Let CSS handle it
             }
         }
+
+        this._updateHeaderAutoHide();
+    }
+
+    _isPhoneLandscape() {
+        return window.innerHeight <= 500 && this.isLandscape;
+    }
+
+    _updateHeaderAutoHide() {
+        const header = document.querySelector('.table-header');
+        const revealZone = document.getElementById('header-reveal-zone');
+        if (!header || !revealZone) return;
+
+        if (this._isPhoneLandscape()) {
+            this._setupHeaderAutoHide(header, revealZone);
+        } else {
+            this._teardownHeaderAutoHide(header, revealZone);
+        }
+    }
+
+    _setupHeaderAutoHide(header, revealZone) {
+        // Auto-hide after 3 seconds
+        this._scheduleHeaderHide(header);
+
+        // Reveal zone touch handler
+        if (!revealZone._hasListener) {
+            revealZone.addEventListener('touchstart', () => {
+                this._showHeader(header);
+            });
+            revealZone._hasListener = true;
+        }
+
+        // Hide again when tapping the table
+        const tableEl = document.querySelector('.poker-table');
+        if (tableEl && !tableEl._headerHideListener) {
+            tableEl.addEventListener('touchstart', () => {
+                if (this._isPhoneLandscape() && !header.classList.contains('auto-hidden')) {
+                    this._scheduleHeaderHide(header);
+                }
+            });
+            tableEl._headerHideListener = true;
+        }
+    }
+
+    _teardownHeaderAutoHide(header, revealZone) {
+        clearTimeout(this._headerAutoHideTimer);
+        header.classList.remove('auto-hidden');
+        this._headerAutoHidden = false;
+    }
+
+    _scheduleHeaderHide(header) {
+        clearTimeout(this._headerAutoHideTimer);
+        this._headerAutoHideTimer = setTimeout(() => {
+            if (this._isPhoneLandscape()) {
+                header.classList.add('auto-hidden');
+                this._headerAutoHidden = true;
+            }
+        }, 3000);
+    }
+
+    _showHeader(header) {
+        clearTimeout(this._headerAutoHideTimer);
+        header.classList.remove('auto-hidden');
+        this._headerAutoHidden = false;
+        // Auto-hide again after 4 seconds
+        this._headerAutoHideTimer = setTimeout(() => {
+            if (this._isPhoneLandscape()) {
+                header.classList.add('auto-hidden');
+                this._headerAutoHidden = true;
+            }
+        }, 4000);
     }
 
     updateResponsiveLayout() {

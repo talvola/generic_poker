@@ -2688,6 +2688,138 @@ body {
 
 }
 
+/* Phone landscape — ultra-compact header + auto-hide */
+@media (max-height: 500px) and (orientation: landscape) {
+    .table-header {
+        padding: 0.15rem 0.5rem;
+        transition: transform 0.3s ease, opacity 0.3s ease;
+        position: relative;
+        z-index: 100;
+    }
+
+    /* Auto-hide: header slides up when game is active */
+    .table-header.auto-hidden {
+        transform: translateY(-100%);
+        opacity: 0;
+        pointer-events: none;
+        position: absolute;
+        width: 100%;
+    }
+
+    /* Show on hover/touch near top */
+    .header-reveal-zone {
+        display: block;
+    }
+
+    .table-header.auto-hidden:hover,
+    .table-header.auto-hidden.peek {
+        transform: translateY(0);
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    /* Hide back button entirely */
+    .back-btn {
+        display: none;
+    }
+
+    /* Single-line header layout */
+    .header-left {
+        gap: 0.25rem;
+    }
+
+    .table-name {
+        font-size: 0.75rem;
+        white-space: nowrap;
+    }
+
+    /* Hide detail pills — keep only stakes */
+    .table-details {
+        font-size: 0.65rem;
+        gap: 0.15rem;
+    }
+
+    .table-details .variant,
+    .table-details .structure,
+    .table-details .hand-number-badge,
+    .table-details .player-count-badge {
+        display: none;
+    }
+
+    .table-details .stakes {
+        padding: 0.1rem 0.3rem;
+    }
+
+    /* Compact user info */
+    .user-info .username {
+        display: none;
+    }
+
+    .user-info .bankroll {
+        font-size: 0.75rem;
+        padding: 0.1rem 0.4rem;
+    }
+
+    .header-icon-btn {
+        width: 24px;
+        height: 24px;
+        font-size: 0.8rem;
+    }
+
+    #leave-table-btn {
+        padding: 0.15rem 0.5rem;
+        font-size: 0.7rem;
+    }
+
+    /* Game area fills viewport */
+    .game-container {
+        padding: 0;
+    }
+
+    .poker-table-container {
+        padding: 5px;
+    }
+
+    .poker-table {
+        width: calc(100vw - 10px);
+        height: calc(100vh - 80px);
+        max-height: 280px;
+    }
+
+    /* When header is hidden, table gets full height */
+    .table-header.auto-hidden ~ .game-container .poker-table {
+        height: calc(100vh - 50px);
+        max-height: 340px;
+    }
+
+    /* Compact action bar */
+    .action-bar {
+        height: 50px;
+    }
+
+    .action-btn {
+        min-height: 36px;
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+
+    /* Hide chat in phone landscape */
+    .chat-widget {
+        display: none;
+    }
+}
+
+/* Header reveal zone — tap area at top of screen to show hidden header */
+.header-reveal-zone {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 20px;
+    z-index: 99;
+}
+
 /* Portrait orientation prompt (mobile only) */
 .rotate-prompt {
     display: none;
