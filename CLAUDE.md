@@ -275,13 +275,65 @@ SQLAlchemy with SQLite (dev) or PostgreSQL (prod). Models in `src/online_poker/m
 **Database location:** `instance/poker_platform.db` (Flask instance folder convention)
 
 ```bash
-# Inspect database
+# Inspect local dev database
 sqlite3 instance/poker_platform.db
 .tables
 SELECT username, bankroll FROM users;
 SELECT name, variant, betting_structure FROM poker_tables;
 .quit
 ```
+
+### Running Database Operations on Production (Render)
+
+**Constraints:**
+- WSL cannot connect directly to Render Postgres — SSL handshake fails consistently
+- Render one-off jobs are a paid feature — not available on free tier
+- The only reliable way to run arbitrary DB operations is via `build.sh` at deploy time
+
+**Pattern: add a script to `tools/`, call it from `build.sh`**
+
+`build.sh` runs on every deploy inside the Render environment, with the correct `DATABASE_URL` and full Flask app context. Any script placed in `tools/` and called from `build.sh` can safely access the production database.
+
+```bash
+# build.sh snippet — runs on every deploy
+python tools/manage_user.py --username someuser --bankroll 2000
+```
+
+**Available tools:**
+
+| Script | Purpose |
+|--------|---------|
+| `tools/manage_user.py` | Create or update a user (username, password, bankroll) |
+| `tools/seed_db.py` | Seed default test users and tables (runs on every deploy) |
+| `tools/init_db.py` | Initialize schema (idempotent) |
+| `tools/reset_db.py` | Full reset — init + seed (destructive, dev only) |
+
+**Creating/updating a user on production:**
+```bash
+# 1. Add to build.sh managed users section (bottom of file):
+python tools/manage_user.py --username newuser --password pass123 --bankroll 1500
+
+# 2. Commit and push — deploy runs manage_user.py automatically
+git add build.sh && git commit -m "Add newuser account" && git push
+```
+
+`manage_user.py` is idempotent: if the user exists it updates, if not it creates.
+
+**Writing a new one-off DB script:**
+```python
+# tools/my_script.py
+import os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from app import create_app
+from src.online_poker.database import db
+from src.online_poker.models.user import User  # or any model
+
+app, _ = create_app()
+with app.app_context():
+    # do your query/update here
+    db.session.commit()
+```
+Add to `build.sh`, push, then remove from `build.sh` after the next deploy if it was one-time.
 
 ## API Route Structure
 
