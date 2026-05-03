@@ -341,16 +341,68 @@ render logs -r srv-d6b0ik86fj8s73bppftg --limit 100 --output json  # View logs
 ```
 
 **IDs:**
-- Blueprint: `exs-d6b0i6rnv86c73cb5c10`
 - Web Service: `srv-d6b0ik86fj8s73bppftg`
-- Postgres: `dpg-d6b0icg6fj8s73bppbp0-a`
 - Workspace: `tea-d6b0cji4d50c73ccmfl0`
+- Current Postgres: check memory for current ID and expiry date
 
 **Known issues:**
 - Render provides `postgres://` URLs but SQLAlchemy 2.0+ requires `postgresql://` — handled by `_fix_database_url()` in `config.py` and `database.py`
 - All models must use `String(36)` for IDs (not `UUID(as_uuid=True)`) to work with both SQLite and PostgreSQL
 - Free tier spins down after 15 min idle (~60s cold start on next request)
-- Free Postgres expires after 90 days (recreate or upgrade)
+- Free Postgres expires roughly every 30 days — must be manually recreated (see runbook below)
+- **NEVER use `fromDatabase` in `render.yaml`** — it silently overrides the manually-set `DATABASE_URL` env var on every deploy, causing the app to crash when the linked DB expires. `DATABASE_URL` must use `sync: false`.
+
+### Postgres Renewal Runbook
+
+The free Render Postgres expires approximately every 30 days. When it does, the app crash-loops with:
+`could not translate host name "dpg-xxx" to address: Name or service not known`
+
+**Full renewal via Render API (no dashboard needed):**
+
+```bash
+source ~/.bashrc  # loads RENDER_API_KEY
+
+# 1. Create new Postgres (oregon region, free plan)
+curl -s -X POST "https://api.render.com/v1/postgres" \
+  -H "Authorization: Bearer $RENDER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "databaseName": "generic_poker",
+    "databaseUser": "generic_poker_user",
+    "name": "generic-poker-db-N",
+    "ownerId": "tea-d6b0cji4d50c73ccmfl0",
+    "plan": "free",
+    "region": "oregon",
+    "version": "16"
+  }'
+# Note the "id" from the response (e.g. dpg-xxxxx-a)
+
+# 2. Wait ~30s for DB to be available, then get connection string
+curl -s "https://api.render.com/v1/postgres/<NEW_ID>/connection-info" \
+  -H "Authorization: Bearer $RENDER_API_KEY"
+# Note the "internalConnectionString" value
+
+# 3. Update DATABASE_URL on the web service (replace all 4 env vars atomically)
+curl -s -X PUT "https://api.render.com/v1/services/srv-d6b0ik86fj8s73bppftg/env-vars" \
+  -H "Authorization: Bearer $RENDER_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '[
+    {"key": "DATABASE_URL", "value": "<internalConnectionString>"},
+    {"key": "PYTHON_VERSION", "value": "3.10.12"},
+    {"key": "SECRET_KEY", "value": "<existing value>"},
+    {"key": "FLASK_ENV", "value": "production"}
+  ]'
+
+# 4. Trigger a new deploy
+echo "y" | render deploys create srv-d6b0ik86fj8s73bppftg --confirm
+
+# 5. Monitor until live
+render deploys list srv-d6b0ik86fj8s73bppftg --output json
+```
+
+`build.sh` handles table creation, migrations, and seeding automatically on deploy.
+
+**Important:** Use an incremented name (e.g. `generic-poker-db-3`) since old names remain reserved even after expiry.
 
 ## Code Quality
 
