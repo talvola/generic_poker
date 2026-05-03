@@ -90,3 +90,6 @@ print('Hand ranking conversion complete')
 
 # Seed database with test users (pipe 'y' to handle "already seeded" prompt)
 echo "y" | python tools/seed_db.py
+
+# Create or update managed user accounts
+python tools/manage_user.py --username eugbert2 --password poker123 --bankroll 2000
