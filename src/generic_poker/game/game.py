@@ -438,6 +438,7 @@ class Game:
                 logger.debug(f"Starting betting round: {step.name} with new_round({preserve_bet})")
                 self.betting.new_round(preserve_bet)
                 self.current_player = self.next_player(round_start=True)
+                self.skip_betting_players_unable_to_act()
 
         elif step.action_type == GameActionType.DEAL:
             # Check conditional state for the deal step
@@ -1438,6 +1439,24 @@ class Game:
 
         # Fallback
         return "dealer"
+
+    def skip_betting_players_unable_to_act(self) -> None:
+        """During a betting round, advance past players who are all-in (stack 0).
+
+        All-in players cannot act — leaving them as current_player invites
+        nonsense actions (an all-in player folding away pot eligibility). If no
+        player with chips remains, current_player becomes None and callers'
+        existing "BETTING with no current player" advancement takes over.
+        """
+        if self.state != GameState.BETTING or self.current_player is None:
+            return
+        if not any(p.is_active and p.stack > 0 for p in self.table.players.values()):
+            self.current_player = None
+            return
+        guard = len(self.table.players) + 1
+        while self.current_player is not None and self.current_player.stack == 0 and guard > 0:
+            self.current_player = self.next_player(round_start=False)
+            guard -= 1
 
     def next_player(self, round_start: bool = False) -> Player | None:
         logger.debug(f"Determining next player (round_start={round_start}, current_step={self.current_step})")

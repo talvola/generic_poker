@@ -382,7 +382,9 @@ class BettingManager(ABC):
         1. All active players have acted
         2. All active players have matched the current bet or are all-in
         """
-        active_players = [p.id for p in self.table.players.values() if p.is_active]
+        # Players who are all-in (stack 0) cannot act and must not hold up the round —
+        # e.g. a player all-in on an earlier street has no bet entry in this round.
+        active_players = [p.id for p in self.table.players.values() if p.is_active and p.stack > 0]
 
         # Check that every active player has a bet entry and has acted
         for player_id in active_players:
@@ -391,14 +393,15 @@ class BettingManager(ABC):
             if not self.current_bets[player_id].has_acted:
                 return False
 
-        # Check that all active players have matching bet amounts (or are all-in)
-        active_bet_amounts = set(
-            self.current_bets[player_id].amount
-            for player_id in active_players
-            if not self.current_bets[player_id].is_all_in
-        )
+        # Check that all active players have matched the current bet (or are all-in).
+        # Comparing against current_bet (not just against each other) matters when the
+        # highest bet came from an all-in player: the remaining players still owe a response.
+        for player_id in active_players:
+            bet = self.current_bets[player_id]
+            if not bet.is_all_in and bet.amount < self.current_bet:
+                return False
 
-        return not len(active_bet_amounts) > 1
+        return True
 
     def new_round(self, preserve_current_bet: bool = False) -> None:
         """

@@ -1588,9 +1588,10 @@ class ShowdownManager:
                         gets_odd_chip = False
 
                         # Rule 1: Traditional High-Low games - high hand gets odd chip
+                        # (low eval types are named like "a5_low"/"27_low", so match by containment)
                         if self.rules.showdown.best_hand[0].get(
                             "evaluationType"
-                        ) == "high" and self.rules.showdown.best_hand[1].get("evaluationType").startswith("low"):
+                        ) == "high" and "low" in self.rules.showdown.best_hand[1].get("evaluationType", ""):
                             gets_odd_chip = current_config_idx == 0
 
                         # Rule 2: Five-card hand vs four-card hand - five-card hand gets odd chip
@@ -1727,9 +1728,10 @@ class ShowdownManager:
                     gets_odd_chip = False
 
                     # Rule 1: Traditional High-Low games - high hand gets odd chip
+                    # (low eval types are named like "a5_low"/"27_low", so match by containment)
                     if self.rules.showdown.best_hand[0].get(
                         "evaluationType"
-                    ) == "high" and self.rules.showdown.best_hand[1].get("evaluationType").startswith("low"):
+                    ) == "high" and "low" in self.rules.showdown.best_hand[1].get("evaluationType", ""):
                         gets_odd_chip = current_config_idx == 0
 
                     # Rule 2: Five-card hand vs four-card hand - five-card hand gets odd chip

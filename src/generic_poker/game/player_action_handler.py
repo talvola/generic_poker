@@ -705,6 +705,7 @@ class PlayerActionHandler:
         if not manage_player:
             return ActionResult(success=True)
         self.game.current_player = self.game.next_player(round_start=False)
+        self.game.skip_betting_players_unable_to_act()
         if round_complete:
             return ActionResult(success=True, advance_step=True)
         return ActionResult(success=True)
