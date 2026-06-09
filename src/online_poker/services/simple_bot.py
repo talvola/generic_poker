@@ -282,11 +282,19 @@ class BotManager:
     def __init__(self):
         self.bots: dict[str, SimpleBot] = {}
 
-    def create_bot(self, player_id: str, username: str) -> SimpleBot:
-        """Create a new bot player."""
-        bot = SimpleBot(player_id, username)
+    def create_bot(self, player_id: str, username: str, bot_type: str = "simple") -> SimpleBot:
+        """Create a new bot player.
+
+        bot_type: "simple" (random weighted actions) or "mc" (Monte Carlo equity).
+        """
+        if bot_type == "mc":
+            from .monte_carlo_bot import MonteCarloBot  # local import: avoids circular dependency
+
+            bot = MonteCarloBot(player_id, username)
+        else:
+            bot = SimpleBot(player_id, username)
         self.bots[player_id] = bot
-        logger.info(f"Created bot player: {username} ({player_id})")
+        logger.info(f"Created {bot_type} bot player: {username} ({player_id})")
         return bot
 
     def get_bot(self, player_id: str) -> SimpleBot | None:

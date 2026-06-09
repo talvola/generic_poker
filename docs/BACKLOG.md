@@ -394,6 +394,25 @@ Features prioritized by casino relevance and games unlocked. Each unlocks multip
 
 **6.2.6 details:** New `Visibility.FACE_OUT` enum — cards visible to all OTHER players but hidden from owner. `GameStateManager` flips visibility logic for this type.
 
+### 6.6 Monte Carlo Bot (Phase 1 DONE)
+
+Smarter variant-agnostic bot using Monte Carlo equity estimation. Design + results: `docs/MONTE_CARLO_BOT_DESIGN.md`.
+
+| # | Task | Status |
+|---|------|--------|
+| 6.6.1 | Engine audit (showdown inputs, evaluator API, snapshot fields) | DONE |
+| 6.6.2 | Phase 1: MC betting decisions (hold'em/omaha/stud + post-draw streets), SimpleBot fallback | DONE |
+| 6.6.3 | `tools/bot_arena.py` offline A/B CLI | DONE |
+| 6.6.4 | `BOT_TYPE` config (default `mc`), BotManager wiring | DONE |
+| 6.6.5 | Phase 2: in-rollout draw/discard policy (full draw-game coverage) | TODO |
+| 6.6.6 | Phase 3: MC-driven draw/discard/declare decisions for the bot itself | TODO |
+| 6.6.7 | Phase 4 (optional): crude opponent modeling | TODO |
+
+**6.6.2 result:** `mc_rollout.py` + `mc_policy.py` + `monte_carlo_bot.py`. Arena vs SimpleBot: +1099 BB/100 (NLHE HU),
++349 (7-stud Limit 3-handed), +141 (Omaha 8 Limit), +95 (Dramaha Limit). 26 unit tests. The arena also surfaced
+3 real engine bugs (all-in raise didn't reopen action; all-in players asked to act on later streets; hi-lo odd
+chip dropped) — all fixed with regression tests, see STATUS.md.
+
 ### 6.3 Pagat URL Documentation (DONE)
 
 | # | Task | Status |

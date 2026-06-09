@@ -86,6 +86,7 @@ Flask/SocketIO multiplayer web platform.
 - Parametrized E2E smoke tests (15 variants covering all action types and community layouts)
 - Hand history display (DB persistence, API, modal with expandable details)
 - Bot support: "Fill with Bot Players" fills empty seats, bots handle all 293 variants (all action types)
+- Monte Carlo bot (`BOT_TYPE=mc`, the default): equity-based betting for hold'em/omaha/stud families and post-draw streets; falls back to SimpleBot elsewhere. Offline A/B via `tools/bot_arena.py`
 - Game rules display: visual game cards (timeline, tags, descriptions) in lobby modal + standalone HTML tool
 - 4-color deck option (blue diamonds, green clubs) toggled in table settings, persisted in localStorage
 - Mixed game rotation: HORSE and 8-Game Mix with orbit-based variant rotation, frontend tracker, state persistence
@@ -99,8 +100,19 @@ Flask/SocketIO multiplayer web platform.
 | 4 | Debug deck option | LOW | No way to use fixed/unseeded deck for testing |
 | 9 | Mobile optimization | LOW | Deferred to Phase 7 |
 | ~~10~~ | ~~Admin interface~~ | ~~LOW~~ | ~~Implemented: dashboard, user/table/variant management~~ |
-| 11 | Duplicate tables in Render DB | LOW | seed_db.py ran multiple times across deploys; many duplicate seeded tables |
+| ~~11~~ | ~~Duplicate tables in Render DB~~ | ~~LOW~~ | ~~Fixed: seed_db.py now idempotent for tables and removes accumulated duplicates on next deploy~~ |
 | ~~12~~ | ~~Table creation doesn't auto-join creator~~ | ~~MEDIUM~~ | ~~Fixed: seat selection modal auto-opens after creation~~ |
+
+### Engine Bugs Found via Bot Arena (2026-06-09, all fixed)
+
+Found while validating the Monte Carlo bot with `tools/bot_arena.py` chip-conservation checks.
+All three affected real (human) play, with regression tests added:
+
+| Bug | Description | Fix |
+|-----|-------------|-----|
+| E001 | All-in raise didn't reopen action: `round_complete()` compared non-all-in players only against each other, so a player facing an all-in raise was never required to respond — play skipped streets and stranded chips in an unawarded pot | `round_complete()` now requires non-all-in players to match `current_bet` (`betting.py`) |
+| E002 | All-in (stack 0) players stayed in the betting rotation on later streets — could check, be bet into, even fold away pot eligibility | `Game.skip_betting_players_unable_to_act()` skips them at round start and on advancement; `round_complete()` no longer waits on them |
+| E003 | Hi-lo odd chip vanished: odd-chip rule matched low types via `startswith("low")` but real names are `a5_low`/`27_low` — Omaha 8/Stud 8 split odd pots floor/floor, dropping a chip per odd split | Containment match on eval type in both pot paths (`showdown_manager.py`); regression test `tests/game/test_hilo_odd_chip.py` |
 
 ### Layout Testing Bugs (2026-02-27, all fixed)
 
@@ -134,15 +146,14 @@ Bugs found during first Render deployment testing of bot support:
 
 ## Testing
 
-### Test Counts (2026-02-24)
+### Test Counts (2026-06-09)
 
 | Layer | Tests | Status |
 |-------|-------|--------|
-| Python unit + integration | 752 | All passing |
-| Smoke test (all 293 variants) | 586 | All passing (0 unsupported, 0 xfail) |
-| Other game tests | 153 | All passing |
+| Python unit + integration | 779 | All passing (incl. 26 Monte Carlo bot tests) |
+| Game tests (incl. smoke for all 302 variants) | 793 | All passing (0 unsupported, 0 xfail) |
 | Playwright E2E | 57 | All passing (9 spec files) |
-| **Total** | **~1,548** | **All passing** |
+| **Total** | **~1,629** | **All passing** |
 
 ### Test Layers
 

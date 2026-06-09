@@ -34,6 +34,9 @@ class Config:
     DEFAULT_BANKROLL = int(os.environ.get("DEFAULT_BANKROLL", "1000"))
     TABLE_INACTIVE_TIMEOUT = int(os.environ.get("TABLE_INACTIVE_TIMEOUT", "30"))  # minutes
 
+    # Bot settings — "mc" (Monte Carlo equity) or "simple" (random weighted)
+    BOT_TYPE = os.environ.get("BOT_TYPE", "mc")
+
     # Timeout settings
     ACTION_TIMEOUT_ENABLED = os.environ.get("ACTION_TIMEOUT_ENABLED", "false").lower() == "true"
     ACTION_TIMEOUT_SECONDS = int(os.environ.get("ACTION_TIMEOUT_SECONDS", "30"))

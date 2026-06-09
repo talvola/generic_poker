@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from flask import current_app
 from flask_login import current_user
 from flask_socketio import SocketIO, disconnect, emit, join_room, leave_room
 
@@ -761,13 +762,14 @@ class WebSocketManager:
                 table_short = table_id[:8]
                 buy_in = table.get_minimum_buyin()
                 bots_added = 0
+                bot_type = current_app.config.get("BOT_TYPE", "simple")
 
                 for i, seat in enumerate(empty_seats):
                     bot_id = f"bot_{table_short}_{i}"
                     bot_name = BOT_NAMES[i % len(BOT_NAMES)]
 
                     # Create the bot in the bot manager
-                    bot_manager.create_bot(bot_id, bot_name)
+                    bot_manager.create_bot(bot_id, bot_name, bot_type=bot_type)
 
                     # Add to game session
                     session.add_player(bot_id, bot_name, buy_in, seat_number=seat)
