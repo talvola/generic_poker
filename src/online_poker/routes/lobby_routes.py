@@ -447,45 +447,6 @@ def register_lobby_socket_events(socketio):
         except Exception as e:
             emit("error", {"message": f"Failed to get table list: {str(e)}"})
 
-    @socketio.on("create_table")
-    def handle_create_table(data):
-        """Handle table creation via WebSocket."""
-        try:
-            if not current_user.is_authenticated:
-                emit("error", {"message": "Authentication required"})
-                return
-
-            # Validate required fields
-            required_fields = ["name", "variant", "betting_structure", "max_players", "stakes"]
-            for field in required_fields:
-                if field not in data:
-                    emit("error", {"message": f"Missing required field: {field}"})
-                    return
-
-            # Create table using table manager
-            table = table_manager.create_table(
-                name=data["name"],
-                variant=data["variant"],
-                betting_structure=data["betting_structure"],
-                stakes=data["stakes"],
-                max_players=data["max_players"],
-                creator_id=current_user.id,
-                is_private=data.get("is_private", False),
-                password=data.get("password"),
-                allow_bots=data.get("allow_bots", False),
-            )
-
-            if table:
-                emit("table_created", {"table_id": table.id, "message": "Table created successfully"})
-
-                # Broadcast table list update to all lobby users
-                socketio.emit("table_list_updated", {"action": "created", "table": table.to_dict()})
-            else:
-                emit("error", {"message": "Failed to create table"})
-
-        except Exception as e:
-            emit("error", {"message": f"Failed to create table: {str(e)}"})
-
     @socketio.on("join_table")
     def handle_join_table(data):
         """Handle joining a table via WebSocket."""

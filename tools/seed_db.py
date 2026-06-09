@@ -20,14 +20,36 @@ import string
 
 from app import create_app
 from src.online_poker.database import db
+from src.online_poker.models.chat import ChatMessage, ChatModerationAction
+from src.online_poker.models.game_history import GameHistory
+from src.online_poker.models.game_session_state import GameSessionState
 from src.online_poker.models.table import PokerTable
 from src.online_poker.models.table_access import TableAccess
+from src.online_poker.models.transaction import Transaction
 from src.online_poker.models.user import User
 
 
 def generate_invite_code(length=6):
     """Generate random invite code."""
     return "".join(random.choices(string.ascii_uppercase + string.digits, k=length))
+
+
+def delete_table(table):
+    """Delete a table and all associated records, cashing out any seated players."""
+    for access in TableAccess.query.filter_by(table_id=table.id, is_active=True).all():
+        if access.current_stack and access.current_stack > 0:
+            user = User.query.filter_by(id=access.user_id).first()
+            if user:
+                user.bankroll += access.current_stack
+
+    # Null out transaction references (keep audit trail), then delete dependents
+    Transaction.query.filter_by(table_id=table.id).update({"table_id": None})
+    ChatMessage.query.filter_by(table_id=table.id).delete()
+    ChatModerationAction.query.filter_by(table_id=table.id).delete()
+    GameHistory.query.filter_by(table_id=table.id).delete()
+    GameSessionState.query.filter_by(table_id=table.id).delete()
+    TableAccess.query.filter_by(table_id=table.id).delete()
+    db.session.delete(table)
 
 
 def seed_database():
@@ -136,6 +158,24 @@ def seed_database():
         ]
 
         for config in table_configs:
+            # Idempotency: skip if this seeded table already exists, and remove
+            # duplicates accumulated from earlier deploys (keep the oldest)
+            existing = (
+                PokerTable.query.filter_by(name=config["name"], creator_id=config["creator"].id)
+                .order_by(PokerTable.created_at)
+                .all()
+            )
+            if existing:
+                for duplicate in existing[1:]:
+                    delete_table(duplicate)
+                if len(existing) > 1:
+                    db.session.commit()
+                    print(f"  - {config['name']} (removed {len(existing) - 1} duplicate(s))")
+                else:
+                    print(f"  - {config['name']} (already exists, skipping)")
+                tables.append(existing[0])
+                continue
+
             table = PokerTable(
                 name=config["name"],
                 variant=config["variant"],
@@ -169,7 +209,7 @@ ${config['stakes'].get('big_bet', config['stakes'].get('big_blind', 0))}"
             print(f"  - {config['name']} ({config['variant']}, {config['betting_structure']}, {stakes_display})")
 
         db.session.commit()
-        print(f"✓ Created {len(tables)} tables")
+        print(f"✓ Created/verified {len(tables)} tables")
         print()
 
         print("✅ Database seeded successfully!")

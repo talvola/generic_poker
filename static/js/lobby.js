@@ -125,17 +125,6 @@ class PokerLobby {
             this.renderTables();
         });
 
-        this.socket.on('table_created', (data) => {
-            this.showNotification('Table created successfully!', 'success');
-            this.closeModal('create-table-modal');
-            this.loadTables();
-
-            // Optionally redirect to the table
-            if (data.table_id) {
-                window.location.href = `/table/${data.table_id}`;
-            }
-        });
-
         this.socket.on('table_joined', (data) => {
             this.showNotification('Joined table successfully!', 'success');
             this.closeAllModals();
