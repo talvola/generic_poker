@@ -173,14 +173,14 @@ test.describe('Full Hand Lifecycle', () => {
     // === SHOWDOWN ===
     // Wait for showdown results to appear
     await expect(async () => {
-      const showdownContainer = alicePage.locator('#showdown-results-container');
+      const showdownContainer = alicePage.locator('#showdown-panel');
       const isVisible = await showdownContainer.isVisible();
       expect(isVisible).toBe(true);
     }).toPass({ timeout: 15000 });
 
     // Showdown should show on bob's page too
     await expect(async () => {
-      const showdownContainer = bobPage.locator('#showdown-results-container');
+      const showdownContainer = bobPage.locator('#showdown-panel');
       const isVisible = await showdownContainer.isVisible();
       expect(isVisible).toBe(true);
     }).toPass({ timeout: 5000 });
@@ -191,7 +191,11 @@ test.describe('Full Hand Lifecycle', () => {
     expect(messageCount).toBeGreaterThan(0);
 
     // Look for "SHOW DOWN" in chat
-    await expect(alicePage.locator('#chat-messages:has-text("SHOW DOWN")')).toBeVisible({ timeout: 5000 });
+    // Chat is a collapsed floating widget — assert on content, not visibility
+    await expect(async () => {
+      const text = await alicePage.locator('#chat-messages').textContent();
+      expect(text).toContain('SHOW DOWN');
+    }).toPass({ timeout: 5000 });
 
     // Look for winner announcement (contains "wins with" or "collected")
     const chatText = await alicePage.locator('#chat-messages').textContent();

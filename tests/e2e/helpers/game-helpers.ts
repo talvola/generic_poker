@@ -53,7 +53,7 @@ async function isHandComplete(page: Page): Promise<boolean> {
     const readyPanel = document.querySelector('#ready-panel:not(.hidden)');
     if (readyPanel) return true;
     // Check if showdown container is visible
-    const showdown = document.querySelector('#showdown-results-container');
+    const showdown = document.querySelector('#showdown-panel');
     if (showdown && (showdown as HTMLElement).offsetParent !== null) return true;
     return false;
   });
@@ -131,21 +131,28 @@ async function selectMinimumCards(page: Page): Promise<void> {
  * The UI auto-assigns cards to subsets as you click them.
  */
 async function fillSeparateSubsets(page: Page): Promise<void> {
-  // Click all selectable cards in order — UI auto-assigns to subsets
-  for (let attempt = 0; attempt < 20; attempt++) {
-    const card = page.locator('.card.selectable:not(.selected)').first();
-    if (await card.count() === 0) break;
-    try {
-      await card.click({ timeout: 3000 });
-    } catch {
-      continue;
-    }
-    await page.waitForTimeout(200);
+  // Click cards via page context — seat re-renders replace card elements
+  // constantly, so Playwright's actionability checks stall on detached nodes.
+  // The delegated click listener handles synthetic clicks fine.
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const clicked = await page.evaluate(() => {
+      const card = Array.from(document.querySelectorAll('.card.selectable'))
+        .find(c => !c.classList.contains('selected'));
+      if (!card) return false;
+      (card as HTMLElement).click();
+      return true;
+    });
+    if (!clicked) break;
+    await page.waitForTimeout(150);
 
-    // Check if submit is enabled
-    const btn = page.locator('.draw-submit-btn');
-    if (await btn.count() > 0 && !(await btn.isDisabled())) {
-      return;
+    // Check if submit is enabled (button may be re-rendered between polls)
+    try {
+      const btn = page.locator('.draw-submit-btn');
+      if (await btn.count() > 0 && !(await btn.isDisabled({ timeout: 1000 }))) {
+        return;
+      }
+    } catch {
+      // re-rendered mid-check; keep going
     }
   }
 }
@@ -327,7 +334,7 @@ export async function playHandPassively(
     }
 
     // Check showdown results
-    const showdown = firstPage.locator('#showdown-results-container');
+    const showdown = firstPage.locator('#showdown-panel');
     if (await showdown.isVisible().catch(() => false)) {
       return { completed: true, actions: actionCount };
     }
@@ -346,7 +353,7 @@ export async function playHandPassively(
       if (await readyNow.isVisible().catch(() => false)) {
         return { completed: true, actions: actionCount };
       }
-      const showdownNow = firstPage.locator('#showdown-results-container');
+      const showdownNow = firstPage.locator('#showdown-panel');
       if (await showdownNow.isVisible().catch(() => false)) {
         return { completed: true, actions: actionCount };
       }
@@ -374,7 +381,7 @@ export async function playHandPassively(
   if (await readyFinal.isVisible().catch(() => false)) {
     return { completed: true, actions: actionCount };
   }
-  const showdownFinal = firstPage.locator('#showdown-results-container');
+  const showdownFinal = firstPage.locator('#showdown-panel');
   if (await showdownFinal.isVisible().catch(() => false)) {
     return { completed: true, actions: actionCount };
   }

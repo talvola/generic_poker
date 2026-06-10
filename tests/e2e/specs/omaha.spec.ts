@@ -197,17 +197,21 @@ test.describe('Omaha Poker', () => {
 
     // Showdown: results should appear
     await expect(async () => {
-      const showdown = alicePage.locator('#showdown-results-container');
+      const showdown = alicePage.locator('#showdown-panel');
       expect(await showdown.isVisible()).toBe(true);
     }).toPass({ timeout: 15000 });
 
     await expect(async () => {
-      const showdown = bobPage.locator('#showdown-results-container');
+      const showdown = bobPage.locator('#showdown-panel');
       expect(await showdown.isVisible()).toBe(true);
     }).toPass({ timeout: 5000 });
 
     // Chat should show showdown messages
-    await expect(alicePage.locator('#chat-messages:has-text("SHOW DOWN")')).toBeVisible({ timeout: 5000 });
+    // Chat is a collapsed floating widget — assert on content, not visibility
+    await expect(async () => {
+      const text = await alicePage.locator('#chat-messages').textContent();
+      expect(text).toContain('SHOW DOWN');
+    }).toPass({ timeout: 5000 });
     const chatText = await alicePage.locator('#chat-messages').textContent();
     expect(chatText).toMatch(/wins with|collected|split/);
   });

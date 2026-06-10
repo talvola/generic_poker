@@ -254,7 +254,7 @@ test.describe('Three Player Hold\'em', () => {
 
     // === SHOWDOWN ===
     await expect(async () => {
-      const showdownContainer = alicePage.locator('#showdown-results-container');
+      const showdownContainer = alicePage.locator('#showdown-panel');
       const isVisible = await showdownContainer.isVisible();
       expect(isVisible).toBe(true);
     }).toPass({ timeout: 15000 });
@@ -262,7 +262,7 @@ test.describe('Three Player Hold\'em', () => {
     // All players should see showdown results
     for (const player of players) {
       await expect(async () => {
-        const showdownContainer = player.page.locator('#showdown-results-container');
+        const showdownContainer = player.page.locator('#showdown-panel');
         const isVisible = await showdownContainer.isVisible();
         expect(isVisible).toBe(true);
       }).toPass({ timeout: 5000 });

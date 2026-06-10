@@ -103,6 +103,25 @@ Flask/SocketIO multiplayer web platform.
 | ~~11~~ | ~~Duplicate tables in Render DB~~ | ~~LOW~~ | ~~Fixed: seed_db.py now idempotent for tables and removes accumulated duplicates on next deploy~~ |
 | ~~12~~ | ~~Table creation doesn't auto-join creator~~ | ~~MEDIUM~~ | ~~Fixed: seat selection modal auto-opens after creation~~ |
 
+### UX Test Findings (2026-06-09, critical + high fixed)
+
+A full new-player browser test session (iPad viewport, bots, 4 game families) is documented in
+`docs/UX_TEST_FINDINGS.md` with screenshots in `docs/ux-testing/`. Fixed the same day:
+
+| Fix | Summary |
+|-----|---------|
+| C1 | Showdown strip destroyed the action panel → second hand had no buttons (also caused stuck hand counter). Now renders into a dedicated `#showdown-panel`. |
+| C2 | Draw/separate card-click listeners died on every seat re-render → selection dead on bot tables. Now one delegated listener. |
+| C3 | `websocket_manager` imported `online_poker.*` (not `src.online_poker.*`) → second SQLAlchemy instance → silent DB failures: lost cashouts, stale stacks, empty transactions table. Imports fixed; buy-in/cashout Transaction records added; stack sync moved to `_handle_hand_completion`. |
+| H1 | Ready overlay no longer covers the showdown (defers while strip is up; strip auto-dismisses in 10s). |
+| H2 | View Rules 404 — frontend now fetches the real endpoint. |
+| H3/H4 | Auth pages rebuilt as styled Jinja templates with visible error messages and preserved input. |
+| M1/M3/P1-P4/P9 | Guest gating + public variants API, player-count denominator, "[Unspecified]" labels, raw variant names, doubled checkboxes, favicon, bot buy-in 2x min. |
+
+Still open from that session: M2 (stud bring-in shows "Raise $15" where card-room standard is
+complete-to-$10 — needs engine review), M4 (iPad portrait layout, Phase 7.4), M5 (5-card hand
+card sizes/touch targets), M6 (seat modal crowding), P5-P8, P10.
+
 ### Engine Bugs Found via Bot Arena (2026-06-09, all fixed)
 
 Found while validating the Monte Carlo bot with `tools/bot_arena.py` chip-conservation checks.
