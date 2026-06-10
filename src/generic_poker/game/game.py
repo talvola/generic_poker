@@ -111,6 +111,12 @@ class Game:
             self.bring_in = bring_in
         self.ante = ante
 
+        # Stud 4th-street open-pair double bet (Robert's Rules 8.7), from config
+        self.betting.open_pair_double_rule = bool(getattr(self.rules.forced_bets, "openPairDoubleBet", False))
+        # Limit raise cap (Robert's Rules B&R 4): bet + 3 raises for games with
+        # 3+ betting rounds, bet + 4 for two-round games (draw/lowball)
+        self.betting.max_raises = 3 if self._count_betting_rounds() >= 3 else 4
+
         self.auto_progress = auto_progress  # Store the setting
 
         self.action_handler = PlayerActionHandler(self)
@@ -289,6 +295,19 @@ class Game:
                     return not self._check_condition(conditional_state)
 
         return False
+
+    def _count_betting_rounds(self) -> int:
+        """Count voluntary betting rounds in the gameplay (small/big bet steps)."""
+        count = 0
+        for step in self.rules.gameplay:
+            if step.action_type == GameActionType.BET:
+                if step.action_config.get("type") in ("small", "big"):
+                    count += 1
+            elif step.action_type == GameActionType.GROUPED:
+                for subaction in step.action_config:
+                    if "bet" in subaction and subaction["bet"].get("type") in ("small", "big"):
+                        count += 1
+        return count
 
     def _is_first_betting_round(self):
         """

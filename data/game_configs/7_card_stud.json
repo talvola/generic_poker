@@ -22,7 +22,8 @@
   ],
   "forcedBets": {
     "style": "bring-in",
-    "rule": "low card"
+    "rule": "low card",
+    "openPairDoubleBet": true
   },
   "gamePlay": [
     {

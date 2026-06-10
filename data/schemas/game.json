@@ -8,7 +8,13 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["all_exposed", "any_exposed", "none_exposed", "board_composition", "player_choice"],
+          "enum": [
+            "all_exposed",
+            "any_exposed",
+            "none_exposed",
+            "board_composition",
+            "player_choice"
+          ],
           "description": "Type of condition to check"
         },
         "true_state": {
@@ -25,12 +31,19 @@
         },
         "check": {
           "type": "string",
-          "enum": ["color", "suit", "rank"],
+          "enum": [
+            "color",
+            "suit",
+            "rank"
+          ],
           "description": "Type of card property to check in board composition"
         },
         "color": {
           "type": "string",
-          "enum": ["red", "black"],
+          "enum": [
+            "red",
+            "black"
+          ],
           "description": "Card color to check for in board composition"
         },
         "min_count": {
@@ -50,56 +63,119 @@
           "description": "Array of values to match for player_choice condition"
         }
       },
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": false,
       "allOf": [
         {
           "if": {
-            "properties": { "type": { "enum": ["all_exposed", "any_exposed", "none_exposed"] } }
+            "properties": {
+              "type": {
+                "enum": [
+                  "all_exposed",
+                  "any_exposed",
+                  "none_exposed"
+                ]
+              }
+            }
           },
           "then": {
-            "required": ["true_state", "false_state"]
-          }
-        },
-        {
-          "if": {
-            "properties": { "type": { "enum": ["board_composition"] } }
-          },
-          "then": {
-            "required": ["subset", "true_state", "false_state"]
+            "required": [
+              "true_state",
+              "false_state"
+            ]
           }
         },
         {
           "if": {
             "properties": {
-              "type": { "enum": ["board_composition"] },
-              "check": { "enum": ["color"] }
+              "type": {
+                "enum": [
+                  "board_composition"
+                ]
+              }
             }
           },
           "then": {
-            "required": ["check", "color", "min_count"]
+            "required": [
+              "subset",
+              "true_state",
+              "false_state"
+            ]
           }
         },
         {
           "if": {
             "properties": {
-              "type": { "enum": ["board_composition"] },
-              "check": { "enum": ["suit"] }
+              "type": {
+                "enum": [
+                  "board_composition"
+                ]
+              },
+              "check": {
+                "enum": [
+                  "color"
+                ]
+              }
             }
           },
           "then": {
-            "required": ["check", "suits", "min_count"]
+            "required": [
+              "check",
+              "color",
+              "min_count"
+            ]
           }
         },
         {
           "if": {
-            "properties": { "type": { "enum": ["player_choice"] } }
+            "properties": {
+              "type": {
+                "enum": [
+                  "board_composition"
+                ]
+              },
+              "check": {
+                "enum": [
+                  "suit"
+                ]
+              }
+            }
           },
           "then": {
-            "required": ["subset"],
+            "required": [
+              "check",
+              "suits",
+              "min_count"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "player_choice"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "subset"
+            ],
             "anyOf": [
-              { "required": ["value"] },
-              { "required": ["values"] }
+              {
+                "required": [
+                  "value"
+                ]
+              },
+              {
+                "required": [
+                  "values"
+                ]
+              }
             ]
           }
         }
@@ -123,7 +199,9 @@
           "description": "List of indices for the allowed cards (optional)"
         }
       },
-      "required": ["subsets"],
+      "required": [
+        "subsets"
+      ],
       "additionalProperties": false
     },
     "forcedBetsBase": {
@@ -131,20 +209,36 @@
       "properties": {
         "style": {
           "type": "string",
-          "enum": ["blinds", "bring-in", "antes_only"],
+          "enum": [
+            "blinds",
+            "bring-in",
+            "antes_only"
+          ],
           "description": "Style of forced bets: 'blinds' for small/big blinds, 'bring-in' for Stud bring-in after antes, 'antes_only' for antes without bring-in"
         },
         "rule": {
           "type": "string",
-          "enum": ["low card", "high card", "low card al", "high card ah", "high card ah wild"],
+          "enum": [
+            "low card",
+            "high card",
+            "low card al",
+            "high card ah",
+            "high card ah wild"
+          ],
           "description": "Rule for determining the bring-in player in 'bring-in' style (e.g., 'low card', 'high card'); ignored for other styles"
         },
         "bringInEval": {
           "type": "string",
           "description": "Evaluation type from bestHand to use for bring-in with 2+ cards in multi-hand games; defaults to first bestHand evaluation if unspecified"
+        },
+        "openPairDoubleBet": {
+          "type": "boolean",
+          "description": "Stud high only: an open pair on fourth street gives players the option of betting the big limit (Robert's Rules 8.7). Not used in razz or stud hi-lo."
         }
       },
-      "required": ["style"],
+      "required": [
+        "style"
+      ],
       "additionalProperties": false
     },
     "forcedBets": {
@@ -166,7 +260,9 @@
                     "properties": {
                       "type": {
                         "type": "string",
-                        "enum": ["player_choice"]
+                        "enum": [
+                          "player_choice"
+                        ]
                       },
                       "subset": {
                         "type": "string"
@@ -176,27 +272,46 @@
                       },
                       "values": {
                         "type": "array",
-                        "items": {"type": "string"}
+                        "items": {
+                          "type": "string"
+                        }
                       }
                     },
-                    "required": ["type", "subset"],
+                    "required": [
+                      "type",
+                      "subset"
+                    ],
                     "anyOf": [
-                      { "required": ["value"] },
-                      { "required": ["values"] }
+                      {
+                        "required": [
+                          "value"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "values"
+                        ]
+                      }
                     ]
                   },
                   "forcedBet": {
                     "$ref": "#/definitions/forcedBetsBase"
                   }
                 },
-                "required": ["condition", "forcedBet"]
+                "required": [
+                  "condition",
+                  "forcedBet"
+                ]
               }
             },
             "default": {
               "$ref": "#/definitions/forcedBetsBase"
             }
           },
-          "required": ["conditionalOrders", "default"],
+          "required": [
+            "conditionalOrders",
+            "default"
+          ],
           "description": "Conditional forced bets configuration based on game state"
         }
       ],
@@ -207,14 +322,25 @@
       "properties": {
         "initial": {
           "type": "string",
-          "enum": ["after_big_blind", "bring_in", "dealer", "high_hand"],
+          "enum": [
+            "after_big_blind",
+            "bring_in",
+            "dealer",
+            "high_hand"
+          ],
           "description": "Determines the starting player for the initial betting round"
         },
         "subsequent": {
           "oneOf": [
             {
               "type": "string",
-              "enum": ["high_hand", "dealer", "after_big_blind", "bring_in", "last_actor"],
+              "enum": [
+                "high_hand",
+                "dealer",
+                "after_big_blind",
+                "bring_in",
+                "last_actor"
+              ],
               "description": "Static subsequent betting order"
             },
             {
@@ -230,38 +356,65 @@
                         "properties": {
                           "type": {
                             "type": "string",
-                            "enum": ["player_choice"]
+                            "enum": [
+                              "player_choice"
+                            ]
                           },
                           "subset": {
                             "type": "string"
                           },
                           "values": {
                             "type": "array",
-                            "items": {"type": "string"}
+                            "items": {
+                              "type": "string"
+                            }
                           }
                         },
-                        "required": ["type", "subset", "values"]
+                        "required": [
+                          "type",
+                          "subset",
+                          "values"
+                        ]
                       },
                       "order": {
                         "type": "string",
-                        "enum": ["high_hand", "dealer", "after_big_blind", "bring_in"]
+                        "enum": [
+                          "high_hand",
+                          "dealer",
+                          "after_big_blind",
+                          "bring_in"
+                        ]
                       }
                     },
-                    "required": ["condition", "order"]
+                    "required": [
+                      "condition",
+                      "order"
+                    ]
                   }
                 },
                 "default": {
                   "type": "string",
-                  "enum": ["high_hand", "dealer", "after_big_blind", "bring_in"],
+                  "enum": [
+                    "high_hand",
+                    "dealer",
+                    "after_big_blind",
+                    "bring_in"
+                  ],
                   "description": "Default order when no conditions match"
                 }
               },
-              "required": ["conditionalOrders", "default"]
+              "required": [
+                "conditionalOrders",
+                "default"
+              ]
             }
           ]
         }
       },
-      "required": ["initial", "subsequent"],
+      "required": [
+        "initial",
+        "subsequent"
+      ],
       "additionalProperties": false
     },
     "action": {
@@ -269,12 +422,18 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["split_pot", "best_hand", "evaluate_special"],
+          "enum": [
+            "split_pot",
+            "best_hand",
+            "evaluate_special"
+          ],
           "description": "Type of action to perform"
         },
         "bestHand": {
           "type": "array",
-          "items": { "$ref": "#/definitions/bestHandItem" },
+          "items": {
+            "$ref": "#/definitions/bestHandItem"
+          },
           "description": "Alternate hand evaluation rules for 'best_hand' action"
         },
         "evaluation": {
@@ -282,31 +441,60 @@
           "properties": {
             "criterion": {
               "type": "string",
-              "enum": ["highest_rank", "lowest_rank"],
+              "enum": [
+                "highest_rank",
+                "lowest_rank"
+              ],
               "description": "Criterion for evaluating cards (e.g., 'highest_rank')"
             },
             "suit": {
               "type": "string",
-              "enum": ["clubs", "diamonds", "hearts", "spades", "club", "diamond", "heart", "spade", "joker", "c", "d", "h", "s", "j", "river_card_suit"],
+              "enum": [
+                "clubs",
+                "diamonds",
+                "hearts",
+                "spades",
+                "club",
+                "diamond",
+                "heart",
+                "spade",
+                "joker",
+                "c",
+                "d",
+                "h",
+                "s",
+                "j",
+                "river_card_suit"
+              ],
               "description": "Suit to evaluate, or 'river_card_suit' for dynamic suit from river card"
             },
             "from": {
               "type": "string",
-              "enum": ["hole_cards", "community_cards"],
+              "enum": [
+                "hole_cards",
+                "community_cards"
+              ],
               "description": "Source of cards to evaluate"
             },
             "subsets": {
               "type": "array",
-              "items": { "type": "string" },
+              "items": {
+                "type": "string"
+              },
               "description": "Subsets of cards to consider (e.g., ['default'])"
             }
           },
-          "required": ["criterion", "from"],
+          "required": [
+            "criterion",
+            "from"
+          ],
           "additionalProperties": false,
           "description": "Evaluation rules for 'evaluate_special' action"
         }
       },
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": false,
       "description": "Action specification with type and optional parameters"
     },
@@ -315,7 +503,13 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["community_card_value", "community_card_suit", "board_composition", "player_choice", "player_hand_size"],
+          "enum": [
+            "community_card_value",
+            "community_card_suit",
+            "board_composition",
+            "player_choice",
+            "player_hand_size"
+          ],
           "description": "Type of condition to check"
         },
         "subset": {
@@ -324,12 +518,19 @@
         },
         "values": {
           "type": "array",
-          "items": {"type": ["integer", "string"]},
+          "items": {
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
           "description": "Card values that must match for the condition to be true"
         },
         "hand_sizes": {
           "type": "array",
-          "items": {"type": "integer"},
+          "items": {
+            "type": "integer"
+          },
           "description": "Player hand sizes that match this condition"
         },
         "min_hand_size": {
@@ -341,17 +542,37 @@
           "description": "Maximum hand size for condition to be true"
         }
       },
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "allOf": [
         {
           "if": {
-            "properties": {"type": {"enum": ["player_hand_size"]}}
+            "properties": {
+              "type": {
+                "enum": [
+                  "player_hand_size"
+                ]
+              }
+            }
           },
           "then": {
             "anyOf": [
-              {"required": ["hand_sizes"]},
-              {"required": ["min_hand_size"]},
-              {"required": ["max_hand_size"]}
+              {
+                "required": [
+                  "hand_sizes"
+                ]
+              },
+              {
+                "required": [
+                  "min_hand_size"
+                ]
+              },
+              {
+                "required": [
+                  "max_hand_size"
+                ]
+              }
             ]
           }
         }
@@ -381,7 +602,10 @@
             },
             {
               "type": "string",
-              "enum": ["remaining","all"]
+              "enum": [
+                "remaining",
+                "all"
+              ]
             }
           ],
           "description": "Number of hole cards required, list of indices, 'remaining' for all remaining cards, or 'all' for all available hole cards"
@@ -426,21 +650,28 @@
         },
         "cardState": {
           "type": "string",
-          "enum": ["face down", "face up"],
+          "enum": [
+            "face down",
+            "face up"
+          ],
           "description": "Specify the state of the cards to consider for this hand evaluation"
-       },
+        },
         "holeCardsAllowed": {
           "type": "array",
           "items": {
-              "type": "object",
-              "properties": {
-                  "hole_subsets": {
-                      "type": "array",
-                      "items": {"type": "string"},
-                      "description": "List of hole card subsets forming a valid hand"
-                  }
-              },
-              "required": ["hole_subsets"]
+            "type": "object",
+            "properties": {
+              "hole_subsets": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "List of hole card subsets forming a valid hand"
+              }
+            },
+            "required": [
+              "hole_subsets"
+            ]
           }
         },
         "communityCardCombinations": {
@@ -487,11 +718,22 @@
           "items": {
             "type": "object",
             "properties": {
-              "subset": {"type": "string"},
-              "count": {"type": "integer", "minimum": 1},
-              "required": {"type": "boolean", "default": true}
+              "subset": {
+                "type": "string"
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "required": {
+                "type": "boolean",
+                "default": true
+              }
             },
-            "required": ["subset", "count"],
+            "required": [
+              "subset",
+              "count"
+            ],
             "additionalProperties": false
           },
           "description": "Require specific numbers of cards from specific community subsets"
@@ -499,23 +741,36 @@
         "classification": {
           "type": "object",
           "properties": {
-              "type": {
-                  "type": "string",
-                  "enum": ["face_butt"],
-                  "description": "Type of classification rule"
-              },
-              "faceRanks": {
-                  "type": "array",
-                  "items": { "type": "string", "enum": ["JACK", "QUEEN", "KING"] },
-                  "description": "Ranks that qualify a hand as 'face'"
-              },
-              "fieldName": {
-                  "type": "string",
-                  "description": "Field to store classification result (e.g., 'face_butt')"
-              }
+            "type": {
+              "type": "string",
+              "enum": [
+                "face_butt"
+              ],
+              "description": "Type of classification rule"
             },
-            "required": ["type", "faceRanks", "fieldName"],
-            "additionalProperties": false
+            "faceRanks": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "JACK",
+                  "QUEEN",
+                  "KING"
+                ]
+              },
+              "description": "Ranks that qualify a hand as 'face'"
+            },
+            "fieldName": {
+              "type": "string",
+              "description": "Field to store classification result (e.g., 'face_butt')"
+            }
+          },
+          "required": [
+            "type",
+            "faceRanks",
+            "fieldName"
+          ],
+          "additionalProperties": false
         },
         "wildCards": {
           "type": "array",
@@ -525,7 +780,14 @@
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["joker", "rank", "lowest_community", "lowest_hole", "last_community_card", "follow_card"],
+                "enum": [
+                  "joker",
+                  "rank",
+                  "lowest_community",
+                  "lowest_hole",
+                  "last_community_card",
+                  "follow_card"
+                ],
                 "description": "Specifies the wild card rule type"
               },
               "count": {
@@ -546,22 +808,34 @@
               },
               "visibility": {
                 "type": "string",
-                "enum": ["face down", "face up"],
+                "enum": [
+                  "face down",
+                  "face up"
+                ],
                 "description": "Visibility condition for lowest_hole (e.g., 'face down')"
               },
               "match": {
                 "type": "string",
-                "enum": ["rank"],
+                "enum": [
+                  "rank"
+                ],
                 "description": "Match condition that defines wild cards (e.g., 'rank')"
               },
               "scope": {
                 "type": "string",
-                "enum": ["player", "global"],
+                "enum": [
+                  "player",
+                  "global"
+                ],
                 "description": "Scope of wildness (default is global)"
               },
               "role": {
                 "type": "string",
-                "enum": ["wild", "bug", "conditional"],
+                "enum": [
+                  "wild",
+                  "bug",
+                  "conditional"
+                ],
                 "description": "Wildness behavior: 'wild' (any card) or 'bug' (Ace or straight/flush) or 'conditional' (based on condition)"
               },
               "condition": {
@@ -569,56 +843,106 @@
                 "properties": {
                   "visibility": {
                     "type": "string",
-                    "enum": ["face up", "face down"]
+                    "enum": [
+                      "face up",
+                      "face down"
+                    ]
                   },
                   "true_role": {
                     "type": "string",
-                    "enum": ["wild", "bug"]
+                    "enum": [
+                      "wild",
+                      "bug"
+                    ]
                   },
                   "false_role": {
                     "type": "string",
-                    "enum": ["wild", "bug"]
+                    "enum": [
+                      "wild",
+                      "bug"
+                    ]
                   }
                 },
-                "required": ["visibility", "true_role", "false_role"]
+                "required": [
+                  "visibility",
+                  "true_role",
+                  "false_role"
+                ]
               }
             },
-            "required": ["type", "role"],
+            "required": [
+              "type",
+              "role"
+            ],
             "additionalProperties": false,
             "allOf": [
               {
                 "if": {
-                  "properties": { "type": { "enum": ["rank"] } }
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "rank"
+                      ]
+                    }
+                  }
                 },
                 "then": {
-                  "required": ["rank"]
+                  "required": [
+                    "rank"
+                  ]
                 }
               },
               {
                 "if": {
-                  "properties": { "type": { "enum": ["lowest_hole"] } }
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "lowest_hole"
+                      ]
+                    }
+                  }
                 },
                 "then": {
-                  "required": ["visibility"]
+                  "required": [
+                    "visibility"
+                  ]
                 }
               },
               {
                 "if": {
-                  "properties": { "type": { "enum": ["last_community_card"] } }
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "last_community_card"
+                      ]
+                    }
+                  }
                 },
                 "then": {
                   "properties": {
-                    "match": { "type": "string" },
-                    "scope": { "type": "string" }
+                    "match": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string"
+                    }
                   }
                 }
               },
               {
                 "if": {
-                  "properties": { "type": { "enum": ["follow_card"] } }
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "follow_card"
+                      ]
+                    }
+                  }
                 },
                 "then": {
-                  "required": ["trigger_rank"]
+                  "required": [
+                    "trigger_rank"
+                  ]
                 }
               }
             ]
@@ -661,7 +985,10 @@
                 "description": "Specific subset of community cards to use for this combination"
               }
             },
-            "required": ["holeCards", "communityCards"],
+            "required": [
+              "holeCards",
+              "communityCards"
+            ],
             "additionalProperties": false
           },
           "description": "List of allowed combinations of hole and community cards to form the hand"
@@ -696,14 +1023,19 @@
                   "description": "Multiple community subsets to use for this hand size"
                 }
               },
-              "required": ["holeCards", "communityCards"],
+              "required": [
+                "holeCards",
+                "communityCards"
+              ],
               "additionalProperties": false
             }
           },
           "description": "Hand evaluation rules based on player's current hand size"
         }
       },
-      "required": ["evaluationType"],
+      "required": [
+        "evaluationType"
+      ],
       "additionalProperties": false
     },
     "bet": {
@@ -715,11 +1047,16 @@
         },
         "zeroCardsBetting": {
           "type": "string",
-          "enum": ["call_only", "normal"],
+          "enum": [
+            "call_only",
+            "normal"
+          ],
           "description": "Betting restriction for players with 0 cards (e.g., 'call_only' for Canadian Scarney)"
         }
       },
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": false
     },
     "deal": {
@@ -740,7 +1077,14 @@
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["joker", "rank", "lowest_community", "lowest_hole", "last_community_card", "follow_card"],
+                "enum": [
+                  "joker",
+                  "rank",
+                  "lowest_community",
+                  "lowest_hole",
+                  "last_community_card",
+                  "follow_card"
+                ],
                 "description": "Specifies the wild card rule type"
               },
               "count": {
@@ -761,22 +1105,36 @@
               },
               "visibility": {
                 "type": "string",
-                "enum": ["face down", "face up"],
+                "enum": [
+                  "face down",
+                  "face up"
+                ],
                 "description": "Visibility condition for lowest_hole (e.g., 'face down')"
               },
               "match": {
                 "type": "string",
-                "enum": ["rank", "card", "suit"],
+                "enum": [
+                  "rank",
+                  "card",
+                  "suit"
+                ],
                 "description": "Match condition for dynamic wild cards: 'rank' makes all cards of the dealt card's rank wild, 'card' makes only the specific dealt card wild, 'suit' makes all cards of the dealt card's suit wild"
               },
               "scope": {
                 "type": "string",
-                "enum": ["player", "global"],
+                "enum": [
+                  "player",
+                  "global"
+                ],
                 "description": "Scope of wildness: 'player' affects only the current player's cards, 'global' affects all players and community cards (default is global)"
               },
               "role": {
                 "type": "string",
-                "enum": ["wild", "bug", "conditional"],
+                "enum": [
+                  "wild",
+                  "bug",
+                  "conditional"
+                ],
                 "description": "Wildness behavior: 'wild' (any card) or 'bug' (Ace or straight/flush) or 'conditional' (based on condition)"
               },
               "condition": {
@@ -784,21 +1142,37 @@
                 "properties": {
                   "visibility": {
                     "type": "string",
-                    "enum": ["face up", "face down"]
+                    "enum": [
+                      "face up",
+                      "face down"
+                    ]
                   },
                   "true_role": {
                     "type": "string",
-                    "enum": ["wild", "bug"]
+                    "enum": [
+                      "wild",
+                      "bug"
+                    ]
                   },
                   "false_role": {
                     "type": "string",
-                    "enum": ["wild", "bug"]
+                    "enum": [
+                      "wild",
+                      "bug"
+                    ]
                   }
                 },
-                "required": ["visibility", "true_role", "false_role"]
+                "required": [
+                  "visibility",
+                  "true_role",
+                  "false_role"
+                ]
               }
             },
-            "required": ["type", "role"],
+            "required": [
+              "type",
+              "role"
+            ],
             "additionalProperties": false
           }
         },
@@ -818,12 +1192,33 @@
               "protection_option": {
                 "type": "object",
                 "properties": {
-                  "cost": {"type": "string", "description": "Named bet amount"},
-                  "timing": {"type": "string", "enum": ["pre_deal", "post_deal"], "default": "post_deal"},
-                  "benefit": {"type": "string", "enum": ["flip_face_up"], "default": "flip_face_up"},
-                  "prompt": {"type": "string", "description": "Custom prompt text"}
+                  "cost": {
+                    "type": "string",
+                    "description": "Named bet amount"
+                  },
+                  "timing": {
+                    "type": "string",
+                    "enum": [
+                      "pre_deal",
+                      "post_deal"
+                    ],
+                    "default": "post_deal"
+                  },
+                  "benefit": {
+                    "type": "string",
+                    "enum": [
+                      "flip_face_up"
+                    ],
+                    "default": "flip_face_up"
+                  },
+                  "prompt": {
+                    "type": "string",
+                    "description": "Custom prompt text"
+                  }
                 },
-                "required": ["cost"]
+                "required": [
+                  "cost"
+                ]
               },
               "community_subset": {
                 "description": "Subset of community cards (e.g., 'Board', 'Discard')"
@@ -844,11 +1239,16 @@
                 ]
               }
             },
-            "required": ["number"]
+            "required": [
+              "number"
+            ]
           }
         }
       },
-      "required": ["location", "cards"],
+      "required": [
+        "location",
+        "cards"
+      ],
       "additionalProperties": false
     },
     "roll_die": {
@@ -886,7 +1286,10 @@
               },
               "discardLocation": {
                 "type": "string",
-                "enum": ["community", "discard_pile"],
+                "enum": [
+                  "community",
+                  "discard_pile"
+                ],
                 "description": "Where to place discarded cards (e.g., 'community' for Scarney)"
               },
               "discardSubset": {
@@ -921,15 +1324,30 @@
               }
             },
             "anyOf": [
-              { "required": ["hole_subset"] },
-              { "required": ["number"] },
-              { "required": ["rule", "subset"] }
+              {
+                "required": [
+                  "hole_subset"
+                ]
+              },
+              {
+                "required": [
+                  "number"
+                ]
+              },
+              {
+                "required": [
+                  "rule",
+                  "subset"
+                ]
+              }
             ],
             "additionalProperties": false
           }
         }
       },
-      "required": ["cards"],
+      "required": [
+        "cards"
+      ],
       "additionalProperties": false
     },
     "draw": {
@@ -961,7 +1379,9 @@
                 "properties": {
                   "relative_to": {
                     "type": "string",
-                    "enum": ["discard"],
+                    "enum": [
+                      "discard"
+                    ],
                     "description": "Specifies that the draw amount is relative to the discard amount"
                   },
                   "amount": {
@@ -969,7 +1389,10 @@
                     "description": "The difference between the draw amount and the discard amount"
                   }
                 },
-                "required": ["relative_to", "amount"],
+                "required": [
+                  "relative_to",
+                  "amount"
+                ],
                 "additionalProperties": false
               },
               "preserve_state": {
@@ -977,12 +1400,17 @@
                 "description": "If true, replacement cards maintain the face-up/face-down state of discarded cards"
               }
             },
-            "required": ["number", "state"],
+            "required": [
+              "number",
+              "state"
+            ],
             "additionalProperties": false
           }
         }
       },
-      "required": ["cards"],
+      "required": [
+        "cards"
+      ],
       "additionalProperties": false
     },
     "remove": {
@@ -994,12 +1422,16 @@
         },
         "type": {
           "type": "string",
-          "enum": ["subset"],
+          "enum": [
+            "subset"
+          ],
           "description": "Type of removal (e.g., 'subset' for community card subsets)"
         },
         "criteria": {
           "type": "string",
-          "enum": ["lowest_river_card_unless_all_same"],
+          "enum": [
+            "lowest_river_card_unless_all_same"
+          ],
           "description": "Criteria for determining which subsets to remove"
         },
         "subsets": {
@@ -1010,7 +1442,11 @@
           "description": "List of community card subsets to evaluate for removal"
         }
       },
-      "required": ["type", "criteria", "subsets"],
+      "required": [
+        "type",
+        "criteria",
+        "subsets"
+      ],
       "additionalProperties": false,
       "description": "Remove cards action configuration"
     },
@@ -1026,7 +1462,9 @@
                 "type": "integer",
                 "description": "Number of cards to expose"
               },
-              "min_number": { "type": "integer" },
+              "min_number": {
+                "type": "integer"
+              },
               "state": {
                 "type": "string",
                 "description": "State of the cards (face up or face down)"
@@ -1037,12 +1475,17 @@
                 "default": false
               }
             },
-            "required": ["number", "state"],
+            "required": [
+              "number",
+              "state"
+            ],
             "additionalProperties": false
           }
         }
       },
-      "required": ["cards"],
+      "required": [
+        "cards"
+      ],
       "additionalProperties": false
     },
     "pass": {
@@ -1059,21 +1502,34 @@
               },
               "direction": {
                 "type": "string",
-                "enum": ["left", "right", "across"],
+                "enum": [
+                  "left",
+                  "right",
+                  "across"
+                ],
                 "description": "Direction to pass the cards"
               },
               "state": {
                 "type": "string",
-                "enum": ["face up", "face down"],
+                "enum": [
+                  "face up",
+                  "face down"
+                ],
                 "description": "State of the cards being passed"
               }
             },
-            "required": ["number", "direction", "state"],
+            "required": [
+              "number",
+              "direction",
+              "state"
+            ],
             "additionalProperties": false
           }
         }
       },
-      "required": ["cards"],
+      "required": [
+        "cards"
+      ],
       "additionalProperties": false
     },
     "replaceCommunity": {
@@ -1086,73 +1542,116 @@
         },
         "order": {
           "type": "string",
-          "enum": ["clockwise", "counterclockwise"],
+          "enum": [
+            "clockwise",
+            "counterclockwise"
+          ],
           "default": "clockwise",
           "description": "Order in which players replace cards"
         },
         "startingFrom": {
           "type": "string",
-          "enum": ["left_of_dealer", "dealer", "small_blind", "big_blind"],
+          "enum": [
+            "left_of_dealer",
+            "dealer",
+            "small_blind",
+            "big_blind"
+          ],
           "default": "left_of_dealer",
           "description": "Which player starts the replacement process"
         }
       },
-      "required": ["cardsToReplace"],
+      "required": [
+        "cardsToReplace"
+      ],
       "additionalProperties": false
     },
     "separate": {
-        "type": "object",
-        "properties": {
-            "cards": {
-               "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "hole_subset": { "type": "string" },
-                        "number": { "type": "integer" }
-                    },
-                    "required": ["hole_subset", "number"]
-                }
-            },
-            "visibility_requirements": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "hole_subset": { "type": "string" },
-                        "min_face_down": { "type": "integer", "minimum": 0 },
-                        "min_face_up": { "type": "integer", "minimum": 0 }
-                    },
-                    "required": ["hole_subset"]
-                },
-                "description": "Specifies minimum face-down or face-up cards per subset"
-            },
-            "hand_comparison": {
-              "type": "object",
-              "properties": {
-                  "subsets": {
-                      "type": "array",
-                      "items": {
-                          "type": "object",
-                          "properties": {
-                              "hole_subset": { "type": "string" },
-                              "evaluationType": { "type": "string" }
-                          },
-                          "required": ["hole_subset", "evaluationType"]
-                      },
-                      "minItems": 2,
-                      "maxItems": 2
-                  },
-                  "comparison_rule": {
-                      "type": "string",
-                      "enum": ["greater_than", "less_than", "equal"]
-                  }
+      "type": "object",
+      "properties": {
+        "cards": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hole_subset": {
+                "type": "string"
               },
-              "required": ["subsets", "comparison_rule"]
+              "number": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "hole_subset",
+              "number"
+            ]
           }
         },
-        "required": ["cards"],
-        "additionalProperties": false
+        "visibility_requirements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hole_subset": {
+                "type": "string"
+              },
+              "min_face_down": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "min_face_up": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "hole_subset"
+            ]
+          },
+          "description": "Specifies minimum face-down or face-up cards per subset"
+        },
+        "hand_comparison": {
+          "type": "object",
+          "properties": {
+            "subsets": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "hole_subset": {
+                    "type": "string"
+                  },
+                  "evaluationType": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "hole_subset",
+                  "evaluationType"
+                ]
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "comparison_rule": {
+              "type": "string",
+              "enum": [
+                "greater_than",
+                "less_than",
+                "equal"
+              ]
+            }
+          },
+          "required": [
+            "subsets",
+            "comparison_rule"
+          ]
+        }
+      },
+      "required": [
+        "cards"
+      ],
+      "additionalProperties": false
     },
     "buy": {
       "type": "object",
@@ -1162,56 +1661,95 @@
           "items": {
             "type": "object",
             "properties": {
-              "number": { "type": "integer", "description": "Number of cards to buy" },
-              "state": { "type": "string", "enum": ["face up", "face down"] },
-              "optional": { "type": "boolean", "description": "Whether buying is optional (can stand pat)" },
+              "number": {
+                "type": "integer",
+                "description": "Number of cards to buy"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "face up",
+                  "face down"
+                ]
+              },
+              "optional": {
+                "type": "boolean",
+                "description": "Whether buying is optional (can stand pat)"
+              },
               "cost": {
                 "type": "object",
                 "properties": {
-                  "type": { "type": "string", "enum": ["fixed", "match_pot"], "description": "Cost calculation method" },
-                  "amount": { "description": "Fixed cost amount (number or named bet string)" }
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "fixed",
+                      "match_pot"
+                    ],
+                    "description": "Cost calculation method"
+                  },
+                  "amount": {
+                    "description": "Fixed cost amount (number or named bet string)"
+                  }
                 },
-                "required": ["type"]
+                "required": [
+                  "type"
+                ]
               },
-              "discard_first": { "type": "boolean", "description": "Auto-discard a card before dealing replacement" }
+              "discard_first": {
+                "type": "boolean",
+                "description": "Auto-discard a card before dealing replacement"
+              }
             },
-            "required": ["number", "state", "cost"]
+            "required": [
+              "number",
+              "state",
+              "cost"
+            ]
           }
         }
       },
-      "required": ["cards"],
+      "required": [
+        "cards"
+      ],
       "additionalProperties": false
     },
     "declare": {
       "type": "object",
       "properties": {
-          "type": {
-              "type": "string",
-              "const": "declare",
-              "description": "Action type for player declarations"
+        "type": {
+          "type": "string",
+          "const": "declare",
+          "description": "Action type for player declarations"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "high",
+              "low",
+              "high_low"
+            ],
+            "description": "Allowed declaration types"
           },
-          "options": {
-              "type": "array",
-              "items": {
-                  "type": "string",
-                  "enum": ["high", "low", "high_low"],
-                  "description": "Allowed declaration types"
-              },
-              "minItems": 1,
-              "description": "Possible declarations (e.g., high, low, high/low)"
-          },
-          "per_pot": {
-              "type": "boolean",
-              "default": false,
-              "description": "If true, players declare separately for each pot (main and side)"
-          },
-          "simultaneous": {
-              "type": "boolean",
-              "default": true,
-              "description": "If true, declarations are collected simultaneously and revealed at round end"
-          }
+          "minItems": 1,
+          "description": "Possible declarations (e.g., high, low, high/low)"
+        },
+        "per_pot": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, players declare separately for each pot (main and side)"
+        },
+        "simultaneous": {
+          "type": "boolean",
+          "default": true,
+          "description": "If true, declarations are collected simultaneously and revealed at round end"
+        }
       },
-      "required": ["type", "options"],
+      "required": [
+        "type",
+        "options"
+      ],
       "additionalProperties": false
     },
     "choose": {
@@ -1234,7 +1772,13 @@
         },
         "chooser": {
           "type": "string",
-          "enum": ["utg", "button", "dealer", "sb", "bb"],
+          "enum": [
+            "utg",
+            "button",
+            "dealer",
+            "sb",
+            "bb"
+          ],
           "description": "Position that gets to make the choice (utg = under the gun)"
         },
         "time_limit": {
@@ -1242,7 +1786,10 @@
           "description": "Time limit in seconds for making the choice"
         }
       },
-      "required": ["possible_values", "value"],
+      "required": [
+        "possible_values",
+        "value"
+      ],
       "additionalProperties": false,
       "description": "Configuration for player choice action"
     },
@@ -1254,7 +1801,9 @@
           "description": "Type of showdown"
         }
       },
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": false
     }
   },
@@ -1266,7 +1815,16 @@
     "category": {
       "type": "string",
       "description": "Game family for UI grouping",
-      "enum": ["Hold'em", "Omaha", "Stud", "Draw", "Pineapple", "Dramaha", "Straight", "Other"]
+      "enum": [
+        "Hold'em",
+        "Omaha",
+        "Stud",
+        "Draw",
+        "Pineapple",
+        "Dramaha",
+        "Straight",
+        "Other"
+      ]
     },
     "references": {
       "type": "array",
@@ -1279,10 +1837,17 @@
           {
             "type": "object",
             "properties": {
-              "url": { "type": "string", "format": "uri" },
-              "description": { "type": "string" }
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "description": {
+                "type": "string"
+              }
             },
-            "required": ["url"],
+            "required": [
+              "url"
+            ],
             "additionalProperties": false
           }
         ]
@@ -1301,7 +1866,10 @@
           "description": "Maximum number of players"
         }
       },
-      "required": ["min", "max"],
+      "required": [
+        "min",
+        "max"
+      ],
       "additionalProperties": false
     },
     "deck": {
@@ -1309,12 +1877,22 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["standard", "short_6a", "short_ta", "short_27_ja"],
+          "enum": [
+            "standard",
+            "short_6a",
+            "short_ta",
+            "short_27_ja"
+          ],
           "description": "Type of deck: standard, short_6a (2-5 removed), short_ta (2-9 removed)"
         },
         "cards": {
           "type": "integer",
-          "enum": [20, 36, 40, 52],
+          "enum": [
+            20,
+            36,
+            40,
+            52
+          ],
           "description": "Number of cards in the deck"
         },
         "jokers": {
@@ -1322,7 +1900,10 @@
           "description": "Number of jokers in the deck"
         }
       },
-      "required": ["type", "cards"],
+      "required": [
+        "type",
+        "cards"
+      ],
       "additionalProperties": false
     },
     "bettingStructures": {
@@ -1358,41 +1939,109 @@
               "type": "object",
               "maxProperties": 1,
               "properties": {
-                "bet": { "$ref": "#/definitions/bet" },
-                "deal": { "$ref": "#/definitions/deal" },
-                "discard": { "$ref": "#/definitions/discard" },
-                "draw": { "$ref": "#/definitions/draw" },
-                "remove": { "$ref": "#/definitions/remove" },
-                "expose": { "$ref": "#/definitions/expose" },
-                "pass": { "$ref": "#/definitions/pass" },
-                "replaceCommunity": { "$ref": "#/definitions/replaceCommunity" },
-                "declare": { "$ref": "#/definitions/declare" },
-                "separate": { "$ref": "#/definitions/separate" },
-                "buy": { "$ref": "#/definitions/buy" },
-                "showdown": { "$ref": "#/definitions/showdown" },
-                "roll_die": { "$ref": "#/definitions/roll_die" }
+                "bet": {
+                  "$ref": "#/definitions/bet"
+                },
+                "deal": {
+                  "$ref": "#/definitions/deal"
+                },
+                "discard": {
+                  "$ref": "#/definitions/discard"
+                },
+                "draw": {
+                  "$ref": "#/definitions/draw"
+                },
+                "remove": {
+                  "$ref": "#/definitions/remove"
+                },
+                "expose": {
+                  "$ref": "#/definitions/expose"
+                },
+                "pass": {
+                  "$ref": "#/definitions/pass"
+                },
+                "replaceCommunity": {
+                  "$ref": "#/definitions/replaceCommunity"
+                },
+                "declare": {
+                  "$ref": "#/definitions/declare"
+                },
+                "separate": {
+                  "$ref": "#/definitions/separate"
+                },
+                "buy": {
+                  "$ref": "#/definitions/buy"
+                },
+                "showdown": {
+                  "$ref": "#/definitions/showdown"
+                },
+                "roll_die": {
+                  "$ref": "#/definitions/roll_die"
+                }
               },
               "additionalProperties": false
             }
           },
-          "bet": { "$ref": "#/definitions/bet" },
-          "deal": { "$ref": "#/definitions/deal" },
-          "discard": { "$ref": "#/definitions/discard" },
-          "draw": { "$ref": "#/definitions/draw" },
-          "remove": { "$ref": "#/definitions/remove" },
-          "expose": { "$ref": "#/definitions/expose" },
-          "pass": { "$ref": "#/definitions/pass" },
-          "replaceCommunity": { "$ref": "#/definitions/replaceCommunity" },
-          "declare": { "$ref": "#/definitions/declare" },
-          "separate": { "$ref": "#/definitions/separate" },
-          "buy": { "$ref": "#/definitions/buy" },
-          "showdown": { "$ref": "#/definitions/showdown" },
-          "roll_die": { "$ref": "#/definitions/roll_die" },
-          "choose": { "$ref": "#/definitions/choose" }
+          "bet": {
+            "$ref": "#/definitions/bet"
+          },
+          "deal": {
+            "$ref": "#/definitions/deal"
+          },
+          "discard": {
+            "$ref": "#/definitions/discard"
+          },
+          "draw": {
+            "$ref": "#/definitions/draw"
+          },
+          "remove": {
+            "$ref": "#/definitions/remove"
+          },
+          "expose": {
+            "$ref": "#/definitions/expose"
+          },
+          "pass": {
+            "$ref": "#/definitions/pass"
+          },
+          "replaceCommunity": {
+            "$ref": "#/definitions/replaceCommunity"
+          },
+          "declare": {
+            "$ref": "#/definitions/declare"
+          },
+          "separate": {
+            "$ref": "#/definitions/separate"
+          },
+          "buy": {
+            "$ref": "#/definitions/buy"
+          },
+          "showdown": {
+            "$ref": "#/definitions/showdown"
+          },
+          "roll_die": {
+            "$ref": "#/definitions/roll_die"
+          },
+          "choose": {
+            "$ref": "#/definitions/choose"
+          }
         },
         "oneOf": [
-          { "required": ["name", "groupedActions"] },
-          { "required": ["name"], "properties": { "groupedActions": { "not": {} } } }
+          {
+            "required": [
+              "name",
+              "groupedActions"
+            ]
+          },
+          {
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "groupedActions": {
+                "not": {}
+              }
+            }
+          }
         ],
         "additionalProperties": false
       }
@@ -1402,7 +2051,14 @@
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["none", "linear", "multi-row", "branching", "grid", "criss-cross"],
+          "enum": [
+            "none",
+            "linear",
+            "multi-row",
+            "branching",
+            "grid",
+            "criss-cross"
+          ],
           "description": "Layout type for rendering community cards"
         },
         "rows": {
@@ -1410,14 +2066,21 @@
           "items": {
             "type": "object",
             "properties": {
-              "label": { "type": "string", "description": "Display label for this row" },
+              "label": {
+                "type": "string",
+                "description": "Display label for this row"
+              },
               "subsets": {
                 "type": "array",
-                "items": { "type": "string" },
+                "items": {
+                  "type": "string"
+                },
                 "description": "Community card subset names in this row"
               }
             },
-            "required": ["subsets"]
+            "required": [
+              "subsets"
+            ]
           },
           "description": "Row definitions for multi-row, grid, and branching layouts"
         },
@@ -1434,7 +2097,9 @@
           "description": "2D array of cell definitions for grid layout. Each cell is either a string (subset name) or an array of strings (subset intersection)."
         }
       },
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": false,
       "description": "Layout configuration for community card display. If omitted, layout is auto-inferred from gameplay steps."
     },
@@ -1464,13 +2129,20 @@
           "items": {
             "type": "object",
             "properties": {
-              "condition": {"$ref": "#/definitions/conditionalBestHandCondition"},
+              "condition": {
+                "$ref": "#/definitions/conditionalBestHandCondition"
+              },
               "bestHand": {
                 "type": "array",
-                "items": {"$ref": "#/definitions/bestHandItem"}
+                "items": {
+                  "$ref": "#/definitions/bestHandItem"
+                }
               }
             },
-            "required": ["condition", "bestHand"],
+            "required": [
+              "condition",
+              "bestHand"
+            ],
             "additionalProperties": false
           },
           "description": "Conditional best hand configurations based on game state"
@@ -1484,12 +2156,21 @@
         },
         "classification_priority": {
           "type": "array",
-          "items": { "type": "string", "enum": ["face", "butt"] },
+          "items": {
+            "type": "string",
+            "enum": [
+              "face",
+              "butt"
+            ]
+          },
           "description": "Order of precedence for classified hands (e.g., ['face', 'butt'])"
         },
         "declaration_mode": {
           "type": "string",
-          "enum": ["cards_speak", "declare"],
+          "enum": [
+            "cards_speak",
+            "declare"
+          ],
           "default": "cards_speak",
           "description": "Whether showdown uses declarations or cards speak"
         },
@@ -1498,7 +2179,9 @@
           "properties": {
             "condition": {
               "type": "string",
-              "enum": ["no_qualifier_met"],
+              "enum": [
+                "no_qualifier_met"
+              ],
               "description": "Condition under which the global default action is applied"
             },
             "action": {
@@ -1506,7 +2189,10 @@
               "description": "Action to take when the condition is met"
             }
           },
-          "required": ["condition", "action"],
+          "required": [
+            "condition",
+            "action"
+          ],
           "additionalProperties": false,
           "description": "Global default action applied when no hand configurations have winners"
         },
@@ -1517,12 +2203,16 @@
             "properties": {
               "condition": {
                 "type": "string",
-                "enum": ["no_qualifier_met"],
+                "enum": [
+                  "no_qualifier_met"
+                ],
                 "description": "Condition under which this default action is applied"
               },
               "appliesTo": {
                 "type": "array",
-                "items": { "type": "string" },
+                "items": {
+                  "type": "string"
+                },
                 "description": "Names of bestHand configurations this action applies to"
               },
               "action": {
@@ -1530,20 +2220,43 @@
                 "description": "Action to take when the condition is met for the specified configurations"
               }
             },
-            "required": ["condition", "appliesTo", "action"],
+            "required": [
+              "condition",
+              "appliesTo",
+              "action"
+            ],
             "additionalProperties": false
           },
           "description": "List of per-configuration default actions applied when specific qualifiers are not met"
         }
       },
-      "required": ["order", "startingFrom", "cardsRequired"],
+      "required": [
+        "order",
+        "startingFrom",
+        "cardsRequired"
+      ],
       "anyOf": [
-        { "required": ["bestHand"] },
-        { "required": ["conditionalBestHands"] }
+        {
+          "required": [
+            "bestHand"
+          ]
+        },
+        {
+          "required": [
+            "conditionalBestHands"
+          ]
+        }
       ],
       "additionalProperties": false
     }
   },
-  "required": ["game", "players", "deck", "bettingStructures", "gamePlay", "showdown"],
+  "required": [
+    "game",
+    "players",
+    "deck",
+    "bettingStructures",
+    "gamePlay",
+    "showdown"
+  ],
   "additionalProperties": false
 }

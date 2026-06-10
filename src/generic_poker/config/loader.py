@@ -62,6 +62,7 @@ class ForcedBets:
     style: str | None = None
     rule: str | None = None
     bringInEval: str | None = None
+    openPairDoubleBet: bool = False  # Stud 4th-street open pair allows big bet (Robert's 8.7)
     conditionalOrders: list[dict[str, Any]] | None = None
     default: dict[str, Any] | None = None
 
@@ -216,7 +217,10 @@ class GameRules:
                 style = "blinds"
 
             forced_bets = ForcedBets(
-                style=style, rule=forced_bets_data.get("rule"), bringInEval=forced_bets_data.get("bringInEval")
+                style=style,
+                rule=forced_bets_data.get("rule"),
+                bringInEval=forced_bets_data.get("bringInEval"),
+                openPairDoubleBet=forced_bets_data.get("openPairDoubleBet", False),
             )
 
             # Validate rule is provided for bring-in style

@@ -71,7 +71,7 @@ class SimpleBot:
                     action_weights[action_tuple] = 70
                 elif action_type == PlayerAction.CALL:
                     action_weights[action_tuple] = 60
-                elif action_type in [PlayerAction.BET, PlayerAction.RAISE]:
+                elif action_type in [PlayerAction.BET, PlayerAction.RAISE, PlayerAction.COMPLETE]:
                     action_weights[action_tuple] = 20
                 else:
                     action_weights[action_tuple] = 5
@@ -87,7 +87,7 @@ class SimpleBot:
 
             # Determine amount for betting actions
             amount = None
-            if action_type in [PlayerAction.BET, PlayerAction.RAISE, PlayerAction.CALL]:
+            if action_type in [PlayerAction.BET, PlayerAction.RAISE, PlayerAction.CALL, PlayerAction.COMPLETE]:
                 if min_amount is not None:
                     if max_amount is not None and max_amount > min_amount:
                         # Choose a random amount between min and max, favoring smaller amounts

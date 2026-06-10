@@ -61,6 +61,33 @@ class BettingManager(ABC):
         self.small_bet: int = 0
         self.bring_in_posted = False  # Track if bring-in has been posted
         self.last_actor_id: str | None = None  # Track last player to act
+        # Limit raise cap (Robert's Rules, Betting & Raising rule 4): a bet and
+        # max_raises raises when 3+ live players; unlimited heads-up. Set by Game.
+        self.raise_count: int = 0
+        self.cap_reached: bool = False
+        self.max_raises: int = 3
+        # Stud 4th-street open-pair double bet (Robert's Rules 8.7). Set by Game.
+        self.open_pair_double_rule: bool = False
+        self.big_increment_engaged: bool = False  # a big-size raise was made on 4th street
+
+    def _live_player_count(self) -> int:
+        """Active players who still have chips (not all-in)."""
+        return sum(1 for p in self.table.players.values() if p.is_active and p.stack > 0)
+
+    def _counts_as_completion(self, amount: int) -> bool:
+        """True if this wager merely completes a bring-in to a full bet (not a raise)."""
+        return False
+
+    def is_raise_capped(self) -> bool:
+        """Whether further raises are barred by the limit raise cap.
+
+        Robert's Rules B&R 4-5: with 3+ live players, a bet and max_raises
+        raises; heads-up raising is unlimited, but a cap already reached is
+        not lifted by a fold that leaves two players.
+        """
+        if self.raise_count < self.max_raises:
+            return False
+        return self.cap_reached or self._live_player_count() >= 3
 
     def get_main_pot_amount(self) -> int:
         """Get the amount in the current round's main pot."""
@@ -298,6 +325,14 @@ class BettingManager(ABC):
             if amount > self.current_bet:
                 raise_size = amount - self.current_bet
                 self.last_raise_size = max(self.last_raise_size, raise_size)
+                if not is_forced and self.current_bet > 0 and not self._counts_as_completion(amount):
+                    # A voluntary increase over an existing wager is a raise
+                    self.raise_count += 1
+                    if self.raise_count >= self.max_raises and self._live_player_count() >= 3:
+                        # Cap locks in with 3+ players and survives later folds
+                        self.cap_reached = True
+                if not is_forced and getattr(self, "big_bet", 0) and raise_size >= self.big_bet:
+                    self.big_increment_engaged = True
 
             # Update player bet tracking
             existing_bet = self.current_bets.get(player_id, PlayerBet())
@@ -421,6 +456,9 @@ class BettingManager(ABC):
             self.betting_round += 1
             self.pot.end_betting_round()  # Start new Pot round
             self.bring_in_posted = False  # Reset at the start of each betting round
+            self.raise_count = 0
+            self.cap_reached = False
+            self.big_increment_engaged = False
         self.current_bet = current
 
     def new_hand(self) -> None:
@@ -430,6 +468,9 @@ class BettingManager(ABC):
         self.betting_round = 0
         self.bring_in_posted = False
         self.last_raise_size = 0  # Reset last raise size for new hand
+        self.raise_count = 0
+        self.cap_reached = False
+        self.big_increment_engaged = False
         self.pot.new_hand()  # Reset pot for new hand
 
 
@@ -460,6 +501,27 @@ class LimitBettingManager(BettingManager):
             return self.bring_in  # Assuming bring_in is passed to BettingManager somehow
         return self.current_bet  # Antes don’t affect this
 
+    def _counts_as_completion(self, amount: int) -> bool:
+        """Completing an uncompleted bring-in to the full small bet is not a raise
+        (Robert's Rules 8.6)."""
+        return self.bring_in_posted and self.current_bet < self.small_bet and amount <= self.small_bet
+
+    def open_pair_double_now(self) -> bool:
+        """True when the stud 4th-street open-pair double-bet option applies
+        (Robert's Rules 8.7): rule enabled, on the second betting round, and an
+        active player shows a pair among their upcards."""
+        if not self.open_pair_double_rule or self.betting_round != 1:
+            return False
+        from generic_poker.core.card import Visibility
+
+        for player in self.table.players.values():
+            if not player.is_active:
+                continue
+            up_ranks = [c.rank for c in player.hand.get_cards() if c.visibility == Visibility.FACE_UP]
+            if len(up_ranks) != len(set(up_ranks)):
+                return True
+        return False
+
     def get_min_raise(self, player_id: str) -> int:
         """
         Get minimum amount for a raise.
@@ -475,6 +537,9 @@ class LimitBettingManager(BettingManager):
 
         # Raise amount is fixed in limit games
         bet_size = self.small_bet if self.betting_round < 2 else self.big_bet
+        if self.betting_round == 1 and self.big_increment_engaged:
+            # Open-pair double bet engaged: all further raises use the big bet
+            bet_size = self.big_bet
         return self.current_bet + bet_size
 
     def get_max_bet(self, player_id: str, bet_type: BetType, stack: int) -> int:
@@ -527,6 +592,10 @@ class LimitBettingManager(BettingManager):
         # Stud post-bring-in completion
         if bet_type == BetType.SMALL and amount == self.small_bet and self.betting_round <= 2:
             return amount <= player_stack
+
+        # Stud 4th-street open pair: the big bet is also a legal size
+        if self.open_pair_double_now() and amount in (self.big_bet, self.current_bet + self.big_bet):
+            return amount - current_bet <= player_stack
 
         # Standard limit betting
         if all(bet.posted_blind for bet in self.current_bets.values()):

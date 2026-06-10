@@ -156,11 +156,13 @@ class PlayerActionHandler:
         valid_actions = []
 
         if bet_config.get("type") == "bring-in" and not self.game.betting.bring_in_posted:
+            # Robert's Rules 8.3: the bring-in player may open for the forced
+            # amount or complete to a full (small) bet.
             valid_actions.append((PlayerAction.BRING_IN, self.game.bring_in, self.game.bring_in))
             if player.stack >= self.game.small_bet:
-                valid_actions.append((PlayerAction.BET, self.game.small_bet, self.game.small_bet))
+                valid_actions.append((PlayerAction.COMPLETE, self.game.small_bet, self.game.small_bet))
             elif player.stack > self.game.bring_in:
-                valid_actions.append((PlayerAction.BET, player.stack, player.stack))
+                valid_actions.append((PlayerAction.COMPLETE, player.stack, player.stack))
             return valid_actions
 
         valid_actions.append((PlayerAction.FOLD, None, None))
@@ -183,67 +185,72 @@ class PlayerActionHandler:
             is_stud = self.game.rules.forced_bets.style == "bring-in"
             step_type = bet_config.get("type", "small")
             bet_size = self.game.small_bet if step_type == "small" else self.game.big_bet
+            is_limit = self.game.betting_structure == BettingStructure.LIMIT
 
-            active_players = [p for p in self.game.table.get_position_order() if p.is_active]
-            bring_in_idx = next(
-                (
-                    i
-                    for i, p in enumerate(active_players)
-                    if self.game.betting.current_bets.get(p.id, PlayerBet()).posted_blind
-                ),
-                -1,
-            )
-            acted_count = sum(1 for b in self.game.betting.current_bets.values() if b.has_acted or b.posted_blind)
-            is_first_after_bring_in = (
+            facing_uncompleted_bring_in = (
                 is_stud
                 and step_type == "small"
-                and bring_in_idx != -1
-                and active_players[(bring_in_idx + 1) % len(active_players)].id == player_id
-                and acted_count <= 1
+                and self.game.betting.bring_in_posted
+                and 0 < current_total < self.game.small_bet
             )
+            open_pair_double = is_limit and getattr(self.game.betting, "open_pair_double_now", lambda: False)()
 
-            if is_first_after_bring_in:
-                # if the previous player completed instead of bet, then allow a raise here
-                if current_total == self.game.bring_in:
-                    action = PlayerAction.BET
-                    min_amount = self.game.small_bet
+            # Each entry: (action, min_amount, max_amount)
+            increase_options: list[tuple[PlayerAction, int, int]] = []
+
+            if facing_uncompleted_bring_in:
+                # Robert's Rules 8.6: increasing the bring-in to a full bet is a
+                # completion, not a raise — available to every player facing it.
+                max_amount = (
+                    self.game.small_bet
+                    if is_limit
+                    else self.game.betting.get_max_bet(player_id, BetType.SMALL, player.stack)
+                )
+                increase_options.append((PlayerAction.COMPLETE, self.game.small_bet, max_amount))
+            elif current_total == 0:
+                if open_pair_double:
+                    # Robert's Rules 8.7: with an open pair on 4th street, the
+                    # opener may bet the small or the big limit.
+                    increase_options.append((PlayerAction.BET, self.game.small_bet, self.game.small_bet))
+                    increase_options.append((PlayerAction.BET, self.game.big_bet, self.game.big_bet))
+                else:
                     max_amount = (
-                        min_amount
-                        if self.game.betting_structure == BettingStructure.LIMIT
-                        else self.game.betting.get_max_bet(player_id, BetType.SMALL, player.stack)
+                        bet_size
+                        if is_limit
+                        else self.game.betting.get_max_bet(
+                            player_id, BetType.SMALL if step_type == "small" else BetType.BIG, player.stack
+                        )
+                    )
+                    increase_options.append((PlayerAction.BET, bet_size, max_amount))
+            else:
+                if is_limit and self.game.betting.is_raise_capped():
+                    # Robert's Rules B&R 4: a bet and max_raises raises with 3+
+                    # live players — call or fold only from here.
+                    return valid_actions
+                if open_pair_double and not self.game.betting.big_increment_engaged:
+                    # Both raise sizes available until a big-size raise is made
+                    increase_options.append(
+                        (PlayerAction.RAISE, current_total + self.game.small_bet, current_total + self.game.small_bet)
+                    )
+                    increase_options.append(
+                        (PlayerAction.RAISE, current_total + self.game.big_bet, current_total + self.game.big_bet)
                     )
                 else:
-                    action = PlayerAction.RAISE
                     min_amount = self.game.betting.get_min_raise(player_id)
                     max_amount = (
-                        min_amount
-                        if self.game.betting_structure == BettingStructure.LIMIT
-                        else self.game.betting.get_max_bet(player_id, BetType.SMALL, player.stack)
+                        min_amount if is_limit else self.game.betting.get_max_bet(player_id, BetType.BIG, player.stack)
                     )
-            elif current_total == 0:
-                action = PlayerAction.BET
-                min_amount = bet_size
-                max_amount = (
-                    min_amount
-                    if self.game.betting_structure == BettingStructure.LIMIT
-                    else self.game.betting.get_max_bet(
-                        player_id, BetType.SMALL if step_type == "small" else BetType.BIG, player.stack
-                    )
-                )
-            else:
-                action = PlayerAction.RAISE
-                min_amount = self.game.betting.get_min_raise(player_id)
-                max_amount = (
-                    min_amount
-                    if self.game.betting_structure == BettingStructure.LIMIT
-                    else self.game.betting.get_max_bet(player_id, BetType.BIG, player.stack)
-                )
+                    increase_options.append((PlayerAction.RAISE, min_amount, max_amount))
 
-            if player.stack >= min_amount:
-                valid_actions.append((action, min_amount, max_amount))
-            else:
-                all_in_amount = player.stack + current_bet
-                valid_actions.append((action, all_in_amount, all_in_amount))
+            appended_all_in = False
+            for action, min_amount, max_amount in increase_options:
+                if player.stack + current_bet >= min_amount:
+                    valid_actions.append((action, min_amount, max_amount))
+                elif not appended_all_in:
+                    # Can't afford the smallest option: offer the all-in instead
+                    all_in_amount = player.stack + current_bet
+                    valid_actions.append((action, all_in_amount, all_in_amount))
+                    appended_all_in = True
 
         return valid_actions
 
@@ -819,17 +826,16 @@ class PlayerActionHandler:
                 result.advance_step = True
             return result
 
-        # this will also handle a complete action - which is a BET in a bring-in game phase
-        elif action == PlayerAction.BET or action == PlayerAction.RAISE:
-            valid_bet = next((a for a in valid_actions if a[0] == action), None)
-            if not valid_bet:
+        # COMPLETE (stud bring-in completion) is wagered exactly like a bet
+        elif action in (PlayerAction.BET, PlayerAction.RAISE, PlayerAction.COMPLETE):
+            matching = [a for a in valid_actions if a[0] == action]
+            if not matching:
                 logger.debug(f"No valid {action.value} action available for {player.name}")
                 return ActionResult(success=False, error=f"Invalid {action.value} - no valid action available")
 
-            if amount not in range(valid_bet[1], valid_bet[2] + 1):
-                logger.debug(
-                    f"Invalid {action.value} for {player.name}: ${amount}, expected range ${valid_bet[1]}-${valid_bet[2]}"
-                )
+            if not any(a[1] <= amount <= a[2] for a in matching):
+                ranges = ", ".join(f"${a[1]}-${a[2]}" for a in matching)
+                logger.debug(f"Invalid {action.value} for {player.name}: ${amount}, expected {ranges}")
                 return ActionResult(success=False, error=f"Invalid {action.value} amount: ${amount}")
 
             current_bet = self.game.betting.current_bets.get(player_id, PlayerBet()).amount
