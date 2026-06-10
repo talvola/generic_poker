@@ -15,15 +15,26 @@ class PokerShowdown {
     resetForNewHand() {
         this.winningCards = null;
         this.showdownHoleCards = null;
-        // Remove showdown from action bar
-        const actionBar = document.getElementById('action-bar');
-        if (actionBar) {
-            actionBar.classList.remove('showdown-active');
-        }
+        this.hideShowdownBar();
         // Hide the legacy table overlay if visible
         const container = document.getElementById('showdown-results-container');
         if (container) {
             container.style.display = 'none';
+        }
+    }
+
+    hideShowdownBar() {
+        const actionBar = document.getElementById('action-bar');
+        if (actionBar) {
+            actionBar.classList.remove('showdown-active');
+        }
+        const showdownPanel = document.getElementById('showdown-panel');
+        if (showdownPanel) {
+            showdownPanel.style.display = 'none';
+        }
+        const actionPanel = document.getElementById('action-panel');
+        if (actionPanel) {
+            actionPanel.style.display = '';
         }
     }
 
@@ -109,7 +120,8 @@ class PokerShowdown {
         if (handResults.pots) {
             handResults.pots.forEach((pot, index) => {
                 const potType = pot.pot_type === 'main' ? 'Main pot' : `Side pot-${pot.side_pot_index + 1}`;
-                const handTypeLabel = pot.hand_type && pot.hand_type !== 'Hand' && pot.hand_type !== 'Best Hand'
+                const genericLabels = ['Hand', 'Best Hand', 'Unspecified'];
+                const handTypeLabel = pot.hand_type && !genericLabels.includes(pot.hand_type)
                     ? ` [${pot.hand_type}]`
                     : '';
                 const winnerNames = pot.winners.map(winnerId => this._getPlayerName(winnerId));
@@ -165,26 +177,41 @@ class PokerShowdown {
     _showShowdownInActionBar(handResults) {
         const actionBar = document.getElementById('action-bar');
         const actionPanel = document.getElementById('action-panel');
+        const showdownPanel = document.getElementById('showdown-panel');
 
-        if (!actionBar || !actionPanel) {
+        if (!actionBar || !showdownPanel) {
             console.error('Action bar not found for showdown display');
             return;
         }
 
-        actionPanel.innerHTML = this._createActionBarShowdownContent(handResults);
+        // Render into the dedicated panel — never replace the action panel's
+        // contents, or the action buttons are destroyed for the next hand.
+        showdownPanel.innerHTML = this._createActionBarShowdownContent(handResults);
+        showdownPanel.style.display = '';
+        if (actionPanel) {
+            actionPanel.style.display = 'none';
+        }
         actionBar.classList.add('showdown-active');
 
-        // Auto-dismiss after 10s in production; stay visible in dev for QA
-        if (window.pokerConfig?.actionTimeoutEnabled !== false) {
-            setTimeout(() => {
-                actionBar.classList.remove('showdown-active');
-            }, 10000);
+        // The ready overlay may have appeared already (socket event race) —
+        // hide it while the showdown strip is up. The periodic game-state
+        // refresh re-shows it once the strip is dismissed.
+        const readyPanel = document.getElementById('ready-panel');
+        if (readyPanel) {
+            readyPanel.classList.add('hidden');
         }
 
-        const closeBtn = actionPanel.querySelector('.showdown-close-btn');
+        // Always auto-dismiss — the ready panel waits for the showdown strip,
+        // so it must never stay up indefinitely
+        clearTimeout(this._dismissTimer);
+        this._dismissTimer = setTimeout(() => {
+            this.hideShowdownBar();
+        }, 10000);
+
+        const closeBtn = showdownPanel.querySelector('.showdown-close-btn');
         if (closeBtn) {
             closeBtn.addEventListener('click', () => {
-                actionBar.classList.remove('showdown-active');
+                this.hideShowdownBar();
             });
         }
     }
@@ -196,7 +223,8 @@ class PokerShowdown {
         if (handResults.winning_hands && handResults.winning_hands.length > 0) {
             handResults.winning_hands.forEach(winningHand => {
                 const playerName = this._getPlayerName(winningHand.player_id);
-                const handTypeLabel = winningHand.hand_type && winningHand.hand_type !== 'Hand' && winningHand.hand_type !== 'Best Hand'
+                const genericLabels = ['Hand', 'Best Hand', 'Unspecified'];
+                const handTypeLabel = winningHand.hand_type && !genericLabels.includes(winningHand.hand_type)
                     ? ` (${PokerModals.escapeHtml(winningHand.hand_type)})`
                     : '';
 
@@ -214,9 +242,10 @@ class PokerShowdown {
         if (handResults.pots && handResults.pots.length > 0) {
             html += '<div class="showdown-bar-pots">';
             handResults.pots.forEach(pot => {
-                const winnerNames = pot.winners.map(winnerId => this._getPlayerName(winnerId));
+                const winnerNames = pot.winners.map(winnerId => PokerModals.escapeHtml(this._getPlayerName(winnerId)));
                 const potType = pot.pot_type === 'main' ? 'Pot' : 'Side pot';
-                const handTypeLabel = pot.hand_type && pot.hand_type !== 'Hand' && pot.hand_type !== 'Best Hand'
+                const genericLabels = ['Hand', 'Best Hand', 'Unspecified'];
+                const handTypeLabel = pot.hand_type && !genericLabels.includes(pot.hand_type)
                     ? ` (${PokerModals.escapeHtml(pot.hand_type)})`
                     : '';
                 html += `<span class="showdown-bar-pot">${potType}${handTypeLabel}: $${pot.amount} \u2192 ${winnerNames.join(', ')}</span>`;

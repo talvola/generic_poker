@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Login - Generic Poker Platform</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+</head>
+<body class="auth-page">
+    <div class="auth-card">
+        <h1>&spades; Generic Poker Platform</h1>
+        <p class="auth-subtitle">Log in to play</p>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+                <div class="flash-message {{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endwith %}
+
+        <form method="post">
+            <label for="username">Username</label>
+            <input type="text" id="username" name="username" autocomplete="username"
+                   value="{{ username or '' }}" required autofocus>
+            <label for="password">Password</label>
+            <input type="password" id="password" name="password" autocomplete="current-password" required>
+            <button type="submit">Login</button>
+        </form>
+
+        <p class="auth-alt-link">Don't have an account? <a href="{{ url_for('auth.register_page') }}">Register here</a></p>
+    </div>
+</body>
+</html>

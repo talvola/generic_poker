@@ -1,0 +1,116 @@
+/* Shared styling for login / register pages — matches the lobby look */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body.auth-page {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.auth-card {
+    background: rgba(255, 255, 255, 0.97);
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+    padding: 2.5rem 2rem;
+    width: 100%;
+    max-width: 420px;
+}
+
+.auth-card h1 {
+    color: #2c5aa0;
+    font-size: 1.5rem;
+    text-align: center;
+    margin-bottom: 0.25rem;
+}
+
+.auth-card .auth-subtitle {
+    text-align: center;
+    color: #666;
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+}
+
+.auth-card .flash-message {
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+.auth-card .flash-message.error {
+    background: #fdecea;
+    color: #b71c1c;
+    border: 1px solid #f5c6cb;
+}
+
+.auth-card .flash-message.success {
+    background: #e8f5e9;
+    color: #1b5e20;
+    border: 1px solid #c8e6c9;
+}
+
+.auth-card .flash-message.info {
+    background: #e3f2fd;
+    color: #0d47a1;
+    border: 1px solid #bbdefb;
+}
+
+.auth-card label {
+    display: block;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #444;
+    margin: 0.75rem 0 0.25rem;
+}
+
+.auth-card input {
+    width: 100%;
+    padding: 0.75rem;
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+}
+
+.auth-card input:focus {
+    outline: none;
+    border-color: #2c5aa0;
+    box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.15);
+}
+
+.auth-card button {
+    width: 100%;
+    padding: 0.85rem;
+    margin-top: 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: white;
+    background: #2c5aa0;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.auth-card button:hover {
+    background: #1e3f73;
+}
+
+.auth-card .auth-alt-link {
+    text-align: center;
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+    color: #555;
+}
+
+.auth-card .auth-alt-link a {
+    color: #2c5aa0;
+    font-weight: 600;
+}

@@ -24,13 +24,22 @@ class PokerLobby {
         this.setupStakesConfiguration();
     }
 
+    requireLogin() {
+        if (window.isAuthenticated) return true;
+        this.showNotification('Please log in to play', 'info');
+        setTimeout(() => { window.location.href = '/auth/login'; }, 800);
+        return false;
+    }
+
     setupEventListeners() {
         // Action buttons
         document.getElementById('create-table-btn').addEventListener('click', () => {
+            if (!this.requireLogin()) return;
             this.showModal('create-table-modal');
         });
 
         document.getElementById('join-private-btn').addEventListener('click', () => {
+            if (!this.requireLogin()) return;
             this.showModal('join-private-modal');
         });
 
@@ -617,6 +626,7 @@ class PokerLobby {
     }
 
     joinTable(tableId) {
+        if (!this.requireLogin()) return;
         const table = this.tables.find(t => t.id === tableId);
         if (!table) {
             this.showNotification('Table not found', 'error');
@@ -706,7 +716,7 @@ class PokerLobby {
                                 <div class="table-info-compact">
                                     <div class="info-row">
                                         <span class="info-label">Game:</span>
-                                        <span class="info-value">${table.variant.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                                        <span class="info-value">${this.formatVariantName(table.variant)}</span>
                                     </div>
                                     <div class="info-row">
                                         <span class="info-label">Stakes:</span>
@@ -934,6 +944,7 @@ class PokerLobby {
     }
 
     spectateTable(tableId) {
+        if (!this.requireLogin()) return;
         this.socket.emit('spectate_table', { table_id: tableId });
     }
 
@@ -1128,7 +1139,7 @@ window.showVariantRules = function() {
     content.innerHTML = '<div style="text-align:center; padding: 20px;">Loading...</div>';
     if (window.lobby) window.lobby.showModal('game-rules-modal');
 
-    fetch(`/api/tables/variants/${variantId}/rules`)
+    fetch(`/table/variants/${variantId}/rules`)
         .then(r => r.json())
         .then(data => {
             if (!data.success) {

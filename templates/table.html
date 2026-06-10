@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Poker Table - {{ table.name }}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/table.css') }}?v={{ asset_version }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 </head>
@@ -164,6 +165,9 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Showdown results strip (shown in place of the action panel between hands) -->
+            <div class="showdown-panel" id="showdown-panel" style="display: none;"></div>
         </div>
 
     </div>

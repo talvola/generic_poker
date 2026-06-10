@@ -359,11 +359,25 @@ class PokerTable {
     showReadyPanel(show) {
         const readyPanel = document.getElementById('ready-panel');
         const actionPanel = document.getElementById('action-panel');
+        const actionBar = document.getElementById('action-bar');
 
         if (show) {
+            // Let the showdown moment play out before covering the table with
+            // the ready overlay (the showdown strip auto-dismisses after 10s)
+            if (actionBar && actionBar.classList.contains('showdown-active')) {
+                clearTimeout(this._readyPanelDelay);
+                this._readyPanelDelay = setTimeout(() => {
+                    const phase = this.store.gameState?.game_phase;
+                    if (!phase || phase === 'complete' || phase === 'waiting') {
+                        this.showReadyPanel(true);
+                    }
+                }, 1500);
+                return;
+            }
             readyPanel.classList.remove('hidden');
             actionPanel.style.display = 'none';
         } else {
+            clearTimeout(this._readyPanelDelay);
             readyPanel.classList.add('hidden');
             actionPanel.style.display = 'flex';
         }
@@ -943,6 +957,12 @@ class PokerTable {
     updateActionButtons() {
         const actionButtons = document.getElementById('action-buttons');
         const betControls = document.getElementById('bet-controls');
+        if (!actionButtons || !betControls) {
+            // Never let a missing container throw here — it would abort the
+            // rest of updateGameState and freeze the UI for the whole hand.
+            console.error('Action button containers missing; skipping action button update');
+            return;
+        }
 
         if (!this.store.isMyTurn || this.store.validActions.length === 0) {
             actionButtons.innerHTML = '<div class=\"waiting-message\">Waiting for your turn...</div>';
@@ -956,8 +976,17 @@ class PokerTable {
             a.type === 'draw' || a.type === 'discard' || a.type === 'pass' ||
             a.type === 'expose' || a.type === 'separate');
         if (drawAction) {
+            // Only reset selections when ENTERING the phase — this method runs
+            // on every state broadcast, and clearing each time wipes the
+            // player's in-progress card selections mid-turn.
+            const isNewDrawPhase = !this.drawAction || this.drawAction.type !== drawAction.type;
             this.drawAction = drawAction;
-            this.selectedDiscards.clear();
+            if (isNewDrawPhase) {
+                this.selectedDiscards.clear();
+                if (drawAction.type !== 'separate') {
+                    this.separateSelections = null;
+                }
+            }
             if (drawAction.type === 'separate') {
                 this._renderSeparateControls(actionButtons, drawAction);
             } else {
@@ -966,6 +995,7 @@ class PokerTable {
             betControls.style.display = 'none';
             // Re-render players to make cards selectable
             this.renderPlayers();
+            this._reapplySeparateCardClasses();
             this._setupCardSelectionHandlers();
             return;
         }
@@ -1066,30 +1096,43 @@ class PokerTable {
     }
 
     _setupCardSelectionHandlers() {
-        // Add click handlers to selectable cards
-        document.querySelectorAll('.card.selectable').forEach(cardEl => {
-            cardEl.addEventListener('click', (e) => {
-                const index = parseInt(cardEl.dataset.cardIndex);
-                if (isNaN(index)) return;
+        // One delegated listener, installed once. Seat re-renders (every state
+        // broadcast) replace the card elements, so listeners bound directly to
+        // cards die almost immediately on a live table.
+        if (this._cardSelectionDelegated) return;
+        this._cardSelectionDelegated = true;
 
-                if (this.selectedDiscards.has(index)) {
-                    this.selectedDiscards.delete(index);
-                    cardEl.classList.remove('selected');
-                } else {
-                    const maxCards = this.drawAction?.max_amount || 0;
-                    if (this.selectedDiscards.size < maxCards) {
-                        this.selectedDiscards.add(index);
-                        cardEl.classList.add('selected');
-                    }
-                }
+        document.addEventListener('click', (e) => {
+            const cardEl = e.target.closest('.card.selectable');
+            if (!cardEl || !this.drawAction) return;
+            const index = parseInt(cardEl.dataset.cardIndex);
+            if (isNaN(index)) return;
 
-                // Update the draw button
-                const actionButtons = document.getElementById('action-buttons');
-                if (this.drawAction) {
-                    this._renderDrawControls(actionButtons, this.drawAction);
-                }
-            });
+            if (this.separateSelections) {
+                this._handleSeparateCardClick(cardEl, index);
+            } else {
+                this._handleDiscardCardClick(cardEl, index);
+            }
         });
+    }
+
+    _handleDiscardCardClick(cardEl, index) {
+        if (this.selectedDiscards.has(index)) {
+            this.selectedDiscards.delete(index);
+            cardEl.classList.remove('selected');
+        } else {
+            const maxCards = this.drawAction?.max_amount || 0;
+            if (this.selectedDiscards.size < maxCards) {
+                this.selectedDiscards.add(index);
+                cardEl.classList.add('selected');
+            }
+        }
+
+        // Update the draw button
+        const actionButtons = document.getElementById('action-buttons');
+        if (this.drawAction) {
+            this._renderDrawControls(actionButtons, this.drawAction);
+        }
     }
 
     _submitDrawAction() {
@@ -1219,46 +1262,63 @@ class PokerTable {
     }
 
     _setupSeparateCardHandlers(subsets) {
+        // Card clicks are handled by the delegated listener installed in
+        // _setupCardSelectionHandlers; just remember the subset layout.
+        this._separateSubsets = subsets;
+        this._setupCardSelectionHandlers();
+    }
+
+    _reapplySeparateCardClasses() {
+        // Seat re-renders rebuild card elements; restore subset color classes
+        // from the persistent selection state.
+        if (!this.separateSelections) return;
         document.querySelectorAll('.card.selectable').forEach(cardEl => {
-            cardEl.addEventListener('click', () => {
-                const index = parseInt(cardEl.dataset.cardIndex);
-                if (isNaN(index)) return;
-
-                // Check if this card is already assigned to a subset
-                for (let i = 0; i < this.separateSelections.length; i++) {
-                    const pos = this.separateSelections[i].indexOf(index);
-                    if (pos !== -1) {
-                        // Remove from this subset
-                        this.separateSelections[i].splice(pos, 1);
-                        this.selectedDiscards.delete(index);
-                        cardEl.classList.remove('selected');
-                        for (let j = 0; j < subsets.length; j++) cardEl.classList.remove(`subset-${j}`);
-                        const actionButtons = document.getElementById('action-buttons');
-                        this._renderSeparateControls(actionButtons, this.drawAction);
-                        return;
-                    }
+            const index = parseInt(cardEl.dataset.cardIndex);
+            if (isNaN(index)) return;
+            this.separateSelections.forEach((indices, subsetIdx) => {
+                if (indices.includes(index)) {
+                    cardEl.classList.add('selected', `subset-${subsetIdx}`);
                 }
-
-                // Find current unfilled subset
-                let targetSubset = -1;
-                for (let i = 0; i < subsets.length; i++) {
-                    if (this.separateSelections[i].length < subsets[i].count) {
-                        targetSubset = i;
-                        break;
-                    }
-                }
-
-                if (targetSubset === -1) return; // All full
-
-                // Add to target subset
-                this.separateSelections[targetSubset].push(index);
-                this.selectedDiscards.add(index);
-                cardEl.classList.add('selected', `subset-${targetSubset}`);
-
-                const actionButtons = document.getElementById('action-buttons');
-                this._renderSeparateControls(actionButtons, this.drawAction);
             });
         });
+    }
+
+    _handleSeparateCardClick(cardEl, index) {
+        const subsets = this._separateSubsets || [];
+
+        // Check if this card is already assigned to a subset
+        for (let i = 0; i < this.separateSelections.length; i++) {
+            const pos = this.separateSelections[i].indexOf(index);
+            if (pos !== -1) {
+                // Remove from this subset
+                this.separateSelections[i].splice(pos, 1);
+                this.selectedDiscards.delete(index);
+                cardEl.classList.remove('selected');
+                for (let j = 0; j < subsets.length; j++) cardEl.classList.remove(`subset-${j}`);
+                const actionButtons = document.getElementById('action-buttons');
+                this._renderSeparateControls(actionButtons, this.drawAction);
+                return;
+            }
+        }
+
+        // Find current unfilled subset
+        let targetSubset = -1;
+        for (let i = 0; i < subsets.length; i++) {
+            if (this.separateSelections[i].length < subsets[i].count) {
+                targetSubset = i;
+                break;
+            }
+        }
+
+        if (targetSubset === -1) return; // All full
+
+        // Add to target subset
+        this.separateSelections[targetSubset].push(index);
+        this.selectedDiscards.add(index);
+        cardEl.classList.add('selected', `subset-${targetSubset}`);
+
+        const actionButtons = document.getElementById('action-buttons');
+        this._renderSeparateControls(actionButtons, this.drawAction);
     }
 
     _renderBuyControls(container, buyAction) {
@@ -1591,8 +1651,10 @@ class PokerTable {
 
     updateGameInfo() {
         document.getElementById('hand-number').textContent = this.store.handNumber;
+        const maxPlayers = this.store.gameState?.table_info?.max_players
+            || this.store.gameState?.max_players || '?';
         document.getElementById('player-count').textContent =
-            `${Object.keys(this.store.players).length}/${this.store.gameState?.max_players || 9}`;
+            `${Object.keys(this.store.players).length}/${maxPlayers}`;
 
         // Update mixed game variant display
         const mixedGame = this.store.gameState?.table_info?.mixed_game;

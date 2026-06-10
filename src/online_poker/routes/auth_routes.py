@@ -1,6 +1,6 @@
 """Authentication routes for the online poker platform."""
 
-from flask import Blueprint, current_app, flash, jsonify, redirect, request, url_for
+from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
 
 from ..extensions import limiter
@@ -15,6 +15,7 @@ auth_bp = Blueprint("auth", __name__)
 @limiter.limit(lambda: current_app.config["RATELIMIT_AUTH_LOGIN"], methods=["POST"])
 def login():
     """HTML login page and form handler."""
+    username = ""
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
@@ -34,41 +35,15 @@ def login():
         else:
             flash("Please enter both username and password", "error")
 
-    # Create a simple login template string
-    login_template = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Poker Platform - Login</title>
-        <style>
-            body { font-family: Arial, sans-serif; max-width: 400px; margin: 100px auto; padding: 20px; }
-            input, button { width: 100%; padding: 10px; margin: 10px 0; font-size: 16px; }
-            button { background: #007bff; color: white; border: none; cursor: pointer; }
-            button:hover { background: #0056b3; }
-            .error { color: red; margin: 10px 0; }
-            .register-link { text-align: center; margin-top: 20px; }
-        </style>
-    </head>
-    <body>
-        <h2>🎲 Poker Platform Login</h2>
-        <form method="post">
-            <input type="text" name="username" placeholder="Enter your username" required>
-            <input type="password" name="password" placeholder="Enter your password" required>
-            <button type="submit">Login</button>
-        </form>
-        <div class="register-link">
-            <p>Don't have an account? <a href="/auth/register">Register here</a></p>
-        </div>
-    </body>
-    </html>
-    """
-    return login_template
+    return render_template("auth/login.html", username=username)
 
 
 @auth_bp.route("/register", methods=["GET", "POST"])
 @limiter.limit(lambda: current_app.config["RATELIMIT_AUTH_REGISTER"], methods=["POST"])
 def register_page():
     """HTML registration page and form handler."""
+    username = ""
+    email = ""
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         email = request.form.get("email", "").strip()
@@ -90,38 +65,7 @@ def register_page():
             except Exception:
                 flash("Registration failed. Please try again.", "error")
 
-    # Create a simple register template string
-    register_template = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Poker Platform - Register</title>
-        <style>
-            body { font-family: Arial, sans-serif; max-width: 400px; margin: 100px auto; padding: 20px; }
-            input, button { width: 100%; padding: 10px; margin: 10px 0; font-size: 16px; }
-            button { background: #28a745; color: white; border: none; cursor: pointer; }
-            button:hover { background: #218838; }
-            .error { color: red; margin: 10px 0; }
-            .success { color: green; margin: 10px 0; }
-            .login-link { text-align: center; margin-top: 20px; }
-        </style>
-    </head>
-    <body>
-        <h2>🎲 Create Account</h2>
-        <form method="post">
-            <input type="text" name="username" placeholder="Choose a username" required>
-            <input type="email" name="email" placeholder="Enter your email" required>
-            <input type="password" name="password" placeholder="Choose a password" required>
-            <input type="password" name="confirm_password" placeholder="Confirm password" required>
-            <button type="submit">Create Account</button>
-        </form>
-        <div class="login-link">
-            <p>Already have an account? <a href="/auth/login">Login here</a></p>
-        </div>
-    </body>
-    </html>
-    """
-    return register_template
+    return render_template("auth/register.html", username=username, email=email)
 
 
 @auth_bp.route("/logout")

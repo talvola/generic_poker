@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Poker Lobby - Generic Poker Platform</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/lobby.css') }}?v={{ asset_version }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 </head>
@@ -279,6 +280,7 @@
     <!-- Notification Container -->
     <div id="notification-container" class="notification-container"></div>
 
+    <script>window.isAuthenticated = {{ 'true' if current_user.is_authenticated else 'false' }};</script>
     <script src="{{ url_for('static', filename='js/lobby.js') }}?v={{ asset_version }}"></script>
 </body>
 </html>

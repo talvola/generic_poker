@@ -15,8 +15,8 @@ table_bp = Blueprint("table", __name__, url_prefix="/api/tables")
 
 
 @table_bp.route("/variants", methods=["GET"])
-@login_required
 def get_variants():
+    # Public: powers browse-before-register in the lobby
     """Get all available poker variants.
 
     Returns:
@@ -33,8 +33,8 @@ def get_variants():
 
 
 @table_bp.route("/variants/<variant_id>/rules", methods=["GET"])
-@login_required
 def get_variant_rules(variant_id: str):
+    # Public: rules cards are not sensitive and help visitors browse games
     """Get game rules/description card for a variant.
 
     Args:
