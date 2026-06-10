@@ -30,6 +30,10 @@ pytest tests/unit/               # Unit tests only
 pytest tests/integration/        # Integration tests only
 pytest path/to/test.py::TestClass::test_method  # Specific test
 pytest -v -x --tb=short          # Verbose, stop on first failure
+npx playwright test --config tests/e2e/playwright.config.ts  # E2E (reset DB first: echo "yes" | python tools/reset_db.py)
+
+# Bot arena — offline A/B of bot types; chip-conservation checks here found 3 engine bugs
+python tools/bot_arena.py --variant omaha_8 --structure Limit --hands 200 --seed 42
 
 # Code Quality
 ruff check src/                  # Lint (errors block commits via pre-commit)
@@ -84,6 +88,7 @@ Flask/SocketIO multiplayer platform.
 | Service | Purpose |
 |---------|---------|
 | GameOrchestrator | Coordinates game lifecycle and service interactions |
+| MonteCarloBot | Default bot (`BOT_TYPE=mc`): MC equity for betting, SimpleBot fallback for draws/exotics |
 | GameStateManager | Generates serialized game state views for clients |
 | PlayerActionManager | Processes player actions, validates, advances game |
 | WebSocketManager | Real-time SocketIO communication |
@@ -101,6 +106,13 @@ Flask/SocketIO multiplayer platform.
 | `table.js` | Game UI: WebSocket events, card rendering, actions (2,462 lines - monolithic) |
 | `table.css` | Table styling, seat layouts, cards |
 | `lobby.js` | Lobby: browsing, filtering, creating tables |
+
+**Frontend invariants (table.js):** Seats/panels are rebuilt via innerHTML on EVERY state
+broadcast (~constantly on bot tables). Never bind listeners to card/seat elements — use
+delegated listeners on `document`. Never store selection state only in DOM classes — keep
+it on the PokerTable instance and re-apply after renders. Never replace `#action-panel`
+innerHTML — the showdown strip renders into the sibling `#showdown-panel`.
+Note: some JS/CSS files are CRLF; Python-scripted rewrites normalize to LF (noisy diffs).
 
 ## Game Configuration System
 
@@ -157,6 +169,13 @@ Poker variants are defined in `data/game_configs/*.json`. Example structure:
 
 ## Key Implementation Details
 
+### Import Paths (CRITICAL)
+- Inside `src/online_poker/`, ALWAYS use relative imports (`from ..database import db`)
+- NEVER `from online_poker.X import ...` — both `online_poker.*` and `src.online_poker.*`
+  are importable, so absolute imports load a SECOND module copy with its own SQLAlchemy
+  `db` not bound to Flask → DB writes fail silently ("Flask app is not registered with
+  this SQLAlchemy instance"). This caused lost cashouts and an empty transactions table.
+
 ### Hand Evaluation
 - Pre-computed rankings in `data/hand_rankings/*.csv.gz`
 - Cached on first load for O(1) evaluation
@@ -168,6 +187,12 @@ Poker variants are defined in `data/game_configs/*.json`. Example structure:
 - Side pots created automatically for all-in players
 - Hand ends immediately when only one player remains
 - **CRITICAL:** Don't call `_next_step()` after state is COMPLETE
+- **CRITICAL:** Online games run `auto_progress=False`, so showdown completion happens in
+  `_next_step()` AFTER `process_player_action` returns. Any "hand finished" side effect
+  (counters, DB sync, cleanup) must live in `PlayerActionManager._handle_hand_completion()`
+  — the single point hit by all completion paths (fold-win, human action, bot action).
+- Valid-action tuple amounts are TOTALS (player's total bet after the action), not deltas.
+  Incremental call cost = `game.betting.get_additional_required(player_id)`.
 
 ### State Management
 - Game states: WAITING, DEALING, BETTING, SHOWDOWN, COMPLETE
@@ -503,6 +528,8 @@ pip-audit                        # Check for dependency vulnerabilities
 | `docs/STATUS.md` | **Current project status**, open bugs, service quality, testing state |
 | `docs/BACKLOG.md` | **Prioritized task backlog** organized in phases |
 | `docs/GAME_VALIDATION.md` | **Game config feature matrix**, variant testing strategy, new game workflow |
+| `docs/UX_TEST_FINDINGS.md` | UX test report (2026-06) — open UI issues for testers |
+| `docs/MONTE_CARLO_BOT_DESIGN.md` | MC bot design, audit findings, phase plan |
 | `DEVELOPMENT.md` | Development workflow, debugging tips |
 | `data/schemas/README.md` | Complete JSON config schema documentation |
 | `src/generic_poker/*-readme.md` | Component-specific API documentation |
