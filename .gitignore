@@ -203,3 +203,7 @@ hand_rank_mapping.csv
 tools/generate_rankings/poker_hands/
 tools/generate_rankings/all_card_hands_ranked_one_card_low_*.csv
 data/hand_rankings/all_card_hands_ranked_ne_seven_card_high.csv.gz
+
+# SQLite WAL artifacts from hand-rankings cache
+*.db-shm
+*.db-wal

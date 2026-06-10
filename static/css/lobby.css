@@ -555,6 +555,20 @@ body {
     box-shadow: 0 0 0 3px rgba(44, 90, 160, 0.1);
 }
 
+.variant-search {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    margin-bottom: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 0.9rem;
+}
+
+.variant-search:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
 .checkbox-label {
     position: relative;  /* anchor for the visually-hidden native checkbox */
     display: flex !important;
@@ -1187,12 +1201,17 @@ ing seats styles */
     align-items: center;
     padding: 1rem;
     margin: 1rem 0;
+    min-width: 0;
+    flex: 1 1 auto;
 }
 
 .mini-poker-table-felt {
     position: relative;
-    width: 520px;
-    height: 300px;
+    /* Scale down inside narrow modals instead of overflowing (seats are
+       %-positioned so they track the felt size) */
+    width: 100%;
+    max-width: 520px;
+    aspect-ratio: 520 / 300;
     background: radial-gradient(circle at center, #0f5132 0%, #0a3d26 100%);
     border: 4px solid #8b4513;
     border-radius: 150px;
@@ -1841,7 +1860,7 @@ ing seats styles */
 /* Compact m
 odal for seat selection */
 .modal-compact {
-    max-width: 700px;
+    max-width: 820px;
     width: 90%;
 }
 

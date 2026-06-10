@@ -1356,6 +1356,9 @@ body {
     left: 10px;
     z-index: 40;
     width: 280px;
+    /* Translucent unless in use so the left seat stays visible behind it */
+    opacity: 0.82;
+    transition: opacity 0.15s ease;
     display: flex;
     flex-direction: column;
     background: rgba(0, 0, 0, 0.85);
@@ -1400,11 +1403,16 @@ body {
 .chat-widget-body {
     display: flex;
     flex-direction: column;
-    height: 250px;
+    height: 190px;
 }
 
 .chat-widget.collapsed .chat-widget-body {
     display: none;
+}
+
+.chat-widget:hover,
+.chat-widget:focus-within {
+    opacity: 1;
 }
 
 .chat-widget .chat-messages {

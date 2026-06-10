@@ -6,10 +6,12 @@ register → lobby → read rules → create tables → buy in → play hands wi
 Variants exercised: Texas Hold'em (NL), 5-Card Draw (NL, draw UI), 7-Card Stud (Limit,
 bring-in), Omaha 8 (Limit, hi-lo split). Screenshots in `docs/ux-testing/`.
 
-> **Fix status (2026-06-09, same day):** C1, C2, C3, H1, H2, H3, H4, M1, M3, P1, P2, P3,
-> P4, P9 are FIXED and verified in-browser (2-hand cycle, money audit vs sqlite, login error
-> display, guest gating). Still open: M2 (stud bring-in rules — needs engine review), M4
-> (iPad portrait — Phase 7.4), M5 (card sizes), M6 (seat modal crowding), P5-P8, P10.
+> **Fix status:** C1, C2, C3, H1, H2, H3, H4, M1, M3, P1, P2, P3, P4, P9 fixed 2026-06-09.
+> M2, M6, P5, P6, P7, P8, P10 fixed 2026-06-10 — M2 became a full stud betting-rules
+> correction verified against Robert's Rules of Poker v11 (see STATUS.md): completion
+> instead of raise vs the bring-in, limit raise cap (bet + 3 raises, unlimited heads-up),
+> and the 4th-street open-pair double bet for stud high. Still open: M4 (iPad portrait,
+> Phase 7.4) and M5 (card sizes in 5+ card games).
 
 Note: diagonal "X" marks visible across gray boxes in some screenshots are an artifact of the
 headless renderer (1px border + border-radius miter bug in the software rasterizer), NOT a site

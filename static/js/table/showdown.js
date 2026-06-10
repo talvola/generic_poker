@@ -48,8 +48,6 @@ class PokerShowdown {
     }
 
     displayShowdownResults(handResults, onRender) {
-        console.log('DEBUG: displayShowdownResults called');
-        console.log('DEBUG: handResults parameter:', handResults);
 
         try {
             if (handResults.winning_hands && handResults.winning_hands.length > 0) {
@@ -66,18 +64,14 @@ class PokerShowdown {
                     communityCards: communityCardsUsed,
                     allCards: winningHandCards
                 };
-                console.log('DEBUG: Winning cards set:', this.winningCards);
 
                 if (onRender) onRender();
             }
 
-            console.log('DEBUG: Calling displayShowdownInChat');
             this._displayShowdownInChat(handResults);
 
-            console.log('DEBUG: Calling showShowdownInActionBar');
             this._showShowdownInActionBar(handResults);
 
-            console.log('DEBUG: Showdown display completed successfully');
         } catch (error) {
             console.error('DEBUG: Error in displayShowdownResults:', error);
         }

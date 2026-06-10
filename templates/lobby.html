@@ -131,6 +131,8 @@
                         <label for="game-variant">Game Variant:
                             <a href="#" id="view-rules-link" style="font-weight: normal; font-size: 0.85em; margin-left: 8px; display: none;" onclick="showVariantRules(); return false;">View Rules</a>
                         </label>
+                        <input type="text" id="variant-search" class="variant-search"
+                               placeholder="Search 300+ games..." autocomplete="off">
                         <select id="game-variant" name="variant" required>
                             <option value="">Select a variant</option>
                             <!-- Populated dynamically from API -->

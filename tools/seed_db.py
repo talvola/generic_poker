@@ -120,7 +120,7 @@ def seed_database():
                 "is_private": False,
                 "allow_bots": True,
                 "creator": users[0],  # testuser
-                "players": 2,  # Simulate 2 players joined
+                "players": 0,
             },
             {
                 "name": "Texas Hold'em - Micro Stakes",

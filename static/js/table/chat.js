@@ -29,7 +29,6 @@ class PokerChat {
     }
 
     displayChatMessage(data) {
-        console.log('DEBUG: Displaying chat message:', data);
         const messagesContainer = document.getElementById('chat-messages');
         const messageElement = document.createElement('div');
 

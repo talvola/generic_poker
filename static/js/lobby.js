@@ -47,6 +47,14 @@ class PokerLobby {
             this.loadTables();
         });
 
+        // Live search for the 300+ game variant list in the create form
+        const variantSearch = document.getElementById('variant-search');
+        if (variantSearch) {
+            variantSearch.addEventListener('input', () => {
+                this.populateVariantDropdowns(variantSearch.value);
+            });
+        }
+
         // Filter changes
         document.getElementById('variant-filter').addEventListener('change', (e) => {
             this.filters.variant = e.target.value;
@@ -186,11 +194,13 @@ class PokerLobby {
         }
     }
 
-    populateVariantDropdowns() {
+    populateVariantDropdowns(searchTerm = '') {
         // Group variants by category
         const categoryOrder = ['Mixed', "Hold'em", 'Omaha', 'Stud', 'Draw', 'Pineapple', 'Dramaha', 'Straight', 'Other'];
+        const term = searchTerm.trim().toLowerCase();
         const grouped = {};
         for (const v of this.variants) {
+            if (term && !v.display_name.toLowerCase().includes(term)) continue;
             const cat = v.category || 'Other';
             if (!grouped[cat]) grouped[cat] = [];
             grouped[cat].push(v);
@@ -198,17 +208,32 @@ class PokerLobby {
 
         // Build optgroup HTML for the create-table dropdown
         const createSelect = document.getElementById('game-variant');
-        let createHtml = '<option value="">Select a variant</option>';
+        const previous = createSelect.value;
+        let matchCount = 0;
+        let createHtml = `<option value="">${term ? 'Matching games' : 'Select a variant'}</option>`;
         for (const cat of categoryOrder) {
             const games = grouped[cat];
             if (!games || games.length === 0) continue;
             createHtml += `<optgroup label="${cat}">`;
             for (const g of games) {
                 createHtml += `<option value="${g.name}">${g.display_name}</option>`;
+                matchCount++;
             }
             createHtml += '</optgroup>';
         }
+        if (term && matchCount === 0) {
+            createHtml = '<option value="">No games match</option>';
+        }
         createSelect.innerHTML = createHtml;
+        // Keep the selection if it survived the filter; auto-pick a single match
+        if ([...createSelect.options].some(o => o.value === previous)) {
+            createSelect.value = previous;
+        } else if (term && matchCount === 1) {
+            createSelect.selectedIndex = 1;
+            createSelect.dispatchEvent(new Event('change'));
+        }
+
+        if (term) return; // the table filter dropdown always shows everything
 
         // Build flat list for filter dropdown (just unique variants seen in tables)
         const filterSelect = document.getElementById('variant-filter');

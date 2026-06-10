@@ -103,6 +103,22 @@ Flask/SocketIO multiplayer web platform.
 | ~~11~~ | ~~Duplicate tables in Render DB~~ | ~~LOW~~ | ~~Fixed: seed_db.py now idempotent for tables and removes accumulated duplicates on next deploy~~ |
 | ~~12~~ | ~~Table creation doesn't auto-join creator~~ | ~~MEDIUM~~ | ~~Fixed: seat selection modal auto-opens after creation~~ |
 
+### Stud Betting Rules Correction (2026-06-10)
+
+Verified the stud betting engine against **Robert's Rules of Poker v11** (the card-room
+standard; Section 8 + Betting & Raising rules 4-5) rather than trusting any single rules
+website. Three substantive corrections, all with regression tests
+(`tests/game/test_stud_betting_rules.py`):
+
+| Rule | Was | Now |
+|------|-----|-----|
+| Completion (8.6) | Only the first player after the bring-in could complete; everyone else was offered an illegal "Raise" to bring-in + small bet ($13/$15) — and the special case often failed even for the first player in 4+ handed games | Every player facing an uncompleted bring-in gets Fold / Call / **Complete to the small bet** (new COMPLETE action end-to-end: engine → API → "Complete $10" button) |
+| Raise cap (B&R 4-5) | No cap — unlimited raising in limit games | A bet + 3 raises with 3+ live players (bet + 4 for two-round draw games); unlimited heads-up; a reached cap survives folds |
+| 4th-street open pair (8.7) | Not implemented | With an open pair showing, any player may bet the small or big limit; once a big-size raise is made all raises are big. Config-gated (`forcedBets.openPairDoubleBet`), enabled for 7-Card Stud high; razz/stud8 correctly excluded (Sections 9/10) |
+
+8 existing test files had assertions encoding the old behavior (BET where the rules say
+COMPLETE) — updated with rule citations. Bring-in player's full-bet open is also COMPLETE now.
+
 ### UX Test Findings (2026-06-09, critical + high fixed)
 
 A full new-player browser test session (iPad viewport, bots, 4 game families) is documented in

@@ -192,7 +192,6 @@ class PokerTable {
         });
 
         this.socket.on('chat_message', (data) => {
-            console.log('DEBUG: Received chat message:', data);
             this.chat.displayChatMessage(data);
         });
 
@@ -205,7 +204,6 @@ class PokerTable {
         });
 
         this.socket.on('table_joined', (data) => {
-            console.log('DEBUG: Successfully joined table room:', data);
             PokerModals.hideLoadingOverlay();
         });
 
@@ -226,12 +224,10 @@ class PokerTable {
 
         // Ready status events
         this.socket.on('ready_status_update', (data) => {
-            console.log('DEBUG: Received ready status update:', data);
             this.updateReadyStatus(data.ready_status);
         });
 
         this.socket.on('hand_starting', (data) => {
-            console.log('DEBUG: Hand starting:', data);
             // Hide ready panel, show action panel
             this.showReadyPanel(false);
             // Reset tracking for new hand
@@ -244,12 +240,10 @@ class PokerTable {
         });
 
         this.socket.on('game_state_update', (data) => {
-            console.log('DEBUG: Game state update received:', data);
             this.updateGameState(data);
         });
 
         this.socket.on('variant_changed', (data) => {
-            console.log('DEBUG: Variant changed:', data);
             const mixed = data.mixed_game;
             if (mixed) {
                 PokerModals.showNotification(
@@ -298,7 +292,6 @@ class PokerTable {
     }
 
     updateReadyStatus(readyStatus) {
-        console.log('DEBUG: Updating ready status:', readyStatus);
 
         const readyPanel = document.getElementById('ready-panel');
         const actionPanel = document.getElementById('action-panel');
@@ -398,15 +391,9 @@ class PokerTable {
     }
 
     updateGameState(data) {
-        console.log('DEBUG: updateGameState called with data:', data);
-        console.log('DEBUG: Game phase value:', data.game_phase);
-        console.log('DEBUG: Has hand_results:', !!data.hand_results);
 
         this.store.update(data);
 
-        console.log('DEBUG: currentUser:', this.store.currentUser);
-        console.log('DEBUG: current_player:', data.current_player);
-        console.log('DEBUG: isMyTurn:', this.store.isMyTurn);
 
         // Show/hide ready panel based on game phase
         // If no game phase or game is complete/waiting, show ready panel
@@ -457,14 +444,12 @@ class PokerTable {
 
     async fetchAndDisplayHandResults() {
         try {
-            console.log('DEBUG: Fetching hand results for table:', this.store.tableId);
             const response = await fetch(`/game/sessions/${this.store.tableId}/hand-result`);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             const result = await response.json();
 
-            console.log('DEBUG: Hand result response:', result);
 
             if (result.success && result.hand_result) {
                 // Display the showdown results
@@ -473,7 +458,6 @@ class PokerTable {
                         this.renderCommunityCards(this.store.gameState?.community_cards);
                     });
             } else {
-                console.log('DEBUG: No hand results available:', result.error);
             }
         } catch (error) {
             console.error('Failed to fetch hand results:', error);
@@ -1485,7 +1469,6 @@ class PokerTable {
             actionData.amount = action.min_amount || action.default_amount || action.amount;
         }
 
-        console.log('DEBUG: Sending action:', actionData, 'from action:', action);
 
         // Send action via HTTP API instead of WebSocket for better reliability
         this.sendPlayerAction(actionData);
@@ -1549,14 +1532,12 @@ class PokerTable {
 
     async loadAvailableActions() {
         try {
-            console.log('DEBUG: Loading available actions for table:', this.store.tableId);
             const response = await fetch(`/game/sessions/${this.store.tableId}/actions`);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             const result = await response.json();
 
-            console.log('DEBUG: Actions response:', result);
 
             if (result.success) {
                 // Normalize: server sends action_type, frontend also uses type
@@ -1565,7 +1546,6 @@ class PokerTable {
                     type: a.action_type || a.type,
                     action_type: a.action_type || a.type
                 }));
-                console.log('DEBUG: Set validActions to:', this.store.validActions);
                 this.updateActionButtons();
             }
         } catch (error) {
@@ -1816,7 +1796,6 @@ class PokerTable {
     }
 
     handleHandComplete(data) {
-        console.log('DEBUG: handleHandComplete called with data:', data);
 
         // Capture hand result for in-session history
         this.chat.captureHandResult(data);
@@ -1824,14 +1803,12 @@ class PokerTable {
         // Store revealed hole cards for showdown display
         if (data.hand_results && data.hand_results.player_hole_cards) {
             this.showdown.showdownHoleCards = data.hand_results.player_hole_cards;
-            console.log('DEBUG: Stored showdown hole cards:', this.showdown.showdownHoleCards);
             // Re-render players to show all cards
             this.renderPlayers();
         }
 
         // Show detailed hand results if available
         if (data.hand_results) {
-            console.log('DEBUG: hand_results found:', data.hand_results);
             // hand_complete is the primary showdown handler — always display.
             // Set lastDisplayedHandNumber to prevent the game_state_update fallback from re-displaying.
             this.showdown.lastDisplayedHandNumber = (this.showdown.lastDisplayedHandNumber || 0) + 1;
