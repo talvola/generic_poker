@@ -480,11 +480,11 @@ class PokerTable {
 
     createPlayerSeat(player, position) {
         const seat = document.createElement('div');
-        seat.className = 'player-seat';
+        const isCurrentPlayer = player.user_id === this.store.currentUser?.id;
+        seat.className = isCurrentPlayer ? 'player-seat hero-seat' : 'player-seat';
         seat.dataset.position = position;
         seat.dataset.playerId = player.id;
 
-        const isCurrentPlayer = player.user_id === this.store.currentUser?.id;
         const isCurrentTurn = this.store.gameState?.current_player === player.id;
         const isActive = player.is_active;
         const isDisconnected = player.is_disconnected;
@@ -1619,7 +1619,10 @@ class PokerTable {
         const playerSeat = document.querySelector(`[data-position=\"${position}\"]`);
 
         if (playerSeat) {
-            const seatRect = playerSeat.getBoundingClientRect();
+            // Anchor on the info panel, not the seat box — bottom-row seats
+            // render cards above the panel and the button must not cover them
+            const infoPanel = playerSeat.querySelector('.player-info') || playerSeat;
+            const seatRect = infoPanel.getBoundingClientRect();
             const tableRect = document.querySelector('.poker-table').getBoundingClientRect();
 
             dealerButton.style.left = `${seatRect.left - tableRect.left + 10}px`;

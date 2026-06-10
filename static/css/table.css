@@ -631,6 +631,27 @@ body {
 
 /* SEAT 9 - Upper center (12:00 o'clock) */
 
+/* Bottom-row seats: cards above the info panel so they stay on the felt
+   instead of hanging off the bottom rim onto the page background */
+.poker-table[data-max-players="2"] .player-seat[data-position="1"],
+.poker-table[data-max-players="6"] .player-seat[data-position="2"],
+.poker-table[data-max-players="6"] .player-seat[data-position="3"],
+.poker-table[data-max-players="9"] .player-seat[data-position="3"],
+.poker-table[data-max-players="9"] .player-seat[data-position="4"],
+.poker-table[data-max-players="9"] .player-seat[data-position="5"] {
+    flex-direction: column-reverse;
+}
+
+.poker-table[data-max-players="2"] .player-seat[data-position="1"] .player-cards,
+.poker-table[data-max-players="6"] .player-seat[data-position="2"] .player-cards,
+.poker-table[data-max-players="6"] .player-seat[data-position="3"] .player-cards,
+.poker-table[data-max-players="9"] .player-seat[data-position="3"] .player-cards,
+.poker-table[data-max-players="9"] .player-seat[data-position="4"] .player-cards,
+.poker-table[data-max-players="9"] .player-seat[data-position="5"] .player-cards {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+}
+
 .player-info {
     background: rgba(0, 0, 0, 0.8);
     border-radius: var(--border-radius);
@@ -861,6 +882,67 @@ body {
     gap: 0;
 }
 
+/* Hero (own) cards render larger than opponents' — readability and touch
+   targets, especially for draw/discard selection in 5-7 card games (M5).
+   Higher specificity than the generic per-count rules above and in the
+   width breakpoints below, so these win at desktop/tablet sizes. */
+.hero-seat .player-cards .card {
+    width: 50px;
+    height: 70px;
+    font-size: 1rem;
+}
+
+.hero-seat .player-cards.many-cards .card {
+    width: 44px;
+    height: 62px;
+    font-size: 0.85rem;
+}
+
+.hero-seat .player-cards.cards-5 .card,
+.hero-seat .player-cards.cards-6 .card {
+    width: 40px;
+    height: 56px;
+    font-size: 0.8rem;
+}
+
+.hero-seat .player-cards.cards-5 .card-rank,
+.hero-seat .player-cards.cards-6 .card-rank {
+    font-size: 0.95rem;
+}
+
+.hero-seat .player-cards.cards-5 .card-suit,
+.hero-seat .player-cards.cards-6 .card-suit {
+    font-size: 1.05rem;
+}
+
+.hero-seat .player-cards.cards-7 .card,
+.hero-seat .player-cards.cards-8 .card {
+    width: 36px;
+    height: 50px;
+    font-size: 0.75rem;
+    margin-left: -5px;
+}
+
+.hero-seat .player-cards.cards-7 .card:first-child,
+.hero-seat .player-cards.cards-8 .card:first-child {
+    margin-left: 0;
+}
+
+.hero-seat .player-cards.cards-7 .card-rank,
+.hero-seat .player-cards.cards-8 .card-rank {
+    font-size: 0.85rem;
+}
+
+.hero-seat .player-cards.cards-7 .card-suit,
+.hero-seat .player-cards.cards-8 .card-suit {
+    font-size: 0.95rem;
+}
+
+/* Hero cards may be wider than the seat box — keep them above neighbors */
+.hero-seat {
+    z-index: 5;
+}
+
 .player-bet {
     position: absolute;
     top: -20px;
@@ -873,6 +955,18 @@ body {
     font-size: 0.8rem;
     font-weight: bold;
     white-space: nowrap;
+}
+
+/* Bottom-row (column-reverse) seats: cards sit above the info panel, so
+   the bet chip moves below the seat to avoid covering them */
+.poker-table[data-max-players="2"] .player-seat[data-position="1"] .player-bet,
+.poker-table[data-max-players="6"] .player-seat[data-position="2"] .player-bet,
+.poker-table[data-max-players="6"] .player-seat[data-position="3"] .player-bet,
+.poker-table[data-max-players="9"] .player-seat[data-position="3"] .player-bet,
+.poker-table[data-max-players="9"] .player-seat[data-position="4"] .player-bet,
+.poker-table[data-max-players="9"] .player-seat[data-position="5"] .player-bet {
+    top: auto;
+    bottom: -20px;
 }
 
 /* Dealer Button */
@@ -1988,9 +2082,68 @@ body {
 }
 
 /* Responsive Design */
+
+/* Tablet (iPad) — both orientations: compact single-line header */
 @media (max-width: 1024px) {
     .poker-table-container {
         padding: 60px 70px;
+    }
+
+    .table-header {
+        padding: 0.3rem 0.6rem;
+        gap: 0.5rem;
+        flex-wrap: nowrap;
+    }
+
+    .back-text {
+        display: none;
+    }
+
+    .back-btn {
+        padding: 0.4rem 0.6rem;
+    }
+
+    .table-name {
+        font-size: 1rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 28vw;
+    }
+
+    .table-details {
+        font-size: 0.75rem;
+        flex-wrap: nowrap;
+    }
+
+    .table-details > span {
+        white-space: nowrap;
+    }
+
+    .header-right {
+        flex-shrink: 0;
+    }
+}
+
+/* Tablet portrait — vertically oriented table that uses the tall viewport
+   instead of a near-circular squashed oval (M4). Upper bound 1100px covers
+   13" iPads (1024-1032px wide in portrait), not just 11" (820-834px). */
+@media (min-width: 431px) and (max-width: 1100px) and (orientation: portrait) {
+    .poker-table-container {
+        padding: 80px 115px;
+    }
+
+    .poker-table {
+        width: calc(100vw - 230px);
+        max-width: 620px;
+        height: clamp(480px, 57vh, 700px);
+        border-radius: calc((100vw - 230px) / 2);
+    }
+
+    /* More felt available — bump community cards back up */
+    .community-cards .card {
+        width: 50px;
+        height: 70px;
     }
 }
 
@@ -2348,6 +2501,54 @@ body {
         height: 22px;
         font-size: 0.35rem;
         margin-left: -3px;
+    }
+
+    /* Hero cards on phone — modest bump over opponents, viewport is tight */
+    .hero-seat .player-cards .card {
+        width: 34px;
+        height: 48px;
+        font-size: 0.7rem;
+    }
+
+    .hero-seat .player-cards.many-cards .card {
+        width: 28px;
+        height: 39px;
+        font-size: 0.55rem;
+    }
+
+    .hero-seat .player-cards.cards-5 .card,
+    .hero-seat .player-cards.cards-6 .card {
+        width: 26px;
+        height: 36px;
+        font-size: 0.5rem;
+    }
+
+    .hero-seat .player-cards.cards-5 .card-rank,
+    .hero-seat .player-cards.cards-6 .card-rank {
+        font-size: 0.65rem;
+    }
+
+    .hero-seat .player-cards.cards-5 .card-suit,
+    .hero-seat .player-cards.cards-6 .card-suit {
+        font-size: 0.75rem;
+    }
+
+    .hero-seat .player-cards.cards-7 .card,
+    .hero-seat .player-cards.cards-8 .card {
+        width: 24px;
+        height: 34px;
+        font-size: 0.45rem;
+        margin-left: -4px;
+    }
+
+    .hero-seat .player-cards.cards-7 .card-rank,
+    .hero-seat .player-cards.cards-8 .card-rank {
+        font-size: 0.6rem;
+    }
+
+    .hero-seat .player-cards.cards-7 .card-suit,
+    .hero-seat .player-cards.cards-8 .card-suit {
+        font-size: 0.7rem;
     }
 
     /* Community cards */
@@ -2891,8 +3092,8 @@ body {
     color: white;
 }
 
-/* Show prompt on mobile portrait only */
-@media (max-width: 768px) and (orientation: portrait) {
+/* Show prompt on phone portrait only — tablets get a working portrait layout */
+@media (max-width: 430px) and (orientation: portrait) {
     .rotate-prompt:not(.dismissed) {
         display: flex;
     }

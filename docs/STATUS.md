@@ -134,9 +134,13 @@ A full new-player browser test session (iPad viewport, bots, 4 game families) is
 | H3/H4 | Auth pages rebuilt as styled Jinja templates with visible error messages and preserved input. |
 | M1/M3/P1-P4/P9 | Guest gating + public variants API, player-count denominator, "[Unspecified]" labels, raw variant names, doubled checkboxes, favicon, bot buy-in 2x min. |
 
-Still open from that session: M2 (stud bring-in shows "Raise $15" where card-room standard is
-complete-to-$10 — needs engine review), M4 (iPad portrait layout, Phase 7.4), M5 (5-card hand
-card sizes/touch targets), M6 (seat modal crowding), P5-P8, P10.
+All findings from that session are now fixed: M2 became the stud betting-rules correction
+(2026-06-10, above); M6/P5-P8/P10 were quick hits (2026-06-10); M4 + M5 closed 2026-06-10
+with the tablet layout work — dedicated tablet-portrait table (431-1024px portrait gets a
+taller capsule table with cards kept on the felt), compact single-line tablet header, and
+hero-card enlargement (own cards ~45% larger than opponents' at all breakpoints; `.hero-seat`
+in table.js). Rotate prompt is now phone-only; iPad portrait is a supported layout.
+See BACKLOG 7.4 for details.
 
 ### Engine Bugs Found via Bot Arena (2026-06-09, all fixed)
 

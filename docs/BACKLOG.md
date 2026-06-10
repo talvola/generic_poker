@@ -1,7 +1,7 @@
 # Backlog
 
 > Prioritized task list. Work top-to-bottom within each phase.
-> Last updated: 2026-03-10
+> Last updated: 2026-06-10
 
 ---
 
@@ -434,8 +434,22 @@ Goal: Make the app fully playable on phones and tablets.
 |---|------|--------|
 | 7.1 | iPhone portrait optimization (375-430px breakpoint) | DONE |
 | 7.2 | Visual tuning of seat transforms per layout (2/6/9-max) on actual iPhone | TODO |
-| 7.3 | Touch-friendly card selection (draw/discard/expose/separate) on phone | TODO |
-| 7.4 | Tablet optimization (768-1024px landscape) | TODO |
+| 7.3 | Touch-friendly card selection (draw/discard/expose/separate) on phone | TODO (hero cards enlarged 2026-06-10; verify on device) |
+| 7.4 | Tablet optimization (768-1024px, portrait + landscape) | DONE |
+
+**7.4 result (UX findings M4+M5, 2026-06-10):** Dedicated tablet treatment since iPad is a
+primary platform. (a) New `@media (max-width: 1024px)` compact single-line header (back arrow
+only, ellipsized table name, nowrap pills). (b) New tablet-portrait block
+(`431-1024px + orientation: portrait`): taller table — `width: calc(100vw - 230px)` capped
+620px, `height: clamp(480px, 57vh, 700px)`, capsule `border-radius: calc(width/2)` — instead
+of the old near-circular squashed oval; community cards back to 50×70. (c) Bottom-row seats
+(2-max pos 1, 6-max pos 2-3, 9-max pos 3-5) flow `column-reverse` so cards sit ON the felt
+above the info panel instead of hanging off the rim; their bet chips move below the panel;
+dealer button now anchors to the info panel (table.js `updateDealerButton`). (d) Hero (own)
+seat gets `.hero-seat` class; own cards render much larger than opponents' at every count tier
+(2 cards 50×70, 3-4 44×62, 5-6 40×56, 7-8 36×50 desktop/tablet; modest bump on phone) —
+fixes unreadable/untappable 24×34px cards in 5+ card games. (e) Rotate prompt restricted to
+phones (≤430px); tablet portrait is now a supported layout.
 
 **7.1 result:** New `@media (max-width: 430px)` breakpoint targeting iPhone SE (375px) through iPhone Pro Max (430px). Key changes:
 - Table clamp minimum lowered from 500px to 280px, phone table uses `calc(100vw - 10px)` width

@@ -6,12 +6,15 @@ register → lobby → read rules → create tables → buy in → play hands wi
 Variants exercised: Texas Hold'em (NL), 5-Card Draw (NL, draw UI), 7-Card Stud (Limit,
 bring-in), Omaha 8 (Limit, hi-lo split). Screenshots in `docs/ux-testing/`.
 
-> **Fix status:** C1, C2, C3, H1, H2, H3, H4, M1, M3, P1, P2, P3, P4, P9 fixed 2026-06-09.
-> M2, M6, P5, P6, P7, P8, P10 fixed 2026-06-10 — M2 became a full stud betting-rules
-> correction verified against Robert's Rules of Poker v11 (see STATUS.md): completion
-> instead of raise vs the bring-in, limit raise cap (bet + 3 raises, unlimited heads-up),
-> and the 4th-street open-pair double bet for stud high. Still open: M4 (iPad portrait,
-> Phase 7.4) and M5 (card sizes in 5+ card games).
+> **Fix status:** ALL FIXED. C1, C2, C3, H1, H2, H3, H4, M1, M3, P1, P2, P3, P4, P9 fixed
+> 2026-06-09. M2, M6, P5, P6, P7, P8, P10 fixed 2026-06-10 — M2 became a full stud
+> betting-rules correction verified against Robert's Rules of Poker v11 (see STATUS.md):
+> completion instead of raise vs the bring-in, limit raise cap (bet + 3 raises, unlimited
+> heads-up), and the 4th-street open-pair double bet for stud high. M4 + M5 fixed
+> 2026-06-10: dedicated tablet-portrait layout (431-1024px) with a taller table, compact
+> single-line tablet header, bottom-row seats render cards above the info panel (on the
+> felt), rotate prompt now phone-only, and hero (own) cards render ~45% larger than
+> opponents' at every breakpoint (e.g. 7-card stud hand: 36×50 vs 22×31 desktop/tablet).
 
 Note: diagonal "X" marks visible across gray boxes in some screenshots are an artifact of the
 headless renderer (1px border + border-radius miter bug in the software rasterizer), NOT a site
