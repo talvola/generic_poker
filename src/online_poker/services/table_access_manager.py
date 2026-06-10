@@ -6,6 +6,7 @@ from flask import current_app
 
 from ..database import db
 from ..models.table_access import TableAccess
+from ..models.transaction import Transaction
 from ..services.table_manager import TableManager
 from ..services.user_manager import UserManager
 
@@ -161,6 +162,17 @@ class TableAccessManager:
 
             db.session.add(access_record)
 
+            # Record the buy-in for the audit trail
+            db.session.add(
+                Transaction(
+                    user_id=user_id,
+                    amount=-buy_in_amount,
+                    transaction_type=Transaction.TYPE_BUYIN,
+                    description=f"Buy-in at table '{table.name}'",
+                    table_id=table_id,
+                )
+            )
+
             # Update table activity
             table.update_activity()
 
@@ -202,16 +214,27 @@ class TableAccessManager:
             if not user:
                 return False, "User not found"
 
+            table = TableManager.get_table_by_id(table_id)
+
             # Cash out chips if player (not spectator)
             if not access_record.is_spectator and access_record.current_stack:
                 user.update_bankroll(access_record.current_stack)
+                table_name = table.name if table else table_id
+                db.session.add(
+                    Transaction(
+                        user_id=user_id,
+                        amount=access_record.current_stack,
+                        transaction_type=Transaction.TYPE_CASHOUT,
+                        description=f"Cash out from table '{table_name}'",
+                        table_id=table_id,
+                    )
+                )
                 current_app.logger.info(f"User {user_id} cashed out ${access_record.current_stack}")
 
             # Mark as inactive
             access_record.leave_table()
 
             # Update table activity
-            table = TableManager.get_table_by_id(table_id)
             if table:
                 table.update_activity()
 

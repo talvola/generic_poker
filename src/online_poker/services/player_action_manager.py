@@ -1113,6 +1113,11 @@ class PlayerActionManager:
             # Save session state for recovery after server restart
             self._save_session_state(table_id, session)
 
+            # Sync player chip stacks to the DB. This must happen here (the
+            # single completion point) — completion via _next_step() after the
+            # final action never passes through process_player_action's sync.
+            self._sync_player_stacks(table_id, session)
+
             # Process any pending leaves now that the hand is complete
             if session.pending_leaves:
                 removed_players = session.process_pending_leaves()
@@ -1138,6 +1143,19 @@ class PlayerActionManager:
 
         except Exception as e:
             logger.error(f"Failed to handle hand completion for table {table_id}: {e}", exc_info=True)
+
+    def _sync_player_stacks(self, table_id: str, session: GameSession) -> None:
+        """Persist in-game chip stacks to table_access so cashouts pay the real stack."""
+        try:
+            from ..services.simple_bot import bot_manager
+            from ..services.table_access_manager import TableAccessManager
+
+            for player in session.game.table.players.values():
+                if bot_manager.is_bot(player.id):
+                    continue  # bots have no DB records
+                TableAccessManager.update_player_stack(player.id, table_id, player.stack)
+        except Exception as e:
+            logger.error(f"Failed to sync player stacks for table {table_id}: {e}")
 
     def _save_hand_to_database(self, table_id: str, session: GameSession, results_dict: dict, hand_number: int) -> None:
         """Save completed hand to the database for hand history.

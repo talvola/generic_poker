@@ -200,7 +200,7 @@ class WebSocketManager:
                         try:
                             hand_results = session.game.get_hand_results()
                             if hand_results:
-                                from online_poker.services.player_action_manager import player_action_manager
+                                from .player_action_manager import player_action_manager
 
                                 player_action_manager._handle_hand_completion(table_id, session)
                         except Exception as hc_err:
@@ -412,7 +412,7 @@ class WebSocketManager:
                         try:
                             hand_results = game.get_hand_results()
                             if hand_results:
-                                from online_poker.services.player_action_manager import player_action_manager
+                                from .player_action_manager import player_action_manager
 
                                 player_action_manager._handle_hand_completion(table_id, session)
                         except Exception as hc_err:
@@ -760,7 +760,9 @@ class WebSocketManager:
 
                 # Add bots to empty seats
                 table_short = table_id[:8]
-                buy_in = table.get_minimum_buyin()
+                # Bots buy in for a healthy stack (2x min, capped at max) so they
+                # don't all sit down short-stacked
+                buy_in = min(table.get_minimum_buyin() * 2, table.get_maximum_buyin())
                 bots_added = 0
                 bot_type = current_app.config.get("BOT_TYPE", "simple")
 
@@ -1418,7 +1420,7 @@ class WebSocketManager:
                     try:
                         hand_results = session.game.get_hand_results()
                         if hand_results:
-                            from online_poker.services.player_action_manager import player_action_manager
+                            from .player_action_manager import player_action_manager
 
                             player_action_manager._handle_hand_completion(table_id, session)
                     except Exception as hc_err:
