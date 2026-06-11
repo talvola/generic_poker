@@ -107,6 +107,21 @@ def create_table():
         if not betting_structure_enum:
             return jsonify({"success": False, "error": f"Invalid betting structure: {data['betting_structure']}"}), 400
 
+        # Betting caps (BACKLOG 6.2.13), only the one relevant to the structure.
+        raise_cap_override = None
+        hand_cap_bb = None
+        if data["betting_structure"] == "limit":
+            raw = data.get("raise_cap_override")
+            if raw not in (None, "", "standard"):
+                # "unlimited" -> 0; otherwise an integer raise count.
+                raise_cap_override = 0 if str(raw) == "unlimited" else int(raw)
+        else:  # no-limit / pot-limit
+            raw = data.get("hand_cap_bb")
+            if raw not in (None, "", "0", 0):
+                hand_cap_bb = int(raw)
+                if hand_cap_bb <= 0:
+                    hand_cap_bb = None
+
         # Create table config
         config = TableConfig(
             name=data["name"],
@@ -117,6 +132,8 @@ def create_table():
             is_private=data.get("is_private", False),
             password=data.get("password") if data.get("is_private") else None,
             allow_bots=data.get("allow_bots", False),
+            raise_cap_override=raise_cap_override,
+            hand_cap_bb=hand_cap_bb,
         )
 
         # Create table using table manager

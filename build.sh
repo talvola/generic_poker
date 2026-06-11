@@ -40,6 +40,20 @@ with app.app_context():
         else:
             print(f'Note: {e}')
 
+    # Add betting cap columns to poker_tables if they don't exist (BACKLOG 6.2.13)
+    for col in ['raise_cap_override INTEGER', 'hand_cap_bb INTEGER']:
+        col_name = col.split()[0]
+        try:
+            db.session.execute(text(f'ALTER TABLE poker_tables ADD COLUMN {col}'))
+            db.session.commit()
+            print(f'Added {col_name} column to poker_tables')
+        except Exception as e:
+            db.session.rollback()
+            if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+                print(f'{col_name} column already exists')
+            else:
+                print(f'Note: {e}')
+
     # Add mixed game rotation columns to game_session_state if they don't exist
     for col in ['current_variant_index INTEGER', 'hands_in_current_variant INTEGER', 'orbit_size INTEGER']:
         col_name = col.split()[0]

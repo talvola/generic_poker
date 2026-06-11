@@ -49,6 +49,9 @@ class WebSocketManager:
         self.session_users: dict[str, str] = {}  # session_id -> user_id
         self.table_rooms: dict[str, set[str]] = {}  # table_id -> set of session_ids
         self.user_tables: dict[str, str] = {}  # user_id -> table_id
+        # Stud street chat announcements (BACKLOG 8.4): announce each new
+        # betting street's up-cards once. Keyed table_id -> (hands_played, step).
+        self._last_stud_announce: dict[str, tuple] = {}
 
         # Register event handlers
         self._register_handlers()
@@ -1055,8 +1058,37 @@ class WebSocketManager:
 
             logger.debug(f"Broadcasted game state update to table {table_id}")
 
+            # Announce stud up-cards when a new betting street begins.
+            self._maybe_announce_stud_street(table_id)
+
         except Exception as e:
             logger.error(f"Failed to broadcast game state update: {e}")
+
+    def _maybe_announce_stud_street(self, table_id: str) -> None:
+        """Announce the up-cards for a stud street, once, when it begins.
+
+        No-op for non-stud games or when not waiting on a player. Keyed on
+        (hands_played, current_step) so it fires once per street and resets each
+        hand. See BACKLOG 8.4 / stud_announcer.py.
+        """
+        try:
+            from ..services.game_orchestrator import game_orchestrator
+            from ..services.stud_announcer import build_street_announcement
+
+            session = game_orchestrator.get_session(table_id)
+            if not session or not session.game:
+                return
+
+            key = (session.hands_played, session.game.current_step)
+            if self._last_stud_announce.get(table_id) == key:
+                return
+            self._last_stud_announce[table_id] = key
+
+            message = build_street_announcement(session.game)
+            if message:
+                self.broadcast_game_action_chat(table_id, message, "phase_change")
+        except Exception as e:
+            logger.error(f"Failed to announce stud street for table {table_id}: {e}")
 
     def broadcast_hand_complete(self, table_id: str, hand_results: dict[str, Any], hand_number: int = 1) -> None:
         """Broadcast hand completion with showdown results to all table participants.

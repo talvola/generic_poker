@@ -165,6 +165,28 @@
                         </div>
                     </div>
 
+                    <div class="form-group" id="raise-cap-group" style="display: none;">
+                        <label for="raise-cap-override">Raise Cap (per street):</label>
+                        <select id="raise-cap-override" name="raise_cap_override">
+                            <option value="standard">Standard (bet + 3, unlimited heads-up)</option>
+                            <option value="4">Bet + 4 raises</option>
+                            <option value="5">Bet + 5 raises</option>
+                            <option value="unlimited">Unlimited raises</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="hand-cap-group" style="display: none;">
+                        <label for="hand-cap-bb">Per-Hand Cap (max loss):</label>
+                        <select id="hand-cap-bb" name="hand_cap_bb">
+                            <option value="0">No cap</option>
+                            <option value="20">20 big blinds</option>
+                            <option value="30">30 big blinds</option>
+                            <option value="40">40 big blinds</option>
+                            <option value="50">50 big blinds</option>
+                            <option value="100">100 big blinds</option>
+                        </select>
+                    </div>
+
                     <div class="form-group">
                         <label class="checkbox-label">
                             <input type="checkbox" id="is-private" name="is_private">

@@ -37,6 +37,11 @@ class Config:
     # Bot settings — "mc" (Monte Carlo equity) or "simple" (random weighted)
     BOT_TYPE = os.environ.get("BOT_TYPE", "mc")
 
+    # Debug: allow the /api/debug stacked/seeded deck endpoints (T009). Off by
+    # default; enable per-environment (dev/testing) or via env var to reproduce
+    # specific deal scenarios during tester sessions. Always gated behind admin.
+    DEBUG_ALLOW_STACKED_DECK = os.environ.get("DEBUG_ALLOW_STACKED_DECK", "false").lower() == "true"
+
     # Timeout settings
     ACTION_TIMEOUT_ENABLED = os.environ.get("ACTION_TIMEOUT_ENABLED", "false").lower() == "true"
     ACTION_TIMEOUT_SECONDS = int(os.environ.get("ACTION_TIMEOUT_SECONDS", "30"))
@@ -90,6 +95,9 @@ class DevelopmentConfig(Config):
     # Disable rate limiting for development
     RATELIMIT_ENABLED = False
 
+    # Allow the debug stacked-deck endpoints in development by default
+    DEBUG_ALLOW_STACKED_DECK = os.environ.get("DEBUG_ALLOW_STACKED_DECK", "true").lower() == "true"
+
 
 class TestingConfig(Config):
     """Testing configuration."""
@@ -111,6 +119,9 @@ class TestingConfig(Config):
 
     # Disable rate limiting in tests
     RATELIMIT_ENABLED = False
+
+    # Allow the debug stacked-deck endpoints in tests
+    DEBUG_ALLOW_STACKED_DECK = True
 
 
 class ProductionConfig(Config):

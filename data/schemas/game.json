@@ -212,9 +212,10 @@
           "enum": [
             "blinds",
             "bring-in",
-            "antes_only"
+            "antes_only",
+            "bomb"
           ],
-          "description": "Style of forced bets: 'blinds' for small/big blinds, 'bring-in' for Stud bring-in after antes, 'antes_only' for antes without bring-in"
+          "description": "Style of forced bets: 'blinds' for small/big blinds, 'bring-in' for Stud bring-in after antes, 'antes_only' for antes without bring-in, 'bomb' for bomb pots (everyone antes, no preflop betting, deal straight to flop)"
         },
         "rule": {
           "type": "string",

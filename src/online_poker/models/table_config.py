@@ -23,6 +23,12 @@ class TableConfig:
     password: str | None = None
     allow_bots: bool = False
 
+    # Betting caps (BACKLOG 6.2.13). raise_cap_override (Limit): bet + N raises,
+    # 0 = unlimited, None = standard. hand_cap_bb (NL/PL): per-hand loss cap in
+    # big blinds, None/0 = off.
+    raise_cap_override: int | None = None
+    hand_cap_bb: int | None = None
+
     # Optional settings with defaults
     auto_start: bool = True
     timeout_minutes: int = 30

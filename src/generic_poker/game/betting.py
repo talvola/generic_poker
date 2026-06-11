@@ -66,13 +66,27 @@ class BettingManager(ABC):
         self.raise_count: int = 0
         self.cap_reached: bool = False
         self.max_raises: int = 3
+        self.raise_cap_enabled: bool = True  # False = unlimited raises (table override)
+        # Per-hand money cap (BACKLOG 6.2.13 "cap game"): max total chips a player
+        # may contribute across a whole hand. 0 = no cap. Set by Game.
+        self.hand_cap: int = 0
+        self.hand_contributed: dict[str, int] = {}  # player_id -> chips put in this hand
         # Stud 4th-street open-pair double bet (Robert's Rules 8.7). Set by Game.
         self.open_pair_double_rule: bool = False
         self.big_increment_engaged: bool = False  # a big-size raise was made on 4th street
 
+    def can_act(self, player) -> bool:
+        """Active player who can still wager — has effective (cap-aware) chips.
+
+        A player capped out by the per-hand money cap has chips left but no
+        spendable chips this hand, so they're treated as all-in like a stack-0
+        player.
+        """
+        return player.is_active and self.effective_stack(player.id, player.stack) > 0
+
     def _live_player_count(self) -> int:
-        """Active players who still have chips (not all-in)."""
-        return sum(1 for p in self.table.players.values() if p.is_active and p.stack > 0)
+        """Active players who can still act (not all-in, not capped out)."""
+        return sum(1 for p in self.table.players.values() if self.can_act(p))
 
     def _counts_as_completion(self, amount: int) -> bool:
         """True if this wager merely completes a bring-in to a full bet (not a raise)."""
@@ -85,9 +99,24 @@ class BettingManager(ABC):
         raises; heads-up raising is unlimited, but a cap already reached is
         not lifted by a fold that leaves two players.
         """
+        if not self.raise_cap_enabled:
+            return False
         if self.raise_count < self.max_raises:
             return False
         return self.cap_reached or self._live_player_count() >= 3
+
+    def effective_stack(self, player_id: str, real_stack: int) -> int:
+        """A player's spendable stack this hand, clamped by the per-hand money cap.
+
+        Returns ``real_stack`` when no cap is set. With a cap, returns
+        ``min(real_stack, cap - already_contributed_this_hand)`` — when this hits
+        0 the player is "capped out" and treated as all-in for the rest of the
+        hand (BACKLOG 6.2.13). Forced bets (blinds/antes) count toward the cap.
+        """
+        if self.hand_cap <= 0:
+            return real_stack
+        remaining = self.hand_cap - self.hand_contributed.get(player_id, 0)
+        return max(0, min(real_stack, remaining))
 
     def get_main_pot_amount(self) -> int:
         """Get the amount in the current round's main pot."""
@@ -297,7 +326,8 @@ class BettingManager(ABC):
             if not is_forced and not self.validate_bet(player_id, amount, stack, bet_type):
                 raise ValueError(f"Invalid bet: {amount}")
 
-            is_all_in = amount_to_add >= stack
+            # A per-hand money cap makes the player all-in once their cap is reached.
+            is_all_in = amount_to_add >= self.effective_stack(player_id, stack)
 
             # For antes, don't update current_bets (betting amount) - keep existing betting amount
             # Antes are tracked separately in the pot
@@ -309,6 +339,7 @@ class BettingManager(ABC):
 
             # Update pot with the ante amount
             self.pot.add_bet(player_id, amount, is_all_in, stack, is_ante=True)
+            self.hand_contributed[player_id] = self.hand_contributed.get(player_id, 0) + amount_to_add
 
         else:
             # Regular betting logic
@@ -319,7 +350,8 @@ class BettingManager(ABC):
             if not is_forced and not self.validate_bet(player_id, amount, stack, bet_type):
                 raise ValueError(f"Invalid bet: {amount}")
 
-            is_all_in = amount_to_add >= stack
+            # A per-hand money cap makes the player all-in once their cap is reached.
+            is_all_in = amount_to_add >= self.effective_stack(player_id, stack)
 
             # Track raise size if this bet is raising
             if amount > self.current_bet:
@@ -351,6 +383,7 @@ class BettingManager(ABC):
             # Update pot with the additional amount
             if amount_to_add > 0:
                 self.pot.add_bet(player_id, amount, is_all_in, stack, is_ante=False)
+                self.hand_contributed[player_id] = self.hand_contributed.get(player_id, 0) + amount_to_add
 
             # Update current bet if this is highest
             self.current_bet = max(self.current_bet, amount)
@@ -419,7 +452,7 @@ class BettingManager(ABC):
         """
         # Players who are all-in (stack 0) cannot act and must not hold up the round —
         # e.g. a player all-in on an earlier street has no bet entry in this round.
-        active_players = [p.id for p in self.table.players.values() if p.is_active and p.stack > 0]
+        active_players = [p.id for p in self.table.players.values() if self.can_act(p)]
 
         # Check that every active player has a bet entry and has acted
         for player_id in active_players:
@@ -471,6 +504,7 @@ class BettingManager(ABC):
         self.raise_count = 0
         self.cap_reached = False
         self.big_increment_engaged = False
+        self.hand_contributed.clear()  # Reset per-hand money-cap tracking
         self.pot.new_hand()  # Reset pot for new hand
 
 
@@ -549,6 +583,7 @@ class LimitBettingManager(BettingManager):
         Returns the total amount the player can bet.
         In limit games, this is the current bet plus one bet unit (small or big depending on round).
         """
+        stack = self.effective_stack(player_id, stack)  # honor the per-hand money cap
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
         bet_size = self.small_bet if self.betting_round < 2 else self.big_bet
 
@@ -575,6 +610,7 @@ class LimitBettingManager(BettingManager):
         Returns:
             True if bet is valid, False otherwise
         """
+        player_stack = self.effective_stack(player_id, player_stack)  # honor the per-hand money cap
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
         to_call = self.current_bet - current_bet
         bet_size = self.small_bet if bet_type == BetType.SMALL else self.big_bet
@@ -659,6 +695,7 @@ class NoLimitBettingManager(BettingManager):
         Returns the total amount the player can bet.
         In No Limit, this is their current bet plus their entire stack.
         """
+        player_stack = self.effective_stack(player_id, player_stack)  # honor the per-hand money cap
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
         return current_bet + player_stack  # Total bet including what's already in
 
@@ -677,6 +714,7 @@ class NoLimitBettingManager(BettingManager):
         if amount == 0:  # Check/fold always valid
             return True
 
+        player_stack = self.effective_stack(player_id, player_stack)  # honor the per-hand money cap
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
         to_call = self.current_bet - current_bet
 
@@ -750,6 +788,7 @@ class PotLimitBettingManager(BettingManager):
         Returns the total amount the player can bet.
         In Pot Limit: max bet = current bet + pot after call
         """
+        player_stack = self.effective_stack(player_id, player_stack)  # honor the per-hand money cap
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
         call_amount = self.current_bet - current_bet
 
@@ -780,6 +819,7 @@ class PotLimitBettingManager(BettingManager):
         if amount == 0:  # Check/fold always valid
             return True
 
+        player_stack = self.effective_stack(player_id, player_stack)  # honor the per-hand money cap
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
         to_call = self.current_bet - current_bet
 

@@ -26,14 +26,24 @@ class Deck(CardContainer):
         include_jokers: Whether deck includes jokers
     """
 
-    def __init__(self, include_jokers: int = 0, deck_type: DeckType = DeckType.STANDARD):
+    def __init__(
+        self,
+        include_jokers: int = 0,
+        deck_type: DeckType = DeckType.STANDARD,
+        rng: "random.Random | None" = None,
+    ):
         """
         Initialize a new deck.
 
         Args:
             include_jokers: Whether to include joker cards
+            deck_type: Type of deck to build
+            rng: Optional random source for shuffling. Pass a seeded
+                ``random.Random`` for reproducible shuffles (debug/testing);
+                defaults to the global ``random`` module.
         """
         self.cards: list[Card] = []
+        self.rng = rng if rng is not None else random
         self._initialize_deck(include_jokers, deck_type)
 
     def _initialize_deck(self, include_jokers: int, deck_type: DeckType) -> None:
@@ -84,7 +94,27 @@ class Deck(CardContainer):
             times: Number of times to shuffle
         """
         for _ in range(times):
-            random.shuffle(self.cards)
+            self.rng.shuffle(self.cards)
+
+    def set_stack(self, named_cards: list[Card]) -> None:
+        """
+        Arrange the deck so that ``named_cards`` are dealt first, in order.
+
+        The named cards are placed on top of the deck (dealt first), followed
+        by the deck's remaining cards in a deterministic order. This is the
+        engine equivalent of the ``MockDeck`` pattern used in tests/game/ and
+        is used by the debug/stacked-deck feature to reproduce specific deal
+        scenarios on demand. Cards not present in this deck type are ignored.
+
+        Args:
+            named_cards: Cards to deal first, in deal order (top of deck first)
+        """
+        full_set = list(self.cards)
+        used = {(c.rank, c.suit) for c in named_cards}
+        stacked = [c for c in named_cards if (c.rank, c.suit) in {(d.rank, d.suit) for d in full_set}]
+        remaining = [c for c in full_set if (c.rank, c.suit) not in used]
+        # deal_card() pops from the end, so reverse to deal stacked[0] first.
+        self.cards = list(reversed(stacked + remaining))
 
     def deal_card(self, face_up: bool = False) -> Card | None:
         """

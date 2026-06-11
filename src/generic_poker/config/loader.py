@@ -185,9 +185,9 @@ class GameRules:
                 # Validate the forcedBet configuration
                 forced_bet = cond_order["forcedBet"]
                 style = forced_bet.get("style")
-                if style not in ["blinds", "bring-in", "antes_only"]:
+                if style not in ["blinds", "bring-in", "antes_only", "bomb"]:
                     logger.warning(
-                        f"Invalid forcedBet style '{style}' in conditional order {i}, should be one of: blinds, bring-in, antes_only"
+                        f"Invalid forcedBet style '{style}' in conditional order {i}, should be one of: blinds, bring-in, antes_only, bomb"
                     )
 
                 # Validate rule is provided for bring-in style
@@ -199,7 +199,7 @@ class GameRules:
 
             # Validate default configuration
             default_style = default_config.get("style")
-            if default_style not in ["blinds", "bring-in", "antes_only"]:
+            if default_style not in ["blinds", "bring-in", "antes_only", "bomb"]:
                 logger.warning(f"Invalid default forcedBet style '{default_style}', defaulting to 'blinds'")
                 default_config["style"] = "blinds"
 
@@ -212,7 +212,7 @@ class GameRules:
         else:
             # Simple forced bets configuration
             style = forced_bets_data.get("style")
-            if style not in ["blinds", "bring-in", "antes_only"]:
+            if style not in ["blinds", "bring-in", "antes_only", "bomb"]:
                 logger.warning(f"Invalid forcedBets style '{style}', defaulting to 'blinds'")
                 style = "blinds"
 
@@ -329,6 +329,11 @@ class GameRules:
         elif default_style == "antes_only":
             default_initial = "dealer"
             default_subsequent = "high_hand"
+        elif default_style == "bomb":
+            # Bomb pots are flop games: everyone antes, no preflop action, and
+            # post-flop betting starts left of the button like a normal flop game.
+            default_initial = "dealer"
+            default_subsequent = "dealer"
         else:  # Fallback for invalid styles
             default_initial = "after_big_blind"
             default_subsequent = "dealer"

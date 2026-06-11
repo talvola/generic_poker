@@ -82,7 +82,7 @@ def create_smoke_game(rules: GameRules) -> Game:
         if structure == BettingStructure.LIMIT:
             kwargs["small_bet"] = 10
             kwargs["big_bet"] = 20
-    elif rules.forced_bets.style == "antes_only":
+    elif rules.forced_bets.style in ("antes_only", "bomb"):
         kwargs["ante"] = 5
 
     game = Game(**kwargs)

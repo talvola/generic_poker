@@ -320,6 +320,16 @@ class PokerLobby {
                 </div>
             `;
         }
+
+        // Betting cap (BACKLOG 6.2.13): show the raise cap for Limit, the
+        // per-hand money cap for No-Limit/Pot-Limit.
+        const raiseCapGroup = document.getElementById('raise-cap-group');
+        const handCapGroup = document.getElementById('hand-cap-group');
+        if (raiseCapGroup && handCapGroup) {
+            const isLimit = structure === 'limit';
+            raiseCapGroup.style.display = isLimit ? '' : 'none';
+            handCapGroup.style.display = isLimit ? 'none' : '';
+        }
     }
 
     loadTables() {
@@ -588,6 +598,13 @@ class PokerLobby {
             password: formData.get('is_private') === 'on' ? (formData.get('password') || null) : null,
             allow_bots: formData.get('allow_bots') === 'on'
         };
+
+        // Betting cap (BACKLOG 6.2.13) — only the control relevant to the structure.
+        if (bettingStructure === 'limit') {
+            tableData.raise_cap_override = formData.get('raise_cap_override') || 'standard';
+        } else {
+            tableData.hand_cap_bb = formData.get('hand_cap_bb') || '0';
+        }
 
         // Validate required fields
         if (!tableData.name || !tableData.variant || !tableData.betting_structure) {

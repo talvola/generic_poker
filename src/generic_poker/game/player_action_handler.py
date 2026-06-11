@@ -152,6 +152,9 @@ class PlayerActionHandler:
         player = self.game.table.players[player_id]
         current_bet = self.game.betting.current_bets.get(player_id, PlayerBet()).amount
         required_bet = self.game.betting.get_required_bet(player_id)
+        # Spendable stack honoring the per-hand money cap (BACKLOG 6.2.13). Equals
+        # player.stack when no cap is set, so this is a no-op for normal tables.
+        eff_stack = self.game.betting.effective_stack(player_id, player.stack)
 
         valid_actions = []
 
@@ -159,18 +162,18 @@ class PlayerActionHandler:
             # Robert's Rules 8.3: the bring-in player may open for the forced
             # amount or complete to a full (small) bet.
             valid_actions.append((PlayerAction.BRING_IN, self.game.bring_in, self.game.bring_in))
-            if player.stack >= self.game.small_bet:
+            if eff_stack >= self.game.small_bet:
                 valid_actions.append((PlayerAction.COMPLETE, self.game.small_bet, self.game.small_bet))
-            elif player.stack > self.game.bring_in:
-                valid_actions.append((PlayerAction.COMPLETE, player.stack, player.stack))
+            elif eff_stack > self.game.bring_in:
+                valid_actions.append((PlayerAction.COMPLETE, eff_stack, eff_stack))
             return valid_actions
 
         valid_actions.append((PlayerAction.FOLD, None, None))
         if required_bet > 0:
-            if player.stack >= required_bet:
+            if eff_stack >= required_bet:
                 valid_actions.append((PlayerAction.CALL, self.game.betting.current_bet, self.game.betting.current_bet))
-            elif player.stack > 0:
-                total_amount = current_bet + player.stack
+            elif eff_stack > 0:
+                total_amount = current_bet + eff_stack
                 valid_actions.append((PlayerAction.CALL, total_amount, total_amount))
         else:
             valid_actions.append((PlayerAction.CHECK, None, None))
@@ -180,7 +183,7 @@ class PlayerActionHandler:
         if zero_cards_betting == "call_only" and len(hole_cards) == 0:
             return valid_actions
 
-        if player.stack > required_bet:
+        if eff_stack > required_bet:
             current_total = self.game.betting.current_bet
             is_stud = self.game.rules.forced_bets.style == "bring-in"
             step_type = bet_config.get("type", "small")
@@ -244,11 +247,11 @@ class PlayerActionHandler:
 
             appended_all_in = False
             for action, min_amount, max_amount in increase_options:
-                if player.stack + current_bet >= min_amount:
+                if eff_stack + current_bet >= min_amount:
                     valid_actions.append((action, min_amount, max_amount))
                 elif not appended_all_in:
                     # Can't afford the smallest option: offer the all-in instead
-                    all_in_amount = player.stack + current_bet
+                    all_in_amount = eff_stack + current_bet
                     valid_actions.append((action, all_in_amount, all_in_amount))
                     appended_all_in = True
 
@@ -722,17 +725,21 @@ class PlayerActionHandler:
     ) -> tuple[int, int]:
         """Calculate total and additional amounts for a bet, handling all-in and antes."""
         player = self.game.table.players[player_id]
+        # Spendable stack honoring the per-hand money cap; equals player.stack
+        # when no cap is set. A cap-bound player calls/raises for their remaining
+        # cap and is all-in for the rest of the hand (BACKLOG 6.2.13).
+        eff_stack = self.game.betting.effective_stack(player_id, player.stack)
         if action == PlayerAction.CALL:
             total_amount = self.game.betting.current_bet
             additional_amount = self.game.betting.get_required_bet(player_id)
-            if additional_amount > player.stack:
-                additional_amount = player.stack
+            if additional_amount > eff_stack:
+                additional_amount = eff_stack
                 total_amount = current_bet + additional_amount
         else:  # BET or RAISE
-            if amount >= player.stack + current_bet:
-                logger.debug(f"{player.name} is going all-in with ${player.stack}")
-                additional_amount = player.stack
-                total_amount = player.stack + current_bet
+            if amount >= eff_stack + current_bet:
+                logger.debug(f"{player.name} is going all-in with ${eff_stack}")
+                additional_amount = eff_stack
+                total_amount = eff_stack + current_bet
             else:
                 additional_amount = amount - current_bet
                 total_amount = amount

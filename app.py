@@ -15,6 +15,7 @@ from src.online_poker.database import create_tables, db, init_database
 from src.online_poker.extensions import limiter
 from src.online_poker.routes.admin_routes import admin_bp
 from src.online_poker.routes.auth_routes import auth_bp
+from src.online_poker.routes.debug_routes import debug_bp
 from src.online_poker.routes.game_routes import game_bp
 from src.online_poker.routes.lobby_routes import lobby_bp, register_lobby_socket_events
 from src.online_poker.routes.table_routes import table_bp
@@ -120,6 +121,7 @@ def create_app(config_class=Config):
     app.register_blueprint(game_bp, url_prefix="/game")
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(test_bp)  # Test-only routes for E2E testing
+    app.register_blueprint(debug_bp)  # Debug stacked/seeded deck (gated by DEBUG_ALLOW_STACKED_DECK)
 
     # Initialize WebSocket manager
     init_websocket_manager(socketio)

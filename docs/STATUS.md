@@ -91,13 +91,17 @@ Flask/SocketIO multiplayer web platform.
 - 4-color deck option (blue diamonds, green clubs) toggled in table settings, persisted in localStorage
 - Mixed game rotation: HORSE and 8-Game Mix with orbit-based variant rotation, frontend tracker, state persistence
 - Single-viewport table layout: no scrolling, full-width action bar at bottom, floating chat widget, showdown in action bar, settings/debug in header modals
+- Debug seeded/stacked deck (T009): reproduce specific deal scenarios on demand. Engine `Table.set_stacked_deck()/set_deck_seed()`; admin `/api/debug` endpoints gated by `DEBUG_ALLOW_STACKED_DECK` (dev/testing only)
+- Bomb pot forced-bet style (`bomb`): everyone antes, no preflop betting, deal straight to flop. Configs: Bomb Pot Hold'em, Double Board Bomb Pot
+- Stud street chat announcements: each new betting street posts a compact line of every player's up-cards + whose action it is
+- Betting caps (table settings): Limit raise-cap override (bet+N / unlimited) and NL/PL per-hand money cap (cap game). `BettingManager.effective_stack` clamp; no-cap play unchanged
 
 ### Remaining Issues
 
 | # | Issue | Priority | Description |
 |---|-------|----------|-------------|
 | ~~3~~ | ~~Hardcoded timeouts~~ | ~~LOW~~ | ~~Fixed: all timeouts and limits configurable via env vars~~ |
-| 4 | Debug deck option | LOW | No way to use fixed/unseeded deck for testing |
+| ~~4~~ | ~~Debug deck option~~ | ~~LOW~~ | ~~Fixed (T009): seeded/stacked deck in engine + admin `/api/debug` endpoints (dev/testing only)~~ |
 | 9 | Mobile optimization | LOW | Deferred to Phase 7 |
 | ~~10~~ | ~~Admin interface~~ | ~~LOW~~ | ~~Implemented: dashboard, user/table/variant management~~ |
 | ~~11~~ | ~~Duplicate tables in Render DB~~ | ~~LOW~~ | ~~Fixed: seed_db.py now idempotent for tables and removes accumulated duplicates on next deploy~~ |

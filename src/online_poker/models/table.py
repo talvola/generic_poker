@@ -40,6 +40,12 @@ class PokerTable(db.Model):
     # Mixed game flag
     is_mixed_game: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
 
+    # Betting caps (BACKLOG 6.2.13). Both nullable; null/omitted = engine default.
+    # raise_cap_override (Limit only): bet + N raises; 0 = unlimited.
+    # hand_cap_bb (No-Limit/Pot-Limit only): max loss per hand, in big blinds.
+    raise_cap_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hand_cap_bb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     last_activity: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
@@ -64,6 +70,8 @@ class PokerTable(db.Model):
         is_private: bool = False,
         allow_bots: bool = False,
         password: str | None = None,
+        raise_cap_override: int | None = None,
+        hand_cap_bb: int | None = None,
     ):
         """Initialize poker table."""
         self.name = name
@@ -74,6 +82,8 @@ class PokerTable(db.Model):
         self.creator_id = creator_id
         self.is_private = is_private
         self.allow_bots = allow_bots
+        self.raise_cap_override = raise_cap_override
+        self.hand_cap_bb = hand_cap_bb
 
         if is_private:
             self.invite_code = self._generate_invite_code()
@@ -163,6 +173,8 @@ class PokerTable(db.Model):
             "is_private": self.is_private,
             "is_mixed_game": self.is_mixed_game,
             "allow_bots": self.allow_bots,
+            "raise_cap_override": self.raise_cap_override,
+            "hand_cap_bb": self.hand_cap_bb,
             "created_at": self.created_at.isoformat(),
             "last_activity": self.last_activity.isoformat(),
             "creator_id": self.creator_id,
@@ -176,6 +188,28 @@ class PokerTable(db.Model):
             result["invite_code"] = self.invite_code
 
         return result
+
+    def _betting_cap_params(self, betting_structure, stakes_dict: dict) -> dict:
+        """Game kwargs for this table's betting caps (BACKLOG 6.2.13).
+
+        For Limit, applies the raise-cap override; for No-Limit/Pot-Limit,
+        converts the per-hand money cap from big blinds to chips.
+        """
+        from generic_poker.game.betting import BettingStructure
+
+        params: dict = {}
+        if betting_structure == BettingStructure.LIMIT:
+            if self.raise_cap_override is not None:
+                if self.raise_cap_override <= 0:
+                    params["unlimited_raises"] = True
+                else:
+                    params["max_raises_override"] = self.raise_cap_override
+        else:  # No-Limit / Pot-Limit
+            if self.hand_cap_bb and self.hand_cap_bb > 0:
+                big_blind = stakes_dict.get("big_blind") or stakes_dict.get("small_bet") or 0
+                if big_blind > 0:
+                    params["hand_cap"] = self.hand_cap_bb * big_blind
+        return params
 
     def create_game_instance(self, rules: GameRules) -> Game:
         """Create a Game instance for this table.
@@ -231,6 +265,7 @@ class PokerTable(db.Model):
                 }
             )
 
+        game_params.update(self._betting_cap_params(betting_structure, stakes_dict))
         return Game(**game_params)
 
     def create_game_instance_for_variant(self, rules: GameRules, betting_structure_str: str) -> Game:
@@ -292,6 +327,7 @@ class PokerTable(db.Model):
                 }
             )
 
+        game_params.update(self._betting_cap_params(betting_structure, stakes_dict))
         return Game(**game_params)
 
     def __repr__(self) -> str:

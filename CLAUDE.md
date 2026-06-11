@@ -151,7 +151,10 @@ Poker variants are defined in `data/game_configs/*.json`. Example structure:
 
 **Deck Types:** `standard` (52), `short_6a` (36), `short_ta` (20), `short_27_ja` (40)
 
-**Forced Bet Styles:** `blinds`, `bring-in`, `antes_only`
+**Forced Bet Styles:** `blinds`, `bring-in`, `antes_only`, `bomb` (bomb pot: everyone antes, no
+preflop bet, deal straight to flop — same ante collection as `antes_only` but betting order
+defaults to `dealer`/`dealer` instead of stud `high_hand`; "no preflop bet" is config-only —
+the gameplay array just omits the preflop bet step)
 
 **Betting Order:** `after_big_blind`, `bring_in`, `dealer`, `high_hand`
 
@@ -203,6 +206,40 @@ Poker variants are defined in `data/game_configs/*.json`. Example structure:
   — the single point hit by all completion paths (fold-win, human action, bot action).
 - Valid-action tuple amounts are TOTALS (player's total bet after the action), not deltas.
   Incremental call cost = `game.betting.get_additional_required(player_id)`.
+
+### Betting Caps (6.2.13) — two distinct, structure-aware table settings
+- **Limit raise cap** (per street): `betting.max_raises` (bet + N; default 3, or 4 for
+  two-round draw/lowball), `betting.raise_cap_enabled` (False = unlimited), unlimited heads-up.
+  Per-table override via Game `max_raises_override` / `unlimited_raises`.
+- **Per-hand money cap** (NL/PL "cap game"): Game `hand_cap` (chips). `betting.effective_stack(
+  pid, real_stack) = min(real_stack, hand_cap − hand_contributed[pid])` is the single clamp —
+  threaded through `get_max_bet`/`validate_bet`/`place_bet` all-in + the direct `player.stack`
+  reads in `player_action_handler`. A capped-out player (chips left, cap hit) is all-in via
+  `betting.can_act()` (used by `round_complete`/`_live_player_count`/`skip_betting_players_
+  unable_to_act`). **`effective_stack` returns the real stack when `hand_cap=0`, so non-cap
+  play is unchanged** — keep it that way when touching betting.
+- Table surface: `PokerTable.raise_cap_override` / `hand_cap_bb` (BB→chips in
+  `create_game_instance`). New columns → `reset_db.py` locally; fresh deploys get them.
+- ⚠️ Chip-conservation footgun (cost me an hour): calling `game._next_step()` after the hand
+  is already `COMPLETE` double-awards the pot. Any passive/sim loop MUST guard
+  `if res.advance_step and game.state != COMPLETE`. This is NOT an engine bug.
+
+### Debug Deck (T009) — reproduce deal scenarios on demand
+- Engine: `Deck(rng=...)` for reproducible shuffles; `Deck.set_stack(cards)` (engine-reusable
+  MockDeck pattern); `Table.set_stacked_deck(cards, repeat=)`, `set_deck_seed(seed)`,
+  `clear_stacked_deck()`. A stacked deck survives `clear_hands()` (deck rebuilt via
+  `Table._build_deck()`) and `start_hand(shuffle_deck=True)` skips shuffle when
+  `table.deck_is_stacked`. One-shot stack consumed after one hand; `repeat=True` persists.
+- Online: admin-gated `/api/debug/tables/<id>/stacked-deck|seed|deck-status` (`debug_routes.py`),
+  gated by `DEBUG_ALLOW_STACKED_DECK` (on in dev/testing, **off in production → 404**). Needs an
+  admin user (`tools/make_admin.py`). Workflow: open table (session created) → POST cards → Ready.
+
+### Stud Street Chat Announcements (8.4)
+- `services/stud_announcer.py::build_street_announcement(game)` is a pure fn over the engine
+  Game (unit-testable, no WS). `WebSocketManager.broadcast_game_state_update` (the single
+  broadcast choke point) calls `_maybe_announce_stud_street`, announce-once keyed on
+  `(hands_played, current_step)`. Street label derived from the betting round's index in
+  gameplay (stud configs name betting steps inconsistently, so don't parse step names).
 
 ### State Management
 - Game states: WAITING, DEALING, BETTING, SHOWDOWN, COMPLETE

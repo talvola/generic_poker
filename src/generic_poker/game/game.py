@@ -54,6 +54,10 @@ class Game:
         max_buyin: int = 2000,
         auto_progress: bool = True,
         named_bets: dict[str, int] | None = None,
+        # Table-level betting caps (BACKLOG 6.2.13):
+        max_raises_override: int | None = None,  # Limit: override bet+N raise cap
+        unlimited_raises: bool = False,  # Limit: disable the raise cap entirely
+        hand_cap: int = 0,  # NL/PL: max chips a player may lose per hand (0 = off)
     ):
         """
         Initialize new game.
@@ -116,6 +120,13 @@ class Game:
         # Limit raise cap (Robert's Rules B&R 4): bet + 3 raises for games with
         # 3+ betting rounds, bet + 4 for two-round games (draw/lowball)
         self.betting.max_raises = 3 if self._count_betting_rounds() >= 3 else 4
+        # Table overrides for the Limit raise cap (number of raises / unlimited).
+        if max_raises_override is not None:
+            self.betting.max_raises = max_raises_override
+        if unlimited_raises:
+            self.betting.raise_cap_enabled = False
+        # Per-hand money cap for cap games (mainly NL/PL).
+        self.betting.hand_cap = hand_cap if hand_cap and hand_cap > 0 else 0
 
         self.auto_progress = auto_progress  # Store the setting
 
@@ -241,7 +252,9 @@ class Game:
 
         # Reset state
         self.table.clear_hands()
-        self.table.deck.shuffle() if shuffle_deck else None
+        # A stacked (debug) deck must keep its forced order — never shuffle it.
+        if shuffle_deck and not self.table.deck_is_stacked:
+            self.table.deck.shuffle()
         self.betting.new_hand()
 
         self.current_step = 0
@@ -1469,11 +1482,17 @@ class Game:
         """
         if self.state != GameState.BETTING or self.current_player is None:
             return
-        if not any(p.is_active and p.stack > 0 for p in self.table.players.values()):
+        # Cap-bound players (money cap reached) have chips but can't act — treat
+        # them like stack-0 all-ins via the betting manager's effective stack.
+        if not any(self.betting.can_act(p) for p in self.table.players.values()):
             self.current_player = None
             return
         guard = len(self.table.players) + 1
-        while self.current_player is not None and self.current_player.stack == 0 and guard > 0:
+        while (
+            self.current_player is not None
+            and self.betting.effective_stack(self.current_player.id, self.current_player.stack) == 0
+            and guard > 0
+        ):
             self.current_player = self.next_player(round_start=False)
             guard -= 1
 

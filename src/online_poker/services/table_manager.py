@@ -320,6 +320,8 @@ class TableManager:
             is_private=config.is_private,
             allow_bots=config.allow_bots,
             password=config.password,
+            raise_cap_override=config.raise_cap_override,
+            hand_cap_bb=config.hand_cap_bb,
         )
 
         # Save to database

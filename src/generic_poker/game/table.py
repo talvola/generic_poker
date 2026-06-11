@@ -160,6 +160,7 @@ class Table:
         deck_type: DeckType = DeckType.STANDARD,
         rules: GameRules | None = None,
         max_players: int | None = None,  # Backward compatibility
+        deck_seed: int | None = None,
     ):
         """
         Initialize a new table.
@@ -189,11 +190,60 @@ class Table:
         # Button starts at seat 1 by default
         self.button_seat: int = 1
 
+        # Debug/testing deck controls. A seeded RNG gives reproducible
+        # (but still randomized) shuffles across hands; a stacked deck forces a
+        # specific deal order for reproducing scenarios. See Table.set_stacked_deck.
+        self.deck_seed: int | None = deck_seed
+        self._deck_rng: random.Random | None = random.Random(deck_seed) if deck_seed is not None else None
+        self.stacked_deck: list[Card] | None = None
+        self.stacked_deck_repeat: bool = False
+        self.deck_is_stacked: bool = False
+
         # Game state
-        self.deck = Deck(deck_type=self.deck_type)
+        self.deck = self._build_deck()
         self.discard_pile = Deck()
         self.discard_pile.clear()
         self.community_cards: dict[str, list[Card]] = {}
+
+    def _build_deck(self) -> Deck:
+        """Create a fresh deck honoring the seed and any pending stacked order.
+
+        Sets ``deck_is_stacked`` so callers (Game.start_hand) know not to
+        shuffle. A one-shot stack is consumed here so the next hand reverts to
+        a normal randomized deck; a repeating stack persists until cleared.
+        """
+        deck = Deck(deck_type=self.deck_type, rng=self._deck_rng)
+        self.deck_is_stacked = False
+        if self.stacked_deck:
+            deck.set_stack(self.stacked_deck)
+            self.deck_is_stacked = True
+            if not self.stacked_deck_repeat:
+                self.stacked_deck = None
+        return deck
+
+    def set_stacked_deck(self, cards: list[Card], repeat: bool = False) -> None:
+        """Force the next hand to be dealt from a specific card order (debug).
+
+        Args:
+            cards: Cards to deal first, in deal order (first card dealt first).
+            repeat: If True, re-apply the stack every hand until cleared; if
+                False (default), the stack applies to the next hand only.
+        """
+        self.stacked_deck = list(cards)
+        self.stacked_deck_repeat = repeat
+
+    def clear_stacked_deck(self) -> None:
+        """Clear any pending stacked deck so hands revert to random deals."""
+        self.stacked_deck = None
+        self.stacked_deck_repeat = False
+
+    def set_deck_seed(self, seed: int | None) -> None:
+        """Seed the deck RNG for reproducible (but randomized) shuffles (debug).
+
+        Pass ``None`` to revert to the global, unseeded RNG.
+        """
+        self.deck_seed = seed
+        self._deck_rng = random.Random(seed) if seed is not None else None
 
     @property
     def max_players(self) -> int:
@@ -751,4 +801,4 @@ class Table:
             player.is_active = True  # Reset fold status for new hand
         self.community_cards.clear()
         self.discard_pile.clear()
-        self.deck = Deck(deck_type=self.deck_type)
+        self.deck = self._build_deck()

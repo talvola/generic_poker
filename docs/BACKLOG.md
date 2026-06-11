@@ -346,10 +346,10 @@ Features prioritized by casino relevance and games unlocked. Each unlocks multip
 | 6.2.7 | Two-Dice Roll (2d6 sum, range 2-12) for Omaha X-or-Better | 1+ | Low | Easy-Medium | DONE |
 | 6.2.8 | Tommy Tutone "867-5309" sequence evaluation type | 1 | Very Low | Medium | TODO |
 | 6.2.9 | Single-Color evaluation (best poker hand from 5 cards of one color) for Dramaha Red/Black | 1 | Very Low | Medium | TODO |
-| 6.2.10 | Bomb Pot mechanic (everyone antes, no preflop action, deal straight to flop) | 3+ | Medium-High | Medium | TODO |
+| 6.2.10 | Bomb Pot mechanic (everyone antes, no preflop action, deal straight to flop) | 3+ | Medium-High | Medium | DONE |
 | 6.2.11 | Cross-Board evaluation for Ultimate Bomb Pot / "Best Best" (best hand across any board) | 1+ | Low-Medium | Medium | TODO |
 | 6.2.12 | Captain mechanic (asymmetric dealing: button pays extra, gets extra cards, must discard) | 3+ | Low | Medium-Hard | TODO |
-| 6.2.13 | Betting cap (maximum loss per hand, configurable per table) | N/A | Medium | Easy-Medium | TODO |
+| 6.2.13 | Betting cap (maximum loss per hand, configurable per table) | N/A | Medium | Easy-Medium | DONE |
 | 6.2.14 | Single-Color Low evaluation (best low hand from 5 cards of one color) for Red/Black Draw variants | 3+ | Very Low | Medium | TODO |
 | 6.2.15 | Ten-to-Ace Highball evaluation type (mirror of A-5 low: highest unpaired low card wins) | 1+ | Very Low | Medium | TODO |
 | 6.2.16 | Pass the Pips (board-matching discard, pip-count hi-lo, neighbor card passing) | 1 | Very Low | Very Hard | TODO |
@@ -376,11 +376,46 @@ Features prioritized by casino relevance and games unlocked. Each unlocks multip
 
 **6.2.10 details:** Bomb Pot (Card Player Magazine, Feb 2026) — everyone antes a fixed amount (no blinds), no preflop betting round, deal proceeds straight to flop. Popular in cardrooms as a "dealer change" game. Needs: (a) new forced bet style `"bomb"` that collects a fixed ante from all players with no subsequent preflop action, (b) game flow skip from ante directly to flop deal. Can be combined with existing double-board infrastructure for Double Board Bomb Pot. The basic structure is: ante → deal hole cards → deal flop (no bet) → post-flop bet → turn → bet → river → bet → showdown. Currently our `"antes_only"` style posts antes but still expects a betting round after the deal.
 
+**6.2.10 result (DONE 2026-06-10):** Added `"bomb"` forced-bet style. It reuses the
+existing `{"bet":{"type":"antes"}}` step to collect antes (antes don't set `current_bet`, so
+post-flop betting starts clean) — the difference from `antes_only` is the betting-order
+default: `bomb` → `initial/subsequent = "dealer"` (flop-game order, action left of button),
+where `antes_only` defaults `subsequent` to `"high_hand"` (stud). The "no preflop bet" is
+purely config: the gameplay array simply omits the preflop bet step (ante → deal hole → deal
+flop → post-flop bet → ...). Changes: `loader.py` (accept `bomb` in 3 validation lists + betting-order
+default), `data/schemas/game.json` (style enum), smoke-test ante param. New configs:
+`bomb_pot_holdem.json`, `double_board_bomb_pot.json` (reuses multi-row double-board showdown).
+Tests: `tests/game/test_bomb_pot.py` (6 — ante collection, no-preflop/flop-already-dealt,
+post-flop action order, single- and double-board chip conservation).
+
 **6.2.11 details:** Ultimate Bomb Pot / "Best Best" (Card Player Magazine, Feb 2026) — double-board bomb pot where the pot splits between best HIGH across either board and best LOW across either board (not per-board like regular double-board). Needs a new showdown mode: `"communityCardCombinations"` with a `"cross_board"` option that evaluates each player's best hand considering all boards and picks the single best high and single best low. Currently our multi-board showdown splits the pot per-board independently. Depends on 6.2.10 (bomb pot mechanic).
 
 **6.2.12 details:** Captain (Card Player Magazine, Feb 2026) — Dramaha variant where the button ("captain") pays a premium ante (e.g., 5x the blind), receives one extra card, and must discard at least one before/during the draw. Other players match the captain's ante or fold (no raising). Needs: (a) asymmetric dealing — `"deal"` step config option to give one position extra cards, (b) new forced bet type for captain's premium with match-or-fold for others, (c) minimum discard constraint on specific position. Can be applied to any Dramaha variant (high = "Lieutenant", low-dugi = "General", etc.).
 
 **6.2.13 details:** Betting Cap (Card Player Magazine, Feb 2026) — maximum amount a player can lose per hand, commonly set to 10x the limit big bet (e.g., $400 at $20/$40). When a player's losses in a hand reach the cap, they are effectively all-in. Needs: (a) `"cap"` field in table/betting config (absolute amount or multiplier of big bet), (b) BettingManager tracks cumulative bets per player per hand and enforces cap as an artificial stack limit. This is a table-level setting, not a game config setting. Common in mixed games to make NL/PL variants acceptable to limit players.
+
+**6.2.13 result (DONE 2026-06-11):** Research clarified two *distinct* conventions the
+backlog had conflated, and we implemented both as structure-aware table settings:
+1. **Limit raise cap** (per betting round; the "number of raises" cap common in CA/Vegas
+   clubs): already enforced by default (bet + 3 / bet + 4 two-round, unlimited heads-up).
+   Added a **per-table override** — `max_raises_override` (e.g. bet + 4/5) and
+   `unlimited_raises` (disable the cap). `betting.raise_cap_enabled` gates `is_raise_capped`.
+2. **Per-hand money cap** ("cap game", mainly NL/PL): `betting.hand_cap` (chips) + per-hand
+   `hand_contributed` tracking. `BettingManager.effective_stack(pid, real_stack) =
+   min(real_stack, cap − contributed)` is threaded through `get_max_bet`/`validate_bet`/
+   `place_bet` all-in detection and the direct `player.stack` reads in `get_valid_actions`/
+   `_calculate_bet_amounts`. A capped-out player (chips left but cap reached) is treated as
+   all-in via a new `betting.can_act()` used by `round_complete`, `_live_player_count`, and
+   `skip_betting_players_unable_to_act`. Side pots form through the existing all-in machinery.
+   `effective_stack` returns the real stack when no cap is set, so non-cap tables are byte-for-
+   byte unchanged (all prior tests pass).
+- Table surface: `PokerTable.raise_cap_override` + `hand_cap_bb` columns (nullable),
+  `create_game_instance` converts BB→chips and passes the right kwargs by structure;
+  create-table form shows the raise-cap dropdown for Limit and the per-hand-cap (BB) dropdown
+  for NL/PL. Tests: `tests/game/test_betting_cap.py` (9, incl. a 60-hand random chip-
+  conservation stress) + `tests/integration/test_betting_cap_table.py` (7 plumbing).
+- Note: new DB columns — run `python tools/reset_db.py` locally (create_all doesn't ALTER
+  existing tables); fresh Render deploys get them automatically.
 
 **6.2.14 details:** Single-Color Low evaluation (Card Player Magazine, Jan 2026) — for Red/Black variants of draw lowball. Players must show down 5 cards of a single color (all red or all black) for the best low. Five-card single-color beats four-card; within same length, standard low rankings apply. For 2-7 Red/Black, use 2-7 low ranking among single-color cards. For A-5 Red/Black, use A-5 low ranking. Shares the color-filtering logic with 6.2.9 (Dramaha Red/Black) but applies low evaluation instead of high. Could be implemented as a modifier/wrapper on existing low evaluators rather than a fully separate eval type.
 
@@ -472,7 +507,7 @@ phones (≤430px); tablet portrait is now a supported layout.
 | 8.1 | Game rules display (visual game cards from JSON configs) | DONE |
 | 8.2 | 4-color deck option (blue diamonds, green clubs) for better card readability | DONE |
 | 8.3 | Table layout redesign: single-viewport, no side panel, full-width action bar | DONE |
-| 8.4 | Stud games: show each player's visible cards in table chat when action order changes | TODO |
+| 8.4 | Stud games: show each player's visible cards in table chat when action order changes | DONE |
 
 **8.1 result:** Visual game description cards inspired by abby99 Mixed Game Cards format. Each card shows game name, subtitle tags (Blinds/Antes, Split Pot, Qualifier, Wild Cards, Max Players), a visual timeline with card stacks (I=individual, C=community), bet chips, and color-coded action boxes (draw=blue, discard=red, expose=green, pass=purple, separate=orange, declare=pink), plus Final Hand description and Split Pot info.
 
@@ -480,6 +515,19 @@ Three components:
 - **Shared module** `src/generic_poker/config/game_description.py` — extracts display data from game config JSONs (subtitle tags, timeline, hand descriptions, wild cards, split pot info)
 - **Standalone tool** `tools/generate_game_cards.py` — generates a single HTML file with all 293 game cards (filterable, print-friendly). Usage: `python tools/generate_game_cards.py [output.html] [--filter PATTERN]`
 - **Lobby integration** — "View Rules" link appears next to variant selector in create-table form; opens modal with visual game card via `/api/tables/variants/<id>/rules` API endpoint
+
+**8.4 result (DONE 2026-06-10):** Stud street chat announcements. When a new betting street
+begins in a bring-in (stud) game, a compact chat line lists each active player's up-cards and
+whose action it is, e.g. `4th street — Alice: K♠ 9♦ | Bob: A♥ 2♣ · action on Bob`. The street
+label is derived from the betting round's position in the config (stateless), since stud
+configs name betting steps inconsistently; suits render as Unicode symbols. Logic is a pure
+function over the engine `Game` in `services/stud_announcer.py` (`build_street_announcement`),
+so it's unit-tested without a WebSocket. `WebSocketManager.broadcast_game_state_update` — the
+single broadcast choke point hit by all action paths (human, bot, disconnect) — calls
+`_maybe_announce_stud_street`, which announces once per street keyed on `(hands_played,
+current_step)`. Messages use the existing `game_action`/`phase_change` chat path. Tests:
+`tests/integration/test_stud_announcer.py` (6 — format, stud detection, 3rd-street content,
+3rd→7th label progression, growing board).
 
 **8.3 result:** Complete table layout redesign eliminating the side panel. Layout now fits in one viewport with zero scrolling, matching industry poker clients (PokerStars, GGPoker). Changes: viewport locked to `100vh`, action bar full-width at bottom, chat converted to floating collapsible widget (bottom-left) with unread badge, game info (hand#, player count) moved to header, settings/debug moved to icon-triggered modals in header, ready panel and showdown display as centered table overlays, side panel removed entirely (~200 lines dead CSS). All element IDs preserved for JS/E2E test compatibility. Files: `table.html`, `table.css`, `table.js`, `chat.js`, `responsive.js`. **Deployed to Render, awaiting user testing.**
 
@@ -502,4 +550,15 @@ These are bugs found during `.kiro` testing sessions that may or may not still b
 | G006 | High | 404 for available-actions API endpoint | Not a bug (route works, url_prefix override is correct) |
 | T007 | Medium | Gameplay table shape (oval) doesn't match seat selection screen (rounded rectangle) — should use consistent rounded-rectangle shape | Fixed (border-radius: 50% → 250px) |
 | T008 | Critical | Deck not shuffled between hands — same cards dealt every hand. `start_hand()` must shuffle by default | Fixed |
-| T009 | Low | Add debug option for fixed/unseeded deck (useful for testing specific scenarios). Could be server flag, config option, or admin toggle. Similar to test fixtures in `tests/game/` | Open |
+| T009 | Low | Add debug option for fixed/unseeded deck (useful for testing specific scenarios). Could be server flag, config option, or admin toggle. Similar to test fixtures in `tests/game/` | DONE (2026-06-10) |
+
+**T009 result:** Engine + online debug deck support. Engine: `Deck(rng=...)` for
+reproducible shuffles, `Deck.set_stack(cards)` (the MockDeck pattern, reusable in engine),
+and `Table.set_stacked_deck(cards, repeat=)` / `set_deck_seed(seed)` / `clear_stacked_deck()`.
+A stacked deck survives the per-hand deck rebuild in `clear_hands()` and `start_hand()` never
+shuffles it away (`deck_is_stacked` guard). One-shot stacks apply to the next hand only;
+`repeat=True` re-applies every hand until cleared. Online: admin-gated `/api/debug` blueprint
+(`debug_routes.py`) to POST a card list or seed per table, gated behind the
+`DEBUG_ALLOW_STACKED_DECK` flag (on in dev/testing, off in production → endpoints 404).
+Workflow: open the table (session created) → POST `{cards:[...]}` → Ready. Tests:
+`tests/game/test_stacked_deck.py` (7), `tests/integration/test_debug_deck.py` (9).
