@@ -114,6 +114,16 @@ it on the PokerTable instance and re-apply after renders. Never replace `#action
 innerHTML — the showdown strip renders into the sibling `#showdown-panel`.
 Note: some JS/CSS files are CRLF; Python-scripted rewrites normalize to LF (noisy diffs).
 
+**Responsive layout invariants (table.css/table.js):** Seat-position CSS exists only for
+`data-max-players` 2/6/9 (bucketed in table.html). The hero's own seat gets `.hero-seat`
+(own cards render larger); its selectors outrank media-query card rules, so each breakpoint
+needs its own hero overrides. Bottom-row seats (2-max pos 1, 6-max pos 2-3, 9-max pos 3-5)
+are `column-reverse` — cards above the info panel, on the felt. The dealer button is
+positioned by JS inline styles (`updateDealerButton()`, anchored to `.player-info`); the
+`.dealer-button[data-position]` CSS rules are dead code. Tablet-portrait breakpoint is
+431-1100px — 13" iPads are 1024-1032px wide in portrait, so don't cap tablet queries at
+1024px. Rotate prompt is phone-only (≤430px).
+
 ## Game Configuration System
 
 Poker variants are defined in `data/game_configs/*.json`. Example structure:
@@ -231,6 +241,9 @@ Layer 3: E2E Browser Tests (visual verification only)
   - tests/e2e/specs/
 ```
 
+E2E flake pattern: a single test (Badugi multi-draw, SOHE separate) can fail in the full
+run but pass in isolation — re-run with `-g "<test name>"` before investigating.
+
 ### Bug Fix Workflow
 
 1. Reproduce with a Python integration test (Layer 1)
@@ -244,6 +257,13 @@ Layer 3: E2E Browser Tests (visual verification only)
 - Fixtures in `tests/test_helpers.py`
 - **Integration tests do NOT require a running server** - use Flask test client
 - Integration tests create own Flask app with in-memory SQLite
+
+**Manual UI verification with bots (no E2E needed):** log in via browser, then
+`POST /api/tables` (create) and `POST /api/tables/<id>/join` with
+`{buy_in_amount, seat_number}`, navigate to `/table/<id>`, click `#ready-btn` —
+bots fill and play automatically. Note: `/api/tables` works; `/api/tables/`
+(trailing slash) 404s. Resize viewport to device sizes (iPad 11" 834×1194,
+13" 1032×1376) for layout checks.
 
 **Common issues:**
 - Patch path must match actual import location (not class definition location)
