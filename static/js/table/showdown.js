@@ -196,11 +196,12 @@ class PokerShowdown {
         }
 
         // Always auto-dismiss — the ready panel waits for the showdown strip,
-        // so it must never stay up indefinitely
+        // so it must never stay up indefinitely. Longer window gives time to
+        // study results in unusual/split games (the close button dismisses early).
         clearTimeout(this._dismissTimer);
         this._dismissTimer = setTimeout(() => {
             this.hideShowdownBar();
-        }, 10000);
+        }, 20000);
 
         const closeBtn = showdownPanel.querySelector('.showdown-close-btn');
         if (closeBtn) {
@@ -211,38 +212,55 @@ class PokerShowdown {
     }
 
     _createActionBarShowdownContent(handResults) {
+        const GENERIC = ['Hand', 'Best Hand', 'Unspecified', ''];
+        const typeClass = (t) => /low/i.test(t) ? 'low' : (/high/i.test(t) ? 'high' : '');
         let html = '<div class="showdown-bar">';
 
-        // Winners section
-        if (handResults.winning_hands && handResults.winning_hands.length > 0) {
-            handResults.winning_hands.forEach(winningHand => {
-                const playerName = this._getPlayerName(winningHand.player_id);
-                const genericLabels = ['Hand', 'Best Hand', 'Unspecified'];
-                const handTypeLabel = winningHand.hand_type && !genericLabels.includes(winningHand.hand_type)
-                    ? ` (${PokerModals.escapeHtml(winningHand.hand_type)})`
-                    : '';
-
-                html += `
-                    <div class="showdown-bar-winner">
-                        <span class="showdown-bar-trophy">\u2605</span>
-                        <strong>${PokerModals.escapeHtml(playerName)}</strong> wins${handTypeLabel} with
-                        <strong>${PokerModals.escapeHtml(winningHand.hand_description)}</strong>
-                    </div>
-                `;
-            });
+        // Header with total pot
+        if (handResults.total_pot) {
+            html += `<div class="showdown-bar-header">Showdown &mdash; Pot $${handResults.total_pot}</div>`;
         }
 
-        // Pot section
+        // Winners grouped by hand type, so the High and Low halves of a split
+        // pot are clearly labeled and separated.
+        if (handResults.winning_hands && handResults.winning_hands.length > 0) {
+            const groups = {};
+            const order = [];
+            handResults.winning_hands.forEach(wh => {
+                const type = (wh.hand_type && !GENERIC.includes(wh.hand_type)) ? wh.hand_type : '';
+                if (!(type in groups)) { groups[type] = []; order.push(type); }
+                groups[type].push(wh);
+            });
+
+            html += '<div class="showdown-bar-winners">';
+            order.forEach(type => {
+                const tag = type
+                    ? `<span class="showdown-type-tag ${typeClass(type)}">${PokerModals.escapeHtml(type)}</span>`
+                    : '';
+                groups[type].forEach(wh => {
+                    const name = this._getPlayerName(wh.player_id);
+                    html += `
+                        <div class="showdown-bar-winner">
+                            <span class="showdown-bar-trophy">\u2605</span>${tag}
+                            <strong>${PokerModals.escapeHtml(name)}</strong>
+                            <span class="showdown-bar-hand">${PokerModals.escapeHtml(wh.hand_description)}</span>
+                        </div>
+                    `;
+                });
+            });
+            html += '</div>';
+        }
+
+        // Pot breakdown (main / side, with the half it pays and the amount)
         if (handResults.pots && handResults.pots.length > 0) {
             html += '<div class="showdown-bar-pots">';
             handResults.pots.forEach(pot => {
-                const winnerNames = pot.winners.map(winnerId => PokerModals.escapeHtml(this._getPlayerName(winnerId)));
+                const winnerNames = pot.winners.map(w => PokerModals.escapeHtml(this._getPlayerName(w)));
                 const potType = pot.pot_type === 'main' ? 'Pot' : 'Side pot';
-                const genericLabels = ['Hand', 'Best Hand', 'Unspecified'];
-                const handTypeLabel = pot.hand_type && !genericLabels.includes(pot.hand_type)
-                    ? ` (${PokerModals.escapeHtml(pot.hand_type)})`
-                    : '';
-                html += `<span class="showdown-bar-pot">${potType}${handTypeLabel}: $${pot.amount} \u2192 ${winnerNames.join(', ')}</span>`;
+                const type = (pot.hand_type && !GENERIC.includes(pot.hand_type)) ? pot.hand_type : '';
+                const tag = type ? ` <span class="showdown-type-tag ${typeClass(type)}">${PokerModals.escapeHtml(type)}</span>` : '';
+                const splitNote = pot.split ? ` (split $${Math.floor(pot.amount / pot.winners.length)} each)` : '';
+                html += `<span class="showdown-bar-pot">${potType}${tag}: $${pot.amount} \u2192 ${winnerNames.join(', ')}${splitNote}</span>`;
             });
             html += '</div>';
         }

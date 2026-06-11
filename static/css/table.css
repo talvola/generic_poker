@@ -666,15 +666,26 @@ body {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
+/* Not folded: keep neutral. The loud highlight is reserved for whoever is to
+   act, so the whole table isn't lit up at once (that made the acting player
+   indistinguishable from everyone else, including yourself). */
 .player-info.active {
-    border-color: var(--gold);
-    box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+    border-color: rgba(255, 255, 255, 0.16);
 }
 
-.player-info.current-turn {
+/* Your own seat gets a subtle blue accent so you can find yourself at a glance,
+   clearly different from the green "to act" highlight. */
+.hero-seat .player-info {
+    border-color: rgba(74, 144, 226, 0.7);
+}
+
+/* Whoever is to act: the single, unmistakable highlight — a bright pulsing
+   green glow. Listed for the hero too so it wins on your own turn. */
+.player-info.current-turn,
+.hero-seat .player-info.current-turn {
     border-color: var(--success-color);
-    box-shadow: 0 0 15px rgba(40, 167, 69, 0.5);
-    animation: pulse 2s infinite;
+    box-shadow: 0 0 22px 5px rgba(40, 167, 69, 0.8);
+    animation: pulse 1.4s infinite;
 }
 
 .player-info.disconnected {
@@ -764,6 +775,45 @@ body {
     font-size: 0.7rem;
     color: rgba(255, 255, 255, 0.8);
     margin-top: 0.25rem;
+    min-height: 1.15em; /* reserve space so the seat doesn't shift when a badge appears */
+}
+
+/* Action badge for the current betting round — color-coded by action type so
+   it's obvious at a glance who checked, called, bet, or raised before your turn. */
+.player-action.has-action {
+    display: inline-block;
+    padding: 1px 9px;
+    border-radius: 10px;
+    font-weight: 700;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: #fff;
+    background: rgba(110, 110, 120, 0.9);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+    white-space: nowrap;
+}
+.player-action[data-action="raise"],
+.player-action[data-action="bet"],
+.player-action[data-action="allin"] {
+    background: var(--danger-color);
+}
+.player-action[data-action="call"],
+.player-action[data-action="bringin"],
+.player-action[data-action="complete"] {
+    background: #1a6bc4;
+}
+.player-action[data-action="check"] {
+    background: #1e8c45;
+}
+.player-action[data-action="draw"],
+.player-action[data-action="discard"],
+.player-action[data-action="pass"],
+.player-action[data-action="expose"],
+.player-action[data-action="separate"],
+.player-action[data-action="declare"],
+.player-action[data-action="choose"],
+.player-action[data-action="buy"] {
+    background: #7a3fb0;
 }
 
 /* Position Indicators (Dealer, SB, BB) */
@@ -1086,17 +1136,19 @@ body {
 /* Ready Panel (overlay centered on table) */
 .ready-panel {
     position: absolute;
-    top: 50%;
+    /* Sit in the lower portion of the table, not over the board, so the
+       community cards and winning hands stay visible while readying up. */
+    bottom: 3%;
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translateX(-50%);
     z-index: 40;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1rem;
-    padding: 1.5rem 2rem;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(10px);
+    gap: 0.6rem;
+    padding: 0.9rem 1.5rem;
+    background: rgba(0, 0, 0, 0.78);
+    backdrop-filter: blur(8px);
     border-radius: var(--border-radius);
     border: 1px solid rgba(255, 255, 255, 0.15);
 }
@@ -1404,13 +1456,56 @@ body {
     padding-right: 2rem;
 }
 
+.showdown-bar-header {
+    width: 100%;
+    font-weight: 700;
+    font-size: 0.8rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.showdown-bar-winners {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.25rem;
+    align-items: center;
+}
+
 .showdown-bar-winner {
     color: var(--gold);
     font-size: 0.95rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.showdown-bar-hand {
+    color: #fff;
+    font-weight: 600;
+}
+
+/* High/Low (and other) hand-type tags so split pots read at a glance */
+.showdown-type-tag {
+    display: inline-block;
+    padding: 0 7px;
+    border-radius: 9px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #fff;
+    background: rgba(120, 120, 130, 0.9);
+}
+.showdown-type-tag.high {
+    background: #1a6bc4;
+}
+.showdown-type-tag.low {
+    background: #1e8c45;
 }
 
 .showdown-bar-trophy {
-    margin-right: 0.25rem;
+    margin-right: 0.1rem;
 }
 
 .showdown-bar-pots {
@@ -1989,11 +2084,11 @@ body {
 
     0%,
     100% {
-        box-shadow: 0 0 15px rgba(40, 167, 69, 0.5);
+        box-shadow: 0 0 16px 2px rgba(40, 167, 69, 0.65);
     }
 
     50% {
-        box-shadow: 0 0 25px rgba(40, 167, 69, 0.8);
+        box-shadow: 0 0 28px 7px rgba(40, 167, 69, 0.95);
     }
 }
 

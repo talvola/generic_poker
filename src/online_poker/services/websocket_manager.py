@@ -1339,6 +1339,7 @@ class WebSocketManager:
 
                 # Start the hand
                 game.start_hand(shuffle_deck=True)
+                session.reset_action_tracking()  # clear seat action badges
                 logger.info(f"Started new hand at table {table_id}")
 
                 # Broadcast hand start and blinds to chat

@@ -110,13 +110,19 @@ class GameStateManager:
             # Get table information
             table_info = GameStateManager._get_table_info(session)
 
-            # Get time_limit from Flask config
+            # Send a countdown time_limit only when action timeouts are actually
+            # enabled. With timeouts off (the default), there is no auto-action, so
+            # a ticking countdown is misleading false pressure — the client just
+            # highlights whose turn it is instead.
             try:
                 from flask import current_app
 
-                time_limit = current_app.config.get("ACTION_TIMEOUT_SECONDS", 30)
+                if current_app.config.get("ACTION_TIMEOUT_ENABLED", False):
+                    time_limit = current_app.config.get("ACTION_TIMEOUT_SECONDS", 30)
+                else:
+                    time_limit = None
             except RuntimeError:
-                time_limit = 30
+                time_limit = None
 
             # Create game state view
             game_state_view = GameStateView(
@@ -752,9 +758,26 @@ class GameStateManager:
 
     @staticmethod
     def _get_last_action(session: GameSession, user_id: str) -> str | None:
-        """Get a player's last action."""
-        # This would typically come from the game engine's action history
-        # For now, return None - this should be implemented with actual game logic
+        """Get a player's action this betting round, for the seat badge.
+
+        Folded players show "Fold" until the hand ends; other actions show only
+        while they belong to the live betting round (cleared when the street
+        advances). Recorded in GameSession.process_player_action.
+        """
+        game = session.game
+        if not game:
+            return None
+        player = game.table.players.get(user_id)
+        if player is not None and not player.is_active:
+            return "Fold"
+        record = getattr(session, "player_last_actions", {}).get(user_id)
+        if not record:
+            return None
+        try:
+            if record.get("round") == game.betting.betting_round:
+                return record.get("label")
+        except Exception:
+            return None
         return None
 
     @staticmethod

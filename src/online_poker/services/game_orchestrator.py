@@ -52,6 +52,11 @@ class GameSession:
         self.hands_played = 0
         self.current_hand_id = None
 
+        # Per-player last action this betting round, for the seat action badges
+        # (BACKLOG UX). Keyed user_id -> {"label": str, "round": int}. Cleared
+        # each hand; only shown while the recorded round matches the live round.
+        self.player_last_actions: dict[str, dict] = {}
+
         # Mixed game rotation state
         self.mixed_game_config: MixedGameConfig | None = None
         self.current_variant_index: int = 0
@@ -385,11 +390,16 @@ class GameSession:
                 else:
                     return False, "Player not in game", None
 
+            # Capture the betting round before the action so the seat badge is
+            # tied to the street it happened on (cleared when the street advances).
+            round_before = self.game.betting.betting_round if self.game else 0
+
             # Process action through the underlying Game
             result = self.game.player_action(user_id, action, amount, cards=cards, declaration_data=declaration_data)
 
             if result.success:
                 self.update_activity()
+                self._record_player_action(user_id, action, amount, round_before)
 
                 # Check if hand completed (cleanup only; hands_played and
                 # variant hand count are incremented in _handle_hand_completion
@@ -408,6 +418,45 @@ class GameSession:
         except Exception as e:
             logger.error(f"Failed to process action for player {user_id} in session {self.session_id}: {e}")
             return False, str(e), None
+
+    def reset_action_tracking(self) -> None:
+        """Clear per-player action badges at the start of a new hand."""
+        self.player_last_actions.clear()
+
+    def _record_player_action(self, user_id: str, action, amount: int, round_no: int) -> None:
+        """Record a player's action for the seat action badge."""
+        bet = self.game.betting.current_bets.get(user_id) if self.game else None
+        is_all_in = bool(bet and bet.is_all_in)
+        label = GameSession._format_action_label(action, amount, is_all_in)
+        if label:
+            self.player_last_actions[user_id] = {"label": label, "round": round_no}
+
+    @staticmethod
+    def _format_action_label(action, amount: int, is_all_in: bool) -> str | None:
+        """Short label for a seat action badge, e.g. 'Raise $40', 'Check', 'Fold'."""
+        from generic_poker.game.game_state import PlayerAction
+
+        amt = f" ${amount}" if amount else ""
+        if is_all_in and action in (PlayerAction.BET, PlayerAction.RAISE, PlayerAction.CALL, PlayerAction.COMPLETE):
+            return f"All-in{amt}"
+        labels = {
+            PlayerAction.FOLD: "Fold",
+            PlayerAction.CHECK: "Check",
+            PlayerAction.CALL: f"Call{amt}",
+            PlayerAction.BET: f"Bet{amt}",
+            PlayerAction.RAISE: f"Raise{amt}",
+            PlayerAction.BRING_IN: f"Bring-in{amt}",
+            PlayerAction.COMPLETE: f"Complete{amt}",
+            PlayerAction.DRAW: "Draw",
+            PlayerAction.DISCARD: "Discard",
+            PlayerAction.PASS: "Pass",
+            PlayerAction.EXPOSE: "Expose",
+            PlayerAction.SEPARATE: "Separate",
+            PlayerAction.DECLARE: "Declare",
+            PlayerAction.CHOOSE: "Choose",
+            PlayerAction.BUY: "Buy",
+        }
+        return labels.get(action)
 
     def _update_player_stacks(self) -> None:
         """Update player chip stacks in the database after a hand."""

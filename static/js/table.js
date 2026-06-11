@@ -423,11 +423,15 @@ class PokerTable {
         this.updateGameInfo();
         this.updateDealerButton(data.dealer_position);
 
-        // Start/update timer for the current player's turn (visible to everyone)
-        if (data.current_player && data.game_phase && data.game_phase !== 'waiting' && data.game_phase !== 'complete' && data.game_phase !== 'showdown') {
+        // Show a countdown only when the server sends a time_limit (i.e. action
+        // timeouts are enabled). Otherwise there's no deadline — the seat's
+        // "current turn" highlight is enough, with no stressful ticking bar.
+        const inPlay = data.current_player && data.game_phase
+            && data.game_phase !== 'waiting' && data.game_phase !== 'complete' && data.game_phase !== 'showdown';
+        if (inPlay && data.time_limit) {
             // Only restart timer if the current player changed (new turn)
             if (this.timer.currentPlayerId !== data.current_player) {
-                this.timer.start(data.time_limit || 30, data.current_player);
+                this.timer.start(data.time_limit, data.current_player);
             } else {
                 // Same player, just re-render the bar (DOM was rebuilt by renderPlayers)
                 this.timer._updateTimerBar();
@@ -501,11 +505,19 @@ class PokerTable {
         const positionIndicators = this.getPositionIndicators(player.seat_number);
         const leavingTag = isLeaving ? ' <span class="leaving-indicator">(leaving)</span>' : '';
 
+        // Action badge for the current betting round (color-coded by type).
+        // Folds are already shown by the FOLDED indicator, so skip them here.
+        const lastAction = player.last_action || '';
+        const actionType = lastAction.split(' ')[0].toLowerCase().replace('-', '');
+        const actionBadge = (lastAction && actionType !== 'fold')
+            ? `<div class="player-action has-action" data-action="${actionType}">${PokerModals.escapeHtml(lastAction)}</div>`
+            : '<div class="player-action"></div>';
+
         seat.innerHTML = `
             <div class="${playerInfoClass}">
                 <div class="player-name">${PokerModals.escapeHtml(player.username)}${leavingTag}</div>
                 <div class="player-chips">$${player.chip_stack || player.stack || 0}</div>
-                <div class="player-action">${player.last_action || ''}</div>
+                ${actionBadge}
                 ${hasFolded ? '<div class="folded-indicator">FOLDED</div>' : ''}
                 ${player.current_bet > 0 ? `<div class="player-bet">$${player.current_bet}</div>` : ''}
                 ${positionIndicators}
