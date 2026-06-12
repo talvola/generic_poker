@@ -487,9 +487,15 @@ class PokerTable {
         const isCurrentPlayer = player.user_id === this.store.currentUser?.id;
         seat.className = isCurrentPlayer ? 'player-seat hero-seat' : 'player-seat';
         seat.dataset.position = position;
-        seat.dataset.playerId = player.id;
+        // Player objects carry user_id (engine player id), not a separate id —
+        // using player.id set this to "undefined" and broke the turn highlight
+        // and the timer's seat lookup.
+        seat.dataset.playerId = player.user_id;
 
-        const isCurrentTurn = this.store.gameState?.current_player === player.id;
+        // is_current_player is computed server-side; fall back to comparing the
+        // current_player id against user_id.
+        const isCurrentTurn = player.is_current_player === true
+            || this.store.gameState?.current_player === player.user_id;
         const isActive = player.is_active;
         const isDisconnected = player.is_disconnected;
         const hasFolded = player.has_folded;
