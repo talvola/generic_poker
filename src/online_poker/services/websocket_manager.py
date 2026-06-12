@@ -164,92 +164,7 @@ class WebSocketManager:
                     emit("error", {"message": "Table ID required"})
                     return
 
-                user_id = current_user.id
-
-                from generic_poker.game.game_state import GameState
-
-                from ..services.game_orchestrator import game_orchestrator
-                from ..services.table_access_manager import TableAccessManager
-                from ..services.table_manager import TableManager
-
-                session = game_orchestrator.get_session(table_id)
-
-                # Check if a hand is actively in progress
-                hand_active = (
-                    session
-                    and session.game
-                    and session.game.state
-                    in (GameState.BETTING, GameState.DEALING, GameState.SHOWDOWN, GameState.DRAWING)
-                )
-
-                if hand_active:
-                    # Mid-hand: fold and mark for removal after hand
-                    hand_completed, msg = session.mark_player_leaving(user_id)
-                    logger.info(f"Player {user_id} leaving mid-hand: {msg}")
-
-                    # Broadcast that this player is leaving
-                    self.broadcast_to_table(
-                        table_id,
-                        "player_leaving",
-                        {
-                            "user_id": user_id,
-                            "username": current_user.username,
-                            "timestamp": datetime.utcnow().isoformat() + "Z",
-                        },
-                    )
-
-                    # If fold completed the hand, handle completion
-                    if hand_completed and session.game.state == GameState.COMPLETE:
-                        try:
-                            hand_results = session.game.get_hand_results()
-                            if hand_results:
-                                from .player_action_manager import player_action_manager
-
-                                player_action_manager._handle_hand_completion(table_id, session)
-                        except Exception as hc_err:
-                            logger.error(f"Failed to handle hand completion after leave-fold: {hc_err}")
-                    else:
-                        # Hand continues - broadcast updated state
-                        self.broadcast_game_state_update(table_id)
-                else:
-                    # Not mid-hand: remove from game session immediately
-                    if session:
-                        session.remove_player(user_id, "Player left table")
-
-                # Leave the WebSocket room
-                self.leave_table_room(user_id, table_id)
-
-                # Remove player from the table in the database
-                # (skip if hand_completed — _handle_hand_completion already did this)
-                if not (hand_active and hand_completed):
-                    success, message = TableAccessManager.leave_table(user_id, table_id)
-                    if not success:
-                        logger.warning(f"Failed to leave table in database: {message}")
-                    else:
-                        logger.info(f"User {user_id} left table {table_id}")
-
-                # Check if last human left — clean up bots
-                if session:
-                    from ..services.simple_bot import SimpleBot, bot_manager
-
-                    human_players = [pid for pid in session.connected_players if not SimpleBot.is_bot_player(pid)]
-                    if not human_players:
-                        # Remove all bots from session and bot manager
-                        bot_ids = [pid for pid in list(session.connected_players) if SimpleBot.is_bot_player(pid)]
-                        for bot_id in bot_ids:
-                            session.remove_player(bot_id, "Last human left")
-                            bot_manager.remove_bot(bot_id)
-                        logger.info(f"Removed {len(bot_ids)} bots after last human left table {table_id}")
-
-                # Broadcast updated game state to remaining players
-                if session:
-                    self.broadcast_game_state_update(table_id)
-
-                # Broadcast table update to all lobby users so they see updated player count
-                table = TableManager.get_table_by_id(table_id)
-                if table:
-                    self.socketio.emit("table_updated", {"table": table.to_dict(), "action": "player_left"})
-
+                self.perform_leave(current_user.id, current_user.username, table_id)
                 emit("left_table", {"table_id": table_id, "timestamp": datetime.utcnow().isoformat() + "Z"})
 
             except Exception as e:
@@ -860,6 +775,85 @@ class WebSocketManager:
         except Exception as e:
             logger.error(f"Failed to join table room: {e}")
             return False
+
+    def perform_leave(self, user_id: str, username: str, table_id: str) -> tuple[bool, str]:
+        """Remove a user from a table: fold if mid-hand, cash out, free the seat,
+        clean up bots if last human, and broadcast.
+
+        Shared by the in-table ``leave_table`` socket event and the lobby's HTTP
+        leave endpoint, so it must be robust when the user is seated but not
+        actively connected to the game session (the lobby case).
+
+        Returns (success, message).
+        """
+        from generic_poker.game.game_state import GameState
+
+        from ..services.game_orchestrator import game_orchestrator
+        from ..services.table_access_manager import TableAccessManager
+        from ..services.table_manager import TableManager
+
+        session = game_orchestrator.get_session(table_id)
+        in_game = bool(session and session.game and user_id in session.game.table.players)
+        hand_active = bool(
+            session
+            and session.game
+            and session.game.state in (GameState.BETTING, GameState.DEALING, GameState.SHOWDOWN, GameState.DRAWING)
+        )
+        hand_completed = False
+
+        if hand_active and in_game:
+            # Mid-hand: fold and mark for removal after the hand.
+            hand_completed, msg = session.mark_player_leaving(user_id)
+            logger.info(f"Player {user_id} leaving mid-hand: {msg}")
+            self.broadcast_to_table(
+                table_id,
+                "player_leaving",
+                {"user_id": user_id, "username": username, "timestamp": datetime.utcnow().isoformat() + "Z"},
+            )
+            if hand_completed and session.game.state == GameState.COMPLETE:
+                try:
+                    if session.game.get_hand_results():
+                        from .player_action_manager import player_action_manager
+
+                        player_action_manager._handle_hand_completion(table_id, session)
+                except Exception as hc_err:
+                    logger.error(f"Failed to handle hand completion after leave-fold: {hc_err}")
+            else:
+                self.broadcast_game_state_update(table_id)
+        elif in_game:
+            # Not mid-hand but in the session: remove immediately.
+            session.remove_player(user_id, "Player left table")
+
+        # Leave the WebSocket room (no-op if leaving from the lobby).
+        self.leave_table_room(user_id, table_id)
+
+        # Cash out chips and free the seat in the DB (skip if completion did it).
+        if not (hand_active and hand_completed):
+            success, message = TableAccessManager.leave_table(user_id, table_id)
+            if not success:
+                logger.warning(f"Failed to leave table in database: {message}")
+                return False, message
+            logger.info(f"User {user_id} left table {table_id}")
+
+        # Clean up bots if the last human left.
+        if session:
+            from ..services.simple_bot import SimpleBot, bot_manager
+
+            human_players = [pid for pid in session.connected_players if not SimpleBot.is_bot_player(pid)]
+            if not human_players:
+                bot_ids = [pid for pid in list(session.connected_players) if SimpleBot.is_bot_player(pid)]
+                for bot_id in bot_ids:
+                    session.remove_player(bot_id, "Last human left")
+                    bot_manager.remove_bot(bot_id)
+                logger.info(f"Removed {len(bot_ids)} bots after last human left table {table_id}")
+            self.broadcast_game_state_update(table_id)
+
+        # Notify the lobby so player counts update everywhere.
+        table = TableManager.get_table_by_id(table_id)
+        if table:
+            self.socketio.emit("table_updated", {"table": table.to_dict(), "action": "player_left"})
+
+        return True, "Left table"
 
     def leave_table_room(self, user_id: str, table_id: str) -> bool:
         """Remove a user from a table room.

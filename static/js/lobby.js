@@ -426,6 +426,10 @@ class PokerLobby {
                                 data-table-id="${table.id}">
                             Rejoin
                         </button>
+                        <button class="btn btn-danger btn-small leave-table-btn"
+                                data-table-id="${table.id}">
+                            Leave
+                        </button>
                     ` : `
                         <button class="btn btn-primary btn-small join-table-btn"
                                 data-table-id="${table.id}"
@@ -462,6 +466,14 @@ class PokerLobby {
                 e.stopPropagation();
                 const tableId = btn.dataset.tableId;
                 this.rejoinTable(tableId);
+            });
+        });
+
+        // Leave table buttons (drop the seat without opening the table)
+        document.querySelectorAll('.leave-table-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.leaveTable(btn.dataset.tableId);
             });
         });
 
@@ -693,6 +705,29 @@ class PokerLobby {
     rejoinTable(tableId) {
         // Navigate directly to the table - user is already seated
         window.location.href = `/table/${tableId}`;
+    }
+
+    async leaveTable(tableId) {
+        const table = this.tables.find(t => t.id === tableId);
+        const name = table ? table.name : 'this table';
+        if (!confirm(`Leave "${name}"? Your chips will be cashed out. If a hand is in progress you'll fold and be removed after it ends.`)) {
+            return;
+        }
+        try {
+            const resp = await fetch(`/api/tables/${tableId}/leave`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                this.showNotification('Left table', 'success');
+                this.userTables = this.userTables.filter(id => id !== tableId);
+                this.loadTables();
+            } else {
+                this.showNotification(data.error || 'Failed to leave table', 'error');
+            }
+        } catch (err) {
+            this.showNotification('Failed to leave table', 'error');
+        }
     }
 
     showSeatSelectionModal(tableId) {

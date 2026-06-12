@@ -276,6 +276,46 @@ def join_table(table_id):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+@lobby_bp.route("/api/tables/<table_id>/leave", methods=["POST"])
+@login_required
+def leave_table_http(table_id):
+    """Leave a table from the lobby (cash out + free the seat).
+
+    Reuses the same logic as the in-table leave: if a hand is in progress the
+    player is folded and removed after it completes; otherwise they're removed
+    immediately. Lets a tester drop seats without opening each table.
+    """
+    try:
+        access = (
+            db.session.query(TableAccess)
+            .filter(
+                TableAccess.table_id == table_id,
+                TableAccess.user_id == current_user.id,
+                TableAccess.is_active == True,
+            )
+            .first()
+        )
+        if not access:
+            return jsonify({"success": False, "error": "You are not seated at this table"}), 400
+
+        from ..services.websocket_manager import get_websocket_manager
+
+        ws_manager = get_websocket_manager()
+        if not ws_manager:
+            # Fall back to a plain DB cash-out if the socket layer isn't available.
+            success, message = TableAccessManager.leave_table(current_user.id, table_id)
+        else:
+            success, message = ws_manager.perform_leave(current_user.id, current_user.username, table_id)
+
+        if success:
+            return jsonify({"success": True, "message": "Left table"})
+        return jsonify({"success": False, "error": message}), 400
+
+    except Exception as e:
+        current_app.logger.error(f"Failed to leave table {table_id}: {e}", exc_info=True)
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @lobby_bp.route("/api/tables/private/join", methods=["POST"])
 @login_required
 def join_private_table():

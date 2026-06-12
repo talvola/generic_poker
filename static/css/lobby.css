@@ -401,6 +401,16 @@ body {
     transform: translateY(-1px);
 }
 
+.btn-danger {
+    background: var(--danger-color, #dc3545);
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #b02a37;
+    transform: translateY(-1px);
+}
+
 .btn-outline {
     background: transparent;
     color: var(--primary-color);
