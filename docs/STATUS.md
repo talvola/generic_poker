@@ -95,6 +95,10 @@ Flask/SocketIO multiplayer web platform.
 - Bomb pot forced-bet style (`bomb`): everyone antes, no preflop betting, deal straight to flop. Configs: Bomb Pot Hold'em, Double Board Bomb Pot
 - Stud street chat announcements: each new betting street posts a compact line of every player's up-cards + whose action it is
 - Betting caps (table settings): Limit raise-cap override (bet+N / unlimited) and NL/PL per-hand money cap (cap game). `BettingManager.effective_stack` clamp; no-cap play unchanged
+- Seat action badges: each player's current-round action (Check/Call/Bet/Raise/All-in) shown as a color-coded badge on their seat
+- Turn indicator: blue accent = your seat, bright pulsing green = whose turn it is (fixed `player.id` undefined bug that broke the highlight); countdown only shown when action timeouts are enabled
+- Showdown clarity: split hi-lo winners grouped with HIGH/LOW tags; Ready panel moved off the board; 20s results window
+- Leave-from-lobby: "Leave" button on your tables in the lobby (`POST /api/tables/<id>/leave`) — cash out + free seat without opening the table
 
 ### Remaining Issues
 
