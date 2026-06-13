@@ -112,6 +112,11 @@ broadcast (~constantly on bot tables). Never bind listeners to card/seat element
 delegated listeners on `document`. Never store selection state only in DOM classes — keep
 it on the PokerTable instance and re-apply after renders. Never replace `#action-panel`
 innerHTML — the showdown strip renders into the sibling `#showdown-panel`.
+Player objects carry `user_id` (the engine player id), NOT `id` — `player.id` is `undefined`.
+Use `player.user_id` for seat ids/comparisons and `player.is_current_player` for the turn
+highlight (both server-computed). Because seats re-render constantly, probing a seat's
+computed style after a manual `classList`/`style` change is unreliable — verify CSS on a
+fresh isolated element instead.
 Note: some JS/CSS files are CRLF; Python-scripted rewrites normalize to LF (noisy diffs).
 
 **Responsive layout invariants (table.css/table.js):** Seat-position CSS exists only for
@@ -206,6 +211,10 @@ the gameplay array just omits the preflop bet step)
   — the single point hit by all completion paths (fold-win, human action, bot action).
 - Valid-action tuple amounts are TOTALS (player's total bet after the action), not deltas.
   Incremental call cost = `game.betting.get_additional_required(player_id)`.
+- No server-side auto-action by default: both the action timeout AND disconnect auto-fold
+  are gated by `ACTION_TIMEOUT_ENABLED` (false unless set). Don't hunt a phantom auto-check.
+- Both human and bot actions flow through `GameSession.process_player_action` — the single
+  choke point for per-action hooks (e.g. seat action badges via `player_last_actions`).
 
 ### Betting Caps (6.2.13) — two distinct, structure-aware table settings
 - **Limit raise cap** (per street): `betting.max_raises` (bet + N; default 3, or 4 for
@@ -280,6 +289,13 @@ Layer 3: E2E Browser Tests (visual verification only)
 
 E2E flake pattern: a single test (Badugi multi-draw, SOHE separate) can fail in the full
 run but pass in isolation — re-run with `-g "<test name>"` before investigating.
+Integration-test isolation: running multiple Flask integration test *files* together can
+fail (each `db.init_app`s its own app) while each passes alone — re-run the file in
+isolation to confirm it's fixture interference, not your code.
+Debugging live/deployed UI: drive it with Playwright — log in via page-context `fetch`
+(`/auth/api/login`, keeps cookies), create+join a table via the API, navigate to
+`/table/<id>`, click `#ready-btn`, then sample `window.pokerTable.store` / the DOM. The only
+way to reproduce bugs that need real bot play.
 
 ### Bug Fix Workflow
 
