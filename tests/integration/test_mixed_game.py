@@ -209,6 +209,86 @@ class TestMixedGameRotation:
         assert game.state == GameState.COMPLETE
 
 
+class TestNewFixedMixes:
+    """Tests for the additional fixed mixes (HOSE, SHOE, 10-Game) — Phase 9.2."""
+
+    NEW_MIXES = {
+        "hose": ("HOSE", 4),
+        "shoe": ("SHOE", 4),
+        "10_game_mix": ("10-Game Mix", 10),
+    }
+
+    @pytest.mark.parametrize("config_name", list(NEW_MIXES))
+    def test_mix_loads(self, config_name):
+        """Each new mix config loads with the expected size and metadata."""
+        display_name, length = self.NEW_MIXES[config_name]
+        config = MixedGameConfig.from_file(f"data/mixed_game_configs/{config_name}.json")
+        assert config.name == config_name
+        assert config.display_name == display_name
+        assert config.category == "Mixed"
+        assert config.rotation_type == "orbit"
+        assert len(config.rotation) == length
+        # Letters are unique so the rotation tracker pills are distinguishable
+        letters = [v.letter for v in config.rotation]
+        assert len(set(letters)) == len(letters), f"Duplicate pill letters in {config_name}: {letters}"
+
+    @pytest.mark.parametrize("config_name", list(NEW_MIXES))
+    def test_mix_variants_exist(self, config_name):
+        """Every variant referenced by a new mix exists and supports its structure."""
+        config = MixedGameConfig.from_file(f"data/mixed_game_configs/{config_name}.json")
+        for v in config.rotation:
+            rules = GameRules.from_file(f"data/game_configs/{v.variant}.json")
+            assert rules is not None, f"Missing variant config: {v.variant}"
+            supported = {s.value for s in rules.betting_structures}
+            assert (
+                v.betting_structure in supported
+            ), f"{v.variant} does not support {v.betting_structure} in {config_name}"
+
+    def _play_variant(self, variant_name, structure_name):
+        """Build and passively play a single hand of a variant under a structure."""
+        from generic_poker.game.betting import BettingStructure
+
+        rules = GameRules.from_file(f"data/game_configs/{variant_name}.json")
+        structure_map = {
+            "Limit": BettingStructure.LIMIT,
+            "No Limit": BettingStructure.NO_LIMIT,
+            "Pot Limit": BettingStructure.POT_LIMIT,
+        }
+        structure = structure_map[structure_name]
+
+        if structure == BettingStructure.LIMIT:
+            game = Game(rules=rules, structure=structure, small_bet=2, big_bet=4, ante=0, auto_progress=True)
+        else:
+            game = Game(rules=rules, structure=structure, small_blind=1, big_blind=2, auto_progress=True)
+
+        game.add_player("p1", "Alice", 200)
+        game.add_player("p2", "Bob", 200)
+        game.start_hand(shuffle_deck=True)
+
+        actions = 0
+        while game.state != GameState.COMPLETE and actions < 200:
+            if game.current_player is None:
+                break
+            valid = game.get_valid_actions(game.current_player.id)
+            if not valid:
+                break
+            action = valid[0][0]
+            amount = valid[0][1] if len(valid[0]) > 1 else 0
+            game.player_action(game.current_player.id, action, amount)
+            actions += 1
+
+        assert (
+            game.state == GameState.COMPLETE
+        ), f"{variant_name} ({structure_name}) did not complete (state={game.state})"
+
+    @pytest.mark.parametrize("config_name", list(NEW_MIXES))
+    def test_mix_all_variants_play(self, config_name):
+        """Every variant in each new mix plays a hand to completion under its structure."""
+        config = MixedGameConfig.from_file(f"data/mixed_game_configs/{config_name}.json")
+        for v in config.rotation:
+            self._play_variant(v.variant, v.betting_structure)
+
+
 class TestMixedGameOrbitTracking:
     """Tests for orbit-based rotation tracking."""
 

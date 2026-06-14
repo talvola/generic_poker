@@ -573,7 +573,7 @@ let players define their own mixes and variants on the fly (no JSON check-in + d
 | # | Task | Difficulty | Status |
 |---|------|-----------|--------|
 | 9.1 | Lobby card "Details" drill-in: enrich existing table-details modal with mixed-game rotation, betting cap, and a "View Rules" link | Easy | DONE |
-| 9.2 | Add more predefined fixed mixes (SHOE, 9-game, 10-game, etc.) as config files | Trivial (config-only) | TODO |
+| 9.2 | Add more predefined fixed mixes (SHOE, 9-game, 10-game, etc.) as config files | Trivial (config-only) | DONE (HOSE, SHOE, 10-Game) |
 | 9.3 | UI custom mixed-game builder: pick a name + ordered list of existing variants/structures → create a mix on the fly (stored per-user/per-table, no file check-in) | Medium | TODO |
 | 9.4 | Dealer's Choice: button player picks the next variant each orbit from an allowed-games menu (needs the 9.1 detail surface + 9.3 menu) | Medium-Hard | TODO |
 | 9.5 | UI custom variant authoring: form/wizard to define a new game JSON for engine-supported features only (e.g. Omaha 7-or-better instead of 8) — validated against the schema, stored as a user variant, never executes code | Hard | TODO |
@@ -593,9 +593,19 @@ Methods: `renderRotationSection`, `renderBettingCapRow`, `renderRulesLink`. CSS 
 (HORSE rotation, NL hand-cap, Limit raise-cap, View Rules → rules card). Presentational, no tests.
 
 **9.2 details:** Each fixed mix is a `data/mixed_game_configs/*.json` file referencing existing
-variant config stems. SHOE = Stud / Hold'em / Omaha-8 / Eight-or-better (razz family) — confirm
-exact lineup. The rotation engine (orbit-based swap, stack/seat/button preservation, NL/PL-from-
-Limit derivation) is already done and tested (`tests/integration/test_mixed_game.py`).
+variant config stems. The rotation engine (orbit-based swap, stack/seat/button preservation,
+NL/PL-from-Limit derivation) is already done and tested (`tests/integration/test_mixed_game.py`).
+
+**9.2 result (DONE):** Added three configs — `hose.json` (H/O/S/E, all Limit), `shoe.json`
+(S/H/O/E, all Limit), and `10_game_mix.json` (canonical WSOP: 2-7 Triple Draw, Hold'em,
+Omaha-8, Razz, Stud, Stud-8, NL Hold'em, PL Omaha, NL 2-7 Single Draw, Badugi — letters
+T/H/O/R/S/E/N/P/D/B). All reference existing variant stems; no engine changes. Surface
+automatically through `get_available_mixed_games` (directory glob) → lobby variants API → the
+9.1 Details rotation section (verified live locally: 10-Game shows all 10 pills + numbered
+list). Tests: extended `test_mixed_game.py` with `TestNewFixedMixes` (load + unique letters,
+variants-exist + structure-supported, and a play-to-completion check for every variant in each
+mix under its own structure). 9-game intentionally skipped — no single canonical lineup;
+the on-the-fly mix builder (9.3) is the better home for arbitrary mixes.
 
 **9.3 / 9.4 / 9.5 rationale:** Today defining a new mix or tweaking a qualifier (8-or-better →
 7-or-better) requires authoring JSON, committing, and redeploying — too heavy for something the
