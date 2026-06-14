@@ -562,3 +562,45 @@ shuffles it away (`deck_is_stacked` guard). One-shot stacks apply to the next ha
 `DEBUG_ALLOW_STACKED_DECK` flag (on in dev/testing, off in production → endpoints 404).
 Workflow: open the table (session created) → POST `{cards:[...]}` → Ready. Tests:
 `tests/game/test_stacked_deck.py` (7), `tests/integration/test_debug_deck.py` (9).
+
+---
+
+## Phase 9: Lobby Detail + User-Authored Variants
+
+Goal: surface richer table info in the lobby without crowding the cards, then progressively
+let players define their own mixes and variants on the fly (no JSON check-in + deploy).
+
+| # | Task | Difficulty | Status |
+|---|------|-----------|--------|
+| 9.1 | Lobby card "Details" drill-in: enrich existing table-details modal with mixed-game rotation, betting cap, and a "View Rules" link | Easy | DONE |
+| 9.2 | Add more predefined fixed mixes (SHOE, 9-game, 10-game, etc.) as config files | Trivial (config-only) | TODO |
+| 9.3 | UI custom mixed-game builder: pick a name + ordered list of existing variants/structures → create a mix on the fly (stored per-user/per-table, no file check-in) | Medium | TODO |
+| 9.4 | Dealer's Choice: button player picks the next variant each orbit from an allowed-games menu (needs the 9.1 detail surface + 9.3 menu) | Medium-Hard | TODO |
+| 9.5 | UI custom variant authoring: form/wizard to define a new game JSON for engine-supported features only (e.g. Omaha 7-or-better instead of 8) — validated against the schema, stored as a user variant, never executes code | Hard | TODO |
+
+**9.1 result (DONE):** Enriched the existing `table-details-modal` (`lobby.js::showTableDetails`)
+with three conditional sections, all frontend-only (data was already on the client via
+`Table.to_dict` + `this.variants`):
+- **Rotation** (mixed games only): brand-colored letter pills + numbered variant list, looked up
+  via `this.variants.find(v => v.name === table.variant && v.is_mixed)` (`rotation` /
+  `rotation_letters` from `TableManager.get_available_mixed_games`).
+- **Betting cap** (only when set): `raise_cap_override` → "Bet + N raises" / "Unlimited raises";
+  `hand_cap_bb` → "Max loss N BB / hand". Row omitted entirely on normal tables.
+- **View Rules** (single variants only): button → `showVariantRulesById(variant)` (refactored out
+  of `showVariantRules`) opens the existing `game-rules-modal` rules card.
+Methods: `renderRotationSection`, `renderBettingCapRow`, `renderRulesLink`. CSS appended to
+`lobby.css` (white-modal pill styling, detail-row flex layout). Verified live via Playwright
+(HORSE rotation, NL hand-cap, Limit raise-cap, View Rules → rules card). Presentational, no tests.
+
+**9.2 details:** Each fixed mix is a `data/mixed_game_configs/*.json` file referencing existing
+variant config stems. SHOE = Stud / Hold'em / Omaha-8 / Eight-or-better (razz family) — confirm
+exact lineup. The rotation engine (orbit-based swap, stack/seat/button preservation, NL/PL-from-
+Limit derivation) is already done and tested (`tests/integration/test_mixed_game.py`).
+
+**9.3 / 9.4 / 9.5 rationale:** Today defining a new mix or tweaking a qualifier (8-or-better →
+7-or-better) requires authoring JSON, committing, and redeploying — too heavy for something the
+engine can already run. 9.3 lets users compose a rotation from existing variants. 9.5 is the
+broader play: a guided builder that emits engine-valid JSON for features the engine already
+supports (no on-the-fly code), validated against `data/schemas/game.json`, stored as a
+user/custom variant alongside the official library. Scope guard: builder must reject any config
+needing an unimplemented feature (reuse the 5.5 "can this game be implemented?" assessment).

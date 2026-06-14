@@ -1060,12 +1060,13 @@ class PokerLobby {
 
         const stakesDisplay = this.formatStakes(table.stakes, table.betting_structure);
         const isFull = table.current_players >= table.max_players;
+        const capRow = this.renderBettingCapRow(table);
 
         content.innerHTML = `
             <div class="table-detail-grid">
                 <div class="detail-row">
                     <strong>Game Variant:</strong>
-                    <span>${this.formatVariantName(table.variant)}</span>
+                    <span>${this.escapeHtml(this.formatVariantName(table.variant))}</span>
                 </div>
                 <div class="detail-row">
                     <strong>Betting Structure:</strong>
@@ -1075,6 +1076,7 @@ class PokerLobby {
                     <strong>Stakes:</strong>
                     <span>${stakesDisplay}</span>
                 </div>
+                ${capRow}
                 <div class="detail-row">
                     <strong>Players:</strong>
                     <span>${table.current_players}/${table.max_players}</span>
@@ -1096,7 +1098,13 @@ class PokerLobby {
                     <span>${new Date(table.created_at).toLocaleString()}</span>
                 </div>
             </div>
+            ${this.renderRotationSection(table)}
+            ${this.renderRulesLink(table)}
         `;
+
+        // Attach the View Rules handler without an inline onclick (avoids HTML-injected handlers)
+        content.querySelector('.view-rules-btn')
+            ?.addEventListener('click', () => window.showVariantRulesById(table.variant));
 
         // Configure action buttons
         joinBtn.disabled = isFull || table.is_private;
@@ -1113,6 +1121,65 @@ class PokerLobby {
         };
 
         this.showModal('table-details-modal');
+    }
+
+    // Betting cap row for the table details modal (omitted entirely when no cap set)
+    renderBettingCapRow(table) {
+        const raiseCap = table.raise_cap_override;
+        const handCap = table.hand_cap_bb;
+        let capText = '';
+        if (raiseCap !== null && raiseCap !== undefined) {
+            capText = raiseCap <= 0 ? 'Unlimited raises' : `Bet + ${raiseCap} raises`;
+        } else if (handCap && handCap > 0) {
+            capText = `Max loss ${handCap} BB / hand`;
+        }
+        if (!capText) return '';
+        return `
+            <div class="detail-row">
+                <strong>Betting Cap:</strong>
+                <span>${this.escapeHtml(capText)}</span>
+            </div>
+        `;
+    }
+
+    // Rotation section for mixed games (HORSE, 8-Game, etc.); empty for single variants
+    renderRotationSection(table) {
+        if (!table.is_mixed_game) return '';
+        const mix = this.variants.find(v => v.name === table.variant && v.is_mixed);
+        if (!mix || !Array.isArray(mix.rotation) || mix.rotation.length === 0) return '';
+
+        const letters = mix.rotation_letters || [];
+        const pills = mix.rotation.map((name, i) => {
+            const letter = letters[i] || (name ? name[0] : '?');
+            return `<span class="rotation-letter" title="${this.escapeHtml(name)}">${this.escapeHtml(letter)}</span>`;
+        }).join('');
+        const list = mix.rotation.map((name, i) => {
+            const letter = letters[i] ? `${this.escapeHtml(letters[i])} ` : '';
+            return `<li>${letter}${this.escapeHtml(name)}</li>`;
+        }).join('');
+
+        return `
+            <div class="detail-rotation">
+                <div class="detail-rotation-header">
+                    <strong>Rotation</strong>
+                    <div class="rotation-tracker">${pills}</div>
+                </div>
+                <ol class="detail-rotation-list">${list}</ol>
+            </div>
+        `;
+    }
+
+    // "View Rules" link for single variants (mixed games rotate, so no single rules card)
+    // Listener is attached after insertion (see showTableDetails) to avoid an inline handler.
+    renderRulesLink(table) {
+        if (table.is_mixed_game) return '';
+        return `
+            <div class="detail-rules-link">
+                <button type="button" class="btn btn-outline btn-small view-rules-btn">
+                    View Rules
+                </button>
+            </div>
+        `;
     }
 
     showModal(modalId) {
@@ -1203,10 +1270,16 @@ window.closeModal = function(modalId) {
     }
 };
 
-// Show variant rules modal
+// Show variant rules modal for the create-table variant selector
 window.showVariantRules = function() {
     const variantSelect = document.getElementById('game-variant');
     const variantId = variantSelect ? variantSelect.value : '';
+    if (!variantId) return;
+    window.showVariantRulesById(variantId);
+};
+
+// Show variant rules modal for a specific variant id (used from table details)
+window.showVariantRulesById = function(variantId) {
     if (!variantId) return;
 
     const content = document.getElementById('game-rules-content');

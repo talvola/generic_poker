@@ -1941,3 +1941,82 @@ to-assign option styling for modal */
     font-size: 0.9rem;
     transition: all 0.3s ease;
 }
+
+/* Table details modal: rows, rotation section, rules link (Phase 9.1) */
+.table-detail-grid .detail-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid var(--border-color, #e0e0e0);
+}
+
+.table-detail-grid .detail-row:last-child {
+    border-bottom: none;
+}
+
+.table-detail-grid .detail-row strong {
+    color: var(--secondary-color, #555);
+    font-weight: 600;
+}
+
+.table-detail-grid .detail-row span {
+    text-align: right;
+    color: var(--dark-color, #222);
+}
+
+.detail-rotation {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color, #e0e0e0);
+}
+
+.detail-rotation-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.detail-rotation-header strong {
+    color: var(--secondary-color, #555);
+    font-weight: 600;
+}
+
+/* Lobby pills sit on a white modal, so fill them with the brand color */
+.detail-rotation .rotation-tracker {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.detail-rotation .rotation-letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    font-weight: bold;
+    color: #fff;
+    background: var(--primary-color);
+    cursor: default;
+}
+
+.detail-rotation-list {
+    margin: 0;
+    padding-left: 1.25rem;
+    color: var(--dark-color, #222);
+}
+
+.detail-rotation-list li {
+    padding: 0.15rem 0;
+}
+
+.detail-rules-link {
+    margin-top: 1rem;
+    text-align: center;
+}
