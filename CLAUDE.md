@@ -119,6 +119,13 @@ computed style after a manual `classList`/`style` change is unreliable — verif
 fresh isolated element instead.
 Note: some JS/CSS files are CRLF; Python-scripted rewrites normalize to LF (noisy diffs).
 
+**Lobby invariants (lobby.js/lobby.css):** The lobby is served at `/` (`/lobby` 404s) and
+exposes `window.lobby` (the table page exposes `window.pokerTable`). Variants + mixed games
+come from `GET /table/variants` — each entry has `display_name`/`category`, and mixes carry
+`is_mixed`/`rotation`/`rotation_letters`. `lobby.css` does NOT load `table.css`, so mirror any
+shared styles; lobby modals render on a WHITE background (felt-oriented light-on-translucent
+styles won't translate).
+
 **Responsive layout invariants (table.css/table.js):** Seat-position CSS exists only for
 `data-max-players` 2/6/9 (bucketed in table.html). The hero's own seat gets `.hero-seat`
 (own cards render larger); its selectors outrank media-query card rules, so each breakpoint
@@ -151,6 +158,15 @@ Poker variants are defined in `data/game_configs/*.json`. Example structure:
 ```
 
 **Full schema documentation:** `data/schemas/README.md`
+
+### Mixed Games (HORSE, 8/10-Game, HOSE, SHOE)
+
+A new mix = one `data/mixed_game_configs/<name>.json` referencing existing variant config stems
+(plus per-variant `bettingStructure`/`letter`). `TableManager.get_available_mixed_games()`
+dir-globs the folder, so a new mix appears in the lobby with no code change or restart. The
+rotation engine (orbit swap, stack/seat/button preservation, NL/PL-from-Limit derivation) lives
+in `GameSession` and is complete. Only Dealer's Choice + an on-the-fly mix builder remain
+(BACKLOG Phase 9).
 
 ### Key Schema Elements
 
@@ -317,6 +333,12 @@ way to reproduce bugs that need real bot play.
 bots fill and play automatically. Note: `/api/tables` works; `/api/tables/`
 (trailing slash) 404s. Resize viewport to device sizes (iPad 11" 834×1194,
 13" 1032×1376) for layout checks.
+- `POST /api/tables` body quirks: `betting_structure` must be LOWERCASE
+  (`limit`/`no-limit`/`pot-limit`) — capitalized falls through to the blinds
+  branch and 400s. Stakes keys are structure-specific: Limit `{small_bet,
+  big_bet, ante}`, blinds games `{small_blind, big_blind}`. Cap fields:
+  `raise_cap_override` (Limit), `hand_cap_bb` (NL/PL). For a mixed game pass the
+  mix name as `variant`; the rotation config drives per-hand structure.
 
 **Common issues:**
 - Patch path must match actual import location (not class definition location)
