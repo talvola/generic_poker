@@ -74,6 +74,21 @@ def create_table():
 
         data = request.get_json()
 
+        # Inline custom mix (Phase 9.3): a user-authored rotation built in the lobby.
+        # Validate/normalize it, then treat the table as a Limit-base mixed game
+        # (per-leg NL/PL blinds are derived from the limit stakes, like HORSE/10-Game).
+        custom_mix_json = None
+        if data.get("custom_mix"):
+            cm = data["custom_mix"]
+            config_dict, err = table_manager.normalize_custom_mix(cm.get("display_name", ""), cm.get("rotation", []))
+            if err:
+                return jsonify({"success": False, "error": err}), 400
+            import json as _json
+
+            custom_mix_json = _json.dumps(config_dict)
+            data["variant"] = table_manager.CUSTOM_MIX_VARIANT
+            data["betting_structure"] = "limit"  # mixes store limit base stakes
+
         # Validate required fields
         required_fields = ["name", "variant", "betting_structure", "max_players", "stakes"]
         for field in required_fields:
@@ -134,6 +149,7 @@ def create_table():
             allow_bots=data.get("allow_bots", False),
             raise_cap_override=raise_cap_override,
             hand_cap_bb=hand_cap_bb,
+            custom_mix_config=custom_mix_json,
         )
 
         # Create table using table manager
@@ -153,6 +169,73 @@ def create_table():
     except Exception as e:
         current_app.logger.error(f"Failed to create table: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# --- Custom mix library (Phase 9.3): user-saved mixed-game rotations -----------------
+
+
+@lobby_bp.route("/api/custom-mixes", methods=["GET"])
+@login_required
+def list_custom_mixes():
+    """List the current user's saved custom mixes."""
+    from ..models.custom_mix import CustomMix
+
+    mixes = (
+        db.session.query(CustomMix)
+        .filter(CustomMix.user_id == current_user.id)
+        .order_by(CustomMix.created_at.desc())
+        .all()
+    )
+    return jsonify({"success": True, "mixes": [m.to_dict() for m in mixes]})
+
+
+@lobby_bp.route("/api/custom-mixes", methods=["POST"])
+@login_required
+def save_custom_mix():
+    """Save a custom mix to the current user's library (validated + normalized)."""
+    from ..models.custom_mix import CustomMix
+
+    data = request.get_json() or {}
+    display_name = (data.get("display_name") or "").strip()
+    config_dict, err = table_manager.normalize_custom_mix(display_name, data.get("rotation", []))
+    if err:
+        return jsonify({"success": False, "error": err}), 400
+
+    existing = (
+        db.session.query(CustomMix)
+        .filter(CustomMix.user_id == current_user.id, CustomMix.display_name == display_name)
+        .first()
+    )
+    import json as _json
+
+    rotation_json = _json.dumps(config_dict)
+    if existing:
+        existing.rotation = rotation_json  # overwrite same-named mix
+        mix = existing
+    else:
+        mix = CustomMix(user_id=current_user.id, display_name=display_name, rotation=rotation_json)
+        db.session.add(mix)
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to save custom mix: {e}")
+        return jsonify({"success": False, "error": "Could not save mix"}), 500
+    return jsonify({"success": True, "mix": mix.to_dict()})
+
+
+@lobby_bp.route("/api/custom-mixes/<mix_id>", methods=["DELETE"])
+@login_required
+def delete_custom_mix(mix_id):
+    """Delete one of the current user's saved mixes (tables keep their inline copy)."""
+    from ..models.custom_mix import CustomMix
+
+    mix = db.session.query(CustomMix).filter(CustomMix.id == mix_id, CustomMix.user_id == current_user.id).first()
+    if not mix:
+        return jsonify({"success": False, "error": "Mix not found"}), 404
+    db.session.delete(mix)
+    db.session.commit()
+    return jsonify({"success": True})
 
 
 @lobby_bp.route("/api/tables/<table_id>/seats")

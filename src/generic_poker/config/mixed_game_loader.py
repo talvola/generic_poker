@@ -58,3 +58,27 @@ class MixedGameConfig:
             max_players=data.get("maxPlayers", 9),
             betting_structures=data.get("bettingStructures", ["Limit"]),
         )
+
+    def to_dict(self) -> dict:
+        """Serialize to the same JSON shape that ``from_dict`` accepts.
+
+        Used to persist user-authored (custom) mixes; round-trips through
+        ``from_dict`` so file-based and DB-stored mixes share one format.
+        """
+        return {
+            "name": self.name,
+            "displayName": self.display_name,
+            "category": self.category,
+            "rotationType": self.rotation_type,
+            "minPlayers": self.min_players,
+            "maxPlayers": self.max_players,
+            "bettingStructures": self.betting_structures,
+            "rotation": [
+                {
+                    "variant": v.variant,
+                    "bettingStructure": v.betting_structure,
+                    "letter": v.letter,
+                }
+                for v in self.rotation
+            ],
+        }

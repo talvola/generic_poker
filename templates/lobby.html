@@ -139,7 +139,7 @@
                         </select>
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-group" id="betting-structure-group">
                         <label for="betting-structure">Betting Structure:</label>
                         <select id="betting-structure" name="betting_structure" required>
                             <option value="">Select structure</option>
@@ -147,6 +147,28 @@
                             <option value="pot-limit">Pot Limit</option>
                             <option value="limit">Limit</option>
                         </select>
+                    </div>
+
+                    <!-- Custom mix builder (Phase 9.3) — shown when "Build a Custom Mix…" is picked -->
+                    <div id="custom-mix-builder" class="custom-mix-builder" style="display: none;">
+                        <div class="form-group">
+                            <label for="mix-name">Mix Name:</label>
+                            <input type="text" id="mix-name" maxlength="40" placeholder="e.g. Erik's Dealer Mix" autocomplete="off">
+                        </div>
+                        <div class="form-group" id="saved-mix-group" style="display: none;">
+                            <label for="saved-mix-select">Load a saved mix:</label>
+                            <div class="saved-mix-row">
+                                <select id="saved-mix-select"><option value="">— My Mixes —</option></select>
+                                <button type="button" id="delete-mix-btn" class="btn btn-secondary btn-small" title="Delete saved mix">Delete</button>
+                            </div>
+                        </div>
+                        <label class="mix-legs-label">Games in rotation (played in order, one per orbit):</label>
+                        <div id="mix-legs" class="mix-legs"></div>
+                        <div class="mix-builder-actions">
+                            <button type="button" id="add-mix-leg" class="btn btn-secondary btn-small">+ Add Game</button>
+                            <button type="button" id="save-mix-btn" class="btn btn-secondary btn-small">Save to My Mixes</button>
+                        </div>
+                        <p class="mix-stakes-note">Stakes below are the Limit base; No-Limit / Pot-Limit legs derive blinds from them (small blind = ½ small bet).</p>
                     </div>
 
                     <div class="form-group">

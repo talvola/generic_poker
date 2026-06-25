@@ -29,6 +29,10 @@ class TableConfig:
     raise_cap_override: int | None = None
     hand_cap_bb: int | None = None
 
+    # Inline user-authored mix (Phase 9.3). JSON in MixedGameConfig shape; set only
+    # when variant is the custom-mix sentinel. None for normal/file-based tables.
+    custom_mix_config: str | None = None
+
     # Optional settings with defaults
     auto_start: bool = True
     timeout_minutes: int = 30

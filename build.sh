@@ -54,6 +54,36 @@ with app.app_context():
             else:
                 print(f'Note: {e}')
 
+    # Add custom mix config column to poker_tables if it doesn't exist (Phase 9.3)
+    try:
+        db.session.execute(text('ALTER TABLE poker_tables ADD COLUMN custom_mix_config TEXT'))
+        db.session.commit()
+        print('Added custom_mix_config column to poker_tables')
+    except Exception as e:
+        db.session.rollback()
+        if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+            print('custom_mix_config column already exists')
+        else:
+            print(f'Note: {e}')
+
+    # Create custom_mixes table if it doesn't exist (Phase 9.3 user mix library)
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS custom_mixes (
+                id VARCHAR(36) PRIMARY KEY,
+                user_id VARCHAR(36) NOT NULL REFERENCES users(id),
+                display_name VARCHAR(60) NOT NULL,
+                rotation TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_custom_mix_user_name UNIQUE (user_id, display_name)
+            )
+        '''))
+        db.session.commit()
+        print('Ensured custom_mixes table exists')
+    except Exception as e:
+        db.session.rollback()
+        print(f'Note: {e}')
+
     # Add mixed game rotation columns to game_session_state if they don't exist
     for col in ['current_variant_index INTEGER', 'hands_in_current_variant INTEGER', 'orbit_size INTEGER']:
         col_name = col.split()[0]

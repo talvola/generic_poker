@@ -2020,3 +2020,101 @@ to-assign option styling for modal */
     margin-top: 1rem;
     text-align: center;
 }
+
+/* Custom mix builder (Phase 9.3) — create-table modal, white background */
+.custom-mix-builder {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: var(--light-color, #f7f9fc);
+}
+
+.custom-mix-builder .mix-legs-label {
+    display: block;
+    margin: 0.25rem 0 0.5rem;
+    font-weight: 600;
+    color: var(--dark-color);
+}
+
+.saved-mix-row {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+
+.saved-mix-row select {
+    flex: 1;
+}
+
+.mix-legs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.mix-leg {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.mix-leg .mix-leg-variant {
+    flex: 2;
+}
+
+.mix-leg .mix-leg-structure {
+    flex: 1;
+}
+
+.mix-leg select {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 0.9rem;
+}
+
+.mix-leg-buttons {
+    display: flex;
+    gap: 0.25rem;
+    flex-shrink: 0;
+}
+
+.mix-leg-buttons button {
+    width: 1.9rem;
+    height: 1.9rem;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: var(--dark-color);
+    transition: var(--transition);
+}
+
+.mix-leg-buttons button:hover {
+    background: var(--primary-color);
+    color: #fff;
+    border-color: var(--primary-color);
+}
+
+.mix-leg-buttons .mix-leg-remove:hover {
+    background: var(--danger-color, #dc3545);
+    border-color: var(--danger-color, #dc3545);
+}
+
+.mix-builder-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.mix-stakes-note {
+    margin: 0.75rem 0 0;
+    font-size: 0.8rem;
+    color: var(--muted-color, #6c757d);
+    line-height: 1.4;
+}

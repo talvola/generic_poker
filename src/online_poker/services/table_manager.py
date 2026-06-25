@@ -231,6 +231,94 @@ class TableManager:
         """Check if a variant name refers to a mixed game config."""
         return Path(f"data/mixed_game_configs/{variant_name}.json").exists()
 
+    # Sentinel variant name stored on tables that use an inline (user-authored) mix.
+    CUSTOM_MIX_VARIANT = "custom_mix"
+
+    @staticmethod
+    def normalize_custom_mix(display_name: str, rotation: list[dict[str, Any]]) -> tuple[dict | None, str | None]:
+        """Validate + normalize a user-authored mix into ``MixedGameConfig`` JSON.
+
+        ``rotation`` is a list of ``{"variant", "bettingStructure", "letter"?}`` dicts.
+        Each leg's variant must exist and must support the requested betting structure.
+        Letters are auto-derived (and de-duplicated) from the variant name when absent.
+
+        Returns ``(config_dict, None)`` on success — the dict is in the shape
+        ``MixedGameConfig.from_dict`` accepts — or ``(None, error_message)`` on failure.
+        """
+        display_name = (display_name or "").strip()
+        if not display_name:
+            return None, "Mix needs a name"
+        if not isinstance(rotation, list) or len(rotation) < 2:
+            return None, "A mix needs at least 2 games"
+
+        used_letters: set[str] = set()
+        norm_rotation: list[dict[str, str]] = []
+        min_players = 2
+        max_players = 9
+        for i, leg in enumerate(rotation):
+            variant = (leg.get("variant") or "").strip()
+            structure = (leg.get("bettingStructure") or "").strip()
+            if not variant:
+                return None, f"Game #{i + 1} is missing a variant"
+            rules = TableManager.get_variant_rules(variant)
+            if not rules:
+                return None, f"Unknown variant: {variant}"
+            supported = [s.value for s in rules.betting_structures]
+            if structure not in supported:
+                return None, f"{rules.game} does not support {structure or '(none)'} (allowed: {', '.join(supported)})"
+
+            # Tighten player bounds to the most restrictive leg.
+            min_players = max(min_players, rules.min_players)
+            max_players = min(max_players, rules.max_players)
+
+            # Auto-derive a unique display letter when not supplied.
+            letter = (leg.get("letter") or "").strip().upper()
+            if not letter:
+                base = next((c for c in rules.game.upper() if c.isalpha()), "?")
+                letter = base
+                suffix = 2
+                while letter in used_letters:
+                    letter = f"{base}{suffix}"
+                    suffix += 1
+            used_letters.add(letter)
+            norm_rotation.append({"variant": variant, "bettingStructure": structure, "letter": letter})
+
+        if min_players > max_players:
+            return None, "Selected games have incompatible player counts"
+
+        # bettingStructures is the union of leg structures (for lobby display/filtering).
+        structures = list(dict.fromkeys(leg["bettingStructure"] for leg in norm_rotation))
+        config = {
+            "name": TableManager.CUSTOM_MIX_VARIANT,
+            "displayName": display_name,
+            "category": "Mixed",
+            "rotationType": "orbit",
+            "minPlayers": min_players,
+            "maxPlayers": max_players,
+            "bettingStructures": structures,
+            "rotation": norm_rotation,
+        }
+        return config, None
+
+    @staticmethod
+    def get_table_mixed_config(table: PokerTable) -> MixedGameConfig | None:
+        """Resolve the mix config for a table: inline custom JSON, else file-based.
+
+        Custom (user-authored) mixes are stored as JSON on ``table.custom_mix_config``
+        and are never written to disk; everything else falls back to the on-disk
+        ``data/mixed_game_configs/<variant>.json`` lookup.
+        """
+        raw = getattr(table, "custom_mix_config", None)
+        if raw:
+            import json
+
+            try:
+                return MixedGameConfig.from_dict(json.loads(raw))
+            except Exception as e:
+                current_app.logger.error(f"Failed to parse custom mix for table {table.id}: {e}")
+                return None
+        return TableManager.get_mixed_game_config(table.variant)
+
     @staticmethod
     def validate_table_config(config: TableConfig) -> None:
         """Validate table configuration against variant rules.
@@ -241,6 +329,20 @@ class TableManager:
         Raises:
             TableValidationError: If configuration is invalid
         """
+        # Inline custom mix: already normalized/validated when the JSON was built
+        # (normalize_custom_mix). Just enforce player-count bounds here.
+        if config.variant == TableManager.CUSTOM_MIX_VARIANT and config.custom_mix_config:
+            import json
+
+            data = json.loads(config.custom_mix_config)
+            min_p = data.get("minPlayers", 2)
+            max_p = data.get("maxPlayers", 9)
+            if config.max_players < min_p:
+                raise TableValidationError(f"Maximum players ({config.max_players}) is less than mix minimum ({min_p})")
+            if config.max_players > max_p:
+                raise TableValidationError(f"Maximum players ({config.max_players}) exceeds mix maximum ({max_p})")
+            return
+
         # Check if this is a mixed game
         mixed_config = TableManager.get_mixed_game_config(config.variant)
         if mixed_config:
@@ -322,6 +424,8 @@ class TableManager:
             password=config.password,
             raise_cap_override=config.raise_cap_override,
             hand_cap_bb=config.hand_cap_bb,
+            custom_mix_config=config.custom_mix_config,
+            is_mixed_game=bool(config.custom_mix_config),
         )
 
         # Save to database

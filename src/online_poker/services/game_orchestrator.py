@@ -666,8 +666,8 @@ class GameOrchestrator:
                 if not table:
                     return False, "Table not found", None
 
-                # Check if this is a mixed game
-                mixed_config = TableManager.get_mixed_game_config(table.variant)
+                # Check if this is a mixed game (inline custom mix, else file-based)
+                mixed_config = TableManager.get_table_mixed_config(table)
                 if mixed_config:
                     # Load the first variant in the rotation
                     first_variant = mixed_config.rotation[0]
@@ -683,6 +683,12 @@ class GameOrchestrator:
                     session.mixed_game_config = mixed_config
                     session.current_variant_index = 0
                     session.hands_in_current_variant = 0
+                    # The first orbit must honor the first leg's own betting structure
+                    # (e.g. a custom mix starting with NL Hold'em). Without this the
+                    # initial game uses the table's Limit base structure — fine for
+                    # file-based mixes (their first leg is always Limit) but wrong for
+                    # custom rotations that open on an NL/PL leg.
+                    session.game = table.create_game_instance_for_variant(game_rules, first_variant.betting_structure)
                     # orbit_size set when first hand starts (need player count)
                 else:
                     # Standard single-variant table

@@ -40,6 +40,10 @@ class PokerTable(db.Model):
     # Mixed game flag
     is_mixed_game: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
 
+    # Inline (user-authored) mix definition — JSON in MixedGameConfig shape.
+    # Set only for tables whose variant is the custom-mix sentinel; null otherwise.
+    custom_mix_config: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Betting caps (BACKLOG 6.2.13). Both nullable; null/omitted = engine default.
     # raise_cap_override (Limit only): bet + N raises; 0 = unlimited.
     # hand_cap_bb (No-Limit/Pot-Limit only): max loss per hand, in big blinds.
@@ -72,6 +76,8 @@ class PokerTable(db.Model):
         password: str | None = None,
         raise_cap_override: int | None = None,
         hand_cap_bb: int | None = None,
+        custom_mix_config: str | None = None,
+        is_mixed_game: bool = False,
     ):
         """Initialize poker table."""
         self.name = name
@@ -84,6 +90,8 @@ class PokerTable(db.Model):
         self.allow_bots = allow_bots
         self.raise_cap_override = raise_cap_override
         self.hand_cap_bb = hand_cap_bb
+        self.custom_mix_config = custom_mix_config
+        self.is_mixed_game = is_mixed_game
 
         if is_private:
             self.invite_code = self._generate_invite_code()
@@ -183,11 +191,40 @@ class PokerTable(db.Model):
             "is_full": active_players >= self.max_players,
         }
 
+        # Surface a user-authored mix so the lobby card + Details modal can render
+        # its rotation without a global-variants lookup (custom mixes aren't in the
+        # /table/variants list). Mirrors the file-based mix shape (display/letters).
+        if self.custom_mix_config:
+            result["custom_mix"] = self._custom_mix_summary()
+
         # Only include sensitive information if requested and appropriate
         if include_sensitive and self.is_private:
             result["invite_code"] = self.invite_code
 
         return result
+
+    def _custom_mix_summary(self) -> dict | None:
+        """Display summary of this table's inline mix (name, rotation, letters)."""
+        import json
+
+        from ..services.table_manager import TableManager
+
+        try:
+            data = json.loads(self.custom_mix_config)
+        except (TypeError, ValueError):
+            return None
+
+        rotation_display = []
+        for leg in data.get("rotation", []):
+            rules = TableManager.get_variant_rules(leg.get("variant", ""))
+            rotation_display.append(rules.game if rules else leg.get("variant", ""))
+
+        return {
+            "display_name": data.get("displayName", "Custom Mix"),
+            "rotation": rotation_display,
+            "rotation_letters": [leg.get("letter", "") for leg in data.get("rotation", [])],
+            "betting_structures": data.get("bettingStructures", []),
+        }
 
     def _betting_cap_params(self, betting_structure, stakes_dict: dict) -> dict:
         """Game kwargs for this table's betting caps (BACKLOG 6.2.13).

@@ -574,7 +574,7 @@ let players define their own mixes and variants on the fly (no JSON check-in + d
 |---|------|-----------|--------|
 | 9.1 | Lobby card "Details" drill-in: enrich existing table-details modal with mixed-game rotation, betting cap, and a "View Rules" link | Easy | DONE |
 | 9.2 | Add more predefined fixed mixes (SHOE, 9-game, 10-game, etc.) as config files | Trivial (config-only) | DONE (HOSE, SHOE, 10-Game) |
-| 9.3 | UI custom mixed-game builder: pick a name + ordered list of existing variants/structures → create a mix on the fly (stored per-user/per-table, no file check-in) | Medium | TODO |
+| 9.3 | UI custom mixed-game builder: pick a name + ordered list of existing variants/structures → create a mix on the fly (stored per-user/per-table, no file check-in) | Medium | DONE |
 | 9.4 | Dealer's Choice: button player picks the next variant each orbit from an allowed-games menu (needs the 9.1 detail surface + 9.3 menu) | Medium-Hard | TODO |
 | 9.5 | UI custom variant authoring: form/wizard to define a new game JSON for engine-supported features only (e.g. Omaha 7-or-better instead of 8) — validated against the schema, stored as a user variant, never executes code | Hard | TODO |
 
@@ -606,6 +606,36 @@ list). Tests: extended `test_mixed_game.py` with `TestNewFixedMixes` (load + uni
 variants-exist + structure-supported, and a play-to-completion check for every variant in each
 mix under its own structure). 9-game intentionally skipped — no single canonical lineup;
 the on-the-fly mix builder (9.3) is the better home for arbitrary mixes.
+
+**9.3 result (DONE):** On-the-fly custom mix builder — compose a rotation from existing
+variants in the lobby, no JSON file/redeploy. Per-variant betting structures (the engine
+already supports interleaved Limit/NL/PL); user picks "🎲 Build a Custom Mix…" in the
+create-table variant dropdown. Storage is **both** (Erik's choice): the table stores an inline
+copy (`PokerTable.custom_mix_config`, JSON in `MixedGameConfig` shape) AND users can save/load
+reusable mixes in a per-user library (`CustomMix` model + `/api/custom-mixes` GET/POST/DELETE).
+Library mixes are expanded into the table's own inline copy at create time, so deleting a saved
+mix never breaks a running table.
+- Backend: `TableManager.normalize_custom_mix()` validates+normalizes (each leg's variant
+  exists, supports its structure; auto-derives unique display letters; tightens player bounds to
+  the most-restrictive leg; ≥2 games). `MixedGameConfig.to_dict()` round-trips the stored JSON.
+  `TableManager.get_table_mixed_config(table)` resolves inline JSON, else file-based — used in
+  `GameOrchestrator.create_session`. Custom mixes use **Limit base stakes** (like HORSE/10-Game);
+  per-leg NL/PL blinds derive from `small_bet`. `Table.to_dict` surfaces a `custom_mix` summary
+  (display name, rotation display names, letters) so lobby cards + the 9.1 Details modal render
+  without a global-variants lookup.
+- **Engine gap found + fixed:** the FIRST orbit of any mix was built with the table's base
+  structure (`create_game_instance`), not the first leg's per-variant structure. File-based mixes
+  masked it (their first leg is always Limit); a custom mix opening on an NL/PL leg would play the
+  first orbit as Limit. Fixed in `create_session` by building the initial game via
+  `create_game_instance_for_variant(first_leg)`. No behavior change for file-based mixes.
+- Frontend (`lobby.js`/`lobby.html`/`lobby.css`): builder panel with add/reorder/remove legs,
+  per-leg variant + structure selects (structures populated from each variant's supported set,
+  default = first), name field, Save to My Mixes + load/delete saved mixes. Betting-structure
+  select hidden + stakes forced to Limit in custom mode.
+- DB: new `custom_mix_config` column on `poker_tables` + new `custom_mixes` table (run
+  `reset_db.py` locally; fresh deploys get them). Tests: `test_custom_mix.py` (13 — validation,
+  to_dict round-trip, inline/file resolution, all-legs-play). Verified live via API + Playwright
+  (create → persist → to_dict surface → orchestrator session opens on NL Hold'em → library CRUD).
 
 **9.3 / 9.4 / 9.5 rationale:** Today defining a new mix or tweaking a qualifier (8-or-better →
 7-or-better) requires authoring JSON, committing, and redeploying — too heavy for something the

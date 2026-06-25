@@ -6,6 +6,9 @@ class PokerLobby {
         this.userTables = [];  // Table IDs where current user is seated
         this.variants = [];    // Available game variants from API
         this.variantMap = {};   // variant_name -> display_name lookup
+        this.CUSTOM_MIX_VALUE = '__custom_mix__';  // sentinel for the builder option
+        this.customMixMode = false;
+        this.savedMixes = [];   // user's saved custom mixes (Phase 9.3)
         this.filters = {
             variant: '',
             stakes: '',
@@ -35,6 +38,7 @@ class PokerLobby {
         // Action buttons
         document.getElementById('create-table-btn').addEventListener('click', () => {
             if (!this.requireLogin()) return;
+            this.resetCustomMixBuilder();
             this.showModal('create-table-modal');
         });
 
@@ -95,10 +99,34 @@ class PokerLobby {
 
         // Game variant change - update available betting structures and show rules link
         document.getElementById('game-variant').addEventListener('change', (e) => {
+            if (e.target.value === this.CUSTOM_MIX_VALUE) {
+                this.enterCustomMixMode();
+                return;
+            }
+            this.exitCustomMixMode();
             this.updateBettingStructureOptions(e.target.value);
             const rulesLink = document.getElementById('view-rules-link');
             if (rulesLink) {
                 rulesLink.style.display = e.target.value ? 'inline' : 'none';
+            }
+        });
+
+        // Custom mix builder controls (Phase 9.3)
+        document.getElementById('add-mix-leg').addEventListener('click', () => this.addMixLeg());
+        document.getElementById('save-mix-btn').addEventListener('click', () => this.saveCustomMix());
+        document.getElementById('saved-mix-select').addEventListener('change', (e) => this.loadSavedMix(e.target.value));
+        document.getElementById('delete-mix-btn').addEventListener('click', () => this.deleteSavedMix());
+        // Delegated handlers for dynamically-rendered leg rows
+        document.getElementById('mix-legs').addEventListener('click', (e) => {
+            const row = e.target.closest('.mix-leg');
+            if (!row) return;
+            if (e.target.classList.contains('mix-leg-remove')) this.removeMixLeg(row);
+            else if (e.target.classList.contains('mix-leg-up')) this.moveMixLeg(row, -1);
+            else if (e.target.classList.contains('mix-leg-down')) this.moveMixLeg(row, 1);
+        });
+        document.getElementById('mix-legs').addEventListener('change', (e) => {
+            if (e.target.classList.contains('mix-leg-variant')) {
+                this.populateLegStructures(e.target.closest('.mix-leg'));
             }
         });
 
@@ -211,6 +239,10 @@ class PokerLobby {
         const previous = createSelect.value;
         let matchCount = 0;
         let createHtml = `<option value="">${term ? 'Matching games' : 'Select a variant'}</option>`;
+        // Custom mix builder entry (Phase 9.3) — always offered, plus on "custom"/"mix" search
+        if (!term || 'custom mix build'.includes(term)) {
+            createHtml += `<option value="${this.CUSTOM_MIX_VALUE}">🎲 Build a Custom Mix…</option>`;
+        }
         for (const cat of categoryOrder) {
             const games = grouped[cat];
             if (!games || games.length === 0) continue;
@@ -248,6 +280,209 @@ class PokerLobby {
             filterHtml += '</optgroup>';
         }
         filterSelect.innerHTML = filterHtml;
+    }
+
+    // --- Custom mix builder (Phase 9.3) ---------------------------------------
+
+    singleVariants() {
+        // Variants eligible as mix legs: real games only, never other mixes.
+        return this.variants
+            .filter(v => !v.is_mixed)
+            .sort((a, b) => a.display_name.localeCompare(b.display_name));
+    }
+
+    enterCustomMixMode() {
+        this.customMixMode = true;
+        document.getElementById('custom-mix-builder').style.display = 'block';
+        document.getElementById('betting-structure-group').style.display = 'none';
+        const rulesLink = document.getElementById('view-rules-link');
+        if (rulesLink) rulesLink.style.display = 'none';
+        // Mixes use Limit base stakes; force the stakes inputs to Limit.
+        document.getElementById('betting-structure').value = 'limit';
+        this.updateStakesInputs('limit');
+        if (document.getElementById('mix-legs').children.length === 0) {
+            this.addMixLeg();
+            this.addMixLeg();
+        }
+        this.loadSavedMixes();
+    }
+
+    exitCustomMixMode() {
+        this.customMixMode = false;
+        document.getElementById('custom-mix-builder').style.display = 'none';
+        document.getElementById('betting-structure-group').style.display = '';
+    }
+
+    resetCustomMixBuilder() {
+        this.exitCustomMixMode();
+        document.getElementById('mix-name').value = '';
+        document.getElementById('mix-legs').innerHTML = '';
+        const sel = document.getElementById('saved-mix-select');
+        if (sel) sel.value = '';
+    }
+
+    legVariantOptionsHtml(selected = '') {
+        let html = '<option value="">Select game…</option>';
+        for (const v of this.singleVariants()) {
+            const sel = v.name === selected ? ' selected' : '';
+            html += `<option value="${v.name}"${sel}>${v.display_name}</option>`;
+        }
+        return html;
+    }
+
+    addMixLeg(variant = '', structure = '') {
+        const row = document.createElement('div');
+        row.className = 'mix-leg';
+        row.innerHTML = `
+            <select class="mix-leg-variant">${this.legVariantOptionsHtml(variant)}</select>
+            <select class="mix-leg-structure"><option value="">Structure…</option></select>
+            <div class="mix-leg-buttons">
+                <button type="button" class="mix-leg-up" title="Move up">▲</button>
+                <button type="button" class="mix-leg-down" title="Move down">▼</button>
+                <button type="button" class="mix-leg-remove" title="Remove">✕</button>
+            </div>`;
+        document.getElementById('mix-legs').appendChild(row);
+        if (variant) this.populateLegStructures(row, structure);
+    }
+
+    populateLegStructures(row, selected = '') {
+        const variantName = row.querySelector('.mix-leg-variant').value;
+        const structSelect = row.querySelector('.mix-leg-structure');
+        const variant = this.variants.find(v => v.name === variantName);
+        if (!variant) {
+            structSelect.innerHTML = '<option value="">Structure…</option>';
+            return;
+        }
+        let html = '';
+        for (const bs of variant.betting_structures) {
+            const sel = bs === selected ? ' selected' : '';
+            html += `<option value="${bs}"${sel}>${bs}</option>`;
+        }
+        structSelect.innerHTML = html;
+        // Default to the first (or sole) supported structure when none chosen.
+        if (!selected && variant.betting_structures.length) {
+            structSelect.value = variant.betting_structures[0];
+        }
+    }
+
+    removeMixLeg(row) {
+        const legs = document.getElementById('mix-legs');
+        if (legs.children.length <= 2) {
+            this.showNotification('A mix needs at least 2 games', 'info');
+            return;
+        }
+        row.remove();
+    }
+
+    moveMixLeg(row, dir) {
+        const legs = document.getElementById('mix-legs');
+        if (dir < 0 && row.previousElementSibling) {
+            legs.insertBefore(row, row.previousElementSibling);
+        } else if (dir > 0 && row.nextElementSibling) {
+            legs.insertBefore(row.nextElementSibling, row);
+        }
+    }
+
+    collectRotation() {
+        const rotation = [];
+        for (const row of document.querySelectorAll('#mix-legs .mix-leg')) {
+            const variant = row.querySelector('.mix-leg-variant').value;
+            const bettingStructure = row.querySelector('.mix-leg-structure').value;
+            if (variant) rotation.push({ variant, bettingStructure });
+        }
+        return rotation;
+    }
+
+    async loadSavedMixes() {
+        try {
+            const res = await fetch('/api/custom-mixes');
+            const data = await res.json();
+            if (data.success) {
+                this.savedMixes = data.mixes || [];
+                this.renderSavedMixSelect();
+            }
+        } catch (e) {
+            console.error('Failed to load saved mixes:', e);
+        }
+    }
+
+    renderSavedMixSelect() {
+        const group = document.getElementById('saved-mix-group');
+        const sel = document.getElementById('saved-mix-select');
+        if (!this.savedMixes.length) {
+            group.style.display = 'none';
+            return;
+        }
+        group.style.display = 'block';
+        let html = '<option value="">— My Mixes —</option>';
+        for (const m of this.savedMixes) {
+            html += `<option value="${this.escapeHtml(m.id)}">${this.escapeHtml(m.display_name)}</option>`;
+        }
+        sel.innerHTML = html;
+    }
+
+    loadSavedMix(mixId) {
+        if (!mixId) return;
+        const mix = this.savedMixes.find(m => m.id === mixId);
+        if (!mix) return;
+        document.getElementById('mix-name').value = mix.display_name;
+        document.getElementById('mix-legs').innerHTML = '';
+        for (const leg of mix.rotation) {
+            this.addMixLeg(leg.variant, leg.bettingStructure);
+        }
+    }
+
+    async saveCustomMix() {
+        const mixName = document.getElementById('mix-name').value.trim();
+        const rotation = this.collectRotation();
+        if (!mixName) {
+            this.showNotification('Give your mix a name', 'error');
+            return;
+        }
+        if (rotation.length < 2) {
+            this.showNotification('A mix needs at least 2 games', 'error');
+            return;
+        }
+        try {
+            const res = await fetch('/api/custom-mixes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ display_name: mixName, rotation })
+            });
+            const data = await res.json();
+            if (data.success) {
+                this.showNotification('Mix saved to your library', 'success');
+                await this.loadSavedMixes();
+                document.getElementById('saved-mix-select').value = data.mix.id;
+            } else {
+                this.showNotification(data.error || 'Could not save mix', 'error');
+            }
+        } catch (e) {
+            this.showNotification('Could not save mix', 'error');
+        }
+    }
+
+    async deleteSavedMix() {
+        const sel = document.getElementById('saved-mix-select');
+        const mixId = sel.value;
+        if (!mixId) {
+            this.showNotification('Pick a saved mix to delete', 'info');
+            return;
+        }
+        const mix = this.savedMixes.find(m => m.id === mixId);
+        if (!confirm(`Delete "${mix ? mix.display_name : 'this mix'}" from your library?`)) return;
+        try {
+            const res = await fetch(`/api/custom-mixes/${mixId}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) {
+                this.showNotification('Mix deleted', 'success');
+                await this.loadSavedMixes();
+            } else {
+                this.showNotification(data.error || 'Could not delete mix', 'error');
+            }
+        } catch (e) {
+            this.showNotification('Could not delete mix', 'error');
+        }
     }
 
     updateBettingStructureOptions(variantName) {
@@ -391,7 +626,7 @@ class PokerLobby {
                 <div class="table-header-info">
                     <div>
                         <div class="table-name">${this.escapeHtml(table.name)}</div>
-                        <div class="table-variant">${this.formatVariantName(table.variant)} <span class="table-id-tag">#${table.id.substring(0, 6)}</span></div>
+                        <div class="table-variant">${table.custom_mix ? this.escapeHtml(table.custom_mix.display_name) : this.formatVariantName(table.variant)} <span class="table-id-tag">#${table.id.substring(0, 6)}</span></div>
                     </div>
                     <div class="table-status">
                         <div class="status-badge status-${statusClass}">${statusText}</div>
@@ -616,6 +851,25 @@ class PokerLobby {
             tableData.raise_cap_override = formData.get('raise_cap_override') || 'standard';
         } else {
             tableData.hand_cap_bb = formData.get('hand_cap_bb') || '0';
+        }
+
+        // Custom mix (Phase 9.3): attach the composed rotation; server overrides variant.
+        if (this.customMixMode) {
+            const mixName = document.getElementById('mix-name').value.trim();
+            const rotation = this.collectRotation();
+            if (!mixName) {
+                this.showNotification('Give your mix a name', 'error');
+                return;
+            }
+            if (rotation.length < 2) {
+                this.showNotification('A mix needs at least 2 games', 'error');
+                return;
+            }
+            if (rotation.some(r => !r.variant || !r.bettingStructure)) {
+                this.showNotification('Each game needs a variant and a betting structure', 'error');
+                return;
+            }
+            tableData.custom_mix = { display_name: mixName, rotation };
         }
 
         // Validate required fields
@@ -1142,12 +1396,15 @@ class PokerLobby {
         `;
     }
 
-    // Rotation section for mixed games (HORSE, 8-Game, etc.); empty for single variants
+    // Rotation section for mixed games (HORSE, 8-Game, etc.); empty for single variants.
+    // Custom (user-authored) mixes carry their rotation inline on the table; file-based
+    // mixes are looked up in the shared variants list.
     renderRotationSection(table) {
         if (!table.is_mixed_game) return '';
-        const mix = this.variants.find(v => v.name === table.variant && v.is_mixed);
+        const mix = table.custom_mix || this.variants.find(v => v.name === table.variant && v.is_mixed);
         if (!mix || !Array.isArray(mix.rotation) || mix.rotation.length === 0) return '';
 
+        const heading = table.custom_mix ? `Rotation — ${this.escapeHtml(table.custom_mix.display_name)}` : 'Rotation';
         const letters = mix.rotation_letters || [];
         const pills = mix.rotation.map((name, i) => {
             const letter = letters[i] || (name ? name[0] : '?');
@@ -1161,7 +1418,7 @@ class PokerLobby {
         return `
             <div class="detail-rotation">
                 <div class="detail-rotation-header">
-                    <strong>Rotation</strong>
+                    <strong>${heading}</strong>
                     <div class="rotation-tracker">${pills}</div>
                 </div>
                 <ol class="detail-rotation-list">${list}</ol>

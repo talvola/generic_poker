@@ -1,6 +1,7 @@
 """Database Models Package."""
 
 from .chat import ChatFilter, ChatMessage, ChatModerationAction
+from .custom_mix import CustomMix
 from .disabled_variant import DisabledVariant
 from .game_history import GameHistory
 from .game_session_state import GameSessionState
@@ -22,4 +23,5 @@ __all__ = [
     "ChatModerationAction",
     "ChatFilter",
     "DisabledVariant",
+    "CustomMix",
 ]
