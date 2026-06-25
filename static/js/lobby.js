@@ -113,6 +113,12 @@ class PokerLobby {
 
         // Custom mix builder controls (Phase 9.3)
         document.getElementById('add-mix-leg').addEventListener('click', () => this.addMixLeg());
+        document.getElementById('mix-dealers-choice').addEventListener('change', (e) => {
+            // Relabel the leg list: a fixed rotation vs a pickable menu (Phase 9.4)
+            document.getElementById('mix-legs-label').textContent = e.target.checked
+                ? 'Allowed games (dealer picks one each orbit):'
+                : 'Games in rotation (played in order, one per orbit):';
+        });
         document.getElementById('save-mix-btn').addEventListener('click', () => this.saveCustomMix());
         document.getElementById('saved-mix-select').addEventListener('change', (e) => this.loadSavedMix(e.target.value));
         document.getElementById('delete-mix-btn').addEventListener('click', () => this.deleteSavedMix());
@@ -317,6 +323,10 @@ class PokerLobby {
         this.exitCustomMixMode();
         document.getElementById('mix-name').value = '';
         document.getElementById('mix-legs').innerHTML = '';
+        const dc = document.getElementById('mix-dealers-choice');
+        if (dc) dc.checked = false;
+        const label = document.getElementById('mix-legs-label');
+        if (label) label.textContent = 'Games in rotation (played in order, one per orbit):';
         const sel = document.getElementById('saved-mix-select');
         if (sel) sel.value = '';
     }
@@ -869,7 +879,8 @@ class PokerLobby {
                 this.showNotification('Each game needs a variant and a betting structure', 'error');
                 return;
             }
-            tableData.custom_mix = { display_name: mixName, rotation };
+            const dealersChoice = document.getElementById('mix-dealers-choice').checked;
+            tableData.custom_mix = { display_name: mixName, rotation, dealers_choice: dealersChoice };
         }
 
         // Validate required fields
@@ -1404,7 +1415,12 @@ class PokerLobby {
         const mix = table.custom_mix || this.variants.find(v => v.name === table.variant && v.is_mixed);
         if (!mix || !Array.isArray(mix.rotation) || mix.rotation.length === 0) return '';
 
-        const heading = table.custom_mix ? `Rotation — ${this.escapeHtml(table.custom_mix.display_name)}` : 'Rotation';
+        const isDC = !!(table.custom_mix && table.custom_mix.dealers_choice);
+        let heading = 'Rotation';
+        if (table.custom_mix) {
+            const label = isDC ? '🃏 Dealer\'s Choice' : 'Rotation';
+            heading = `${label} — ${this.escapeHtml(table.custom_mix.display_name)}`;
+        }
         const letters = mix.rotation_letters || [];
         const pills = mix.rotation.map((name, i) => {
             const letter = letters[i] || (name ? name[0] : '?');
@@ -1422,6 +1438,7 @@ class PokerLobby {
                     <div class="rotation-tracker">${pills}</div>
                 </div>
                 <ol class="detail-rotation-list">${list}</ol>
+                ${isDC ? '<p class="detail-rotation-note">The player on the button picks one of these games each orbit.</p>' : ''}
             </div>
         `;
     }

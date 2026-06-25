@@ -63,6 +63,13 @@ class GameSession:
         self.hands_in_current_variant: int = 0
         self.orbit_size: int = 0  # Number of hands per orbit (= player count at rotation start)
 
+        # Dealer's Choice state (Phase 9.4): the button player picks the next variant
+        # from the menu each orbit (and before the very first hand). While a pick is
+        # awaited the next hand is held.
+        self.pending_dealer_choice: bool = False
+        self.has_made_initial_choice: bool = False
+        self.dealer_choice_player_id: str | None = None  # who must pick (button player)
+
         logger.info(f"Created game session {self.session_id} for table {table.id}")
 
     def _create_game_instance(self) -> Game:
@@ -600,6 +607,68 @@ class GameSession:
         if self.mixed_game_config:
             self.hands_in_current_variant += 1
 
+    # --- Dealer's Choice (Phase 9.4) ---
+
+    def is_dealers_choice(self) -> bool:
+        """True if this table is a Dealer's Choice mix."""
+        return bool(self.mixed_game_config and self.mixed_game_config.dealers_choice)
+
+    def needs_dealer_choice(self) -> bool:
+        """True when the button player must pick the next variant before the hand.
+
+        Fires before the very first hand (no initial pick yet) and at every orbit
+        boundary thereafter. Caller invokes this AFTER moving the button so the
+        chooser is the upcoming hand's dealer.
+        """
+        if not self.is_dealers_choice():
+            return False
+        if not self.has_made_initial_choice:
+            return True
+        return self.should_rotate()
+
+    def apply_dealer_choice(self, variant_index: int) -> str:
+        """Switch to the menu variant the dealer picked and start a fresh orbit.
+
+        Mirrors ``rotate_variant`` but jumps to an explicit index instead of
+        advancing. Preserves player stacks, seats, and the dealer button.
+
+        Returns the display name of the chosen variant.
+        """
+        if not self.mixed_game_config:
+            return ""
+        rotation = self.mixed_game_config.rotation
+        if variant_index < 0 or variant_index >= len(rotation):
+            raise ValueError(f"Dealer choice index {variant_index} out of range (0..{len(rotation) - 1})")
+
+        self.current_variant_index = variant_index
+        self.hands_in_current_variant = 0
+        self.orbit_size = len(self.game.table.players)
+        self.has_made_initial_choice = True
+        self.pending_dealer_choice = False
+        self.dealer_choice_player_id = None
+
+        self._swap_game_for_variant()
+        logger.info(f"Session {self.session_id} dealer-choice -> variant {variant_index}: {self.game_rules.game}")
+        return self.game_rules.game
+
+    def get_dealer_choice_menu(self) -> list[dict[str, Any]]:
+        """The pickable menu (one entry per allowed variant) for the picker UI."""
+        if not self.mixed_game_config:
+            return []
+        menu = []
+        for i, v in enumerate(self.mixed_game_config.rotation):
+            rules = TableManager.get_variant_rules(v.variant)
+            menu.append(
+                {
+                    "index": i,
+                    "variant": v.variant,
+                    "display_name": rules.game if rules else v.variant,
+                    "betting_structure": v.betting_structure,
+                    "letter": v.letter,
+                }
+            )
+        return menu
+
     def get_mixed_game_info(self) -> dict[str, Any] | None:
         """Get rotation info for the frontend.
 
@@ -622,6 +691,7 @@ class GameSession:
             "rotation_letters": [v.letter for v in self.mixed_game_config.rotation],
             "hands_until_rotation": max(0, self.orbit_size - self.hands_in_current_variant),
             "orbit_size": self.orbit_size,
+            "dealers_choice": self.is_dealers_choice(),
         }
 
     def cleanup(self) -> None:

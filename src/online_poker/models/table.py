@@ -224,6 +224,7 @@ class PokerTable(db.Model):
             "rotation": rotation_display,
             "rotation_letters": [leg.get("letter", "") for leg in data.get("rotation", [])],
             "betting_structures": data.get("bettingStructures", []),
+            "dealers_choice": data.get("dealersChoice", False),
         }
 
     def _betting_cap_params(self, betting_structure, stakes_dict: dict) -> dict:

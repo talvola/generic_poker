@@ -162,7 +162,12 @@
                                 <button type="button" id="delete-mix-btn" class="btn btn-secondary btn-small" title="Delete saved mix">Delete</button>
                             </div>
                         </div>
-                        <label class="mix-legs-label">Games in rotation (played in order, one per orbit):</label>
+                        <label class="checkbox-label mix-dealers-choice-label">
+                            <input type="checkbox" id="mix-dealers-choice" name="dealers_choice">
+                            <span class="checkmark"></span>
+                            🃏 Dealer's Choice — the player on the button picks from this menu each orbit (instead of a fixed rotation)
+                        </label>
+                        <label class="mix-legs-label" id="mix-legs-label">Games in rotation (played in order, one per orbit):</label>
                         <div id="mix-legs" class="mix-legs"></div>
                         <div class="mix-builder-actions">
                             <button type="button" id="add-mix-leg" class="btn btn-secondary btn-small">+ Add Game</button>

@@ -4286,3 +4286,44 @@ owdown Overlay Styles */
 .card-subset-group.subset-0 .subset-label { color: #4fc3f7; }
 .card-subset-group.subset-1 .subset-label { color: #81c784; }
 .card-subset-group.subset-2 .subset-label { color: #ffb74d; }
+
+/* Dealer's Choice picker (Phase 9.4) */
+.dealer-choice-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+}
+
+.dealer-choice-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    text-align: left;
+    padding: 0.6rem 0.9rem;
+}
+
+.dealer-choice-btn .dealer-choice-letter {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.8rem;
+    height: 1.8rem;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.18);
+    font-weight: 700;
+    font-size: 0.85rem;
+}
+
+.dealer-choice-btn .dealer-choice-name {
+    flex: 1;
+    font-weight: 600;
+}
+
+.dealer-choice-btn .dealer-choice-struct {
+    flex-shrink: 0;
+    font-size: 0.8rem;
+    opacity: 0.85;
+}

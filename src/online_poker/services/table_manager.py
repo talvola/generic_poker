@@ -235,12 +235,16 @@ class TableManager:
     CUSTOM_MIX_VARIANT = "custom_mix"
 
     @staticmethod
-    def normalize_custom_mix(display_name: str, rotation: list[dict[str, Any]]) -> tuple[dict | None, str | None]:
+    def normalize_custom_mix(
+        display_name: str, rotation: list[dict[str, Any]], dealers_choice: bool = False
+    ) -> tuple[dict | None, str | None]:
         """Validate + normalize a user-authored mix into ``MixedGameConfig`` JSON.
 
         ``rotation`` is a list of ``{"variant", "bettingStructure", "letter"?}`` dicts.
         Each leg's variant must exist and must support the requested betting structure.
         Letters are auto-derived (and de-duplicated) from the variant name when absent.
+        When ``dealers_choice`` is set the rotation is treated as an *allowed menu*
+        (button player picks each orbit) rather than a fixed cycle.
 
         Returns ``(config_dict, None)`` on success — the dict is in the shape
         ``MixedGameConfig.from_dict`` accepts — or ``(None, error_message)`` on failure.
@@ -296,6 +300,7 @@ class TableManager:
             "minPlayers": min_players,
             "maxPlayers": max_players,
             "bettingStructures": structures,
+            "dealersChoice": bool(dealers_choice),
             "rotation": norm_rotation,
         }
         return config, None

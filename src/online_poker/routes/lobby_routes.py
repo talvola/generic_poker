@@ -80,7 +80,9 @@ def create_table():
         custom_mix_json = None
         if data.get("custom_mix"):
             cm = data["custom_mix"]
-            config_dict, err = table_manager.normalize_custom_mix(cm.get("display_name", ""), cm.get("rotation", []))
+            config_dict, err = table_manager.normalize_custom_mix(
+                cm.get("display_name", ""), cm.get("rotation", []), dealers_choice=cm.get("dealers_choice", False)
+            )
             if err:
                 return jsonify({"success": False, "error": err}), 400
             import json as _json

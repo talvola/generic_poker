@@ -565,6 +565,44 @@ class WebSocketManager:
                 logger.error(f"Set ready error: {e}")
                 emit("error", {"message": "Failed to update ready status"})
 
+        @self.socketio.on("dealer_choice")
+        def handle_dealer_choice(data):
+            """Handle the button player's Dealer's Choice pick (Phase 9.4)."""
+            try:
+                table_id = data.get("table_id")
+                variant_index = data.get("variant_index")
+                if not table_id or variant_index is None:
+                    emit("error", {"message": "table_id and variant_index required"})
+                    return
+
+                from ..services.game_orchestrator import game_orchestrator
+
+                session = game_orchestrator.get_session(table_id)
+                if not session or not session.pending_dealer_choice:
+                    emit("error", {"message": "No game choice is pending"})
+                    return
+                # Only the player on the button may choose.
+                if current_user.id != session.dealer_choice_player_id:
+                    emit("error", {"message": "Only the dealer may choose the game"})
+                    return
+
+                try:
+                    chosen = session.apply_dealer_choice(int(variant_index))
+                except (ValueError, TypeError):
+                    emit("error", {"message": "Invalid game choice"})
+                    return
+
+                # Announce + broadcast the new variant, then start the held hand.
+                self.broadcast_game_action_chat(table_id, f"*** NOW PLAYING: {chosen} ***", "phase_change")
+                mixed_info = session.get_mixed_game_info()
+                if mixed_info:
+                    self.broadcast_to_table(table_id, "variant_changed", {"mixed_game": mixed_info})
+                self._begin_hand(table_id, session)
+
+            except Exception as e:
+                logger.error(f"Dealer choice error: {e}", exc_info=True)
+                emit("error", {"message": "Failed to apply game choice"})
+
         @self.socketio.on("request_ready_status")
         def handle_request_ready_status(data):
             """Handle request for current ready status."""
@@ -1297,8 +1335,10 @@ class WebSocketManager:
                 session.orbit_size = len(session.game.table.players)
                 logger.info(f"Mixed game orbit size set to {session.orbit_size} for table {table_id}")
 
-            # Check if mixed game needs to rotate variants
-            if session.should_rotate():
+            # Check if mixed game needs to rotate variants. Dealer's Choice tables
+            # do NOT auto-rotate — the button player picks at the orbit boundary
+            # (handled by the dealer-choice gate after the button moves).
+            if session.should_rotate() and not session.is_dealers_choice():
                 new_variant = session.rotate_variant()
                 logger.info(f"Mixed game rotated to {new_variant} at table {table_id}")
                 # Re-add players that may not have been in the session yet
@@ -1331,66 +1371,15 @@ class WebSocketManager:
                 game.table.move_button()
                 logger.info(f"Moved dealer button to seat {game.table.button_seat}")
 
-                # Start the hand
-                game.start_hand(shuffle_deck=True)
-                session.reset_action_tracking()  # clear seat action badges
-                logger.info(f"Started new hand at table {table_id}")
+                # Dealer's Choice gate (Phase 9.4): the button player picks the
+                # variant before the hand. Bot dealers auto-pick inline; a human
+                # dealer is prompted and the hand is held until they choose (the
+                # pick arrives via the dealer_choice socket event).
+                if session.needs_dealer_choice():
+                    if self._handle_dealer_choice_gate(table_id, session):
+                        return
 
-                # Broadcast hand start and blinds to chat
-                hand_number = session.hands_played + 1
-                self.broadcast_game_action_chat(table_id, f"*** HAND #{hand_number} ***", "phase_change")
-
-                # Get blind information and broadcast to chat
-                from generic_poker.game.table import Position
-
-                for player in game.table.players.values():
-                    if player.position and player.position.has_position(Position.SMALL_BLIND):
-                        sb_amount = game.small_blind
-                        self.broadcast_game_action_chat(
-                            table_id, f"{player.name} posts small blind ${sb_amount}", "forced_bet"
-                        )
-                    elif player.position and player.position.has_position(Position.BIG_BLIND):
-                        bb_amount = game.big_blind
-                        self.broadcast_game_action_chat(
-                            table_id, f"{player.name} posts big blind ${bb_amount}", "forced_bet"
-                        )
-
-                # Note: "*** HOLE CARDS ***" is announced by the frontend when it receives
-                # the game state update with the player's cards (see announceHoleCards in table.js)
-
-                # For online games with auto_progress=False, we need to manually
-                # advance through dealing steps until player input is needed
-                # Note: _next_step() already calls process_current_step() internally
-                while game.current_player is None and game.state != game.state.COMPLETE:
-                    game._next_step()
-                    if game.current_step >= len(game.rules.gameplay):
-                        break
-                logger.info(
-                    f"Game advanced to current_player: {game.current_player.name if game.current_player else None}"
-                )
-
-                # Reset ready status for next hand
-                TableAccessManager.reset_all_ready(table_id)
-
-                # Broadcast updated game state
-                self.broadcast_game_state_update(table_id)
-
-                # Broadcast that ready status has been reset
-                new_ready_status = TableAccessManager.get_ready_status(table_id)
-                self.broadcast_to_table(
-                    table_id,
-                    GameEvent.READY_STATUS_UPDATE,
-                    {
-                        "table_id": table_id,
-                        "ready_status": new_ready_status,
-                        "timestamp": datetime.utcnow().isoformat() + "Z",
-                    },
-                )
-
-                # Trigger bot actions if first player to act is a bot
-                from ..services.bot_action_service import BotActionService
-
-                BotActionService.trigger_bot_actions_if_needed(table_id)
+                self._begin_hand(table_id, session)
             else:
                 player_count = len(game.table.players) if game else 0
                 logger.warning(f"Cannot start hand at table {table_id} - only {player_count} players")
@@ -1400,6 +1389,126 @@ class WebSocketManager:
 
         except Exception as e:
             logger.error(f"Failed to start hand when ready: {e}", exc_info=True)
+            self.broadcast_to_table(table_id, GameEvent.ERROR, {"message": "Failed to start hand"})
+
+    def _handle_dealer_choice_gate(self, table_id: str, session) -> bool:
+        """Resolve a Dealer's Choice pick before a hand starts (Phase 9.4).
+
+        Call AFTER moving the button. A bot dealer picks a random menu variant
+        inline; a human dealer is prompted and the hand held.
+
+        Returns True if waiting on a human pick (caller must NOT start the hand),
+        False if resolved inline (bot picked) and the hand may begin.
+        """
+        game = session.game
+        btn_player = game.table.get_player_in_seat(game.table.button_seat)
+        if btn_player is None:
+            # No identifiable dealer — fall back to the first menu entry.
+            session.apply_dealer_choice(0)
+            return False
+
+        from ..services.simple_bot import bot_manager
+
+        if bot_manager.is_bot(btn_player.id):
+            import random
+
+            idx = random.randrange(len(session.mixed_game_config.rotation))
+            chosen = session.apply_dealer_choice(idx)
+            self.broadcast_game_action_chat(table_id, f"*** {btn_player.name} chooses {chosen} ***", "phase_change")
+            mixed_info = session.get_mixed_game_info()
+            if mixed_info:
+                self.broadcast_to_table(table_id, "variant_changed", {"mixed_game": mixed_info})
+            return False
+
+        # Human dealer: prompt and hold the hand.
+        session.pending_dealer_choice = True
+        session.dealer_choice_player_id = btn_player.id
+        self.broadcast_to_table(
+            table_id,
+            "dealer_choice_required",
+            {
+                "table_id": table_id,
+                "chooser_id": btn_player.id,
+                "chooser_name": btn_player.name,
+                "menu": session.get_dealer_choice_menu(),
+            },
+        )
+        self.broadcast_game_action_chat(table_id, f"*** {btn_player.name} is choosing the game ***", "phase_change")
+        return True
+
+    def _begin_hand(self, table_id: str, session) -> None:
+        """Start a hand once the button is positioned (and any pick resolved).
+
+        Extracted so both the normal ready flow and the dealer_choice handler
+        share one path. The dealer button must already be set by the caller.
+        """
+        try:
+            from ..services.table_access_manager import TableAccessManager
+
+            game = session.game
+            if not (game and len(game.table.players) >= 2):
+                return
+            # Start the hand
+            game.start_hand(shuffle_deck=True)
+            session.reset_action_tracking()  # clear seat action badges
+            logger.info(f"Started new hand at table {table_id}")
+
+            # Broadcast hand start and blinds to chat
+            hand_number = session.hands_played + 1
+            self.broadcast_game_action_chat(table_id, f"*** HAND #{hand_number} ***", "phase_change")
+
+            # Get blind information and broadcast to chat
+            from generic_poker.game.table import Position
+
+            for player in game.table.players.values():
+                if player.position and player.position.has_position(Position.SMALL_BLIND):
+                    sb_amount = game.small_blind
+                    self.broadcast_game_action_chat(
+                        table_id, f"{player.name} posts small blind ${sb_amount}", "forced_bet"
+                    )
+                elif player.position and player.position.has_position(Position.BIG_BLIND):
+                    bb_amount = game.big_blind
+                    self.broadcast_game_action_chat(
+                        table_id, f"{player.name} posts big blind ${bb_amount}", "forced_bet"
+                    )
+
+            # Note: "*** HOLE CARDS ***" is announced by the frontend when it receives
+            # the game state update with the player's cards (see announceHoleCards in table.js)
+
+            # For online games with auto_progress=False, we need to manually
+            # advance through dealing steps until player input is needed
+            # Note: _next_step() already calls process_current_step() internally
+            while game.current_player is None and game.state != game.state.COMPLETE:
+                game._next_step()
+                if game.current_step >= len(game.rules.gameplay):
+                    break
+            logger.info(f"Game advanced to current_player: {game.current_player.name if game.current_player else None}")
+
+            # Reset ready status for next hand
+            TableAccessManager.reset_all_ready(table_id)
+
+            # Broadcast updated game state
+            self.broadcast_game_state_update(table_id)
+
+            # Broadcast that ready status has been reset
+            new_ready_status = TableAccessManager.get_ready_status(table_id)
+            self.broadcast_to_table(
+                table_id,
+                GameEvent.READY_STATUS_UPDATE,
+                {
+                    "table_id": table_id,
+                    "ready_status": new_ready_status,
+                    "timestamp": datetime.utcnow().isoformat() + "Z",
+                },
+            )
+
+            # Trigger bot actions if first player to act is a bot
+            from ..services.bot_action_service import BotActionService
+
+            BotActionService.trigger_bot_actions_if_needed(table_id)
+
+        except Exception as e:
+            logger.error(f"Failed to begin hand: {e}", exc_info=True)
             self.broadcast_to_table(table_id, GameEvent.ERROR, {"message": "Failed to start hand"})
 
     def _auto_fold_pending_players(self, table_id: str, session) -> None:

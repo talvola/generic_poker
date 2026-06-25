@@ -115,8 +115,10 @@ class PokerTable {
             });
         }
 
-        // Modal close on background click
+        // Modal close on background click — except the Dealer's Choice picker,
+        // which is mandatory (the hand is held until the dealer picks a game).
         document.querySelectorAll('.modal').forEach(modal => {
+            if (modal.id === 'dealer-choice-modal') return;
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) {
                     PokerModals.closeModal(modal.id);
@@ -251,7 +253,48 @@ class PokerTable {
                 );
                 this.updateRotationTracker(mixed);
             }
+            // A pick resolved the choice — dismiss any open picker/waiting UI.
+            PokerModals.closeModal('dealer-choice-modal');
         });
+
+        // Dealer's Choice (Phase 9.4): the button player must pick the next game.
+        this.socket.on('dealer_choice_required', (data) => {
+            this.handleDealerChoiceRequired(data);
+        });
+    }
+
+    handleDealerChoiceRequired(data) {
+        const myId = this.store.currentUser && this.store.currentUser.id;
+        if (data.chooser_id === myId) {
+            this.showDealerChoiceModal(data.menu || []);
+        } else {
+            PokerModals.showNotification(
+                `Waiting for ${data.chooser_name || 'the dealer'} to choose the game…`, 'info', 4000
+            );
+        }
+    }
+
+    showDealerChoiceModal(menu) {
+        const container = document.getElementById('dealer-choice-options');
+        if (!container) return;
+        container.innerHTML = menu.map(m =>
+            `<button type="button" class="btn btn-primary dealer-choice-btn" data-index="${m.index}">
+                <span class="dealer-choice-letter">${PokerModals.escapeHtml(m.letter || '')}</span>
+                <span class="dealer-choice-name">${PokerModals.escapeHtml(m.display_name)}</span>
+                <span class="dealer-choice-struct">${PokerModals.escapeHtml(m.betting_structure)}</span>
+            </button>`
+        ).join('');
+        // Delegated click — buttons are rebuilt each prompt.
+        container.onclick = (e) => {
+            const btn = e.target.closest('.dealer-choice-btn');
+            if (!btn) return;
+            this.socket.emit('dealer_choice', {
+                table_id: this.store.tableId,
+                variant_index: parseInt(btn.dataset.index, 10)
+            });
+            PokerModals.closeModal('dealer-choice-modal');
+        };
+        PokerModals.showModal('dealer-choice-modal');
     }
 
     // Touch/responsive methods delegated to this.responsive (PokerResponsive)

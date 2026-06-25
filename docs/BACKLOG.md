@@ -575,7 +575,7 @@ let players define their own mixes and variants on the fly (no JSON check-in + d
 | 9.1 | Lobby card "Details" drill-in: enrich existing table-details modal with mixed-game rotation, betting cap, and a "View Rules" link | Easy | DONE |
 | 9.2 | Add more predefined fixed mixes (SHOE, 9-game, 10-game, etc.) as config files | Trivial (config-only) | DONE (HOSE, SHOE, 10-Game) |
 | 9.3 | UI custom mixed-game builder: pick a name + ordered list of existing variants/structures → create a mix on the fly (stored per-user/per-table, no file check-in) | Medium | DONE |
-| 9.4 | Dealer's Choice: button player picks the next variant each orbit from an allowed-games menu (needs the 9.1 detail surface + 9.3 menu) | Medium-Hard | TODO |
+| 9.4 | Dealer's Choice: button player picks the next variant each orbit from an allowed-games menu (needs the 9.1 detail surface + 9.3 menu) | Medium-Hard | DONE |
 | 9.5 | UI custom variant authoring: form/wizard to define a new game JSON for engine-supported features only (e.g. Omaha 7-or-better instead of 8) — validated against the schema, stored as a user variant, never executes code | Hard | TODO |
 
 **9.1 result (DONE):** Enriched the existing `table-details-modal` (`lobby.js::showTableDetails`)
@@ -636,6 +636,34 @@ mix never breaks a running table.
   `reset_db.py` locally; fresh deploys get them). Tests: `test_custom_mix.py` (13 — validation,
   to_dict round-trip, inline/file resolution, all-legs-play). Verified live via API + Playwright
   (create → persist → to_dict surface → orchestrator session opens on NL Hold'em → library CRUD).
+
+**9.4 result (DONE):** Dealer's Choice — a custom-mix menu with a `dealersChoice` flag.
+Instead of auto-cycling, the table pauses at each orbit boundary (and before the very first
+hand — Erik's choices: per-orbit cadence, dealer picks the first game too) and the player on
+the button picks from the menu.
+- Config: `MixedGameConfig.dealers_choice` (`dealersChoice` in JSON, round-trips via to_dict);
+  `normalize_custom_mix(..., dealers_choice=)` sets it. Reuses the 9.3 custom-mix storage —
+  no new DB column or build.sh migration (it's the same `custom_mix_config` JSON).
+- GameSession: `is_dealers_choice()`, `needs_dealer_choice()` (fires when no initial pick yet,
+  else `should_rotate()`), `apply_dealer_choice(index)` (jumps to the chosen menu index, resets
+  the orbit, swaps the game preserving stacks/seats/button), `get_dealer_choice_menu()`.
+- WS flow (`_start_hand_when_ready`): auto-rotate is skipped for dealers-choice tables; after the
+  button moves, `_handle_dealer_choice_gate` runs — a **bot** dealer auto-picks a random menu
+  variant inline; a **human** dealer gets a `dealer_choice_required` broadcast and the hand is
+  HELD. The pick arrives on the new `dealer_choice` socket event (validated: only the button
+  player may choose), which applies it and starts the hand. The hand-start tail was extracted
+  into `_begin_hand` so the normal-ready and post-pick paths share one path.
+- Frontend: a "🃏 Dealer's Choice" checkbox in the 9.3 builder (relabels the list to an *allowed
+  menu*); table.js shows a mandatory picker modal to the chooser (non-dismissable — the hand is
+  held) and a "Waiting for X to choose…" toast to everyone else; the lobby Details modal flags
+  Dealer's Choice mode.
+- **Engine note:** finding the button player needs `table.get_player_in_seat(button_seat)` — the
+  engine `Table` exposes players that way (the `Seat`/`seats` API belongs to the unrelated
+  `TableLayout` class in the same file, a footgun).
+- Tests: `test_dealers_choice.py` (12 — config flag round-trip, the needs/apply state machine,
+  menu, and both gate branches via a mocked WS manager). Verified live via Playwright: a bot
+  dealer auto-picked Razz and the hand started; the human picker modal renders all menu options
+  and emits the correct `dealer_choice` on click.
 
 **9.3 / 9.4 / 9.5 rationale:** Today defining a new mix or tweaking a qualifier (8-or-better →
 7-or-better) requires authoring JSON, committing, and redeploying — too heavy for something the

@@ -28,6 +28,9 @@ class MixedGameConfig:
     min_players: int
     max_players: int
     betting_structures: list[str] = field(default_factory=lambda: ["Limit"])
+    # Dealer's Choice: the rotation list is an *allowed menu*; the button player
+    # picks the next variant each orbit instead of cycling in fixed order.
+    dealers_choice: bool = False
 
     @classmethod
     def from_file(cls, filepath: Path) -> MixedGameConfig:
@@ -57,6 +60,7 @@ class MixedGameConfig:
             min_players=data.get("minPlayers", 2),
             max_players=data.get("maxPlayers", 9),
             betting_structures=data.get("bettingStructures", ["Limit"]),
+            dealers_choice=data.get("dealersChoice", False),
         )
 
     def to_dict(self) -> dict:
@@ -73,6 +77,7 @@ class MixedGameConfig:
             "minPlayers": self.min_players,
             "maxPlayers": self.max_players,
             "bettingStructures": self.betting_structures,
+            "dealersChoice": self.dealers_choice,
             "rotation": [
                 {
                     "variant": v.variant,
