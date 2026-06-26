@@ -371,7 +371,7 @@
 
     <script>
         window.isAuthenticated = {{ 'true' if current_user.is_authenticated else 'false' }};
-        window.currentUserId = {{ ('"' + current_user.id + '"') | safe if current_user.is_authenticated else 'null' }};
+        window.currentUserId = {{ current_user.id | tojson if current_user.is_authenticated else 'null' }};
     </script>
     <script src="{{ url_for('static', filename='js/lobby.js') }}?v={{ asset_version }}"></script>
 </body>
