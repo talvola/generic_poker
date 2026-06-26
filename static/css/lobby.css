@@ -2118,3 +2118,11 @@ to-assign option styling for modal */
     color: var(--muted-color, #6c757d);
     line-height: 1.4;
 }
+
+/* Edit Table modal note */
+.edit-table-note {
+    margin: 0.75rem 0 0;
+    font-size: 0.8rem;
+    color: var(--muted-color, #6c757d);
+    line-height: 1.4;
+}

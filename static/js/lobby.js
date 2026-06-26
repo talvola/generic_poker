@@ -91,6 +91,11 @@ class PokerLobby {
             this.joinPrivateTable();
         });
 
+        document.getElementById('edit-table-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.submitEditTable();
+        });
+
         // Private table checkbox
         document.getElementById('is-private').addEventListener('change', (e) => {
             const privateOptions = document.getElementById('private-options');
@@ -690,6 +695,12 @@ class PokerLobby {
                             data-table-id="${table.id}">
                         Details
                     </button>
+                    ${table.creator_id && table.creator_id === window.currentUserId ? `
+                        <button class="btn btn-outline btn-small edit-table-btn"
+                                data-table-id="${table.id}">
+                            Edit
+                        </button>
+                    ` : ''}
                 </div>
             </div>
         `;
@@ -737,6 +748,14 @@ class PokerLobby {
                 e.stopPropagation();
                 const tableId = btn.dataset.tableId;
                 this.showTableDetails(tableId);
+            });
+        });
+
+        // Edit buttons (creator only)
+        document.querySelectorAll('.edit-table-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.openEditTableModal(btn.dataset.tableId);
             });
         });
 
@@ -992,6 +1011,53 @@ class PokerLobby {
             }
         } catch (err) {
             this.showNotification('Failed to leave table', 'error');
+        }
+    }
+
+    openEditTableModal(tableId) {
+        const table = this.tables.find(t => t.id === tableId);
+        if (!table) {
+            this.showNotification('Table not found', 'error');
+            return;
+        }
+        document.getElementById('edit-table-id').value = tableId;
+        document.getElementById('edit-table-name').value = table.name || '';
+        document.getElementById('edit-allow-bots').checked = !!table.allow_bots;
+        document.getElementById('edit-is-private').checked = !!table.is_private;
+        this.showModal('edit-table-modal');
+    }
+
+    async submitEditTable() {
+        const tableId = document.getElementById('edit-table-id').value;
+        const settings = {
+            name: document.getElementById('edit-table-name').value.trim(),
+            allow_bots: document.getElementById('edit-allow-bots').checked,
+            is_private: document.getElementById('edit-is-private').checked
+        };
+        if (!settings.name) {
+            this.showNotification('Table name cannot be empty', 'error');
+            return;
+        }
+        try {
+            // Settings endpoint lives on table_bp (/table prefix), creator-only.
+            const resp = await fetch(`/table/${tableId}/settings`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settings)
+            });
+            const data = await resp.json();
+            if (resp.ok && data.success) {
+                this.showNotification('Table updated', 'success');
+                this.closeModal('edit-table-modal');
+                this.loadTables();
+                if (settings.allow_bots) {
+                    this.showNotification('Bots will fill empty seats when the table page loads', 'info');
+                }
+            } else {
+                this.showNotification(data.error || 'Failed to update table', 'error');
+            }
+        } catch (err) {
+            this.showNotification('Failed to update table', 'error');
         }
     }
 
