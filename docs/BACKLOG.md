@@ -672,3 +672,32 @@ broader play: a guided builder that emits engine-valid JSON for features the eng
 supports (no on-the-fly code), validated against `data/schemas/game.json`, stored as a
 user/custom variant alongside the official library. Scope guard: builder must reject any config
 needing an unimplemented feature (reuse the 5.5 "can this game be implemented?" assessment).
+
+---
+
+## Phase 10: Deferred / Aspirational Features
+
+Migrated from the original Kiro spec (`.kiro/specs/online-poker-platform/tasks.md`, since
+deleted — the historical EARS requirements + design are archived under `docs/archive/`) on
+2026-06-26. These are the only items from that spec that are *not* already done; everything
+else (bots, all action types, showdown, card visibility, layouts, admin core, PostgreSQL
+deploy) shipped and is recorded in the phases above. All bugs from the Kiro testing sessions
+were verified resolved before deletion. None of these are prioritized — they're the long tail
+of the original grand plan, kept here so nothing is lost. Verify current state before starting
+any of them.
+
+| # | Task | Original Req | Status |
+|---|------|--------------|--------|
+| 10.1 | Automated rules **generation**: JSON→markdown rules text for every variant, rules search/filtering API, regeneration + manual-override, config-hash caching, bookmarking. (Only the visual rules-*card* display from BACKLOG 8.1 exists today.) | Spec 22, 23, 9.1-9.6 | TODO |
+| 10.2 | Player statistics & reporting: per-player stats (win rate, hands played, by-variant performance), session/table-level reports. (Only admin routes touch stats today.) | Spec 8.2/8.3/8.6, 10.2 | TODO |
+| 10.3 | PHH (Poker Hand History) standard-format export — serialize hands to the [phh-std](https://github.com/uoftcprg/phh-std/) format with validation + batch export. No `phh` code exists yet. | Spec 9.5/9.7/9.8, 10.4 | TODO |
+| 10.4 | Security hardening: audit logging for all game actions, data encryption at rest, secure-RNG audit for shuffling. (Rate limiting from BACKLOG 4.5 is done; the rest is partial.) | Spec 11.1/11.3/11.4/11.5 | TODO |
+| 10.5 | Performance optimization + monitoring: DB query/index tuning, WebSocket message batching/compression, app performance monitoring, error tracking/alerting, health metrics dashboards. | Spec 12.x, 13.1/13.2 | TODO |
+| 10.6 | Admin interface — remaining modules beyond the shipped dashboard/user/table/variant management (BACKLOG 4.6): financial/transaction oversight, system-health & performance dashboard, reporting/analytics with scheduled reports + data export. | Spec 14.4/14.5/14.6 | TODO |
+| 10.7 | Docker containerization + deployment automation (DB migration/backup, health-check endpoints). Currently deploys via Render blueprint, not Docker. | Spec 15.2 | TODO |
+
+> Note: the original Kiro spec also listed many tasks as "[ ]" that are in fact **done** — bot
+> player system, advanced player actions (discard/expose/pass/separate/declare/choose), next-hand
+> progression, multi-hand flow, chip/bankroll management, dynamic variant layouts, and the admin
+> core. Those were verified complete against the codebase and are recorded in Phases 3-9 above;
+> they are intentionally *not* repeated here.
