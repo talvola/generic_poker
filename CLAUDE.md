@@ -124,7 +124,9 @@ exposes `window.lobby` (the table page exposes `window.pokerTable`). Variants + 
 come from `GET /table/variants` — each entry has `display_name`/`category`, and mixes carry
 `is_mixed`/`rotation`/`rotation_letters`. `lobby.css` does NOT load `table.css`, so mirror any
 shared styles; lobby modals render on a WHITE background (felt-oriented light-on-translucent
-styles won't translate).
+styles won't translate). Owner-only UI (e.g. the Edit button) is gated on
+`table.creator_id === window.currentUserId` (the id is exposed in lobby.html). Inject server
+values into inline `<script>` with Jinja `| tojson`, never `'"' + x + '"' | safe`.
 
 **Responsive layout invariants (table.css/table.js):** Seat-position CSS exists only for
 `data-max-players` 2/6/9 (bucketed in table.html). The hero's own seat gets `.hero-seat`
@@ -165,8 +167,15 @@ A new mix = one `data/mixed_game_configs/<name>.json` referencing existing varia
 (plus per-variant `bettingStructure`/`letter`). `TableManager.get_available_mixed_games()`
 dir-globs the folder, so a new mix appears in the lobby with no code change or restart. The
 rotation engine (orbit swap, stack/seat/button preservation, NL/PL-from-Limit derivation) lives
-in `GameSession` and is complete. Only Dealer's Choice + an on-the-fly mix builder remain
-(BACKLOG Phase 9).
+in `GameSession` and is complete.
+
+**Custom mixes (9.3) + Dealer's Choice (9.4):** user-authored mixes are stored inline as
+`MixedGameConfig` JSON on `PokerTable.custom_mix_config` (no file). `TableManager.get_table_mixed_config(table)`
+resolves inline JSON, else the file. Dealer's Choice = the same menu + a `dealersChoice` flag
+(button player picks each orbit; bot dealers auto-pick) — reuses `custom_mix_config`, no new column.
+⚠️ The FIRST orbit of any mix must be built with `create_game_instance_for_variant(first_leg)`,
+NOT the table's base structure — else an NL/PL-first leg wrongly plays as Limit (file mixes mask
+this since their first leg is always Limit). Only 9.5 (custom variant authoring) remains.
 
 ### Key Schema Elements
 
@@ -225,6 +234,8 @@ the gameplay array just omits the preflop bet step)
   `_next_step()` AFTER `process_player_action` returns. Any "hand finished" side effect
   (counters, DB sync, cleanup) must live in `PlayerActionManager._handle_hand_completion()`
   — the single point hit by all completion paths (fold-win, human action, bot action).
+- websocket_manager `_start_hand_when_ready` / `_begin_hand` use FUNCTION-LOCAL imports
+  (`TableAccessManager`, `Position`, `BotActionService`) — extracted helpers need their own.
 - Valid-action tuple amounts are TOTALS (player's total bet after the action), not deltas.
   Incremental call cost = `game.betting.get_additional_required(player_id)`.
 - No server-side auto-action by default: both the action timeout AND disconnect auto-fold
@@ -312,6 +323,10 @@ Debugging live/deployed UI: drive it with Playwright — log in via page-context
 (`/auth/api/login`, keeps cookies), create+join a table via the API, navigate to
 `/table/<id>`, click `#ready-btn`, then sample `window.pokerTable.store` / the DOM. The only
 way to reproduce bugs that need real bot play.
+- Playwright synthetic events need `{bubbles:true}` (`new Event('change',{bubbles:true})`) for
+  DELEGATED listeners — a bare `new Event('change')` doesn't bubble, so the handler never fires.
+- Start the dev app with Bash `run_in_background:true`, NOT `(python app.py &)` — a backgrounded
+  subshell inside a tool call gets killed when the call returns (exit 144).
 
 ### Bug Fix Workflow
 
@@ -383,6 +398,10 @@ game.betting.current_bets[player_id]  # PlayerBet(amount, has_acted, posted_blin
 
 # Player class has: id, name, stack, position, hand, is_active
 # Player does NOT have: current_bet, has_folded
+
+# Player at a seat: game.table.get_player_in_seat(seat_num). button_seat is an int.
+# The engine Table (table.py:141) has NO .seats dict — `table.seats` belongs to the
+# unrelated TableLayout class in the same file (a footgun; cost an hour in 9.4).
 
 # Hand results from engine
 game.get_hand_results()  # Returns GameResult with .pots, .hands, .winning_hands, .winners
@@ -460,6 +479,11 @@ Add to `build.sh`, push, then remove from `build.sh` after the next deploy if it
 Auth blueprint registered with `/auth` prefix:
 - HTML: `/auth/login`, `/auth/register`, `/auth/logout`
 - API: `/auth/api/register`, `/auth/api/login`, `/auth/api/logout`, `/auth/me`, `/auth/check-auth`
+
+Edit a table after creation: `PUT /table/<id>/settings` (creator-only,
+`TableManager.update_table_settings`) edits name/is_private/allow_bots. The lobby "Edit" button
+(shown on owner cards) wires to it. Flipping `allow_bots` on fills empty seats the next time the
+table page loads (the page emits `fill_bots` on connect; the server gates it on the flag).
 
 ## Important File Locations
 
