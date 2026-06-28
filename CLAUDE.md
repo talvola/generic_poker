@@ -629,4 +629,4 @@ pip-audit                        # Check for dependency vulnerabilities
 | `data/schemas/README.md` | Complete JSON config schema documentation |
 | `src/generic_poker/*-readme.md` | Component-specific API documentation |
 
-> **Note:** `.kiro/specs/online-poker-platform/` contains historical planning docs from earlier development. The current source of truth for status and tasks is `docs/STATUS.md` and `docs/BACKLOG.md`.
+> **Note:** The original Kiro IDE spec (`.kiro/`) was removed 2026-06-26 — its open items were migrated to `docs/BACKLOG.md` Phase 10 and its requirements/design docs archived under `docs/archive/`. The current source of truth for status and tasks is `docs/STATUS.md` and `docs/BACKLOG.md`.
