@@ -701,3 +701,29 @@ any of them.
 > progression, multi-hand flow, chip/bankroll management, dynamic variant layouts, and the admin
 > core. Those were verified complete against the codebase and are recorded in Phases 3-9 above;
 > they are intentionally *not* repeated here.
+
+## Phase 11: Tournament Play (added 2026-07-19)
+
+Requested by Erik: support tournament-style play — single-table sit-and-gos first, then
+multi-table tournaments (WSOP-style). Lower priority than the Phase 9.5 / MC bot / UX items
+above, but on the roadmap. Cash-game infrastructure (tables, seats, bots, rotation) is the
+foundation; tournaments layer lifecycle + payout logic on top.
+
+| # | Task | Difficulty | Status |
+|---|------|------------|--------|
+| 11.1 | Tournament core model: `Tournament` entity (buy-in, starting stack, blind schedule, payout structure, state machine registering→running→finished), registration/unregistration, bankroll debit on entry | Medium | TODO |
+| 11.2 | Blind level scheduler: timed blind/ante escalation driving the engine's forced-bet amounts between hands; on-screen level + next-level countdown | Medium | TODO |
+| 11.3 | Single-table sit-and-go: auto-start when N players registered, play down to a winner, elimination on bust (no rebuy), payout top finishers from prize pool, bots can fill | Medium | TODO |
+| 11.4 | Multi-table tournaments: table balancing (move players as tables shrink), table breaking, hand-for-hand near the bubble, final-table consolidation | Hard | TODO |
+| 11.5 | Tournament lobby UI: upcoming/running tournament list, registration flow, live standings/payouts view, blind-structure display | Medium | TODO |
+| 11.6 | Tournament extras: rebuys/add-ons, late registration, satellites, per-tournament variant or mixed-game rotation (reuse 9.3 mix configs) | Hard | TODO |
+
+Design notes for whoever starts this:
+- Elimination conflicts with the cash-game assumption that a busted player can rebuy or leave
+  freely — bust handling belongs in `PlayerActionManager._handle_hand_completion()` (the single
+  hand-completion choke point; see CLAUDE.md).
+- Blind escalation must apply *between* hands, not mid-hand; the per-orbit variant-rotation
+  machinery in `GameSession` (stack/seat/button preservation across game swaps) is the closest
+  existing pattern and likely reusable for blind-level swaps.
+- Tournament chips ≠ bankroll dollars: only the buy-in and the payout touch `User.bankroll`;
+  stacks inside the tournament are play chips.
