@@ -44,6 +44,10 @@ class PokerTable(db.Model):
     # Set only for tables whose variant is the custom-mix sentinel; null otherwise.
     custom_mix_config: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Inline (user-authored) variant — full game-config JSON (Phase 9.5).
+    # Set only for tables whose variant is the custom-variant sentinel; null otherwise.
+    custom_variant_config: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Betting caps (BACKLOG 6.2.13). Both nullable; null/omitted = engine default.
     # raise_cap_override (Limit only): bet + N raises; 0 = unlimited.
     # hand_cap_bb (No-Limit/Pot-Limit only): max loss per hand, in big blinds.
@@ -77,6 +81,7 @@ class PokerTable(db.Model):
         raise_cap_override: int | None = None,
         hand_cap_bb: int | None = None,
         custom_mix_config: str | None = None,
+        custom_variant_config: str | None = None,
         is_mixed_game: bool = False,
     ):
         """Initialize poker table."""
@@ -91,6 +96,7 @@ class PokerTable(db.Model):
         self.raise_cap_override = raise_cap_override
         self.hand_cap_bb = hand_cap_bb
         self.custom_mix_config = custom_mix_config
+        self.custom_variant_config = custom_variant_config
         self.is_mixed_game = is_mixed_game
 
         if is_private:
@@ -197,6 +203,11 @@ class PokerTable(db.Model):
         if self.custom_mix_config:
             result["custom_mix"] = self._custom_mix_summary()
 
+        # Surface a user-authored variant the same way (custom variants aren't in
+        # the /table/variants list either).
+        if self.custom_variant_config:
+            result["custom_variant"] = self._custom_variant_summary()
+
         # Only include sensitive information if requested and appropriate
         if include_sensitive and self.is_private:
             result["invite_code"] = self.invite_code
@@ -226,6 +237,37 @@ class PokerTable(db.Model):
             "betting_structures": data.get("bettingStructures", []),
             "dealers_choice": data.get("dealersChoice", False),
         }
+
+    def _custom_variant_summary(self) -> dict | None:
+        """Display summary of this table's inline custom variant."""
+        try:
+            data = json.loads(self.custom_variant_config)
+        except (TypeError, ValueError):
+            return None
+
+        return {
+            "display_name": data.get("game", "Custom Variant"),
+            "base_variant": None,
+            "betting_structures": data.get("bettingStructures", []),
+        }
+
+    def variant_display_name(self) -> str | None:
+        """Human-readable game name for sentinel variants (custom variant/mix).
+
+        Returns None for ordinary file-based variants — callers fall back to
+        formatting the variant stem.
+        """
+        if self.custom_variant_config:
+            try:
+                return json.loads(self.custom_variant_config).get("game")
+            except (TypeError, ValueError):
+                return None
+        if self.custom_mix_config:
+            try:
+                return json.loads(self.custom_mix_config).get("displayName")
+            except (TypeError, ValueError):
+                return None
+        return None
 
     def _betting_cap_params(self, betting_structure, stakes_dict: dict) -> dict:
         """Game kwargs for this table's betting caps (BACKLOG 6.2.13).

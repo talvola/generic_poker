@@ -355,6 +355,7 @@ class PlayerSessionManager:
                     "id": table.id,
                     "name": table.name,
                     "variant": table.variant,
+                    "variant_display": table.variant_display_name(),
                     "betting_structure": table.betting_structure,
                     "stakes": table.get_stakes(),
                     "max_players": table.max_players,

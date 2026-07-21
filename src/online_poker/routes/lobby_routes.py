@@ -19,7 +19,9 @@ table_manager = TableManager()
 @lobby_bp.route("/")
 def index():
     """Main lobby page."""
-    return render_template("lobby.html")
+    from generic_poker.evaluation.evaluator import EvaluationType
+
+    return render_template("lobby.html", evaluation_types=sorted(e.value for e in EvaluationType))
 
 
 @lobby_bp.route("/api/tables")
@@ -91,6 +93,23 @@ def create_table():
             data["variant"] = table_manager.CUSTOM_MIX_VARIANT
             data["betting_structure"] = "limit"  # mixes store limit base stakes
 
+        # Inline custom variant (Phase 9.5): created only from a SAVED library entry
+        # (validation has a single entry point — the save endpoint). The config is
+        # copied inline so deleting the library entry never affects this table.
+        custom_variant_json = None
+        if data.get("custom_variant_id"):
+            from ..models.custom_variant import CustomVariant
+
+            cv = (
+                db.session.query(CustomVariant)
+                .filter(CustomVariant.id == data["custom_variant_id"], CustomVariant.user_id == current_user.id)
+                .first()
+            )
+            if not cv:
+                return jsonify({"success": False, "error": "Custom variant not found"}), 404
+            custom_variant_json = cv.config
+            data["variant"] = table_manager.CUSTOM_VARIANT_VARIANT
+
         # Validate required fields
         required_fields = ["name", "variant", "betting_structure", "max_players", "stakes"]
         for field in required_fields:
@@ -152,6 +171,7 @@ def create_table():
             raise_cap_override=raise_cap_override,
             hand_cap_bb=hand_cap_bb,
             custom_mix_config=custom_mix_json,
+            custom_variant_config=custom_variant_json,
         )
 
         # Create table using table manager
@@ -161,8 +181,6 @@ def create_table():
             # Mark as mixed game if applicable
             if table_manager.is_mixed_game(data["variant"]):
                 table.is_mixed_game = True
-                from ..database import db
-
                 db.session.commit()
             return jsonify({"success": True, "table_id": table.id, "message": "Table created successfully"})
         else:
@@ -236,6 +254,123 @@ def delete_custom_mix(mix_id):
     if not mix:
         return jsonify({"success": False, "error": "Mix not found"}), 404
     db.session.delete(mix)
+    db.session.commit()
+    return jsonify({"success": True})
+
+
+# --- Custom variant library (Phase 9.5): user-authored game configs -----------------
+
+MAX_CUSTOM_VARIANTS_PER_USER = 50
+
+
+@lobby_bp.route("/api/custom-variants", methods=["GET"])
+@login_required
+def list_custom_variants():
+    """List the current user's saved custom variants."""
+    from ..models.custom_variant import CustomVariant
+
+    variants = (
+        db.session.query(CustomVariant)
+        .filter(CustomVariant.user_id == current_user.id)
+        .order_by(CustomVariant.created_at.desc())
+        .all()
+    )
+    return jsonify({"success": True, "variants": [v.to_dict() for v in variants]})
+
+
+@lobby_bp.route("/api/custom-variants/validate", methods=["POST"])
+@login_required
+@limiter.limit(
+    "30 per minute", key_func=lambda: current_user.id if current_user.is_authenticated else get_remote_address()
+)
+def validate_custom_variant_endpoint():
+    """Validate a candidate config without saving (live editor feedback).
+
+    Body: {"config": {...}, "smoke": bool}. Smoke-play (in-memory bot hands)
+    only runs when requested — the debounced editor check sends smoke=false.
+    """
+    from ..services.variant_authoring import validate_custom_variant
+
+    data = request.get_json() or {}
+    config = data.get("config")
+    if not isinstance(config, dict):
+        return jsonify({"success": False, "error": "Body must include a 'config' object"}), 400
+
+    ok, errors, warnings = validate_custom_variant(config, run_smoke=bool(data.get("smoke", True)))
+    return jsonify({"success": True, "valid": ok, "errors": [e.to_dict() for e in errors], "warnings": warnings})
+
+
+@lobby_bp.route("/api/custom-variants", methods=["POST"])
+@login_required
+def save_custom_variant():
+    """Save a custom variant to the current user's library (full validation, smoke on)."""
+    from ..models.custom_variant import CustomVariant
+    from ..services.variant_authoring import validate_custom_variant
+
+    data = request.get_json() or {}
+    display_name = (data.get("display_name") or "").strip()
+    config = data.get("config")
+    if not display_name:
+        return jsonify({"success": False, "error": "Variant needs a name"}), 400
+    if not isinstance(config, dict):
+        return jsonify({"success": False, "error": "Body must include a 'config' object"}), 400
+
+    # The name field is authoritative — the stored config always matches it.
+    config["game"] = display_name
+
+    ok, errors, warnings = validate_custom_variant(config, run_smoke=True)
+    if not ok:
+        return (
+            jsonify({"success": False, "error": "Validation failed", "errors": [e.to_dict() for e in errors]}),
+            400,
+        )
+
+    import json as _json
+
+    config_json = _json.dumps(config)
+    existing = (
+        db.session.query(CustomVariant)
+        .filter(CustomVariant.user_id == current_user.id, CustomVariant.display_name == display_name)
+        .first()
+    )
+    if existing:
+        existing.config = config_json  # overwrite same-named variant
+        existing.base_variant = data.get("base_variant") or existing.base_variant
+        variant = existing
+    else:
+        count = db.session.query(CustomVariant).filter(CustomVariant.user_id == current_user.id).count()
+        if count >= MAX_CUSTOM_VARIANTS_PER_USER:
+            return jsonify({"success": False, "error": "Variant library is full (50 max)"}), 400
+        variant = CustomVariant(
+            user_id=current_user.id,
+            display_name=display_name,
+            base_variant=data.get("base_variant"),
+            config=config_json,
+        )
+        db.session.add(variant)
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to save custom variant: {e}")
+        return jsonify({"success": False, "error": "Could not save variant"}), 500
+    return jsonify({"success": True, "variant": variant.to_dict(), "warnings": warnings})
+
+
+@lobby_bp.route("/api/custom-variants/<variant_id>", methods=["DELETE"])
+@login_required
+def delete_custom_variant(variant_id):
+    """Delete one of the current user's saved variants (tables keep their inline copy)."""
+    from ..models.custom_variant import CustomVariant
+
+    variant = (
+        db.session.query(CustomVariant)
+        .filter(CustomVariant.id == variant_id, CustomVariant.user_id == current_user.id)
+        .first()
+    )
+    if not variant:
+        return jsonify({"success": False, "error": "Variant not found"}), 404
+    db.session.delete(variant)
     db.session.commit()
     return jsonify({"success": True})
 
@@ -540,6 +675,7 @@ def table_view(table_id):
         "id": table.id,
         "name": table.name,
         "variant": table.variant,
+        "variant_display": table.variant_display_name(),
         "betting_structure": table.betting_structure,
         "max_players": table.max_players,
         "current_players": active_players,

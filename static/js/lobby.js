@@ -9,6 +9,13 @@ class PokerLobby {
         this.CUSTOM_MIX_VALUE = '__custom_mix__';  // sentinel for the builder option
         this.customMixMode = false;
         this.savedMixes = [];   // user's saved custom mixes (Phase 9.3)
+        this.CUSTOM_VARIANT_VALUE = '__custom_variant__';  // sentinel for the variant builder (9.5)
+        this.CUSTOM_VARIANT_PREFIX = 'customvar:';         // dropdown value prefix for saved variants
+        this.customVariantMode = false;
+        this.savedVariants = [];        // user's saved custom variants (Phase 9.5)
+        this.selectedCustomVariantId = null;  // library id to create a table from
+        this.cvConfig = null;           // parsed config in the builder (JSON is source of truth)
+        this.cvValidateTimer = null;    // debounce handle for editor validation
         this.filters = {
             variant: '',
             stakes: '',
@@ -25,6 +32,7 @@ class PokerLobby {
         this.loadVariants();
         this.loadTables();
         this.setupStakesConfiguration();
+        this.loadSavedVariants();  // populates the "My Variants" dropdown group (9.5)
     }
 
     requireLogin() {
@@ -39,6 +47,7 @@ class PokerLobby {
         document.getElementById('create-table-btn').addEventListener('click', () => {
             if (!this.requireLogin()) return;
             this.resetCustomMixBuilder();
+            this.resetCustomVariantBuilder();
             this.showModal('create-table-modal');
         });
 
@@ -105,16 +114,49 @@ class PokerLobby {
         // Game variant change - update available betting structures and show rules link
         document.getElementById('game-variant').addEventListener('change', (e) => {
             if (e.target.value === this.CUSTOM_MIX_VALUE) {
+                this.exitCustomVariantMode();
                 this.enterCustomMixMode();
                 return;
             }
+            if (e.target.value === this.CUSTOM_VARIANT_VALUE) {
+                this.exitCustomMixMode();
+                this.enterCustomVariantMode();
+                return;
+            }
             this.exitCustomMixMode();
+            this.exitCustomVariantMode();
+            if (e.target.value.startsWith(this.CUSTOM_VARIANT_PREFIX)) {
+                // A saved custom variant picked directly for table creation.
+                this.selectCustomVariant(e.target.value.slice(this.CUSTOM_VARIANT_PREFIX.length));
+                return;
+            }
+            this.selectedCustomVariantId = null;
             this.updateBettingStructureOptions(e.target.value);
             const rulesLink = document.getElementById('view-rules-link');
             if (rulesLink) {
                 rulesLink.style.display = e.target.value ? 'inline' : 'none';
             }
         });
+
+        // Custom variant builder controls (Phase 9.5)
+        document.getElementById('cv-base-variant').addEventListener('change', (e) => {
+            if (e.target.value) this.loadCvBase(e.target.value);
+        });
+        document.getElementById('cv-name').addEventListener('input', (e) => {
+            if (this.cvConfig) {
+                this.cvConfig.game = e.target.value;
+                this.cvSyncEditor(false);
+            }
+        });
+        document.getElementById('cv-json').addEventListener('input', () => this.cvJsonChanged());
+        document.getElementById('cv-knobs').addEventListener('change', (e) => {
+            const knob = e.target.closest('[data-knob]');
+            if (knob) this.applyKnob(knob);
+        });
+        document.getElementById('cv-validate-btn').addEventListener('click', () => this.cvValidate(true));
+        document.getElementById('cv-save-btn').addEventListener('click', () => this.saveCustomVariant());
+        document.getElementById('saved-variant-select').addEventListener('change', (e) => this.loadSavedVariant(e.target.value));
+        document.getElementById('delete-variant-btn').addEventListener('click', () => this.deleteSavedVariant());
 
         // Custom mix builder controls (Phase 9.3)
         document.getElementById('add-mix-leg').addEventListener('click', () => this.addMixLeg());
@@ -253,6 +295,22 @@ class PokerLobby {
         // Custom mix builder entry (Phase 9.3) — always offered, plus on "custom"/"mix" search
         if (!term || 'custom mix build'.includes(term)) {
             createHtml += `<option value="${this.CUSTOM_MIX_VALUE}">🎲 Build a Custom Mix…</option>`;
+        }
+        // Custom variant builder entry (Phase 9.5)
+        if (!term || 'custom variant design'.includes(term)) {
+            createHtml += `<option value="${this.CUSTOM_VARIANT_VALUE}">🛠️ Design a Custom Variant…</option>`;
+        }
+        // Saved custom variants (Phase 9.5) — playable directly from the dropdown
+        const savedMatches = this.savedVariants.filter(
+            v => !term || v.display_name.toLowerCase().includes(term)
+        );
+        if (savedMatches.length) {
+            createHtml += '<optgroup label="My Variants">';
+            for (const v of savedMatches) {
+                createHtml += `<option value="${this.CUSTOM_VARIANT_PREFIX}${this.escapeHtml(v.id)}">${this.escapeHtml(v.display_name)}</option>`;
+                matchCount++;
+            }
+            createHtml += '</optgroup>';
         }
         for (const cat of categoryOrder) {
             const games = grouped[cat];
@@ -500,6 +558,366 @@ class PokerLobby {
         }
     }
 
+    // --- Custom variant builder (Phase 9.5) -----------------------------------
+    // The JSON editor is the source of truth (this.cvConfig mirrors it when it
+    // parses); knobs rewrite cvConfig and re-serialize into the editor.
+
+    enterCustomVariantMode() {
+        this.customVariantMode = true;
+        document.getElementById('custom-variant-builder').style.display = 'block';
+        const rulesLink = document.getElementById('view-rules-link');
+        if (rulesLink) rulesLink.style.display = 'none';
+        this.populateCvBasePicker();
+        this.loadSavedVariants();
+    }
+
+    exitCustomVariantMode() {
+        this.customVariantMode = false;
+        document.getElementById('custom-variant-builder').style.display = 'none';
+    }
+
+    resetCustomVariantBuilder() {
+        this.exitCustomVariantMode();
+        this.cvConfig = null;
+        this.selectedCustomVariantId = null;
+        document.getElementById('cv-name').value = '';
+        document.getElementById('cv-json').value = '';
+        document.getElementById('cv-knobs').innerHTML = '';
+        document.getElementById('cv-base-variant').value = '';
+        const sel = document.getElementById('saved-variant-select');
+        if (sel) sel.value = '';
+        this.cvShowValidation(null);
+    }
+
+    populateCvBasePicker() {
+        const sel = document.getElementById('cv-base-variant');
+        if (sel.options.length > 1) return; // already populated
+        let html = '<option value="">Select a game to clone…</option>';
+        for (const v of this.singleVariants()) {
+            html += `<option value="${v.name}">${v.display_name}</option>`;
+        }
+        sel.innerHTML = html;
+    }
+
+    async loadCvBase(stem) {
+        try {
+            const res = await fetch(`/table/game-configs/${stem}`);
+            const data = await res.json();
+            if (!data.success) {
+                this.showNotification(data.error || 'Could not load game config', 'error');
+                return;
+            }
+            this.cvConfig = data.config;
+            const base = this.variants.find(v => v.name === stem);
+            const name = `${base ? base.display_name : this.cvConfig.game} (Custom)`;
+            this.cvConfig.game = name;
+            document.getElementById('cv-name').value = name;
+            this.cvSyncEditor(true);
+            this.cvScheduleValidate();
+        } catch (e) {
+            this.showNotification('Could not load game config', 'error');
+        }
+    }
+
+    /** Re-serialize cvConfig into the editor; optionally re-render the knobs. */
+    cvSyncEditor(renderKnobs = true) {
+        document.getElementById('cv-json').value = JSON.stringify(this.cvConfig, null, 2);
+        if (renderKnobs) this.renderVariantKnobs();
+        this.cvSetKnobsEnabled(true);
+    }
+
+    cvJsonChanged() {
+        const text = document.getElementById('cv-json').value;
+        try {
+            this.cvConfig = JSON.parse(text);
+        } catch (e) {
+            // Unparseable JSON: grey the knobs out and report locally, no server call.
+            this.cvSetKnobsEnabled(false);
+            this.cvShowValidation({ valid: false, errors: [{ stage: 'json', message: `JSON does not parse: ${e.message}` }], warnings: [] });
+            return;
+        }
+        const nameInput = document.getElementById('cv-name');
+        if (typeof this.cvConfig.game === 'string') nameInput.value = this.cvConfig.game;
+        this.renderVariantKnobs();
+        this.cvSetKnobsEnabled(true);
+        this.cvScheduleValidate();
+    }
+
+    cvScheduleValidate() {
+        clearTimeout(this.cvValidateTimer);
+        this.cvValidateTimer = setTimeout(() => this.cvValidate(false), 800);
+    }
+
+    cvSetKnobsEnabled(enabled) {
+        const knobs = document.getElementById('cv-knobs');
+        knobs.classList.toggle('cv-knobs-disabled', !enabled);
+        for (const el of knobs.querySelectorAll('select, input')) el.disabled = !enabled;
+    }
+
+    // Low-qualifier presets: N-or-better for a5_low is [1, C(N,5)] — the count of
+    // distinct no-pair 5-card rank sets with high card ≤ N (matches omaha_x_or_better).
+    static get QUALIFIER_PRESETS() {
+        return { '': null, '9': [1, 126], '8': [1, 56], '7': [1, 21], '6': [1, 6], '5': [1, 1] };
+    }
+
+    static get DECK_TYPES() {
+        return { standard: 52, short_27_ja: 40, short_6a: 36, short_ta: 20 };
+    }
+
+    renderVariantKnobs() {
+        const container = document.getElementById('cv-knobs');
+        const cfg = this.cvConfig;
+        if (!cfg || typeof cfg !== 'object') {
+            container.innerHTML = '';
+            return;
+        }
+        let html = '';
+
+        // Deck type knob
+        const deckType = cfg.deck && cfg.deck.type;
+        if (deckType in PokerLobby.DECK_TYPES) {
+            const labels = { standard: 'Standard (52)', short_27_ja: 'Short 2-7 + JA (40)', short_6a: 'Short 6-A (36)', short_ta: 'Short T-A (20)' };
+            html += `<div class="cv-knob"><label>Deck:</label><select data-knob="deck">`;
+            for (const [t, n] of Object.entries(PokerLobby.DECK_TYPES)) {
+                html += `<option value="${t}"${t === deckType ? ' selected' : ''}>${labels[t] || t} </option>`;
+            }
+            html += '</select></div>';
+        }
+
+        // Per-side knobs only when the config has a plain bestHand array
+        const bestHands = Array.isArray(cfg.showdown && cfg.showdown.bestHand) ? cfg.showdown.bestHand : [];
+        bestHands.forEach((bh, i) => {
+            const label = this.escapeHtml(bh.name || `Hand ${i + 1}`);
+            // Evaluation type select
+            if (typeof bh.evaluationType === 'string' && Array.isArray(window.evaluationTypes) && window.evaluationTypes.length) {
+                html += `<div class="cv-knob"><label>${label} evaluation:</label><select data-knob="evaltype" data-index="${i}">`;
+                for (const et of window.evaluationTypes) {
+                    html += `<option value="${et}"${et === bh.evaluationType ? ' selected' : ''}>${et}</option>`;
+                }
+                html += '</select></div>';
+            }
+            // Low qualifier presets (a5_low sides only — the classic X-or-better family)
+            if (bh.evaluationType === 'a5_low') {
+                const current = Array.isArray(bh.qualifier) ? String(this.qualifierToPreset(bh.qualifier)) : '';
+                html += `<div class="cv-knob"><label>${label} qualifier:</label><select data-knob="qualifier" data-index="${i}">`;
+                html += `<option value=""${current === '' ? ' selected' : ''}>None (always qualifies)</option>`;
+                for (const n of ['9', '8', '7', '6', '5']) {
+                    html += `<option value="${n}"${current === n ? ' selected' : ''}>${n}-or-better</option>`;
+                }
+                html += '</select></div>';
+            }
+        });
+
+        container.innerHTML = html;
+    }
+
+    qualifierToPreset(qualifier) {
+        for (const [preset, val] of Object.entries(PokerLobby.QUALIFIER_PRESETS)) {
+            if (val && val[0] === qualifier[0] && val[1] === qualifier[1]) return preset;
+        }
+        return '';
+    }
+
+    applyKnob(el) {
+        if (!this.cvConfig) return;
+        const kind = el.dataset.knob;
+        if (kind === 'deck') {
+            this.cvConfig.deck = this.cvConfig.deck || {};
+            this.cvConfig.deck.type = el.value;
+            this.cvConfig.deck.cards = PokerLobby.DECK_TYPES[el.value];
+        } else if (kind === 'evaltype' || kind === 'qualifier') {
+            const bh = this.cvConfig.showdown && Array.isArray(this.cvConfig.showdown.bestHand)
+                ? this.cvConfig.showdown.bestHand[Number(el.dataset.index)] : null;
+            if (!bh) return;
+            if (kind === 'evaltype') {
+                bh.evaluationType = el.value;
+            } else {
+                const preset = PokerLobby.QUALIFIER_PRESETS[el.value];
+                if (preset) bh.qualifier = preset;
+                else delete bh.qualifier;
+            }
+        }
+        this.cvSyncEditor(true);
+        this.cvScheduleValidate();
+    }
+
+    async cvValidate(smoke) {
+        if (!this.cvConfig) return null;
+        try {
+            const res = await fetch('/api/custom-variants/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ config: this.cvConfig, smoke })
+            });
+            const data = await res.json();
+            if (data.success) {
+                this.cvShowValidation(data, smoke);
+                return data;
+            }
+        } catch (e) {
+            console.error('Validation request failed:', e);
+        }
+        return null;
+    }
+
+    cvShowValidation(result, smokeRan = false) {
+        const panel = document.getElementById('cv-validation');
+        if (!result) {
+            panel.style.display = 'none';
+            panel.innerHTML = '';
+            return;
+        }
+        panel.style.display = 'block';
+        if (result.valid) {
+            const note = smokeRan ? ' — test hands played clean' : ' (schema + engine; Validate runs test hands)';
+            let html = `<div class="cv-valid">✓ Config is valid${note}</div>`;
+            for (const w of result.warnings || []) {
+                html += `<div class="cv-warning">⚠ ${this.escapeHtml(w)}</div>`;
+            }
+            panel.innerHTML = html;
+        } else {
+            let html = '';
+            for (const err of result.errors || []) {
+                const path = err.json_path ? ` <code>${this.escapeHtml(err.json_path)}</code>` : '';
+                html += `<div class="cv-error">✕ [${this.escapeHtml(err.stage)}] ${this.escapeHtml(err.message)}${path}</div>`;
+            }
+            panel.innerHTML = html;
+        }
+    }
+
+    async loadSavedVariants() {
+        if (!window.isAuthenticated) return;
+        try {
+            const res = await fetch('/api/custom-variants');
+            const data = await res.json();
+            if (data.success) {
+                this.savedVariants = data.variants || [];
+                this.renderSavedVariantSelect();
+                this.populateVariantDropdowns();
+            }
+        } catch (e) {
+            console.error('Failed to load saved variants:', e);
+        }
+    }
+
+    renderSavedVariantSelect() {
+        const group = document.getElementById('saved-variant-group');
+        const sel = document.getElementById('saved-variant-select');
+        if (!this.savedVariants.length) {
+            group.style.display = 'none';
+            return;
+        }
+        group.style.display = 'block';
+        let html = '<option value="">— My Variants —</option>';
+        for (const v of this.savedVariants) {
+            html += `<option value="${this.escapeHtml(v.id)}">${this.escapeHtml(v.display_name)}</option>`;
+        }
+        sel.innerHTML = html;
+    }
+
+    loadSavedVariant(variantId) {
+        if (!variantId) return;
+        const v = this.savedVariants.find(x => x.id === variantId);
+        if (!v) return;
+        this.cvConfig = v.config;
+        this.selectedCustomVariantId = v.id;
+        document.getElementById('cv-name').value = v.display_name;
+        this.cvSyncEditor(true);
+        this.cvShowValidation(null);
+        this.selectCustomVariant(v.id);
+    }
+
+    async deleteSavedVariant() {
+        const sel = document.getElementById('saved-variant-select');
+        const variantId = sel.value;
+        if (!variantId) {
+            this.showNotification('Pick a saved variant to delete', 'info');
+            return;
+        }
+        const v = this.savedVariants.find(x => x.id === variantId);
+        if (!confirm(`Delete "${v ? v.display_name : 'this variant'}" from your library? (Tables already using it keep playing.)`)) return;
+        try {
+            const res = await fetch(`/api/custom-variants/${variantId}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) {
+                this.showNotification('Variant deleted', 'success');
+                if (this.selectedCustomVariantId === variantId) this.selectedCustomVariantId = null;
+                await this.loadSavedVariants();
+            } else {
+                this.showNotification(data.error || 'Could not delete variant', 'error');
+            }
+        } catch (e) {
+            this.showNotification('Could not delete variant', 'error');
+        }
+    }
+
+    async saveCustomVariant() {
+        const name = document.getElementById('cv-name').value.trim();
+        if (!name) {
+            this.showNotification('Give your variant a name', 'error');
+            return;
+        }
+        if (!this.cvConfig) {
+            this.showNotification('Pick a game to clone (or paste a config) first', 'error');
+            return;
+        }
+        const saveBtn = document.getElementById('cv-save-btn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Validating…';
+        try {
+            const res = await fetch('/api/custom-variants', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    display_name: name,
+                    base_variant: document.getElementById('cv-base-variant').value || null,
+                    config: this.cvConfig
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                this.showNotification('Variant saved to your library', 'success');
+                this.selectedCustomVariantId = data.variant.id;
+                this.cvShowValidation({ valid: true, warnings: data.warnings || [] }, true);
+                await this.loadSavedVariants();
+                document.getElementById('saved-variant-select').value = data.variant.id;
+                // Restrict the structure picker to what the saved variant supports.
+                this.selectCustomVariant(data.variant.id);
+            } else if (data.errors) {
+                this.cvShowValidation({ valid: false, errors: data.errors, warnings: [] });
+                this.showNotification('Validation failed — see details above the buttons', 'error');
+            } else {
+                this.showNotification(data.error || 'Could not save variant', 'error');
+            }
+        } catch (e) {
+            this.showNotification('Could not save variant', 'error');
+        } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save to My Variants';
+        }
+    }
+
+    /** A saved variant was picked in the dropdown: restrict structures to its config. */
+    selectCustomVariant(variantId) {
+        const v = this.savedVariants.find(x => x.id === variantId);
+        if (!v) return;
+        this.selectedCustomVariantId = variantId;
+        const structSelect = document.getElementById('betting-structure');
+        const structMap = { 'No Limit': 'no-limit', 'Pot Limit': 'pot-limit', 'Limit': 'limit' };
+        let html = '<option value="">Select structure</option>';
+        for (const bs of v.betting_structures || []) {
+            const val = structMap[bs] || bs.toLowerCase().replace(' ', '-');
+            html += `<option value="${val}">${bs}</option>`;
+        }
+        structSelect.innerHTML = html;
+        if ((v.betting_structures || []).length === 1) {
+            structSelect.value = structMap[v.betting_structures[0]] || '';
+            structSelect.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        const rulesLink = document.getElementById('view-rules-link');
+        if (rulesLink) rulesLink.style.display = 'none';
+    }
+
     updateBettingStructureOptions(variantName) {
         const structSelect = document.getElementById('betting-structure');
         const variant = this.variants.find(v => v.name === variantName);
@@ -641,7 +1059,7 @@ class PokerLobby {
                 <div class="table-header-info">
                     <div>
                         <div class="table-name">${this.escapeHtml(table.name)}</div>
-                        <div class="table-variant">${table.custom_mix ? this.escapeHtml(table.custom_mix.display_name) : this.formatVariantName(table.variant)} <span class="table-id-tag">#${table.id.substring(0, 6)}</span></div>
+                        <div class="table-variant">${table.custom_mix ? this.escapeHtml(table.custom_mix.display_name) : (table.custom_variant ? this.escapeHtml(table.custom_variant.display_name) : this.formatVariantName(table.variant))} <span class="table-id-tag">#${table.id.substring(0, 6)}</span></div>
                     </div>
                     <div class="table-status">
                         <div class="status-badge status-${statusClass}">${statusText}</div>
@@ -900,6 +1318,16 @@ class PokerLobby {
             }
             const dealersChoice = document.getElementById('mix-dealers-choice').checked;
             tableData.custom_mix = { display_name: mixName, rotation, dealers_choice: dealersChoice };
+        }
+
+        // Custom variant (Phase 9.5): tables are created from a SAVED library entry.
+        if (this.customVariantMode || (tableData.variant || '').startsWith(this.CUSTOM_VARIANT_PREFIX)) {
+            if (!this.selectedCustomVariantId) {
+                this.showNotification('Save your variant first, then create the table', 'error');
+                return;
+            }
+            tableData.custom_variant_id = this.selectedCustomVariantId;
+            tableData.variant = 'custom_variant';  // server re-derives from the library entry
         }
 
         // Validate required fields
@@ -1397,7 +1825,7 @@ class PokerLobby {
             <div class="table-detail-grid">
                 <div class="detail-row">
                     <strong>Game Variant:</strong>
-                    <span>${this.escapeHtml(this.formatVariantName(table.variant))}</span>
+                    <span>${this.escapeHtml(table.custom_variant ? `${table.custom_variant.display_name} (custom)` : this.formatVariantName(table.variant))}</span>
                 </div>
                 <div class="detail-row">
                     <strong>Betting Structure:</strong>
@@ -1435,7 +1863,9 @@ class PokerLobby {
 
         // Attach the View Rules handler without an inline onclick (avoids HTML-injected handlers)
         content.querySelector('.view-rules-btn')
-            ?.addEventListener('click', () => window.showVariantRulesById(table.variant));
+            ?.addEventListener('click', () => table.custom_variant
+                ? window.showTableRulesCard(table.id)
+                : window.showVariantRulesById(table.variant));
 
         // Configure action buttons
         joinBtn.disabled = isFull || table.is_private;
@@ -1619,6 +2049,34 @@ window.showVariantRules = function() {
 };
 
 // Show variant rules modal for a specific variant id (used from table details)
+// Rules card for a specific table — works for inline custom variants (9.5), whose
+// configs have no file under /table/variants/<id>/rules.
+window.showTableRulesCard = function(tableId) {
+    if (!tableId) return;
+
+    const content = document.getElementById('game-rules-content');
+    const title = document.getElementById('game-rules-title');
+    if (!content) return;
+
+    content.innerHTML = '<div style="text-align:center; padding: 20px;">Loading...</div>';
+    if (window.lobby) window.lobby.showModal('game-rules-modal');
+
+    fetch(`/table/${tableId}/rules-card`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) {
+                content.innerHTML = '<div>Could not load rules.</div>';
+                return;
+            }
+            const rules = data.rules;
+            if (title) title.textContent = rules.game;
+            content.innerHTML = renderGameCard(rules);
+        })
+        .catch(() => {
+            content.innerHTML = '<div>Failed to load rules.</div>';
+        });
+};
+
 window.showVariantRulesById = function(variantId) {
     if (!variantId) return;
 

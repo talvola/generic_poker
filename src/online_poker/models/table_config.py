@@ -33,6 +33,10 @@ class TableConfig:
     # when variant is the custom-mix sentinel. None for normal/file-based tables.
     custom_mix_config: str | None = None
 
+    # Inline user-authored variant (Phase 9.5). Full game-config JSON; set only
+    # when variant is the custom-variant sentinel. None for file-based tables.
+    custom_variant_config: str | None = None
+
     # Optional settings with defaults
     auto_start: bool = True
     timeout_minutes: int = 30

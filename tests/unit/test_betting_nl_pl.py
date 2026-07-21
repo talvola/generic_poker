@@ -474,3 +474,51 @@ def test_all_in_player_skipped_in_later_betting_rounds():
         if result.advance_step:
             break
     assert sorted(acted) == sorted([raiser, caller])  # both live players acted exactly once
+
+
+def test_pl_all_in_raise_below_min_raise_is_valid():
+    """Regression (found by 9.5 smoke-play): in Pot Limit, a short stack's all-in
+    raise that falls below the minimum raise was offered by get_valid_actions but
+    rejected by validate_bet/place_bet with ValueError("Invalid bet"). An all-in
+    is legal even when short of the min raise, as long as it's within the pot cap.
+    """
+    from pathlib import Path
+
+    config_dir = Path(__file__).parent.parent.parent / "data" / "game_configs"
+    rules = GameRules.from_file(config_dir / "hold_em.json")
+    game = Game(
+        rules,
+        structure=BettingStructure.POT_LIMIT,
+        small_blind=5,
+        big_blind=10,
+        auto_progress=False,
+    )
+    for i in range(3):
+        game.add_player(f"p{i}", f"Player{i}", 500)
+    game.table.move_button()
+    game.start_hand()
+    while game.current_player is None and game.state != GameState.COMPLETE:
+        game._next_step()
+
+    # First actor pot-raises; shorten the next player so their all-in total is
+    # above the call amount but below the minimum re-raise.
+    raiser = game.current_player.id
+    result = game.player_action(raiser, PlayerAction.RAISE, 35)  # pot raise
+    assert result.success
+
+    short_id = game.current_player.id
+    current = game.betting.current_bets.get(short_id)
+    already_in = current.amount if current else 0
+    # All-in total = call (35) + 10 — above the call, below min raise (60)
+    game.table.players[short_id].stack = (35 - already_in) + 10
+    all_in_total = already_in + game.table.players[short_id].stack
+
+    valid = game.get_valid_actions(short_id)
+    raise_actions = [a for a in valid if a[0] == PlayerAction.RAISE]
+    assert raise_actions, f"expected an all-in raise option, got {valid}"
+    assert raise_actions[0][1] == all_in_total  # engine offers exactly the all-in
+
+    # This raise must be accepted, not rejected with ValueError("Invalid bet")
+    result = game.player_action(short_id, PlayerAction.RAISE, all_in_total)
+    assert result.success
+    assert game.table.players[short_id].stack == 0

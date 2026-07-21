@@ -576,7 +576,7 @@ let players define their own mixes and variants on the fly (no JSON check-in + d
 | 9.2 | Add more predefined fixed mixes (SHOE, 9-game, 10-game, etc.) as config files | Trivial (config-only) | DONE (HOSE, SHOE, 10-Game) |
 | 9.3 | UI custom mixed-game builder: pick a name + ordered list of existing variants/structures → create a mix on the fly (stored per-user/per-table, no file check-in) | Medium | DONE |
 | 9.4 | Dealer's Choice: button player picks the next variant each orbit from an allowed-games menu (needs the 9.1 detail surface + 9.3 menu) | Medium-Hard | DONE |
-| 9.5 | UI custom variant authoring: form/wizard to define a new game JSON for engine-supported features only (e.g. Omaha 7-or-better instead of 8) — validated against the schema, stored as a user variant, never executes code | Hard | TODO |
+| 9.5 | UI custom variant authoring: form/wizard to define a new game JSON for engine-supported features only (e.g. Omaha 7-or-better instead of 8) — validated against the schema, stored as a user variant, never executes code | Hard | DONE |
 
 **9.1 result (DONE):** Enriched the existing `table-details-modal` (`lobby.js::showTableDetails`)
 with three conditional sections, all frontend-only (data was already on the client via
@@ -672,6 +672,26 @@ broader play: a guided builder that emits engine-valid JSON for features the eng
 supports (no on-the-fly code), validated against `data/schemas/game.json`, stored as a
 user/custom variant alongside the official library. Scope guard: builder must reject any config
 needing an unimplemented feature (reuse the 5.5 "can this game be implemented?" assessment).
+
+**9.5 result (DONE 2026-07-20):** Clone-and-tweak builder in the lobby ("🛠️ Design a Custom
+Variant…"): pick any of the 310 official configs as a base → prefills a raw JSON editor (the
+source of truth) + knobs for deck type, per-side evaluationType, and a5_low qualifier presets
+(N-or-better = `[1, C(N,5)]`, from `omaha_x_or_better.json`). 5-stage validation in
+`services/variant_authoring.py` (precheck → jsonschema vs `data/schemas/game.json` → engine
+`GameRules.from_json` → unsupported-action gate → **seeded smoke-play**: 2 bot hands per
+betting structure, bot_arena loop). Storage mirrors 9.3: per-user `CustomVariant` library
+(`custom_variants` table, 50 cap, upsert by name) + copy-on-create onto
+`PokerTable.custom_variant_config` with `variant="custom_variant"` sentinel (never resolved
+against the filesystem); `TableManager.get_table_variant_rules(table)` is the single resolver
+(also the seam for future custom-variants-in-mixes). Endpoints: CRUD+validate under
+`/api/custom-variants`, `/table/game-configs/<stem>` (clone picker), `/table/<id>/rules-card`
+(rules for inline configs). `variant_display` threaded through game-state/table views so the
+sentinel never shows. jsonschema is now a pinned dependency; build.sh migrates prod. Tests:
+`tests/unit/test_variant_authoring.py` (12), `tests/integration/test_custom_variant.py` (13).
+**Bonus engine bug found by smoke-play** (fixed + regression-tested): PL `validate_bet`
+rejected a short stack's all-in raise below min-raise that `get_valid_actions` itself offered
+(`test_pl_all_in_raise_below_min_raise_is_valid`). Follow-up (9.6?): custom variants as
+custom-mix legs / Dealer's Choice entries.
 
 ---
 

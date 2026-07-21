@@ -206,6 +206,7 @@ class GameStateManager:
                 table_info = {
                     "table_name": table.name,
                     "variant": table.variant,
+                    "variant_display": table.variant_display_name(),
                     "betting_structure": table.betting_structure,
                     "max_players": table.max_players,
                     "stakes": table.get_stakes(),
@@ -593,6 +594,7 @@ class GameStateManager:
             table_info = {
                 "name": session.table.name,
                 "variant": session.table.variant,
+                "variant_display": session.table.variant_display_name(),
                 "betting_structure": session.table.betting_structure,
                 "stakes": session.table.get_stakes(),
                 "max_players": session.table.max_players,

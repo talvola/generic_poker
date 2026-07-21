@@ -29,7 +29,7 @@
                 <div class="table-info">
                     <h1 class="table-name">{{ table.name }}</h1>
                     <div class="table-details">
-                        <span class="variant">{{ table.variant | format_variant }}</span>
+                        <span class="variant">{{ table.variant_display or (table.variant | format_variant) }}</span>
                         <span class="stakes">
                             {% set stakes_dict = table.get_stakes() %}
                             {% if table.betting_structure.lower() == 'limit' %}

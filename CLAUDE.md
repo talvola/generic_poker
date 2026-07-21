@@ -177,6 +177,15 @@ resolves inline JSON, else the file. Dealer's Choice = the same menu + a `dealer
 NOT the table's base structure — else an NL/PL-first leg wrongly plays as Limit (file mixes mask
 this since their first leg is always Limit). Only 9.5 (custom variant authoring) remains.
 
+**Custom variants (9.5):** per-user `CustomVariant` library; table creation copies the config
+inline onto `PokerTable.custom_variant_config` with `variant="custom_variant"` sentinel (never a
+file path — safe to shadow official stems). Resolve rules via
+`TableManager.get_table_variant_rules(table)` (NOT `get_variant_rules(table.variant)`) anywhere
+a table's variant becomes GameRules. Validation pipeline in `services/variant_authoring.py`
+ends with seeded smoke-play (bot hands per structure) — it caught a real PL engine bug on day
+one; keep it on for saves. UI surfaces show `variant_display` (server-computed), never the raw
+sentinel.
+
 ### Key Schema Elements
 
 **Deck Types:** `standard` (52), `short_6a` (36), `short_ta` (20), `short_27_ja` (40)

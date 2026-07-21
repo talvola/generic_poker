@@ -98,6 +98,38 @@ with app.app_context():
             else:
                 print(f'Note: {e}')
 
+    # Phase 9.5: custom variant column on poker_tables (create_all never adds columns)
+    try:
+        db.session.execute(text('ALTER TABLE poker_tables ADD COLUMN custom_variant_config TEXT'))
+        db.session.commit()
+        print('Added custom_variant_config column to poker_tables')
+    except Exception as e:
+        db.session.rollback()
+        if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+            print('custom_variant_config column already exists')
+        else:
+            print(f'Note: {e}')
+
+    # Create custom_variants table if it doesn't exist (Phase 9.5 user variant library)
+    try:
+        db.session.execute(text('''
+            CREATE TABLE IF NOT EXISTS custom_variants (
+                id VARCHAR(36) PRIMARY KEY,
+                user_id VARCHAR(36) NOT NULL REFERENCES users(id),
+                display_name VARCHAR(60) NOT NULL,
+                base_variant VARCHAR(50),
+                config TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT uq_custom_variant_user_name UNIQUE (user_id, display_name)
+            )
+        '''))
+        db.session.commit()
+        print('Ensured custom_variants table exists')
+    except Exception as e:
+        db.session.rollback()
+        print(f'Note: {e}')
+
     # Create disabled_variants table if it doesn't exist
     try:
         db.session.execute(text('''

@@ -2126,3 +2126,78 @@ to-assign option styling for modal */
     color: var(--muted-color, #6c757d);
     line-height: 1.4;
 }
+
+/* Custom variant builder (Phase 9.5) — white modal background, mirror mix builder */
+.custom-variant-builder {
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: var(--light-color, #f7f9fc);
+}
+
+.custom-variant-builder #cv-json {
+    width: 100%;
+    font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+    font-size: 0.78rem;
+    line-height: 1.45;
+    color: var(--dark-color, #212529);
+    background: #fff;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 0.5rem;
+    resize: vertical;
+    white-space: pre;
+    overflow-x: auto;
+}
+
+.cv-knobs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.cv-knobs:empty {
+    display: none;
+}
+
+.cv-knob {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+}
+
+.cv-knob label {
+    font-weight: 600;
+    color: var(--dark-color);
+    margin: 0;
+}
+
+.cv-knobs-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.cv-validation {
+    margin: 0.5rem 0 0.75rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--border-radius);
+    background: #fff;
+    border: 1px solid var(--border-color);
+    font-size: 0.82rem;
+    line-height: 1.5;
+    max-height: 160px;
+    overflow-y: auto;
+}
+
+.cv-validation .cv-valid { color: #1e8c45; font-weight: 600; }
+.cv-validation .cv-warning { color: #9a6700; }
+.cv-validation .cv-error { color: #c0392b; }
+.cv-validation code {
+    background: #f2f4f7;
+    padding: 0 0.25rem;
+    border-radius: 3px;
+    font-size: 0.78rem;
+}

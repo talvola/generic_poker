@@ -1706,6 +1706,11 @@ class PokerTable {
         if (mixedGame && variantEl) {
             variantEl.textContent = `${mixedGame.name} - ${mixedGame.current_variant}`;
             variantEl.title = mixedGame.rotation_variants.join(' \u2192 ');
+        } else if (variantEl) {
+            // Custom variants store a sentinel in table.variant; the server sends
+            // the real game name as variant_display.
+            const display = this.store.gameState?.table_info?.variant_display;
+            if (display) variantEl.textContent = display;
         }
 
         // Update rotation tracker if present

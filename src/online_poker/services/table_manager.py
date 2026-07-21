@@ -70,29 +70,7 @@ class TableManager:
                     rules = TableManager._rules_cache[variant_name]
 
                 # Skip variants with unsupported actions
-                has_unsupported = False
-                for step in rules.gameplay:
-                    if step.action_type in TableManager.UNSUPPORTED_ACTIONS:
-                        has_unsupported = True
-                        break
-                    # Also check sub-actions in grouped steps
-                    if step.action_type == GameActionType.GROUPED and isinstance(step.action_config, list):
-                        for sub_action in step.action_config:
-                            for key in sub_action:
-                                if key == "name":
-                                    continue
-                                try:
-                                    sub_type = GameActionType[key.upper()]
-                                    if sub_type in TableManager.UNSUPPORTED_ACTIONS:
-                                        has_unsupported = True
-                                        break
-                                except KeyError:
-                                    pass
-                            if has_unsupported:
-                                break
-                    if has_unsupported:
-                        break
-                if has_unsupported:
+                if TableManager.find_unsupported_action(rules) is not None:
                     continue
 
                 # Convert betting structures to string values
@@ -130,6 +108,29 @@ class TableManager:
         # Sort variants alphabetically by display name
         variants.sort(key=lambda x: x["display_name"])
         return variants
+
+    @staticmethod
+    def find_unsupported_action(rules: GameRules) -> GameActionType | None:
+        """First gameplay action (incl. grouped sub-actions) not supported online.
+
+        Returns None when every action in the config is playable on the platform.
+        """
+        for step in rules.gameplay:
+            if step.action_type in TableManager.UNSUPPORTED_ACTIONS:
+                return step.action_type
+            # Also check sub-actions in grouped steps
+            if step.action_type == GameActionType.GROUPED and isinstance(step.action_config, list):
+                for sub_action in step.action_config:
+                    for key in sub_action:
+                        if key == "name":
+                            continue
+                        try:
+                            sub_type = GameActionType[key.upper()]
+                        except KeyError:
+                            continue
+                        if sub_type in TableManager.UNSUPPORTED_ACTIONS:
+                            return sub_type
+        return None
 
     @staticmethod
     def get_variant_rules(variant_name: str) -> GameRules | None:
@@ -233,6 +234,32 @@ class TableManager:
 
     # Sentinel variant name stored on tables that use an inline (user-authored) mix.
     CUSTOM_MIX_VARIANT = "custom_mix"
+
+    # Sentinel variant name stored on tables that use an inline (user-authored) variant.
+    # Never resolved against the filesystem, so a custom variant can shadow an official
+    # stem name without ambiguity or path lookups.
+    CUSTOM_VARIANT_VARIANT = "custom_variant"
+
+    # Parsed rules for tables with an inline custom variant, keyed by table id.
+    # Safe to cache: the inline config is immutable after creation (copy-on-create).
+    _custom_variant_rules_cache: dict[str, GameRules] = {}
+
+    @staticmethod
+    def get_table_variant_rules(table: PokerTable) -> GameRules | None:
+        """Resolve rules for a table: inline custom-variant JSON first, else file-based."""
+        raw = getattr(table, "custom_variant_config", None)
+        if table.variant == TableManager.CUSTOM_VARIANT_VARIANT and raw:
+            cached = TableManager._custom_variant_rules_cache.get(table.id)
+            if cached:
+                return cached
+            try:
+                rules = GameRules.from_json(raw)
+            except Exception as e:
+                current_app.logger.error(f"Failed to parse custom variant for table {table.id}: {e}")
+                return None
+            TableManager._custom_variant_rules_cache[table.id] = rules
+            return rules
+        return TableManager.get_variant_rules(table.variant)
 
     @staticmethod
     def normalize_custom_mix(
@@ -348,6 +375,32 @@ class TableManager:
                 raise TableValidationError(f"Maximum players ({config.max_players}) exceeds mix maximum ({max_p})")
             return
 
+        # Inline custom variant: config JSON was fully validated at save time
+        # (variant_authoring pipeline). Enforce table-level bounds against it here.
+        if config.variant == TableManager.CUSTOM_VARIANT_VARIANT and config.custom_variant_config:
+            import json
+
+            try:
+                data = json.loads(config.custom_variant_config)
+                rules = GameRules.from_json(config.custom_variant_config)
+            except Exception as e:
+                raise TableValidationError(f"Invalid custom variant config: {e}")
+            if config.max_players < rules.min_players:
+                raise TableValidationError(
+                    f"Maximum players ({config.max_players}) is less than variant minimum ({rules.min_players})"
+                )
+            if config.max_players > rules.max_players:
+                raise TableValidationError(
+                    f"Maximum players ({config.max_players}) exceeds variant maximum ({rules.max_players})"
+                )
+            if config.betting_structure not in rules.betting_structures:
+                supported = data.get("bettingStructures", [])
+                raise TableValidationError(
+                    f"Betting structure {config.betting_structure.value} not supported by this variant. "
+                    f"Supported structures: {supported}"
+                )
+            return
+
         # Check if this is a mixed game
         mixed_config = TableManager.get_mixed_game_config(config.variant)
         if mixed_config:
@@ -430,6 +483,7 @@ class TableManager:
             raise_cap_override=config.raise_cap_override,
             hand_cap_bb=config.hand_cap_bb,
             custom_mix_config=config.custom_mix_config,
+            custom_variant_config=config.custom_variant_config,
             is_mixed_game=bool(config.custom_mix_config),
         )
 
@@ -639,6 +693,7 @@ class TableManager:
 
                     # Remove table
                     db.session.delete(table)
+                    TableManager._custom_variant_rules_cache.pop(table.id, None)
                     closed_count += 1
                     current_app.logger.info(f"Closed inactive table {table.id} ({table.name})")
 
@@ -923,6 +978,7 @@ class TableManager:
             # Remove table
             db.session.delete(table)
             db.session.commit()
+            TableManager._custom_variant_rules_cache.pop(table_id, None)
 
             current_app.logger.info(f"Table {table_id} closed by creator {creator_id}. Reason: {reason}")
             return True, "Table closed successfully"

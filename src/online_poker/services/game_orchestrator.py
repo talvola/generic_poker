@@ -516,6 +516,7 @@ class GameSession:
             "table_id": self.table.id,
             "table_name": self.table.name,
             "variant": self.table.variant,
+            "variant_display": self.table.variant_display_name(),
             "betting_structure": self.table.betting_structure,
             "stakes": self.table.get_stakes(),
             "max_players": self.table.max_players,
@@ -761,8 +762,8 @@ class GameOrchestrator:
                     session.game = table.create_game_instance_for_variant(game_rules, first_variant.betting_structure)
                     # orbit_size set when first hand starts (need player count)
                 else:
-                    # Standard single-variant table
-                    game_rules = TableManager.get_variant_rules(table.variant)
+                    # Standard single-variant table (or inline custom variant)
+                    game_rules = TableManager.get_table_variant_rules(table)
                     if not game_rules:
                         return (
                             False,

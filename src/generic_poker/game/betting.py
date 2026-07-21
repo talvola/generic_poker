@@ -823,9 +823,11 @@ class PotLimitBettingManager(BettingManager):
         current_bet = self.current_bets.get(player_id, PlayerBet()).amount
         to_call = self.current_bet - current_bet
 
-        # All-in for less than call amount is valid
-        if amount < self.current_bet and amount == current_bet + player_stack:
-            return True
+        # An all-in is valid even when it's short of the minimum raise (or below
+        # the call amount), as long as it doesn't exceed the pot-limit maximum.
+        # get_valid_actions offers exactly this bet to a short-stacked player.
+        if amount == current_bet + player_stack:
+            return amount <= self.get_max_bet(player_id, bet_type, player_stack)
 
         if amount == self.current_bet:  # Calling exact amount is valid
             return to_call <= player_stack

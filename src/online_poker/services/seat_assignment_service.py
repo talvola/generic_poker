@@ -489,8 +489,8 @@ class SeatAssignmentService:
                 .count()
             )
 
-            # Get minimum players for this variant
-            rules = TableManager.get_variant_rules(table.variant)
+            # Get minimum players for this variant (resolves inline custom variants too)
+            rules = TableManager.get_table_variant_rules(table)
             if not rules:
                 return True, "Can join - variant rules not found"
 

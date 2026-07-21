@@ -176,6 +176,36 @@
                         <p class="mix-stakes-note">Stakes below are the Limit base; No-Limit / Pot-Limit legs derive blinds from them (small blind = ½ small bet).</p>
                     </div>
 
+                    <!-- Custom variant builder (Phase 9.5) — shown when "Design a Custom Variant…" is picked -->
+                    <div id="custom-variant-builder" class="custom-variant-builder" style="display: none;">
+                        <div class="form-group">
+                            <label for="cv-base-variant">Start from (clone an existing game):</label>
+                            <select id="cv-base-variant"><option value="">Select a game to clone…</option></select>
+                        </div>
+                        <div class="form-group" id="saved-variant-group" style="display: none;">
+                            <label for="saved-variant-select">Load a saved variant:</label>
+                            <div class="saved-mix-row">
+                                <select id="saved-variant-select"><option value="">— My Variants —</option></select>
+                                <button type="button" id="delete-variant-btn" class="btn btn-secondary btn-small" title="Delete saved variant">Delete</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="cv-name">Variant Name:</label>
+                            <input type="text" id="cv-name" maxlength="60" placeholder="e.g. Omaha 7-or-Better" autocomplete="off">
+                        </div>
+                        <div id="cv-knobs" class="cv-knobs"></div>
+                        <div class="form-group">
+                            <label for="cv-json">Game config (JSON — the source of truth):</label>
+                            <textarea id="cv-json" rows="16" spellcheck="false" placeholder="Pick a game to clone above, or paste a config…"></textarea>
+                        </div>
+                        <div id="cv-validation" class="cv-validation" style="display: none;"></div>
+                        <div class="mix-builder-actions">
+                            <button type="button" id="cv-validate-btn" class="btn btn-secondary btn-small">Validate (plays test hands)</button>
+                            <button type="button" id="cv-save-btn" class="btn btn-secondary btn-small">Save to My Variants</button>
+                        </div>
+                        <p class="mix-stakes-note">Save your variant first — table creation uses the saved copy. Validation checks the config against the schema, the engine, and a couple of bot-played test hands.</p>
+                    </div>
+
                     <div class="form-group">
                         <label for="max-players">Maximum Players:</label>
                         <select id="max-players" name="max_players" required>
@@ -372,6 +402,7 @@
     <script>
         window.isAuthenticated = {{ 'true' if current_user.is_authenticated else 'false' }};
         window.currentUserId = {{ current_user.id | tojson if current_user.is_authenticated else 'null' }};
+        window.evaluationTypes = {{ evaluation_types | default([]) | tojson }};
     </script>
     <script src="{{ url_for('static', filename='js/lobby.js') }}?v={{ asset_version }}"></script>
 </body>
