@@ -548,7 +548,7 @@ render logs -r srv-d6b0ik86fj8s73bppftg --limit 100 --output json  # View logs
 **IDs:**
 - Web Service: `srv-d6b0ik86fj8s73bppftg`
 - Workspace: `tea-d6b0cji4d50c73ccmfl0`
-- Current Postgres: check memory for current ID and expiry date
+- Current Postgres: `generic-poker-db-5` = `dpg-d9vkhpb7uimc73ediu70-a`, created 2026-08-14, **expires 2026-09-13 16:57 UTC**
 
 **Known issues:**
 - Render provides `postgres://` URLs but SQLAlchemy 2.0+ requires `postgresql://` — handled by `_fix_database_url()` in `config.py` and `database.py`
@@ -564,8 +564,18 @@ The free Render Postgres expires approximately every 30 days. When it does, the 
 
 **Full renewal via Render API (no dashboard needed):**
 
+⚠️ **The free tier allows only ONE active database at a time.** If the old DB has not
+expired on its own yet, creating the replacement fails with
+`cannot have more than one active free tier database` — the old one must be DELETED first.
+That deletion is irreversible and drops all data, and the site is down (~10-15 min) until
+the new DB is created and deployed. There is no extend/renew endpoint; `expiresAt` is fixed.
+
 ```bash
 source ~/.bashrc  # loads RENDER_API_KEY
+
+# 0. Delete the outgoing DB (ONLY if it is still 'available' — skip if already expired)
+curl -s -X DELETE "https://api.render.com/v1/postgres/<OLD_ID>" \
+  -H "Authorization: Bearer $RENDER_API_KEY"   # expect HTTP 204
 
 # 1. Create new Postgres (oregon region, free plan)
 curl -s -X POST "https://api.render.com/v1/postgres" \
@@ -587,27 +597,46 @@ curl -s "https://api.render.com/v1/postgres/<NEW_ID>/connection-info" \
   -H "Authorization: Bearer $RENDER_API_KEY"
 # Note the "internalConnectionString" value
 
-# 3. Update DATABASE_URL on the web service (replace all 4 env vars atomically)
-curl -s -X PUT "https://api.render.com/v1/services/srv-d6b0ik86fj8s73bppftg/env-vars" \
+# 3. Update ONLY DATABASE_URL (single-key PUT — the array form replaces ALL env vars and
+#    would need SECRET_KEY re-sent verbatim; don't risk rotating it by accident)
+curl -s -X PUT "https://api.render.com/v1/services/srv-d6b0ik86fj8s73bppftg/env-vars/DATABASE_URL" \
   -H "Authorization: Bearer $RENDER_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '[
-    {"key": "DATABASE_URL", "value": "<internalConnectionString>"},
-    {"key": "PYTHON_VERSION", "value": "3.10.12"},
-    {"key": "SECRET_KEY", "value": "<existing value>"},
-    {"key": "FLASK_ENV", "value": "production"}
-  ]'
+  -d '{"value": "<internalConnectionString>"}'
 
-# 4. Trigger a new deploy
-echo "y" | render deploys create srv-d6b0ik86fj8s73bppftg --confirm
+# 4. Trigger a new deploy (API works too; no render CLI needed)
+curl -s -X POST "https://api.render.com/v1/services/srv-d6b0ik86fj8s73bppftg/deploys" \
+  -H "Authorization: Bearer $RENDER_API_KEY" \
+  -H "Content-Type: application/json" -d '{"clearCache":"do_not_clear"}'
 
-# 5. Monitor until live
-render deploys list srv-d6b0ik86fj8s73bppftg --output json
+# 5. Poll until status is 'live' (~3 min: build_in_progress → update_in_progress → live)
+curl -s "https://api.render.com/v1/services/srv-d6b0ik86fj8s73bppftg/deploys/<DEPLOY_ID>" \
+  -H "Authorization: Bearer $RENDER_API_KEY"
+
+# 6. Verify: GET / returns 200, AND login works (proves the DB is actually wired up —
+#    the site serves HTML fine with a dead DB)
+curl -s -o /dev/null -w "%{http_code}\n" -L https://generic-poker.onrender.com/
+curl -s -X POST https://generic-poker.onrender.com/auth/api/login \
+  -H "Content-Type: application/json" -d '{"username":"testuser","password":"password"}'
 ```
 
 `build.sh` handles table creation, migrations, and seeding automatically on deploy.
 
 **Important:** Use an incremented name (e.g. `generic-poker-db-3`) since old names remain reserved even after expiry.
+
+**Do NOT try to dump/migrate the old data from WSL** — direct connections to Render Postgres
+fail there (`SSL connection has been closed unexpectedly`), external URL included. The only
+way to touch prod data is a script run from inside Render via `build.sh`; to carry data across
+a renewal you would need both old and new URLs live at once, which the free tier's one-DB
+limit forbids. In practice: renewal = fresh DB + `seed_db.py` reseed.
+
+**Expiry watchdog:** a weekly cloud routine (`trig_01KKce7dk3hH7iAi7QrFuSY4`, Mondays 9am PT)
+counts down to expiry and emails talvola@yahoo.com when it's ≤10 days out; silent otherwise.
+It has no Render API key — it warns, it can't renew. Note its sandbox has **no general outbound
+internet** (curl → exit 56 / `CONNECT tunnel failed, response 403`), so it can't health-check
+the live site — expiry date math only, Gmail as the sole outbound channel. **Its prompt hardcodes
+the DB name/expiry, so update the routine as part of every renewal**; it also greps the
+`Current Postgres:` line in this file as an override, so keep that line accurate and pushed.
 
 ## Code Quality
 
