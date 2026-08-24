@@ -431,41 +431,47 @@ SELECT name, variant, betting_structure FROM poker_tables;
 .quit
 ```
 
-### Running Database Operations on Production (Render)
+### Running Database Operations on Production (Neon)
 
-**Constraints:**
-- WSL cannot connect directly to Render Postgres — SSL handshake fails consistently
-- Render one-off jobs are a paid feature — not available on free tier
-- The only reliable way to run arbitrary DB operations is via `build.sh` at deploy time
+Production Postgres is **Neon** — project `generic-poker` (`late-wave-39283598`), AWS
+**us-west-2**, chosen to match the Render web service's region so queries stay ~1-3ms
+(a us-east-1 project would cost ~70ms per round trip). No expiry, unlike the old free
+Render Postgres.
 
-**Pattern: add a script to `tools/`, call it from `build.sh`**
-
-`build.sh` runs on every deploy inside the Render environment, with the correct `DATABASE_URL` and full Flask app context. Any script placed in `tools/` and called from `build.sh` can safely access the production database.
+**Neon is reachable from WSL** (Render Postgres never was), so prod DB work no longer has
+to be smuggled through a deploy:
 
 ```bash
-# build.sh snippet — runs on every deploy
+export DATABASE_URL='<neon -pooler URL, sslmode=require>'
+python -c "from app import create_app; create_app()"   # create_all for new tables
+python tools/migrate_schema.py                          # idempotent ALTERs + CREATE TABLE IF NOT EXISTS
 python tools/manage_user.py --username someuser --bankroll 2000
 ```
 
-**Available tools:**
+Connection string: Neon console, or the REST API with a `NEON_API_KEY`
+(`GET /api/v2/projects/late-wave-39283598/connection_uri`). Erik's key is a file in
+OneDrive (`generic-poker-neon.txt`), deliberately not in the repo or `~/.bashrc`.
 
-| Script | Purpose |
-|--------|---------|
-| `tools/manage_user.py` | Create or update a user (username, password, bankroll) |
-| `tools/seed_db.py` | Seed default test users and tables (runs on every deploy) |
-| `tools/init_db.py` | Initialize schema (idempotent) |
-| `tools/reset_db.py` | Full reset — init + seed (destructive, dev only) |
+`build.sh` still runs `tools/migrate_schema.py` + `seed_db.py` on every deploy. **A column
+added to a model needs a line in `migrate_schema.py`'s `ADD_COLUMNS`** — `create_all()`
+creates missing tables but NEVER adds a column to an existing one. Prefer editing that
+script over adding inline python to `build.sh` (it used to hold 130 lines of it).
 
-**Creating/updating a user on production:**
-```bash
-# 1. Add to build.sh managed users section (bottom of file):
-python tools/manage_user.py --username newuser --password pass123 --bankroll 1500
-
-# 2. Commit and push — deploy runs manage_user.py automatically
-git add build.sh && git commit -m "Add newuser account" && git push
-```
-
-`manage_user.py` is idempotent: if the user exists it updates, if not it creates.
+**Neon specifics that bite:**
+- `DATABASE_URL` is the **`-pooler`** host (PgBouncer, transaction mode): no session-level
+  `pg_advisory_lock`, no `LISTEN/NOTIFY`, no session `SET` persistence. Nothing here uses
+  them — keep it that way (a leaked session advisory lock is what bit the gamefinder repo).
+- The compute **scales to zero after 5 min idle**; the first query then pays a ~500ms wake,
+  and idle connections were dropped — that's what `pool_pre_ping` in `_engine_options()`
+  (`config.py`) is for. Render free already cold-starts ~60s, so the wake is noise.
+- `psycopg2` is a C extension whose sockets `eventlet.monkey_patch()` cannot patch, so
+  `wsgi.py` calls `psycogreen.eventlet.patch_psycopg()` — without it every query blocks the
+  single eventlet worker (and therefore every other player) for the whole round trip. Keep
+  that call above the `create_app` import.
+- Usage via the Neon MCP: `list_projects` → `quota_reset_at`, `describe_project` →
+  `data_transfer_bytes`. **Those counters lag by hours** — an early 0 means "not aggregated
+  yet", not "no usage". Quota (300 CU-h, 500 GB egress/mo, Launch plan) is SHARED with the
+  gamefinder project.
 
 **Writing a new one-off DB script:**
 ```python
@@ -481,7 +487,8 @@ with app.app_context():
     # do your query/update here
     db.session.commit()
 ```
-Add to `build.sh`, push, then remove from `build.sh` after the next deploy if it was one-time.
+Run it locally with `DATABASE_URL` pointed at Neon. Only add it to `build.sh` if it must run
+on every deploy.
 
 ## API Route Structure
 
@@ -548,95 +555,26 @@ render logs -r srv-d6b0ik86fj8s73bppftg --limit 100 --output json  # View logs
 **IDs:**
 - Web Service: `srv-d6b0ik86fj8s73bppftg`
 - Workspace: `tea-d6b0cji4d50c73ccmfl0`
-- Current Postgres: `generic-poker-db-5` = `dpg-d9vkhpb7uimc73ediu70-a`, created 2026-08-14, **expires 2026-09-13 16:57 UTC**
+- Postgres: **Neon**, project `generic-poker` = `late-wave-39283598` (aws-us-west-2, PG 17). No expiry.
+  Render Postgres `generic-poker-db-5` (`dpg-d9vkhpb7uimc73ediu70-a`) is DEAD WEIGHT since the 2026-08-24
+  cutover — kept only as a rollback path until it self-expires 2026-09-13.
 
 **Known issues:**
-- Render provides `postgres://` URLs but SQLAlchemy 2.0+ requires `postgresql://` — handled by `_fix_database_url()` in `config.py` and `database.py`
+- Render's own Postgres handed out `postgres://` URLs, which SQLAlchemy 2.0+ rejects — `_fix_database_url()` in `config.py`/`database.py` still normalizes it (Neon already emits `postgresql://`, so the shim is now belt-and-braces)
 - All models must use `String(36)` for IDs (not `UUID(as_uuid=True)`) to work with both SQLite and PostgreSQL
 - Free tier spins down after 15 min idle (~60s cold start on next request)
-- Free Postgres expires roughly every 30 days — must be manually recreated (see runbook below)
-- **NEVER use `fromDatabase` in `render.yaml`** — it silently overrides the manually-set `DATABASE_URL` env var on every deploy, causing the app to crash when the linked DB expires. `DATABASE_URL` must use `sync: false`.
+- **NEVER use `fromDatabase` in `render.yaml`** — it silently overrides the manually-set `DATABASE_URL` env var on every deploy. It would now also drag the app back off Neon onto a dead Render DB. `DATABASE_URL` must use `sync: false`.
 
-### Postgres Renewal Runbook
+### Postgres history (why the DB moved)
 
-The free Render Postgres expires approximately every 30 days. When it does, the app crash-loops with:
-`could not translate host name "dpg-xxx" to address: Name or service not known`
-
-**Full renewal via Render API (no dashboard needed):**
-
-⚠️ **The free tier allows only ONE active database at a time.** If the old DB has not
-expired on its own yet, creating the replacement fails with
-`cannot have more than one active free tier database` — the old one must be DELETED first.
-That deletion is irreversible and drops all data, and the site is down (~10-15 min) until
-the new DB is created and deployed. There is no extend/renew endpoint; `expiresAt` is fixed.
-
-```bash
-source ~/.bashrc  # loads RENDER_API_KEY
-
-# 0. Delete the outgoing DB (ONLY if it is still 'available' — skip if already expired)
-curl -s -X DELETE "https://api.render.com/v1/postgres/<OLD_ID>" \
-  -H "Authorization: Bearer $RENDER_API_KEY"   # expect HTTP 204
-
-# 1. Create new Postgres (oregon region, free plan)
-curl -s -X POST "https://api.render.com/v1/postgres" \
-  -H "Authorization: Bearer $RENDER_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "databaseName": "generic_poker",
-    "databaseUser": "generic_poker_user",
-    "name": "generic-poker-db-N",
-    "ownerId": "tea-d6b0cji4d50c73ccmfl0",
-    "plan": "free",
-    "region": "oregon",
-    "version": "16"
-  }'
-# Note the "id" from the response (e.g. dpg-xxxxx-a)
-
-# 2. Wait ~30s for DB to be available, then get connection string
-curl -s "https://api.render.com/v1/postgres/<NEW_ID>/connection-info" \
-  -H "Authorization: Bearer $RENDER_API_KEY"
-# Note the "internalConnectionString" value
-
-# 3. Update ONLY DATABASE_URL (single-key PUT — the array form replaces ALL env vars and
-#    would need SECRET_KEY re-sent verbatim; don't risk rotating it by accident)
-curl -s -X PUT "https://api.render.com/v1/services/srv-d6b0ik86fj8s73bppftg/env-vars/DATABASE_URL" \
-  -H "Authorization: Bearer $RENDER_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"value": "<internalConnectionString>"}'
-
-# 4. Trigger a new deploy (API works too; no render CLI needed)
-curl -s -X POST "https://api.render.com/v1/services/srv-d6b0ik86fj8s73bppftg/deploys" \
-  -H "Authorization: Bearer $RENDER_API_KEY" \
-  -H "Content-Type: application/json" -d '{"clearCache":"do_not_clear"}'
-
-# 5. Poll until status is 'live' (~3 min: build_in_progress → update_in_progress → live)
-curl -s "https://api.render.com/v1/services/srv-d6b0ik86fj8s73bppftg/deploys/<DEPLOY_ID>" \
-  -H "Authorization: Bearer $RENDER_API_KEY"
-
-# 6. Verify: GET / returns 200, AND login works (proves the DB is actually wired up —
-#    the site serves HTML fine with a dead DB)
-curl -s -o /dev/null -w "%{http_code}\n" -L https://generic-poker.onrender.com/
-curl -s -X POST https://generic-poker.onrender.com/auth/api/login \
-  -H "Content-Type: application/json" -d '{"username":"testuser","password":"password"}'
-```
-
-`build.sh` handles table creation, migrations, and seeding automatically on deploy.
-
-**Important:** Use an incremented name (e.g. `generic-poker-db-3`) since old names remain reserved even after expiry.
-
-**Do NOT try to dump/migrate the old data from WSL** — direct connections to Render Postgres
-fail there (`SSL connection has been closed unexpectedly`), external URL included. The only
-way to touch prod data is a script run from inside Render via `build.sh`; to carry data across
-a renewal you would need both old and new URLs live at once, which the free tier's one-DB
-limit forbids. In practice: renewal = fresh DB + `seed_db.py` reseed.
-
-**Expiry watchdog:** a weekly cloud routine (`trig_01KKce7dk3hH7iAi7QrFuSY4`, Mondays 9am PT)
-counts down to expiry and emails talvola@yahoo.com when it's ≤10 days out; silent otherwise.
-It has no Render API key — it warns, it can't renew. Note its sandbox has **no general outbound
-internet** (curl → exit 56 / `CONNECT tunnel failed, response 403`), so it can't health-check
-the live site — expiry date math only, Gmail as the sole outbound channel. **Its prompt hardcodes
-the DB name/expiry, so update the routine as part of every renewal**; it also greps the
-`Current Postgres:` line in this file as an override, so keep that line accurate and pushed.
+Production ran on Render's **free** Postgres, which expires every ~30 days and must be
+recreated by hand. `db-3` lapsed on 2026-07-09 and took the site down for ten days before
+anyone noticed; the free tier also allows only ONE active database, so each renewal meant
+deleting the old one first — a fresh DB and a reseed every month, with no way to carry data
+across. On **2026-08-24** the app moved to Neon (Launch plan, already paid for the gamefinder
+project) and the whole ritual went away: the renewal runbook, the "one active free DB" trap,
+and the weekly expiry-watchdog cloud routine are all retired. `git show b9934fd^:CLAUDE.md`
+has the old runbook if a Render Postgres is ever needed again.
 
 ## Code Quality
 
