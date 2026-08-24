@@ -28,3 +28,6 @@ bidict==0.23.1
 # Production server
 gunicorn==25.1.0
 eventlet==0.40.4
+
+# Async DB (psycopg2 must cooperate with eventlet — see wsgi.py)
+psycogreen==1.0.2

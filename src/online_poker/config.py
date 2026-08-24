@@ -10,6 +10,32 @@ def _fix_database_url(url: str) -> str:
     return url
 
 
+def _engine_options(url: str) -> dict:
+    """SQLAlchemy engine options tuned for Neon (serverless Postgres, PgBouncer pooler).
+
+    SQLite gets none of it — pool sizing and libpq connect args are Postgres-only.
+    """
+    if not url.startswith("postgresql"):
+        return {}
+    return {
+        # A Neon compute that scaled to zero drops idle connections; pre_ping
+        # discards the dead ones instead of raising on the next query.
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+        # Keep the pool small — the pooled endpoint multiplexes for us.
+        "pool_size": 5,
+        "max_overflow": 5,
+        "connect_args": {
+            # Wake-from-idle is ~500ms; 10s leaves room for a slow cold start.
+            "connect_timeout": 10,
+            "keepalives": 1,
+            "keepalives_idle": 30,
+            "keepalives_interval": 10,
+            "keepalives_count": 3,
+        },
+    }
+
+
 class Config:
     """Base configuration class."""
 
@@ -19,6 +45,7 @@ class Config:
     # Database settings
     SQLALCHEMY_DATABASE_URI = _fix_database_url(os.environ.get("DATABASE_URL") or "sqlite:///poker_platform.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = _engine_options(SQLALCHEMY_DATABASE_URI)
 
     # Session settings
     PERMANENT_SESSION_LIFETIME = 3600  # 1 hour
@@ -140,10 +167,7 @@ class ProductionConfig(Config):
     BCRYPT_LOG_ROUNDS = 12
 
     # Production-specific settings
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        "pool_pre_ping": True,
-        "pool_recycle": 300,
-    }
+    SQLALCHEMY_ENGINE_OPTIONS = _engine_options(SQLALCHEMY_DATABASE_URI)
 
 
 # Configuration mapping
