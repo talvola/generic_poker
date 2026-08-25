@@ -117,7 +117,9 @@ Use `player.user_id` for seat ids/comparisons and `player.is_current_player` for
 highlight (both server-computed). Because seats re-render constantly, probing a seat's
 computed style after a manual `classList`/`style` change is unreliable — verify CSS on a
 fresh isolated element instead.
-Note: some JS/CSS files are CRLF; Python-scripted rewrites normalize to LF (noisy diffs).
+Note: many tracked files are CRLF — JS/CSS, `CLAUDE.md`, `src/online_poker/config.py`. A
+Python-scripted rewrite normalizes them to LF and buries a 30-line edit in a 1300-line diff.
+Check `file <path>` first; if you slip, re-run a `\n`→`\r\n` pass before committing.
 
 **Lobby invariants (lobby.js/lobby.css):** The lobby is served at `/` (`/lobby` 404s) and
 exposes `window.lobby` (the table page exposes `window.pokerTable`). Variants + mixed games
@@ -336,6 +338,11 @@ way to reproduce bugs that need real bot play.
   DELEGATED listeners — a bare `new Event('change')` doesn't bubble, so the handler never fires.
 - Start the dev app with Bash `run_in_background:true`, NOT `(python app.py &)` — a backgrounded
   subshell inside a tool call gets killed when the call returns (exit 144).
+- `store` keys: `gameState, currentUser, players, isMyTurn, validActions, potAmount,
+  handNumber, tableId`. `store.players` is an OBJECT keyed by id (`.find` throws — use
+  `Object.values`), and entries use `username`/`chip_stack`, not `name`/`stack`.
+- Action buttons have NO ids — `#action-panel button.fold|.call|.raise` (`#ready-btn` does).
+- `POST /api/tables` returns `table_id` at the TOP level, not `table.id`.
 
 ### Bug Fix Workflow
 
@@ -473,6 +480,9 @@ script over adding inline python to `build.sh` (it used to hold 130 lines of it)
   yet", not "no usage". Quota (300 CU-h, 500 GB egress/mo, Launch plan) is SHARED with the
   gamefinder project.
 
+Cleaning up a table: reuse `tools/seed_db.py::delete_table(table)` — it cashes out seated
+players and deletes dependents in FK-safe order. Don't hand-roll DELETEs.
+
 **Writing a new one-off DB script:**
 ```python
 # tools/my_script.py
@@ -533,10 +543,14 @@ Hosted on Render (free tier) with auto-deploy from GitHub.
 **Start command:** `gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT wsgi:app`
 
 **Environment variables (set in Render dashboard):**
-- `DATABASE_URL` — PostgreSQL connection string (from Render Postgres)
+- `DATABASE_URL` — Postgres connection string (Neon pooled endpoint)
 - `FLASK_ENV` — `production`
 - `SECRET_KEY` — auto-generated
 - `PYTHON_VERSION` — `3.10.12`
+
+**Changing an env var does NOT trigger a deploy** — PUT the value, then POST
+`/v1/services/<id>/deploys` explicitly. Always use the single-key form
+`/env-vars/<KEY>`; the array form replaces ALL vars and would rotate `SECRET_KEY`.
 
 **Render CLI:**
 ```bash
