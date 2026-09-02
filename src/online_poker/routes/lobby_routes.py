@@ -400,6 +400,11 @@ def get_table_seats(table_id):
             if access.seat_number is not None:
                 occupied_seats[access.seat_number] = access
 
+        # Bots live only in the in-memory game session (no TableAccess rows).
+        # They yield their seat to a joining human, so bot seats stay joinable
+        # but are shown as bot-held rather than empty (GitHub #3).
+        bot_seats = TableAccessManager.get_bot_seats(table_id)
+
         # Build seats array
         seats = []
         for seat_num in range(1, table.max_players + 1):
@@ -410,6 +415,15 @@ def get_table_seats(table_id):
                         "seat_number": seat_num,
                         "is_available": False,
                         "player": {"username": access.user.username, "stack": access.current_stack},
+                    }
+                )
+            elif seat_num in bot_seats:
+                bot = bot_seats[seat_num]
+                seats.append(
+                    {
+                        "seat_number": seat_num,
+                        "is_available": True,
+                        "player": {"username": bot["username"], "stack": bot["stack"], "is_bot": True},
                     }
                 )
             else:

@@ -692,10 +692,9 @@ class WebSocketManager:
                     if access.user_id not in session.connected_players:
                         user = user_manager.get_user_by_id(access.user_id)
                         username = user.username if user else "Unknown"
-                        session.add_player(
-                            access.user_id, username, access.current_stack, seat_number=access.seat_number
+                        self._seat_human_in_session(
+                            session, table_id, access.user_id, username, access.current_stack, access.seat_number
                         )
-                        session.connected_players.add(access.user_id)
 
                 # Get occupied seats (now includes human players)
                 occupied_seats = set()
@@ -711,6 +710,18 @@ class WebSocketManager:
 
                 if not empty_seats:
                     logger.info(f"No empty seats at table {table_id}, no bots needed")
+                    # A human may have just been seated above (e.g. after taking a
+                    # bot's seat), so everyone at the table still needs a refresh.
+                    self.broadcast_game_state_update(table_id)
+                    self.broadcast_to_table(
+                        table_id,
+                        GameEvent.READY_STATUS_UPDATE,
+                        {
+                            "table_id": table_id,
+                            "ready_status": TableAccessManager.get_ready_status(table_id),
+                            "timestamp": datetime.utcnow().isoformat() + "Z",
+                        },
+                    )
                     emit("fill_bots_result", {"success": True, "bots_added": 0})
                     return
 
@@ -813,6 +824,30 @@ class WebSocketManager:
         except Exception as e:
             logger.error(f"Failed to join table room: {e}")
             return False
+
+    @staticmethod
+    def _seat_human_in_session(session, table_id: str, user_id: str, username: str, stack: int, seat) -> bool:
+        """Put a human (who already holds the seat in the DB) into the live game.
+
+        If a bot is sitting in that seat, evict it and retry — bots are
+        disposable, humans paid for the seat. Failures are logged instead of
+        silently dropped (GitHub #3: a swallowed failure here left a human
+        charged, listed in the ready panel, and never dealt in).
+        """
+        from ..services.simple_bot import SimpleBot
+        from ..services.table_access_manager import TableAccessManager
+
+        if user_id in session.connected_players:
+            return True
+        ok, msg = session.add_player(user_id, username, stack, seat_number=seat)
+        if ok:
+            return True
+        if seat and not SimpleBot.is_bot_player(user_id) and TableAccessManager.evict_bot_from_seat(table_id, seat):
+            ok, msg = session.add_player(user_id, username, stack, seat_number=seat)
+            if ok:
+                return True
+        logger.warning(f"Could not seat {username} ({user_id}) at seat {seat} on table {table_id}: {msg}")
+        return False
 
     def perform_leave(self, user_id: str, username: str, table_id: str) -> tuple[bool, str]:
         """Remove a user from a table: fold if mid-hand, cash out, free the seat,
@@ -1294,7 +1329,7 @@ class WebSocketManager:
                     access = TableAccessManager.get_user_access(player["user_id"], table_id)
                     buy_in = access.current_stack if access else 100
                     seat = access.seat_number if access else None
-                    session.add_player(player["user_id"], username, buy_in, seat_number=seat)
+                    self._seat_human_in_session(session, table_id, player["user_id"], username, buy_in, seat)
 
             # Restore session state from DB if this is a recovered session
             # (e.g., after server restart). Must happen BEFORE move_button().

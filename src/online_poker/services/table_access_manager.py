@@ -21,6 +21,85 @@ class TableAccessManager:
     """Service class for managing table access and player sessions."""
 
     @staticmethod
+    def get_bot_seats(table_id: str) -> dict[int, dict[str, Any]]:
+        """Map seat_number -> {player_id, username, stack} for bots in the live game session.
+
+        Bots live only in memory (no TableAccess rows), so any DB-based view of
+        seat availability must be merged with this or a human can be sold a seat
+        a bot is already sitting in (GitHub #3).
+        """
+        try:
+            from ..services.game_orchestrator import game_orchestrator
+            from ..services.simple_bot import SimpleBot
+
+            session = game_orchestrator.get_session(table_id)
+            if not session or not session.game:
+                return {}
+            layout = session.game.table.layout
+            seats: dict[int, dict[str, Any]] = {}
+            for pid, player in session.game.table.players.items():
+                if not SimpleBot.is_bot_player(pid):
+                    continue
+                seat = layout.get_player_seat(pid)
+                if seat:
+                    seats[seat] = {"player_id": pid, "username": player.name, "stack": player.stack}
+            return seats
+        except Exception as e:
+            current_app.logger.debug(f"Could not read bot seats for table {table_id}: {e}")
+            return {}
+
+    @staticmethod
+    def evict_bot_from_seat(table_id: str, seat_number: int) -> str | None:
+        """Make a bot give up its seat so a human can take it.
+
+        Bots are disposable: if a hand is in progress the bot is folded and
+        removed when the hand ends (via the session's pending-leave path);
+        otherwise it is removed immediately.
+
+        Returns the evicted bot's player id, or None if no bot held the seat.
+        """
+        info = TableAccessManager.get_bot_seats(table_id).get(seat_number)
+        if not info:
+            return None
+        bot_id = info["player_id"]
+        try:
+            from generic_poker.game.game_state import GameState
+
+            from ..services.game_orchestrator import game_orchestrator
+            from ..services.simple_bot import bot_manager
+
+            session = game_orchestrator.get_session(table_id)
+            if not session:
+                return None
+            # The engine flips to DEALING as soon as enough players are seated, before
+            # any hand starts, so only these states mean cards are actually in play.
+            hand_in_progress = session.game and session.game.state in (
+                GameState.BETTING,
+                GameState.DRAWING,
+                GameState.SHOWDOWN,
+            )
+            if hand_in_progress:
+                hand_completed, msg = session.mark_player_leaving(bot_id)
+            else:
+                hand_completed = False
+                _, msg = session.remove_player(bot_id, "Seat taken by a human")
+            if hand_completed and session.game and session.game.state == GameState.COMPLETE:
+                try:
+                    if session.game.get_hand_results():
+                        from ..services.player_action_manager import player_action_manager
+
+                        player_action_manager._handle_hand_completion(table_id, session)
+                except Exception as hc_err:
+                    current_app.logger.error(f"Hand completion after bot eviction failed: {hc_err}")
+            if bot_id not in session.connected_players:
+                bot_manager.remove_bot(bot_id)
+            current_app.logger.info(f"Evicted bot {bot_id} from seat {seat_number} at table {table_id}: {msg}")
+            return bot_id
+        except Exception as e:
+            current_app.logger.error(f"Failed to evict bot {bot_id} from seat {seat_number}: {e}")
+            return None
+
+    @staticmethod
     def join_table(
         user_id: str,
         table_id: str,
@@ -123,6 +202,9 @@ class TableAccessManager:
             ):
                 occupied_seats.add(access.seat_number)
 
+            # Seats held by in-memory bots (they yield to humans, see below)
+            bot_seats = TableAccessManager.get_bot_seats(table_id)
+
             # Use requested seat if specified and available
             if seat_number is not None:
                 # Validate seat number is in valid range
@@ -134,12 +216,18 @@ class TableAccessManager:
                 # Use the requested seat
                 final_seat = seat_number
             else:
-                # Auto-assign first available seat
+                # Auto-assign: prefer a seat nobody (human or bot) is in, and only
+                # displace a bot when every free seat is bot-held.
                 final_seat = None
                 for seat in range(1, table.max_players + 1):
-                    if seat not in occupied_seats:
+                    if seat not in occupied_seats and seat not in bot_seats:
                         final_seat = seat
                         break
+                if final_seat is None:
+                    for seat in range(1, table.max_players + 1):
+                        if seat not in occupied_seats:
+                            final_seat = seat
+                            break
 
                 if final_seat is None:
                     return False, "No available seats", None
@@ -177,6 +265,11 @@ class TableAccessManager:
             table.update_activity()
 
             db.session.commit()
+
+            # The seat is now the human's in the DB; make the bot (if any) give it up
+            # in the live game so the two never share a seat.
+            if seat_number in bot_seats:
+                TableAccessManager.evict_bot_from_seat(table_id, seat_number)
 
             current_app.logger.info(f"User {user_id} joined table {table_id} with ${buy_in_amount} buy-in")
             return True, "Successfully joined table", access_record

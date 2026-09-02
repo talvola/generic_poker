@@ -1614,6 +1614,13 @@ class PokerLobby {
                     <div class="seat-player">${seat.player.username}</div>
                     <div class="seat-stack">$${seat.player.stack}</div>
                 `;
+            } else if (seat.player && seat.player.is_bot) {
+                // Bot-held seat: still joinable, the bot gives it up
+                seatContent = `
+                    <div class="seat-number">Seat ${seat.seat_number}</div>
+                    <div class="seat-player">🤖 ${seat.player.username}</div>
+                    <div class="seat-empty">Take this seat</div>
+                `;
             } else {
                 seatContent = `
                     <div class="seat-number">Seat ${seat.seat_number}</div>
@@ -1659,6 +1666,14 @@ class PokerLobby {
                     <div class="mini-player-info occupied">
                         <div class="mini-player-name">${seat.player.username}</div>
                         <div class="mini-player-chips">$${seat.player.stack}</div>
+                    </div>
+                `;
+            } else if (seat.player && seat.player.is_bot) {
+                // Bot-held seat: joinable, the bot gives it up to a human
+                seatContent = `
+                    <div class="mini-player-info available bot-held" onclick="pokerLobby.selectSeat(${seat.seat_number})">
+                        <div class="mini-seat-number">🤖 ${seat.player.username}</div>
+                        <div class="mini-seat-status">Take seat</div>
                     </div>
                 `;
             } else {

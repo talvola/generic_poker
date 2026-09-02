@@ -22,6 +22,7 @@ from online_poker.routes.game_routes import game_bp
 from online_poker.routes.lobby_routes import lobby_bp, register_lobby_socket_events
 from online_poker.services.disconnect_manager import disconnect_manager
 from online_poker.services.game_orchestrator import game_orchestrator
+from online_poker.services.table_access_manager import TableAccessManager
 from online_poker.services.table_manager import TableManager
 from online_poker.services.user_manager import UserManager
 from online_poker.services.websocket_manager import init_websocket_manager
@@ -99,6 +100,15 @@ def player1(app):
     user = UserManager.create_user(f"human_{uid}", f"human_{uid}@test.com", "password123")
     UserManager.update_user_bankroll(user.id, 1000)
     user._test_username = f"human_{uid}"
+    return user
+
+
+@pytest.fixture
+def player2(app):
+    uid = str(uuid.uuid4())[:8]
+    user = UserManager.create_user(f"human2_{uid}", f"human2_{uid}@test.com", "password123")
+    UserManager.update_user_bankroll(user.id, 1000)
+    user._test_username = f"human2_{uid}"
     return user
 
 
@@ -795,3 +805,110 @@ class TestBotGameplayFlow:
         TableAccessManager.set_player_ready(player1.id, table_id, True)
         ready_status = TableAccessManager.get_ready_status(table_id)
         assert ready_status["all_ready"] is True
+
+
+class TestHumanTakesBotSeat:
+    """GitHub #3: bots hold seats only in memory, so a second human could be sold
+    a bot's seat, charged, listed as ready, and never dealt in."""
+
+    def _seat_first_human_and_fill_bots(self, app, socketio, player1, table_id, seat=1):
+        http1, sio1 = _login_and_connect(app, socketio, player1)
+        http1.post(f"/api/tables/{table_id}/join", json={"buy_in_amount": 100, "seat_number": seat})
+        sio1.get_received()
+        sio1.emit("connect_to_table_room", {"table_id": table_id})
+        sio1.get_received()
+        sio1.emit("fill_bots", {"table_id": table_id})
+        sio1.get_received()
+        return http1, sio1
+
+    @staticmethod
+    def _bot_ids(session):
+        from online_poker.services.simple_bot import SimpleBot
+
+        return [pid for pid in session.game.table.players if SimpleBot.is_bot_player(pid)]
+
+    def test_seats_endpoint_reports_bot_held_seats(self, app, socketio, player1, bot_table):
+        table_id = str(bot_table.id)
+        http1, _ = self._seat_first_human_and_fill_bots(app, socketio, player1, table_id)
+
+        resp = http1.get(f"/api/tables/{table_id}/seats").get_json()
+        assert resp["success"] is True
+        by_seat = {s["seat_number"]: s for s in resp["seats"]}
+        assert by_seat[1]["is_available"] is False
+        assert by_seat[1]["player"]["username"] == player1._test_username
+        for seat in range(2, 7):
+            assert by_seat[seat]["is_available"] is True, "bot seats stay joinable"
+            assert by_seat[seat]["player"]["is_bot"] is True
+            assert by_seat[seat]["player"]["username"]
+            assert by_seat[seat]["player"]["stack"] > 0
+
+    def test_second_human_takes_bot_seat_and_is_dealt_in(self, app, socketio, player1, player2, bot_table):
+        table_id = str(bot_table.id)
+        self._seat_first_human_and_fill_bots(app, socketio, player1, table_id)
+        session = game_orchestrator.get_session(table_id)
+        assert len(self._bot_ids(session)) == 5
+        evicted = [pid for pid in self._bot_ids(session) if session.game.table.layout.get_player_seat(pid) == 3]
+        assert len(evicted) == 1
+
+        # Second human buys the seat a bot is sitting in
+        bankroll_before = UserManager.get_user_by_id(player2.id).bankroll
+        http2, sio2 = _login_and_connect(app, socketio, player2)
+        resp = http2.post(f"/api/tables/{table_id}/join", json={"buy_in_amount": 100, "seat_number": 3}).get_json()
+        assert resp["success"] is True, resp
+
+        # Bot gave up the seat in the live game immediately (no hand in progress)
+        assert evicted[0] not in session.game.table.players
+        assert len(self._bot_ids(session)) == 4
+
+        # Opening the table page seats the human in the game
+        sio2.get_received()
+        sio2.emit("connect_to_table_room", {"table_id": table_id})
+        sio2.get_received()
+        sio2.emit("fill_bots", {"table_id": table_id})
+        received = sio2.get_received()
+
+        assert player2.id in session.game.table.players
+        assert session.game.table.layout.get_player_seat(player2.id) == 3
+        assert len(self._bot_ids(session)) == 4, "the freed seat must not be refilled by a bot"
+        assert len(session.game.table.players) == 6
+
+        # Ready panel counts exactly the players who are actually in the game
+        ready = [m for m in received if m["name"] == "ready_status_update"][-1]["args"][0]["ready_status"]
+        assert ready["player_count"] == 6
+        assert {p["user_id"] for p in ready["players"]} == set(session.game.table.players)
+
+        # Charged exactly once
+        assert UserManager.get_user_by_id(player2.id).bankroll == bankroll_before - 100
+
+    def test_auto_assign_prefers_empty_seat_over_bot_seat(self, app, socketio, player1, player2, bot_table):
+        table_id = str(bot_table.id)
+        self._seat_first_human_and_fill_bots(app, socketio, player1, table_id)
+        session = game_orchestrator.get_session(table_id)
+
+        # Free seat 4 by removing that bot outright
+        from online_poker.services.simple_bot import bot_manager
+
+        bot_at_4 = next(pid for pid in self._bot_ids(session) if session.game.table.layout.get_player_seat(pid) == 4)
+        session.remove_player(bot_at_4, "test")
+        bot_manager.remove_bot(bot_at_4)
+        assert len(self._bot_ids(session)) == 4
+
+        http2, _ = _login_and_connect(app, socketio, player2)
+        resp = http2.post(f"/api/tables/{table_id}/join", json={"buy_in_amount": 100}).get_json()
+        assert resp["success"] is True, resp
+        access = TableAccessManager.get_user_access(player2.id, table_id)
+        assert access.seat_number == 4
+        assert len(self._bot_ids(session)) == 4, "no bot should be displaced when an empty seat exists"
+
+    def test_auto_assign_displaces_bot_when_only_bot_seats_remain(self, app, socketio, player1, player2, bot_table):
+        table_id = str(bot_table.id)
+        self._seat_first_human_and_fill_bots(app, socketio, player1, table_id)
+        session = game_orchestrator.get_session(table_id)
+
+        http2, _ = _login_and_connect(app, socketio, player2)
+        resp = http2.post(f"/api/tables/{table_id}/join", json={"buy_in_amount": 100}).get_json()
+        assert resp["success"] is True, resp
+        access = TableAccessManager.get_user_access(player2.id, table_id)
+        assert access.seat_number == 2
+        assert len(self._bot_ids(session)) == 4
+        assert all(session.game.table.layout.get_player_seat(pid) != 2 for pid in self._bot_ids(session))
