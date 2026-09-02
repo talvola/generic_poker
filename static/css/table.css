@@ -4327,3 +4327,11 @@ owdown Overlay Styles */
     font-size: 0.8rem;
     opacity: 0.85;
 }
+
+/* Rules card modal on the table page: the card is drawn for a white
+   background (lobby modal), so give it one here too (GitHub #9). */
+.rules-card-body {
+    background: #fff;
+    color: #333;
+    border-radius: 6px;
+}

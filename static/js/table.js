@@ -79,6 +79,15 @@ class PokerTable {
         });
 
         // Hand History button
+        // Rules card for whatever this table is playing right now (GitHub #9)
+        document.getElementById('rules-btn').addEventListener('click', () => {
+            PokerModals.showModal('rules-modal');
+            window.loadRulesCardInto(
+                `/table/${this.store.tableId}/rules-card`,
+                document.getElementById('rules-modal-title'),
+                document.getElementById('rules-modal-content')
+            );
+        });
         document.getElementById('hand-history-btn').addEventListener('click', () => {
             this.showHandHistory();
         });

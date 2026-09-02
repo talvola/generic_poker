@@ -32,6 +32,22 @@ def get_variants():
         return jsonify({"success": False, "error": "Failed to load poker variants"}), 500
 
 
+def _current_mixed_leg(table) -> str | None:
+    """Config stem of the variant a mixed-game table is currently playing."""
+    try:
+        mix = TableManager.get_table_mixed_config(table)
+        if not mix or not mix.rotation:
+            return None
+        from ..services.game_orchestrator import game_orchestrator
+
+        session = game_orchestrator.get_session(table.id)
+        index = session.current_variant_index if session and session.mixed_game_config else 0
+        return mix.rotation[index % len(mix.rotation)].variant
+    except Exception as e:
+        current_app.logger.warning(f"Could not resolve current mixed-game leg for {table.id}: {e}")
+        return None
+
+
 def _load_variant_config(variant_id: str) -> dict | None:
     """Load a game-config dict by filename stem, or None if it doesn't exist.
 
@@ -138,13 +154,18 @@ def get_table_rules_card(table_id: str):
         if not table:
             return jsonify({"success": False, "error": "Table not found"}), 404
 
+        variant_stem = table.variant
         if table.custom_variant_config:
             config = json.loads(table.custom_variant_config)
         else:
-            config = _load_variant_config(table.variant)
+            if table.is_mixed_game:
+                # A mix has no rules of its own: show the leg being played right
+                # now (or the first leg before a hand has started).
+                variant_stem = _current_mixed_leg(table) or variant_stem
+            config = _load_variant_config(variant_stem)
         if config is None:
             return jsonify({"success": False, "error": "Variant not found"}), 404
-        return jsonify({"success": True, "rules": _build_rules_card(config, fallback_name=table.variant)})
+        return jsonify({"success": True, "rules": _build_rules_card(config, fallback_name=variant_stem)})
     except Exception as e:
         current_app.logger.error(f"Failed to get rules card for table {table_id}: {e}")
         return jsonify({"success": False, "error": "Failed to get rules"}), 500

@@ -32,6 +32,29 @@
         <!-- Main Content -->
         <main class="main-content">
             <div class="container">
+                {% if not current_user.is_authenticated %}
+                <section class="welcome-card">
+                    <h2>Play-money poker, 300+ variants</h2>
+                    <p>Hold'em, Omaha, stud, draw, lowball, mixed games and a long tail of home-game
+                       oddities, all with the rules built in. Sit down against bot players any time, or
+                       set up a private table for friends. No real money anywhere.</p>
+                    <p>
+                        <a href="{{ url_for('auth.register_page') }}" class="btn btn-primary">Create a free account</a>
+                        <a href="{{ url_for('auth.login') }}" class="btn btn-outline">Log in</a>
+                    </p>
+                </section>
+                {% else %}
+                <section class="first-visit-banner" id="first-visit-banner" hidden>
+                    <div>
+                        <strong>Welcome, {{ current_user.username }}.</strong>
+                        You start with ${{ current_user.bankroll }} in play money. Pick a table and hit
+                        <em>Join</em>, or <em>Create Table</em> and bots will fill the empty seats. Every game
+                        has a rules card under <em>Details → View Rules</em> and on the table page.
+                    </div>
+                    <button type="button" class="btn btn-outline btn-small" id="first-visit-dismiss">Got it</button>
+                </section>
+                {% endif %}
+
                 <!-- Lobby Actions -->
                 <section class="lobby-actions">
                     <div class="action-buttons">
@@ -404,6 +427,7 @@
         window.currentUserId = {{ current_user.id | tojson if current_user.is_authenticated else 'null' }};
         window.evaluationTypes = {{ evaluation_types | default([]) | tojson }};
     </script>
+    <script src="{{ url_for('static', filename='js/rules-card.js') }}?v={{ asset_version }}"></script>
     <script src="{{ url_for('static', filename='js/lobby.js') }}?v={{ asset_version }}"></script>
 </body>
 </html>

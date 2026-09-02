@@ -88,6 +88,54 @@ body {
     padding: 2rem 0;
 }
 
+/* Guest intro (GitHub #9) */
+.welcome-card {
+    background: #fff;
+    border-radius: 8px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.welcome-card h2 {
+    margin: 0 0 0.5rem;
+    color: var(--dark-color, #343a40);
+}
+
+.welcome-card p {
+    margin: 0 0 0.75rem;
+    color: #444;
+    line-height: 1.5;
+    max-width: 720px;
+}
+
+.welcome-card p:last-child {
+    margin-bottom: 0;
+}
+
+.welcome-card .btn + .btn {
+    margin-left: 0.5rem;
+}
+
+/* First-visit banner for a freshly registered user */
+.first-visit-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    background: #fffbea;
+    border: 1px solid #f0d67a;
+    border-radius: 8px;
+    padding: 0.9rem 1.25rem;
+    margin-bottom: 1.5rem;
+    color: #444;
+    line-height: 1.5;
+}
+
+.first-visit-banner[hidden] {
+    display: none;
+}
+
 /* Lobby Actions */
 .lobby-actions {
     margin-bottom: 2rem;
