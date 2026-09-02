@@ -214,45 +214,45 @@ class SessionManager:
 class PasswordResetService:
     """Handles password reset functionality."""
 
+    GENERIC_MESSAGE = "If the email exists, a reset link has been sent"
+
+    @staticmethod
+    def _issue_reset_token(user) -> str:
+        """Create and store a reset token for ``user``; return the raw token.
+
+        The raw token must reach the user out of band (email, or an admin
+        handing it over) — it is NEVER returned to the HTTP caller, because
+        that let anyone who knew an email address take over the account
+        (GitHub #6).
+        """
+        reset_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(reset_token.encode()).hexdigest()
+
+        # Store reset token in session (in production, use database or cache)
+        session[f"reset_token_{user.id}"] = {
+            "token_hash": token_hash,
+            "expires_at": (
+                datetime.utcnow() + timedelta(hours=current_app.config.get("RESET_TOKEN_EXPIRY_HOURS", 1))
+            ).isoformat(),
+            "user_id": user.id,
+        }
+        current_app.logger.info(f"Password reset token generated for user: {user.username}")
+        return reset_token
+
     @staticmethod
     def generate_reset_token(email: str) -> dict[str, Any]:
-        """Generate password reset token for user.
+        """Handle a forgot-password request.
 
-        Args:
-            email: User's email address
-
-        Returns:
-            Dict containing reset token info
+        Always answers with the same generic message so the response does not
+        reveal whether the email is registered, and never includes the token.
+        There is no email delivery yet, so in practice a locked-out user asks
+        the admin, who issues a temporary password from the admin panel.
         """
         try:
-            # Find user by email
             user = UserManager.get_user_by_email(email)
-            if not user:
-                # Don't reveal if email exists or not for security
-                return {"success": True, "message": "If the email exists, a reset link has been sent"}
-
-            # Generate secure reset token
-            reset_token = secrets.token_urlsafe(32)
-            token_hash = hashlib.sha256(reset_token.encode()).hexdigest()
-
-            # Store reset token in session (in production, use database or cache)
-            session[f"reset_token_{user.id}"] = {
-                "token_hash": token_hash,
-                "expires_at": (
-                    datetime.utcnow() + timedelta(hours=current_app.config.get("RESET_TOKEN_EXPIRY_HOURS", 1))
-                ).isoformat(),
-                "user_id": user.id,
-            }
-
-            current_app.logger.info(f"Password reset token generated for user: {user.username}")
-
-            # In production, send email with reset link
-            # For now, return token for testing
-            return {
-                "success": True,
-                "message": "If the email exists, a reset link has been sent",
-                "reset_token": reset_token,  # Remove this in production
-            }
+            if user:
+                PasswordResetService._issue_reset_token(user)
+            return {"success": True, "message": PasswordResetService.GENERIC_MESSAGE}
 
         except Exception as e:
             current_app.logger.error(f"Error generating reset token for {email}: {e}")

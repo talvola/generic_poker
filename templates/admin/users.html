@@ -35,6 +35,24 @@
 
 <div class="pagination" id="users-pagination"></div>
 
+<!-- Temporary Password Modal -->
+<div id="reset-pw-modal" class="modal">
+    <div class="modal-content modal-small">
+        <div class="modal-header">
+            <h3>Temporary Password</h3>
+            <button class="modal-close" onclick="adminPanel.closeModal('reset-pw-modal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>User: <strong id="reset-pw-username"></strong></p>
+            <p>Temporary password (shown once — pass it to the user, they can change it after logging in):</p>
+            <p><code id="reset-pw-value" style="font-size: 1.2em; user-select: all;"></code></p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-primary" onclick="adminPanel.closeModal('reset-pw-modal')">Done</button>
+        </div>
+    </div>
+</div>
+
 <!-- Bankroll Adjust Modal -->
 <div id="bankroll-modal" class="modal">
     <div class="modal-content modal-small">

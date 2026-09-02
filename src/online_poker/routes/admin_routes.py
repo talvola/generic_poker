@@ -1,6 +1,7 @@
 """Admin routes for platform management."""
 
 import functools
+import secrets
 from datetime import datetime, timedelta
 
 from flask import Blueprint, current_app, jsonify, redirect, render_template, request, url_for
@@ -239,6 +240,27 @@ def api_adjust_bankroll(user_id):
             "new_bankroll": user.bankroll,
         }
     )
+
+
+@admin_bp.route("/api/users/<user_id>/reset-password", methods=["POST"])
+@admin_required
+def api_reset_password(user_id):
+    """Set a one-time temporary password for a user and return it once.
+
+    There is no email delivery, so this is how a locked-out player gets back
+    in: they ask the admin, who reads them the temporary password (GitHub #6).
+    """
+    user = db.session.query(User).filter_by(id=user_id).first()
+    if not user:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    # "tmp" + hex + digit always satisfies the letter+digit password policy
+    temporary_password = f"tmp{secrets.token_hex(4)}{secrets.randbelow(10)}"
+    user.set_password(temporary_password)
+    db.session.commit()
+    current_app.logger.info(f"Admin {current_user.username} reset the password for {user.username}")
+
+    return jsonify({"success": True, "username": user.username, "temporary_password": temporary_password})
 
 
 @admin_bp.route("/api/users/<user_id>/toggle-active", methods=["POST"])

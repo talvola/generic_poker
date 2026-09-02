@@ -187,6 +187,7 @@ class AdminPanel {
                 <td class="action-btns">
                     <button class="btn btn-sm btn-primary" onclick="adminPanel.openBankrollModal('${u.id}', '${this.escapeHtml(u.username)}', ${u.bankroll})">Adjust</button>
                     <button class="btn btn-sm ${u.is_active ? 'btn-danger' : 'btn-primary'}" onclick="adminPanel.toggleUserActive('${u.id}')">${u.is_active ? 'Disable' : 'Enable'}</button>
+                    <button class="btn btn-sm btn-secondary" onclick="adminPanel.resetUserPassword('${u.id}', '${this.escapeHtml(u.username)}')">Reset PW</button>
                 </td>
             </tr>
         `).join('');
@@ -209,6 +210,23 @@ class AdminPanel {
     goToPage(page) {
         this.currentPage = page;
         this.fetchUsers();
+    }
+
+    async resetUserPassword(userId, username) {
+        if (!confirm(`Set a temporary password for ${username}? Their current password will stop working.`)) return;
+        try {
+            const res = await fetch(`/admin/api/users/${userId}/reset-password`, { method: 'POST' });
+            const data = await res.json();
+            if (!data.success) {
+                this.showNotification(data.message || 'Failed to reset password', 'error');
+                return;
+            }
+            document.getElementById('reset-pw-username').textContent = data.username;
+            document.getElementById('reset-pw-value').textContent = data.temporary_password;
+            this.openModal('reset-pw-modal');
+        } catch (e) {
+            this.showNotification('Failed to reset password', 'error');
+        }
     }
 
     openBankrollModal(userId, username, bankroll) {

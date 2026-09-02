@@ -240,7 +240,8 @@ class TestPasswordResetService:
             result = PasswordResetService.generate_reset_token("test@example.com")
 
             assert result["success"] is True
-            assert "reset_token" in result
+            # The raw token must never be handed back to the caller (GitHub #6)
+            assert "reset_token" not in result
             assert result["message"] == "If the email exists, a reset link has been sent"
 
     def test_generate_reset_token_nonexistent_user(self, app_context):
@@ -255,8 +256,7 @@ class TestPasswordResetService:
         """Test successful password reset."""
         # First generate a reset token
         with patch("flask.session", {}):
-            token_result = PasswordResetService.generate_reset_token("test@example.com")
-            reset_token = token_result["reset_token"]
+            reset_token = PasswordResetService._issue_reset_token(test_user)
 
             # Now reset the password
             result = PasswordResetService.reset_password(reset_token, "newpassword123")
@@ -313,8 +313,7 @@ class TestPasswordResetService:
     def test_reset_password_invalid_password(self, app_context, test_user):
         """Test password reset with invalid new password."""
         with patch("flask.session", {}):
-            token_result = PasswordResetService.generate_reset_token("test@example.com")
-            reset_token = token_result["reset_token"]
+            reset_token = PasswordResetService._issue_reset_token(test_user)
 
             # Try to reset with invalid password
             result = PasswordResetService.reset_password(reset_token, "weak")
