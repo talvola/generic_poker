@@ -546,9 +546,22 @@ Hosted on Render (free tier) with auto-deploy from GitHub.
 
 **Environment variables (set in Render dashboard):**
 - `DATABASE_URL` — Postgres connection string (Neon pooled endpoint)
-- `FLASK_ENV` — `production`
-- `SECRET_KEY` — auto-generated
+- `FLASK_ENV` — `production` (honored: `wsgi.py` calls `create_app(get_config())`, so
+  `ProductionConfig` really loads — Secure cookies, no dev `SECRET_KEY` fallback)
+- `SECRET_KEY` — auto-generated; `create_app` refuses to start without one
 - `PYTHON_VERSION` — `3.10.12`
+- Optional: `CORS_ORIGINS` (comma list; prod defaults to the site's own origin),
+  `SOCKETIO_LOGGING`, `ENABLE_TEST_ROUTES` (unauth `/api/test/*`; dev/testing only),
+  `TABLE_CLEANUP_INTERVAL_MINUTES` (empty-table sweep, 0 = off), `BANKROLL_RELOAD_THRESHOLD`
+  / `BANKROLL_RELOAD_COOLDOWN_HOURS` (play-money reload).
+
+**Request hygiene (2026-09 onboarding pass):** a `before_request` hook in `app.py` 403s any
+POST/PUT/DELETE whose `Origin` host isn't ours (or `Sec-Fetch-Site: cross-site`) — a token-less
+CSRF check. curl/test clients send no Origin and pass; a browser on another origin doesn't.
+Bots hold seats only in memory: `TableAccessManager.get_bot_seats()` merges them into seat
+availability and a human joining a bot-held seat evicts the bot (`evict_bot_from_seat`). Busting
+sends `player_busted` to that user (rebuy / reload / leave modal). CSS gotcha: `.btn` sets
+`display`, so `hidden` on a button does nothing without a `.btn[hidden]{display:none}` rule.
 
 **Changing an env var does NOT trigger a deploy** — PUT the value, then POST
 `/v1/services/<id>/deploys` explicitly. Always use the single-key form
