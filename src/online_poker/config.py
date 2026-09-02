@@ -55,7 +55,12 @@ class Config:
 
     # SocketIO settings
     SOCKETIO_ASYNC_MODE = "threading"
+    # Comma-separated origins allowed to open a socket, or "*". Production
+    # narrows this to the site's own origin (cookie-authenticated sockets from
+    # any origin would be CSRF).
     SOCKETIO_CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ORIGINS", "*")
+    # Verbose socket.io / engine.io frame logging (very noisy)
+    SOCKETIO_LOGGING = os.environ.get("SOCKETIO_LOGGING", "false").lower() == "true"
 
     # Game settings
     DEFAULT_BANKROLL = int(os.environ.get("DEFAULT_BANKROLL", "1000"))
@@ -132,6 +137,8 @@ class DevelopmentConfig(Config):
     # E2E tests run against `python app.py` (this config) and need /api/test
     ENABLE_TEST_ROUTES = os.environ.get("ENABLE_TEST_ROUTES", "true").lower() == "true"
 
+    SOCKETIO_LOGGING = os.environ.get("SOCKETIO_LOGGING", "true").lower() == "true"
+
 
 class TestingConfig(Config):
     """Testing configuration."""
@@ -173,6 +180,11 @@ class ProductionConfig(Config):
     # Strict security settings
     SESSION_COOKIE_SECURE = True
     BCRYPT_LOG_ROUNDS = 12
+    # No dev fallback: create_app refuses to start without a real SECRET_KEY
+    SECRET_KEY = os.environ.get("SECRET_KEY")
+    # Only the site itself may open cookie-authenticated sockets
+    SOCKETIO_CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ORIGINS", "https://generic-poker.onrender.com")
+    SOCKETIO_LOGGING = False
 
     # Production-specific settings
     SQLALCHEMY_ENGINE_OPTIONS = _engine_options(SQLALCHEMY_DATABASE_URI)

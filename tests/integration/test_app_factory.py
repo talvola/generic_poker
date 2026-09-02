@@ -60,3 +60,34 @@ def test_base_config_keeps_test_routes_off(monkeypatch):
     assert cfg.Config.ENABLE_TEST_ROUTES is False
     assert cfg.ProductionConfig.ENABLE_TEST_ROUTES is False
     assert cfg.DevelopmentConfig.ENABLE_TEST_ROUTES is True
+
+
+class _NoSecretKey(_MemoryTesting):
+    SECRET_KEY = None
+
+
+def test_refuses_to_start_without_secret_key():
+    with pytest.raises(RuntimeError, match="SECRET_KEY"):
+        create_app(_NoSecretKey)
+
+
+def test_cross_site_writes_are_rejected(make_app):
+    app = make_app(_MemoryTesting)
+    client = app.test_client()
+    body = {"username": "nobody", "password": "nothing123"}
+    assert client.post("/auth/api/login", json=body, headers={"Origin": "https://evil.example"}).status_code == 403
+    assert client.post("/auth/api/login", json=body, headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    # Same-origin and header-less requests reach the handler (401: bad credentials, not 403)
+    assert client.post("/auth/api/login", json=body, headers={"Origin": "http://localhost"}).status_code != 403
+    assert client.post("/auth/api/login", json=body).status_code != 403
+    # Reads are never blocked
+    assert client.get("/auth/check-auth", headers={"Origin": "https://evil.example"}).status_code != 403
+
+
+def test_socketio_cors_comes_from_config(make_app):
+    class _Cors(_MemoryTesting):
+        SOCKETIO_CORS_ALLOWED_ORIGINS = "https://a.example, https://b.example"
+
+    app = make_app(_Cors)
+    sio = app.extensions["socketio"]
+    assert sio.server.eio.cors_allowed_origins == ["https://a.example", "https://b.example"]

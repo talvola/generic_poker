@@ -4,8 +4,9 @@ import contextlib
 import logging
 import os
 import time
+from urllib.parse import urlparse
 
-from flask import Flask, jsonify, redirect, url_for
+from flask import Flask, abort, jsonify, redirect, request, url_for
 from flask_socketio import SocketIO
 from src.online_poker.auth import init_login_manager
 from src.online_poker.config import Config, get_config
@@ -96,20 +97,46 @@ def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
 
+    if not app.config.get("SECRET_KEY"):
+        raise RuntimeError("SECRET_KEY is not set; refusing to start with forgeable session cookies")
+
     # Initialize extensions
     db.init_app(app)
     limiter.init_app(app)
 
     # Initialize SocketIO (use default async_mode for better compatibility)
+    cors_origins = app.config.get("SOCKETIO_CORS_ALLOWED_ORIGINS", "*")
+    if cors_origins != "*":
+        cors_origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
+    socketio_logging = bool(app.config.get("SOCKETIO_LOGGING", False))
     socketio = SocketIO(
         app,
-        cors_allowed_origins="*",
+        cors_allowed_origins=cors_origins,
         async_mode=None,  # Let SocketIO choose the best async mode
-        logger=True,
-        engineio_logger=True,
+        logger=socketio_logging,
+        engineio_logger=socketio_logging,
         ping_timeout=60,
         ping_interval=25,
     )
+
+    @app.before_request
+    def _reject_cross_site_writes():
+        """Minimal CSRF defense for cookie-authenticated JSON routes and forms.
+
+        Browsers attach Origin (and Sec-Fetch-Site) to cross-origin POSTs; a
+        state-changing request whose Origin is not this site is refused. Requests
+        without an Origin header (same-origin form posts on older browsers, curl,
+        test clients) are left alone, which is what a token-less check can do.
+        """
+        if request.method in ("GET", "HEAD", "OPTIONS"):
+            return
+        if request.headers.get("Sec-Fetch-Site") == "cross-site":
+            abort(403)
+        origin = request.headers.get("Origin")
+        # Compare hosts only: behind Render's proxy Flask sees http:// while the
+        # browser's Origin says https://, and the scheme is not what matters here.
+        if origin and urlparse(origin).netloc.lower() != request.host.lower():
+            abort(403)
 
     # Initialize authentication
     init_login_manager(app)

@@ -14,5 +14,8 @@ from psycogreen.eventlet import patch_psycopg  # noqa: E402
 patch_psycopg()
 
 from app import create_app  # noqa: E402
+from src.online_poker.config import get_config  # noqa: E402
 
-app, socketio = create_app()
+# get_config() honors FLASK_ENV; without it the base Config ran in production
+# (no Secure cookies, no production-only settings) — GitHub #7.
+app, socketio = create_app(get_config())
