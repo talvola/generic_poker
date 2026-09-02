@@ -31,6 +31,9 @@ export interface TableConfig {
   minBuyIn?: number;
   maxBuyIn?: number;
   maxPlayers?: number;
+  /** Fill empty seats with bots. The lobby defaults this ON (GitHub #8); E2E
+   *  specs drive human-vs-human play, so the helper turns it OFF unless asked. */
+  allowBots?: boolean;
 }
 
 const DEFAULT_TABLE_CONFIG: TableConfig = {
@@ -122,6 +125,15 @@ export async function createTable(page: Page, config: TableConfig = {}): Promise
       await page.fill('#big-blind', finalConfig.bigBlind.toString());
     }
   }
+
+  // Bots default ON in the lobby; the custom checkmark intercepts clicks, so set it directly
+  await page.evaluate((allow) => {
+    const cb = document.getElementById('allow-bots') as HTMLInputElement | null;
+    if (cb && cb.checked !== allow) {
+      cb.checked = allow;
+      cb.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }, finalConfig.allowBots === true);
 
   // Click Create button in modal footer
   const createButton = page.locator('#create-table-modal .modal-footer button[type="submit"]');
