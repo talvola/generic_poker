@@ -334,6 +334,53 @@ class PokerTable {
         }, 500);
     }
 
+    // A lone player at a table with bots off is otherwise a dead end (GitHub #8):
+    // tell them why nothing happens and, if they own the table, let them fix it here.
+    renderShortHandedHint(readyHint, minPlayers) {
+        const cfg = window.pokerConfig || {};
+        readyHint.textContent = `Need at least ${minPlayers} players to start.`;
+        if (cfg.allowBots) {
+            readyHint.textContent += ' Bot players are joining…';
+            return;
+        }
+        if (cfg.creatorId && cfg.creatorId === cfg.currentUserId) {
+            readyHint.textContent += ' Nobody else is here yet. ';
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-primary btn-sm enable-bots-btn';
+            btn.textContent = 'Add bot players';
+            readyHint.appendChild(btn);
+        } else {
+            readyHint.textContent += ' Nobody else is here yet. The table owner can add bot players from the lobby.';
+        }
+        if (!this._enableBotsBound) {
+            this._enableBotsBound = true;
+            document.addEventListener('click', (e) => {
+                if (e.target.closest('.enable-bots-btn')) this.enableBots();
+            });
+        }
+    }
+
+    async enableBots() {
+        try {
+            const resp = await fetch(`/table/${this.store.tableId}/settings`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ allow_bots: true })
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data.success) {
+                PokerModals.showNotification(data.error || 'Could not enable bots', 'error');
+                return;
+            }
+            window.pokerConfig = Object.assign(window.pokerConfig || {}, { allowBots: true });
+            this.socket.emit('fill_bots', { table_id: this.store.tableId });
+            PokerModals.showNotification('Bot players are joining the table', 'success');
+        } catch (err) {
+            PokerModals.showNotification('Could not enable bots', 'error');
+        }
+    }
+
     updateReadyStatus(readyStatus) {
 
         const readyPanel = document.getElementById('ready-panel');
@@ -355,7 +402,7 @@ class PokerTable {
         // Update hint text
         if (readyHint) {
             if (readyStatus.player_count < readyStatus.min_players) {
-                readyHint.textContent = `Need at least ${readyStatus.min_players} players to start`;
+                this.renderShortHandedHint(readyHint, readyStatus.min_players);
             } else if (!readyStatus.all_ready) {
                 readyHint.textContent = 'Waiting for all players to be ready';
             } else {

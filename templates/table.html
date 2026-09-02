@@ -279,7 +279,10 @@
 
     <script>
         window.pokerConfig = {
-            actionTimeoutEnabled: {{ 'true' if action_timeout_enabled else 'false' }}
+            actionTimeoutEnabled: {{ 'true' if action_timeout_enabled else 'false' }},
+            allowBots: {{ table.allow_bots | tojson }},
+            creatorId: {{ table.creator_id | tojson }},
+            currentUserId: {{ current_user.id | tojson if current_user.is_authenticated else 'null' }}
         };
     </script>
     <script src="{{ url_for('static', filename='js/table/card-utils.js') }}?v={{ asset_version }}"></script>

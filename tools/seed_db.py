@@ -129,12 +129,13 @@ def seed_database():
             },
             {
                 "name": "Texas Hold'em - Micro Stakes",
+                # Bots on, so a lone newcomer can actually play (GitHub #8)
                 "variant": "hold_em",
                 "betting_structure": "no-limit",
                 "stakes": {"small_blind": 1, "big_blind": 2},
                 "max_players": 9,
                 "is_private": False,
-                "allow_bots": False,
+                "allow_bots": True,
                 "creator": users[1],  # alice
                 "players": 0,
             },

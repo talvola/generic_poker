@@ -694,6 +694,8 @@ def table_view(table_id):
         "max_players": table.max_players,
         "current_players": active_players,
         "players": players,
+        "allow_bots": table.allow_bots,
+        "creator_id": table.creator_id,
         "get_stakes": table.get_stakes,  # Pass the method for template to call
     }
 
