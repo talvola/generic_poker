@@ -120,7 +120,9 @@ def create_app(config_class=Config):
     app.register_blueprint(table_bp, url_prefix="/table")
     app.register_blueprint(game_bp, url_prefix="/game")
     app.register_blueprint(admin_bp, url_prefix="/admin")
-    app.register_blueprint(test_bp)  # Test-only routes for E2E testing
+    if app.config.get("ENABLE_TEST_ROUTES"):
+        # Unauthenticated state-reset routes for E2E tests; never in production (GitHub #4)
+        app.register_blueprint(test_bp)
     app.register_blueprint(debug_bp)  # Debug stacked/seeded deck (gated by DEBUG_ALLOW_STACKED_DECK)
 
     # Initialize WebSocket manager

@@ -69,6 +69,10 @@ class Config:
     # specific deal scenarios during tester sessions. Always gated behind admin.
     DEBUG_ALLOW_STACKED_DECK = os.environ.get("DEBUG_ALLOW_STACKED_DECK", "false").lower() == "true"
 
+    # Test-only /api/test routes (E2E state reset). Unauthenticated by design, so
+    # they are OFF unless a dev/testing config or env var turns them on (GitHub #4).
+    ENABLE_TEST_ROUTES = os.environ.get("ENABLE_TEST_ROUTES", "false").lower() == "true"
+
     # Timeout settings
     ACTION_TIMEOUT_ENABLED = os.environ.get("ACTION_TIMEOUT_ENABLED", "false").lower() == "true"
     ACTION_TIMEOUT_SECONDS = int(os.environ.get("ACTION_TIMEOUT_SECONDS", "30"))
@@ -125,6 +129,9 @@ class DevelopmentConfig(Config):
     # Allow the debug stacked-deck endpoints in development by default
     DEBUG_ALLOW_STACKED_DECK = os.environ.get("DEBUG_ALLOW_STACKED_DECK", "true").lower() == "true"
 
+    # E2E tests run against `python app.py` (this config) and need /api/test
+    ENABLE_TEST_ROUTES = os.environ.get("ENABLE_TEST_ROUTES", "true").lower() == "true"
+
 
 class TestingConfig(Config):
     """Testing configuration."""
@@ -149,6 +156,7 @@ class TestingConfig(Config):
 
     # Allow the debug stacked-deck endpoints in tests
     DEBUG_ALLOW_STACKED_DECK = True
+    ENABLE_TEST_ROUTES = True
 
 
 class ProductionConfig(Config):

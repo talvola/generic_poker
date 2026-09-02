@@ -692,13 +692,14 @@ def close_table(table_id: str):
 @table_bp.route("/cleanup", methods=["POST"])
 @login_required
 def cleanup_inactive_tables():
-    """Clean up inactive tables and access records (admin function).
+    """Clean up inactive tables and access records (admin only).
 
     Returns:
         JSON response with cleanup results
     """
+    if not getattr(current_user, "is_admin", False):
+        return jsonify({"success": False, "error": "Admin access required"}), 403
     try:
-        # This could be restricted to admin users in the future
         default_timeout = current_app.config.get("TABLE_INACTIVE_TIMEOUT", 30)
         timeout_minutes = request.json.get("timeout_minutes", default_timeout) if request.json else default_timeout
 
