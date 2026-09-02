@@ -707,6 +707,57 @@ class TableManager:
             return 0
 
     @staticmethod
+    def purge_empty_tables(idle_minutes: int = 30) -> int:
+        """Delete tables nobody is using (GitHub #11).
+
+        A table is purged when it has no seated humans (spectators don't count),
+        no live game session with humans in it, and has been idle for
+        ``idle_minutes``. Tables created by an admin are kept: they are the
+        curated "house" tables a newcomer should always find in the lobby.
+        Nothing is cashed out because nobody is seated. Returns the count.
+        """
+        try:
+            from ..models.table_access import TableAccess
+            from ..models.user import User
+            from ..services.game_orchestrator import game_orchestrator
+            from ..services.simple_bot import SimpleBot
+
+            purged = 0
+            admin_ids = {u.id for u in db.session.query(User.id).filter(User.is_admin == True).all()}  # noqa: E712
+            for table in db.session.query(PokerTable).all():
+                if table.creator_id in admin_ids or not table.is_inactive(idle_minutes):
+                    continue
+                seated = (
+                    db.session.query(TableAccess)
+                    .filter(
+                        TableAccess.table_id == table.id,
+                        TableAccess.is_active == True,  # noqa: E712
+                        TableAccess.is_spectator == False,  # noqa: E712
+                    )
+                    .count()
+                )
+                if seated:
+                    continue
+                session = game_orchestrator.get_session(table.id)
+                if session and any(not SimpleBot.is_bot_player(pid) for pid in session.connected_players):
+                    continue
+                if session:
+                    game_orchestrator.remove_session(table.id)
+                # Spectator rows would block the delete via FK
+                db.session.query(TableAccess).filter(TableAccess.table_id == table.id).delete()
+                db.session.delete(table)
+                TableManager._custom_variant_rules_cache.pop(table.id, None)
+                purged += 1
+                current_app.logger.info(f"Purged empty table {table.id} ({table.name})")
+            if purged:
+                db.session.commit()
+            return purged
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Failed to purge empty tables: {e}")
+            return 0
+
+    @staticmethod
     def _notify_table_closure(table: PokerTable, reason: str) -> None:
         """Notify players about table closure.
 

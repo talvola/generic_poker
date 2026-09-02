@@ -69,6 +69,8 @@ class Config:
     BANKROLL_RELOAD_THRESHOLD = int(os.environ.get("BANKROLL_RELOAD_THRESHOLD", "50"))
     BANKROLL_RELOAD_COOLDOWN_HOURS = int(os.environ.get("BANKROLL_RELOAD_COOLDOWN_HOURS", "24"))
     TABLE_INACTIVE_TIMEOUT = int(os.environ.get("TABLE_INACTIVE_TIMEOUT", "30"))  # minutes
+    # How often the background sweep deletes empty, idle tables (0 = never; GitHub #11)
+    TABLE_CLEANUP_INTERVAL_MINUTES = int(os.environ.get("TABLE_CLEANUP_INTERVAL_MINUTES", "5"))
 
     # Bot settings — "mc" (Monte Carlo equity) or "simple" (random weighted)
     BOT_TYPE = os.environ.get("BOT_TYPE", "mc")
@@ -168,6 +170,7 @@ class TestingConfig(Config):
     # Allow the debug stacked-deck endpoints in tests
     DEBUG_ALLOW_STACKED_DECK = True
     ENABLE_TEST_ROUTES = True
+    TABLE_CLEANUP_INTERVAL_MINUTES = 0
 
 
 class ProductionConfig(Config):

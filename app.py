@@ -92,6 +92,22 @@ def _cleanup_stale_sessions(app):
             print(f"Warning: Failed to rollback: {rollback_err}")
 
 
+def _table_sweep_loop(app, socketio, interval_minutes):
+    """Background task: purge empty tables every ``interval_minutes``."""
+    from src.online_poker.services.table_manager import TableManager
+
+    while True:
+        socketio.sleep(interval_minutes * 60)
+        try:
+            with app.app_context():
+                idle = app.config.get("TABLE_INACTIVE_TIMEOUT", 30)
+                purged = TableManager.purge_empty_tables(idle)
+                if purged:
+                    socketio.emit("tables_purged", {"count": purged})
+        except Exception as e:
+            app.logger.error(f"Table sweep failed: {e}")
+
+
 def create_app(config_class=Config):
     """Create and configure the Flask application."""
     app = Flask(__name__)
@@ -194,6 +210,12 @@ def create_app(config_class=Config):
     with app.app_context():
         create_tables()
         _cleanup_stale_sessions(app)
+
+    # Periodically delete empty, idle tables so the lobby doesn't fill with
+    # abandoned ones (GitHub #11). Off when the interval is 0 (tests).
+    cleanup_interval = app.config.get("TABLE_CLEANUP_INTERVAL_MINUTES", 0)
+    if cleanup_interval and not app.testing:
+        socketio.start_background_task(_table_sweep_loop, app, socketio, cleanup_interval)
 
     # Error handler for rate limiting
     @app.errorhandler(429)

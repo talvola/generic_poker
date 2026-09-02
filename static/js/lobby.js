@@ -287,6 +287,9 @@ class PokerLobby {
             this.showNotification(data.message || 'An error occurred', 'error');
         });
 
+        // Background sweep removed idle tables (GitHub #11)
+        this.socket.on('tables_purged', () => this.loadTables());
+
         this.socket.on('table_updated', (data) => {
             // Update specific table in the list
             const tableIndex = this.tables.findIndex(t => t.id === data.table.id);
@@ -1168,6 +1171,10 @@ class PokerLobby {
                                 data-table-id="${table.id}">
                             Edit
                         </button>
+                        <button class="btn btn-outline btn-small close-table-btn"
+                                data-table-id="${table.id}" title="Close this table and cash everyone out">
+                            Close
+                        </button>
                     ` : ''}
                 </div>
             </div>
@@ -1224,6 +1231,30 @@ class PokerLobby {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.openEditTableModal(btn.dataset.tableId);
+            });
+        });
+
+        // Close buttons (creator only) — GitHub #11
+        document.querySelectorAll('.close-table-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('Close this table? Anyone seated is cashed out to their bankroll.')) return;
+                try {
+                    const resp = await fetch(`/table/${btn.dataset.tableId}/close`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ reason: 'Closed by owner from lobby' })
+                    });
+                    const data = await resp.json();
+                    if (resp.ok && data.success) {
+                        this.showNotification('Table closed', 'success');
+                        this.loadTables();
+                    } else {
+                        this.showNotification(data.error || 'Could not close table', 'error');
+                    }
+                } catch (err) {
+                    this.showNotification('Could not close table', 'error');
+                }
             });
         });
 
