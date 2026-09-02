@@ -2667,23 +2667,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 100);
 });
 
-// Seat assignment functionality (called from template onclick)
+// Seat assignment functionality (called from template onclick). Uses the
+// table's real buy-in range instead of a hardcoded $100 prompt (GitHub #12).
 function joinSeat(seatNumber) {
-    if (window.pokerTable && window.pokerTable.socket) {
-        const buyInAmount = prompt(`Enter buy-in amount (minimum $100):`);
-
-        if (buyInAmount && !isNaN(buyInAmount)) {
-            const amount = parseInt(buyInAmount);
-
-            if (amount >= 100) {
-                window.pokerTable.socket.emit('join_table', {
-                    table_id: window.pokerTable.store.tableId,
-                    seat_number: seatNumber,
-                    buy_in_amount: amount
-                });
-            } else {
-                alert('Minimum buy-in is $100');
-            }
+    if (!window.pokerTable || !window.pokerTable.socket) return;
+    const cfg = window.pokerConfig || {};
+    const min = cfg.minBuyin || 0;
+    const max = cfg.maxBuyin || 0;
+    document.getElementById('join-seat-number').textContent = seatNumber;
+    const input = document.getElementById('join-seat-buyin');
+    input.min = min;
+    input.max = max;
+    input.value = Math.min(max, min * 2) || min;
+    document.getElementById('join-seat-range').textContent = `$${min} – $${max}`;
+    const confirmBtn = document.getElementById('confirm-join-seat-btn');
+    confirmBtn.onclick = () => {
+        const amount = parseInt(input.value, 10);
+        if (isNaN(amount) || amount < min || amount > max) {
+            PokerModals.showNotification(`Buy-in must be between $${min} and $${max}`, 'error');
+            return;
         }
-    }
+        window.pokerTable.socket.emit('join_table', {
+            table_id: window.pokerTable.store.tableId,
+            seat_number: seatNumber,
+            buy_in_amount: amount
+        });
+        closeModal('join-seat-modal');
+    };
+    PokerModals.showModal('join-seat-modal');
 }

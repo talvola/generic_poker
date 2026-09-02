@@ -696,6 +696,8 @@ def table_view(table_id):
         "players": players,
         "allow_bots": table.allow_bots,
         "creator_id": table.creator_id,
+        "minimum_buyin": table.get_minimum_buyin(),
+        "maximum_buyin": table.get_maximum_buyin(),
         "get_stakes": table.get_stakes,  # Pass the method for template to call
     }
 
