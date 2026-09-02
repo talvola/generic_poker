@@ -369,7 +369,10 @@ body {
 
 .table-actions {
     display: flex;
-    gap: 0.75rem;
+    /* Owner cards carry five buttons (Join/Spectate/Details/Edit/Close); the
+       card has overflow:hidden, so let the row wrap instead of clipping. */
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
     margin-top: 1rem;
     padding-top: 1rem;
     border-top: 1px solid var(--border-color);
