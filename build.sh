@@ -27,8 +27,7 @@ for csv_file in sorted(csv_dir.glob('all_card_hands_ranked_*.csv')):
 print('Hand ranking conversion complete')
 "
 
-# Seed database with test users (pipe 'y' to handle "already seeded" prompt)
-echo "y" | python tools/seed_db.py
-
-# Create or update managed user accounts
-python tools/manage_user.py --username eugbert2 --password poker123 --bankroll 2000
+# No seeding here: the production DB (Neon) persists across deploys, and the
+# seed script creates well-known test accounts (one of them admin). Seed a
+# fresh dev DB with `python tools/reset_db.py`; manage real accounts by
+# running tools/manage_user.py against Neon from a shell (see CLAUDE.md).

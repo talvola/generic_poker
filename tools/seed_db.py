@@ -57,6 +57,11 @@ def seed_database():
     print("🎲 Seeding Poker Platform Database...")
     print()
 
+    if os.environ.get("FLASK_ENV") == "production" and "--force" not in sys.argv:
+        print("Refusing to seed a production database: this creates well-known test accounts")
+        print("(testuser/password, promoted to admin). Re-run with --force if you really mean it.")
+        sys.exit(1)
+
     app, socketio = create_app()
 
     with app.app_context():

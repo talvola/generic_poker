@@ -459,7 +459,9 @@ Connection string: Neon console, or the REST API with a `NEON_API_KEY`
 (`GET /api/v2/projects/late-wave-39283598/connection_uri`). Erik's key is a file in
 OneDrive (`generic-poker-neon.txt`), deliberately not in the repo or `~/.bashrc`.
 
-`build.sh` still runs `tools/migrate_schema.py` + `seed_db.py` on every deploy. **A column
+`build.sh` runs `tools/migrate_schema.py` on every deploy (it no longer seeds — seeding
+created `testuser`/`password` as an admin on prod; `seed_db.py` now refuses under
+`FLASK_ENV=production`, and `tools/retire_seed_users.py` retires those accounts). **A column
 added to a model needs a line in `migrate_schema.py`'s `ADD_COLUMNS`** — `create_all()`
 creates missing tables but NEVER adds a column to an existing one. Prefer editing that
 script over adding inline python to `build.sh` (it used to hold 130 lines of it).
@@ -537,7 +539,7 @@ Hosted on Render (free tier) with auto-deploy from GitHub.
 |------|---------|
 | `render.yaml` | Render blueprint — defines web service + Postgres |
 | `wsgi.py` | Production entry point (eventlet monkey-patch + gunicorn) |
-| `build.sh` | Build script (install deps, create tables, seed DB) |
+| `build.sh` | Build script (install deps, create tables, migrate schema; no seeding) |
 | `requirements.txt` | Pinned Python dependencies for production |
 
 **Start command:** `gunicorn --worker-class eventlet -w 1 --bind 0.0.0.0:$PORT wsgi:app`
