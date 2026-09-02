@@ -161,6 +161,14 @@ class PokerTable {
             if (this.store.tableId) {
                 this.socket.emit('connect_to_table_room', { table_id: this.store.tableId });
             }
+            if (this._everConnected && this.store.tableId) {
+                // Reconnect (e.g. the server restarted on a deploy): the live game and
+                // its bots were in memory and are gone, while our seat persists in the
+                // DB. Ask for bots and ready status again so play resumes on its own.
+                this.socket.emit('fill_bots', { table_id: this.store.tableId });
+                this.requestReadyStatus();
+            }
+            this._everConnected = true;
         });
 
         this.socket.on('disconnect', () => {
