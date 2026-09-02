@@ -9,7 +9,9 @@ A generic poker engine with a configurable game rules system supporting 100+ pok
 1. **generic_poker** (`src/generic_poker/`) - Core poker engine: game logic, hand evaluation, betting management
 2. **online_poker** (`src/online_poker/`) - Flask/SocketIO web platform for multiplayer online poker
 
-**Current focus:** Get 2-player Texas Hold'em working end-to-end. See `docs/BACKLOG.md` for prioritized tasks.
+**Current focus:** opening the site to more players. **Work is tracked in GitHub Issues**
+(`gh issue list`), not in the repo docs — file findings there and reference them in commits
+("Fixes #N"). `docs/BACKLOG.md` / `docs/STATUS.md` are historical context.
 
 ## Quick Reference
 
@@ -30,7 +32,7 @@ pytest tests/unit/               # Unit tests only
 pytest tests/integration/        # Integration tests only
 pytest path/to/test.py::TestClass::test_method  # Specific test
 pytest -v -x --tb=short          # Verbose, stop on first failure
-npx playwright test --config tests/e2e/playwright.config.ts  # E2E (reset DB first: echo "yes" | python tools/reset_db.py)
+npx playwright test --config tests/e2e/playwright.config.ts  # E2E (reset DB first: echo "yes" | python tools/reset_db.py; start `python app.py` yourself — the config's webServer command fails under sh)
 
 # Bot arena — offline A/B of bot types; chip-conservation checks here found 3 engine bugs
 python tools/bot_arena.py --variant omaha_8 --structure Limit --hands 200 --seed 42
@@ -554,6 +556,14 @@ Hosted on Render (free tier) with auto-deploy from GitHub.
   `SOCKETIO_LOGGING`, `ENABLE_TEST_ROUTES` (unauth `/api/test/*`; dev/testing only),
   `TABLE_CLEANUP_INTERVAL_MINUTES` (empty-table sweep, 0 = off), `BANKROLL_RELOAD_THRESHOLD`
   / `BANKROLL_RELOAD_COOLDOWN_HOURS` (play-money reload).
+
+**Deploys wipe live games:** a Render deploy restarts the single worker, and every game session
+(bots included) lives in memory — hands in progress die, seats persist in the DB. The table
+socket re-requests bots + ready status on reconnect so a bots table resumes by itself, but
+**don't push while someone is testing**. E2E gotcha: `playwright.config.ts`'s `webServer`
+uses `source` and fails under `sh` (exit 127) — start `python app.py` yourself first
+(`reuseExistingServer`). Two fold-and-cycle E2E specs fail on the pre-2026-09 baseline too
+(issue #14); the 7-Card Stud smoke is a flake that passes alone.
 
 **Request hygiene (2026-09 onboarding pass):** a `before_request` hook in `app.py` 403s any
 POST/PUT/DELETE whose `Origin` host isn't ours (or `Sec-Fetch-Site: cross-site`) — a token-less
