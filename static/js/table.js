@@ -218,6 +218,9 @@ class PokerTable {
             PokerModals.hideLoadingOverlay();
         });
 
+        // You just hit $0: rebuy, reload play money, or leave (GitHub #10)
+        this.socket.on('player_busted', (data) => this.showBustedModal(data));
+
         this.socket.on('table_closed', (data) => {
             PokerModals.showNotification('Table has been closed', 'warning');
             setTimeout(() => {
@@ -368,6 +371,87 @@ class PokerTable {
                 if (e.target.closest('.enable-bots-btn')) this.enableBots();
             });
         }
+    }
+
+    async showBustedModal(data) {
+        const min = data.minimum_buyin || 0;
+        const max = data.maximum_buyin || 0;
+        let bankroll = data.bankroll || 0;
+        const msg = document.getElementById('busted-message');
+        const rebuyRow = document.getElementById('busted-rebuy-row');
+        const rebuyBtn = document.getElementById('busted-rebuy-btn');
+        const reloadBtn = document.getElementById('busted-reload-btn');
+        const input = document.getElementById('busted-rebuy-amount');
+
+        const render = () => {
+            const canRebuy = bankroll >= min;
+            msg.textContent = canRebuy
+                ? `That hand took your last chips. You have $${bankroll} in your bankroll.`
+                : `That hand took your last chips, and your bankroll ($${bankroll}) is below this table's $${min} minimum.`;
+            rebuyRow.hidden = !canRebuy;
+            rebuyBtn.hidden = !canRebuy;
+            if (canRebuy) {
+                input.min = min;
+                input.max = Math.min(max, bankroll);
+                input.value = Math.min(max, bankroll, min * 2);
+                document.getElementById('busted-rebuy-range').textContent = `$${min} – $${Math.min(max, bankroll)}`;
+            }
+        };
+        render();
+
+        reloadBtn.hidden = true;
+        try {
+            const status = await (await fetch('/api/bankroll/reload-status')).json();
+            reloadBtn.hidden = !(status.success && status.eligible);
+        } catch (e) { /* leave hidden */ }
+
+        rebuyBtn.onclick = async () => {
+            const amount = parseInt(input.value, 10);
+            try {
+                const resp = await fetch(`/api/tables/${this.store.tableId}/rebuy`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ amount })
+                });
+                const res = await resp.json();
+                if (!resp.ok || !res.success) {
+                    PokerModals.showNotification(res.error || 'Could not add chips', 'error');
+                    return;
+                }
+                this.updateHeaderBankroll(res.bankroll);
+                PokerModals.showNotification(`Added $${amount}. Hit Ready when you want back in.`, 'success');
+                closeModal('busted-modal');
+            } catch (e) {
+                PokerModals.showNotification('Could not add chips', 'error');
+            }
+        };
+        reloadBtn.onclick = async () => {
+            try {
+                const resp = await fetch('/api/bankroll/reload', { method: 'POST' });
+                const res = await resp.json();
+                if (!resp.ok || !res.success) {
+                    PokerModals.showNotification(res.error || 'Reload not available', 'error');
+                    return;
+                }
+                bankroll = res.bankroll;
+                this.updateHeaderBankroll(bankroll);
+                reloadBtn.hidden = true;
+                PokerModals.showNotification(`Bankroll reloaded to $${bankroll}`, 'success');
+                render();
+            } catch (e) {
+                PokerModals.showNotification('Reload not available', 'error');
+            }
+        };
+        document.getElementById('busted-leave-btn').onclick = () => {
+            closeModal('busted-modal');
+            this.leaveTable();
+        };
+        PokerModals.showModal('busted-modal');
+    }
+
+    updateHeaderBankroll(bankroll) {
+        const el = document.querySelector('header .bankroll');
+        if (el && typeof bankroll === 'number') el.textContent = `$${bankroll}`;
     }
 
     async enableBots() {

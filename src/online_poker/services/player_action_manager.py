@@ -1117,6 +1117,7 @@ class PlayerActionManager:
             # single completion point) — completion via _next_step() after the
             # final action never passes through process_player_action's sync.
             self._sync_player_stacks(table_id, session)
+            self._notify_busted_players(table_id, session, websocket_manager)
 
             # Process any pending leaves now that the hand is complete
             if session.pending_leaves:
@@ -1143,6 +1144,40 @@ class PlayerActionManager:
 
         except Exception as e:
             logger.error(f"Failed to handle hand completion for table {table_id}: {e}", exc_info=True)
+
+    def _notify_busted_players(self, table_id: str, session: GameSession, websocket_manager) -> None:
+        """Tell each human who just hit $0 what they can do next (GitHub #10).
+
+        Without this a busted player sat at the table with an empty stack and no
+        prompt; the client shows a rebuy / reload / leave modal on this event.
+        """
+        if not websocket_manager or not session.game:
+            return
+        try:
+            from ..services.simple_bot import bot_manager
+            from ..services.table_manager import TableManager
+            from ..services.user_manager import UserManager
+
+            busted = [p for p in session.game.table.players.values() if p.stack <= 0 and not bot_manager.is_bot(p.id)]
+            if not busted:
+                return
+            table = TableManager.get_table_by_id(table_id)
+            if not table:
+                return
+            for player in busted:
+                user = UserManager.get_user_by_id(player.id)
+                websocket_manager.send_to_user(
+                    player.id,
+                    "player_busted",
+                    {
+                        "table_id": table_id,
+                        "minimum_buyin": table.get_minimum_buyin(),
+                        "maximum_buyin": table.get_maximum_buyin(),
+                        "bankroll": user.bankroll if user else 0,
+                    },
+                )
+        except Exception as e:
+            logger.error(f"Failed to notify busted players at table {table_id}: {e}")
 
     def _sync_player_stacks(self, table_id: str, session: GameSession) -> None:
         """Persist in-game chip stacks to table_access so cashouts pay the real stack."""

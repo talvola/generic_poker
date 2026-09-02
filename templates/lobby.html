@@ -17,6 +17,8 @@
                 <div class="user-info">
                     <span class="username">{{ current_user.username if current_user.is_authenticated else 'Guest' }}</span>
                     <span class="bankroll">${{ current_user.bankroll if current_user.is_authenticated else '0' }}</span>
+                    <button type="button" class="btn btn-outline btn-small" id="reload-bankroll-btn" hidden
+                            title="Top your play-money bankroll back up">Reload chips</button>
                     {% if current_user.is_authenticated %}
                         {% if current_user.is_admin %}
                             <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline btn-small">Admin</a>

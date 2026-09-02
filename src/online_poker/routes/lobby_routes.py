@@ -1,5 +1,7 @@
 """Routes for the poker lobby interface."""
 
+from datetime import datetime, timedelta
+
 from flask import Blueprint, current_app, jsonify, redirect, render_template, request, url_for
 from flask_limiter.util import get_remote_address
 from flask_login import current_user, login_required
@@ -9,6 +11,7 @@ from ..database import db
 from ..extensions import limiter
 from ..models.table import PokerTable
 from ..models.table_access import TableAccess
+from ..models.transaction import Transaction
 from ..services.table_access_manager import TableAccessManager
 from ..services.table_manager import TableManager
 
@@ -508,6 +511,84 @@ def join_table(table_id):
 
     except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@lobby_bp.route("/api/tables/<table_id>/rebuy", methods=["POST"])
+@login_required
+def rebuy_at_table(table_id):
+    """Add chips to your stack from your bankroll (between hands, e.g. after busting)."""
+    data = request.get_json() or {}
+    amount = data.get("amount")
+    if not isinstance(amount, int):
+        return jsonify({"success": False, "error": "amount (integer) required"}), 400
+    success, message, new_stack = TableAccessManager.rebuy(current_user.id, table_id, amount)
+    if not success:
+        return jsonify({"success": False, "error": message}), 400
+
+    from ..services.websocket_manager import get_websocket_manager
+
+    ws_manager = get_websocket_manager()
+    if ws_manager:
+        ws_manager.broadcast_game_state_update(table_id)
+        ws_manager.broadcast_to_table(
+            table_id,
+            "ready_status_update",
+            {"table_id": table_id, "ready_status": TableAccessManager.get_ready_status(table_id)},
+        )
+    return jsonify({"success": True, "stack": new_stack, "bankroll": current_user.bankroll})
+
+
+def _reload_status(user):
+    """Whether the user may reload their play-money bankroll right now."""
+    threshold = current_app.config.get("BANKROLL_RELOAD_THRESHOLD", 50)
+    reload_to = current_app.config.get("DEFAULT_BANKROLL", 1000)
+    cooldown = timedelta(hours=current_app.config.get("BANKROLL_RELOAD_COOLDOWN_HOURS", 24))
+    last = (
+        db.session.query(Transaction)
+        .filter(Transaction.user_id == user.id, Transaction.transaction_type == Transaction.TYPE_BONUS)
+        .order_by(Transaction.created_at.desc())
+        .first()
+    )
+    next_at = last.created_at + cooldown if last else None
+    on_cooldown = bool(next_at and next_at > datetime.utcnow())
+    return {
+        "bankroll": user.bankroll,
+        "threshold": threshold,
+        "reload_to": reload_to,
+        "eligible": user.bankroll < threshold and user.bankroll < reload_to and not on_cooldown,
+        "next_eligible_at": next_at.isoformat() + "Z" if on_cooldown else None,
+    }
+
+
+@lobby_bp.route("/api/bankroll/reload-status", methods=["GET"])
+@login_required
+def bankroll_reload_status():
+    return jsonify({"success": True, **_reload_status(current_user)})
+
+
+@lobby_bp.route("/api/bankroll/reload", methods=["POST"])
+@login_required
+def bankroll_reload():
+    """Top a nearly-broke play-money bankroll back up to the starting amount (GitHub #10)."""
+    status = _reload_status(current_user)
+    if not status["eligible"]:
+        if status["next_eligible_at"]:
+            msg = "You already reloaded recently. Try again later."
+        else:
+            msg = f"Reload is available once your bankroll drops below ${status['threshold']}"
+        return jsonify({"success": False, "error": msg, **status}), 400
+    amount = status["reload_to"] - current_user.bankroll
+    current_user.update_bankroll(amount)
+    db.session.add(
+        Transaction(
+            user_id=current_user.id,
+            amount=amount,
+            transaction_type=Transaction.TYPE_BONUS,
+            description="Play-money reload",
+        )
+    )
+    db.session.commit()
+    return jsonify({"success": True, "bankroll": current_user.bankroll, "amount": amount})
 
 
 @lobby_bp.route("/api/tables/<table_id>/leave", methods=["POST"])

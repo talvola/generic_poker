@@ -64,6 +64,10 @@ class Config:
 
     # Game settings
     DEFAULT_BANKROLL = int(os.environ.get("DEFAULT_BANKROLL", "1000"))
+    # Play-money replenishment (GitHub #10): a user whose bankroll falls below
+    # the threshold may reload back up to DEFAULT_BANKROLL once per cooldown.
+    BANKROLL_RELOAD_THRESHOLD = int(os.environ.get("BANKROLL_RELOAD_THRESHOLD", "50"))
+    BANKROLL_RELOAD_COOLDOWN_HOURS = int(os.environ.get("BANKROLL_RELOAD_COOLDOWN_HOURS", "24"))
     TABLE_INACTIVE_TIMEOUT = int(os.environ.get("TABLE_INACTIVE_TIMEOUT", "30"))  # minutes
 
     # Bot settings — "mc" (Monte Carlo equity) or "simple" (random weighted)

@@ -175,6 +175,28 @@
 
     <!-- Modals -->
     <!-- Leave Table Confirmation -->
+    <div id="busted-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Out of chips</h3>
+                <button class="modal-close" onclick="closeModal('busted-modal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="busted-message"></p>
+                <div id="busted-rebuy-row">
+                    <label for="busted-rebuy-amount">Add chips from your bankroll</label>
+                    <input type="number" id="busted-rebuy-amount" class="form-input" inputmode="numeric">
+                    <p class="join-seat-range" id="busted-rebuy-range"></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="busted-leave-btn">Leave table</button>
+                <button type="button" class="btn btn-outline" id="busted-reload-btn" hidden>Reload play money</button>
+                <button type="button" class="btn btn-primary" id="busted-rebuy-btn">Rebuy</button>
+            </div>
+        </div>
+    </div>
+
     <div id="rules-modal" class="modal">
         <div class="modal-content" style="max-width: 520px;">
             <div class="modal-header">

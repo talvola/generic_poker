@@ -280,6 +280,71 @@ class TableAccessManager:
             return False, "Failed to join table", None
 
     @staticmethod
+    def rebuy(user_id: str, table_id: str, amount: int) -> tuple[bool, str, int]:
+        """Add chips from the bankroll to a seated player's stack between hands.
+
+        Used after busting (GitHub #10). The resulting stack may not exceed the
+        table maximum, and the top-up is refused while the player has cards in a
+        live hand. Returns (success, message, new_stack).
+        """
+        try:
+            table = TableManager.get_table_by_id(table_id)
+            if not table:
+                return False, "Table not found", 0
+            access = TableAccessManager.get_user_access(user_id, table_id)
+            if not access or access.is_spectator or access.seat_number is None:
+                return False, "You are not seated at this table", 0
+            user = UserManager().get_user_by_id(user_id)
+            if not user:
+                return False, "User not found", 0
+            if not isinstance(amount, int) or amount <= 0:
+                return False, "Rebuy amount must be a positive number", 0
+            new_stack = access.current_stack + amount
+            if new_stack > table.get_maximum_buyin():
+                return False, f"Stack cannot exceed the table maximum of ${table.get_maximum_buyin()}", 0
+            if new_stack < table.get_minimum_buyin():
+                return False, f"Stack must be at least the table minimum of ${table.get_minimum_buyin()}", 0
+            if user.bankroll < amount:
+                return False, f"Insufficient bankroll. You have ${user.bankroll}", 0
+
+            from generic_poker.game.game_state import GameState
+
+            from ..services.game_orchestrator import game_orchestrator
+
+            session = game_orchestrator.get_session(table_id)
+            engine_player = session.game.table.players.get(user_id) if session and session.game else None
+            if engine_player is not None:
+                in_live_hand = session.game.state in (GameState.BETTING, GameState.DRAWING, GameState.SHOWDOWN)
+                if in_live_hand and engine_player.is_active and engine_player.stack > 0:
+                    return False, "Wait until the hand is over to add chips", 0
+
+            if not user.update_bankroll(-amount):
+                return False, "Failed to deduct rebuy", 0
+            access.current_stack = new_stack
+            db.session.add(
+                Transaction(
+                    user_id=user_id,
+                    amount=-amount,
+                    transaction_type=Transaction.TYPE_BUYIN,
+                    description=f"Rebuy at table '{table.name}'",
+                    table_id=table_id,
+                )
+            )
+            db.session.commit()
+
+            if engine_player is not None:
+                engine_player.stack += amount
+                # A player who busted out is dealt back in next hand
+                engine_player.is_active = True
+
+            current_app.logger.info(f"User {user_id} rebought ${amount} at table {table_id} (stack {new_stack})")
+            return True, "Chips added", new_stack
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Failed to rebuy: {e}")
+            return False, "Failed to add chips", 0
+
+    @staticmethod
     def leave_table(user_id: str, table_id: str) -> tuple[bool, str]:
         """Leave a table and cash out chips.
 

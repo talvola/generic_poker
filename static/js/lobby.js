@@ -1,5 +1,35 @@
 // Lobby JavaScript - Enhanced Poker Platform
 class PokerLobby {
+    // Offer a play-money reload when the bankroll is nearly gone (GitHub #10)
+    async checkBankrollReload() {
+        const btn = document.getElementById('reload-bankroll-btn');
+        if (!btn || !window.currentUserId) return;
+        try {
+            const status = await (await fetch('/api/bankroll/reload-status')).json();
+            btn.hidden = !(status.success && status.eligible);
+        } catch (e) {
+            btn.hidden = true;
+        }
+        if (btn.dataset.bound) return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', async () => {
+            try {
+                const resp = await fetch('/api/bankroll/reload', { method: 'POST' });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) {
+                    this.showNotification(data.error || 'Reload not available', 'error');
+                    return;
+                }
+                const el = document.querySelector('.user-info .bankroll');
+                if (el) el.textContent = `$${data.bankroll}`;
+                btn.hidden = true;
+                this.showNotification(`Bankroll reloaded to $${data.bankroll}`, 'success');
+            } catch (e) {
+                this.showNotification('Reload not available', 'error');
+            }
+        });
+    }
+
     // One-time orientation for a new account (GitHub #9). localStorage is a
     // per-browser convenience only, so guard every access.
     showFirstVisitBanner() {
@@ -46,6 +76,7 @@ class PokerLobby {
 
     init() {
         this.showFirstVisitBanner();
+        this.checkBankrollReload();
         this.setupEventListeners();
         this.setupSocketEvents();
         this.loadVariants();
