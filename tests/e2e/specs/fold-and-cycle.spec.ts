@@ -74,6 +74,12 @@ async function readyUpForNextHand(alicePage: Page, bobPage: Page): Promise<void>
   }
   await clickReady(alicePage);
   await clickReady(bobPage);
+  // The previous hand's cards can still be on the felt, so waiting for cards
+  // alone returns immediately. Wait for the ready panel to hide (hand_starting)
+  // first — that's the signal the new hand has actually begun.
+  for (const page of [alicePage, bobPage]) {
+    await expect(page.locator('#ready-panel')).toHaveClass(/hidden/, { timeout: 15000 });
+  }
   await waitForGameStart(alicePage);
   await waitForGameStart(bobPage);
 }
@@ -179,9 +185,12 @@ test.describe('Fold and Hand Cycle', () => {
     // Ready up for next hand (players must click Ready again)
     await readyUpForNextHand(alicePage, bobPage);
 
-    // Hand number should have incremented
-    const hand2Num = await alicePage.locator('#hand-number').textContent();
-    expect(parseInt(hand2Num || '0')).toBeGreaterThan(parseInt(hand1Num || '0'));
+    // Hand number should have incremented (header updates on the next
+    // game_state_update after hand_starting, so poll rather than read once)
+    await expect(async () => {
+      const hand2Num = await alicePage.locator('#hand-number').textContent();
+      expect(parseInt(hand2Num || '0')).toBeGreaterThan(parseInt(hand1Num || '0'));
+    }).toPass({ timeout: 10000 });
 
     // Dealer indicator should still be visible in the new hand
     const dealer2Name = await getDealerPlayerName(alicePage);

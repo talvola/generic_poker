@@ -32,8 +32,11 @@ class PokerShowdown {
         if (showdownPanel) {
             showdownPanel.style.display = 'none';
         }
+        // Restore the action panel only if the ready card isn't up — while
+        // players are readying up, showReadyPanel() keeps it hidden.
         const actionPanel = document.getElementById('action-panel');
-        if (actionPanel) {
+        const readyPanel = document.getElementById('ready-panel');
+        if (actionPanel && !(readyPanel && !readyPanel.classList.contains('hidden'))) {
             actionPanel.style.display = '';
         }
     }
@@ -187,17 +190,10 @@ class PokerShowdown {
         }
         actionBar.classList.add('showdown-active');
 
-        // The ready overlay may have appeared already (socket event race) —
-        // hide it while the showdown strip is up. The periodic game-state
-        // refresh re-shows it once the strip is dismissed.
-        const readyPanel = document.getElementById('ready-panel');
-        if (readyPanel) {
-            readyPanel.classList.add('hidden');
-        }
-
-        // Always auto-dismiss — the ready panel waits for the showdown strip,
-        // so it must never stay up indefinitely. Longer window gives time to
-        // study results in unusual/split games (the close button dismisses early).
+        // Always auto-dismiss so the strip never stays up indefinitely. Longer
+        // window gives time to study results in unusual/split games (the close
+        // button dismisses early). The ready card on the felt is independent
+        // of this strip and shows as soon as the hand completes.
         clearTimeout(this._dismissTimer);
         this._dismissTimer = setTimeout(() => {
             this.hideShowdownBar();

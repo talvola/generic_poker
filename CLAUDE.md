@@ -562,8 +562,10 @@ Hosted on Render (free tier) with auto-deploy from GitHub.
 socket re-requests bots + ready status on reconnect so a bots table resumes by itself, but
 **don't push while someone is testing**. E2E gotcha: `playwright.config.ts`'s `webServer`
 uses `source` and fails under `sh` (exit 127) — start `python app.py` yourself first
-(`reuseExistingServer`). Two fold-and-cycle E2E specs fail on the pre-2026-09 baseline too
-(issue #14); the 7-Card Stud smoke is a flake that passes alone.
+(`reuseExistingServer`). The 7-Card Stud smoke is a flake that passes alone. The ready card
+(on the felt) and the showdown strip (in the action bar) are independent: `showReadyPanel()`
+must never wait on `.showdown-active` — the strip auto-dismisses after 20s, and gating the
+ready card on it stalled every hand cycle and timed out two fold-and-cycle specs (issue #14).
 
 **Request hygiene (2026-09 onboarding pass):** a `before_request` hook in `app.py` 403s any
 POST/PUT/DELETE whose `Origin` host isn't ours (or `Sec-Fetch-Site: cross-site`) — a token-less

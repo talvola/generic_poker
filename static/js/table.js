@@ -543,25 +543,15 @@ class PokerTable {
     showReadyPanel(show) {
         const readyPanel = document.getElementById('ready-panel');
         const actionPanel = document.getElementById('action-panel');
-        const actionBar = document.getElementById('action-bar');
 
         if (show) {
-            // Let the showdown moment play out before covering the table with
-            // the ready overlay (the showdown strip auto-dismisses after 10s)
-            if (actionBar && actionBar.classList.contains('showdown-active')) {
-                clearTimeout(this._readyPanelDelay);
-                this._readyPanelDelay = setTimeout(() => {
-                    const phase = this.store.gameState?.game_phase;
-                    if (!phase || phase === 'complete' || phase === 'waiting') {
-                        this.showReadyPanel(true);
-                    }
-                }, 1500);
-                return;
-            }
+            // The ready card sits at the bottom of the felt and the showdown
+            // strip lives in the action bar below it, so the two coexist.
+            // Don't wait for the strip to auto-dismiss (20s) before letting
+            // players ready up — that stalled every hand cycle (GitHub #14).
             readyPanel.classList.remove('hidden');
             actionPanel.style.display = 'none';
         } else {
-            clearTimeout(this._readyPanelDelay);
             readyPanel.classList.add('hidden');
             actionPanel.style.display = 'flex';
         }
