@@ -1,5 +1,10 @@
 # Monte Carlo Bot — Design
 
+> **Phases 2-4 are tracked in GitHub Issues:** [#21](https://github.com/talvola/generic_poker/issues/21) (Phase 2, in-rollout draw
+> policy), [#22](https://github.com/talvola/generic_poker/issues/22) (Phase 3, MC-driven draw/declare), [#23](https://github.com/talvola/generic_poker/issues/23) (Phase 4,
+> opponent modeling). Phase 1 shipped 2026-06-09 and is the current default (`BOT_TYPE=mc`).
+> This document remains the design reference — algorithm, rollout model, and honest limits.
+
 **Status:** Phase 1 implemented (2026-06-09) — see "Phase 1 results" below
 
 ## Phase 1 results (2026-06-09)

@@ -1,5 +1,10 @@
 # Pagat.com Cross-Reference Analysis
 
+> **Reference analysis — not a task list.**
+> The features this analysis identified are now GitHub Issues: enhanced pass [#26](https://github.com/talvola/generic_poker/issues/26),
+> No Peek [#27](https://github.com/talvola/generic_poker/issues/27), inverted visibility [#28](https://github.com/talvola/generic_poker/issues/28), cross-board [#29](https://github.com/talvola/generic_poker/issues/29),
+> Captain [#30](https://github.com/talvola/generic_poker/issues/30), single-colour eval [#31](https://github.com/talvola/generic_poker/issues/31).
+
 Cross-reference between our 192 game configs and the 352 poker variants listed on [Pagat.com](https://www.pagat.com/poker/variants/).
 
 Generated: 2026-02-18

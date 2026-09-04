@@ -1,7 +1,12 @@
 # Project Status
 
-> Single source of truth for project state. Updated as work progresses.
-> Last updated: 2026-03-10
+> **Open bugs and features now live in [GitHub Issues](https://github.com/talvola/generic_poker/issues).**
+> As of 2026-09-04 the remaining open items from this file were filed as issues.
+> This document stays as the **architecture + history** reference: what each service does,
+> what shipped, and the catalogue of bugs already found and fixed (useful when a symptom
+> looks familiar). Don't record new open work here.
+>
+> Last updated: 2026-09-04 (content below is as of 2026-06-12 unless noted)
 
 ## Architecture Overview
 
@@ -106,7 +111,7 @@ Flask/SocketIO multiplayer web platform.
 |---|-------|----------|-------------|
 | ~~3~~ | ~~Hardcoded timeouts~~ | ~~LOW~~ | ~~Fixed: all timeouts and limits configurable via env vars~~ |
 | ~~4~~ | ~~Debug deck option~~ | ~~LOW~~ | ~~Fixed (T009): seeded/stacked deck in engine + admin `/api/debug` endpoints (dev/testing only)~~ |
-| 9 | Mobile optimization | LOW | Deferred to Phase 7 |
+| 9 | Mobile optimization | LOW | Phase 7.1/7.4 done; on-device verification tracked in [#24](https://github.com/talvola/generic_poker/issues/24) and [#25](https://github.com/talvola/generic_poker/issues/25) |
 | ~~10~~ | ~~Admin interface~~ | ~~LOW~~ | ~~Implemented: dashboard, user/table/variant management~~ |
 | ~~11~~ | ~~Duplicate tables in Render DB~~ | ~~LOW~~ | ~~Fixed: seed_db.py now idempotent for tables and removes accumulated duplicates on next deploy~~ |
 | ~~12~~ | ~~Table creation doesn't auto-join creator~~ | ~~MEDIUM~~ | ~~Fixed: seat selection modal auto-opens after creation~~ |

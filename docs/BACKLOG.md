@@ -1,5 +1,11 @@
 # Backlog
 
+> **Open work now lives in [GitHub Issues](https://github.com/talvola/generic_poker/issues).**
+> As of 2026-09-04 every still-open item below was filed as an issue (numbers noted inline).
+> This file is kept as the **historical record** of what was built and why — the completed
+> phases, the result notes, and the design rationale are still worth reading. Do not add new
+> work here; file an issue instead (`gh issue list`).
+
 > Prioritized task list. Work top-to-bottom within each phase.
 > Last updated: 2026-06-10
 
@@ -198,10 +204,10 @@ for adding new variants. See `docs/GAME_VALIDATION.md` for full details.
 | 5.1b | Migrate inline config tests to file-based loading | `tests/game/` | DONE |
 | 5.1c | Verify `antes_only` forced bet style (unit test + smoke test) | `tests/unit/`, `tests/game/` | DONE |
 | 5.2 | Add tests for rare-feature games (roll_die, choose, remove) | `tests/game/` | DONE |
-| 5.3 | Implement `all_exposed`/`any_exposed`/`none_exposed` conditions | `game.py:531` | TODO |
-| 5.4 | Implement `separate.hand_comparison` if needed | `player_action_handler.py` | TODO |
-| 5.5 | Build "can this game be implemented?" assessment skill | `.claude/` | TODO |
-| 5.6 | Build "implement new game variant" skill | `.claude/` | TODO |
+| 5.3 | Implement `all_exposed`/`any_exposed`/`none_exposed` conditions | `game.py:591` | [#16](https://github.com/talvola/generic_poker/issues/16) |
+| 5.4 | Implement `separate.hand_comparison` if needed | `player_action_handler.py` | DONE (implemented at `player_action_handler.py:1152`; used by `outhouse.json`, `cowpie.json`) |
+| 5.5 | Build "can this game be implemented?" assessment skill | `.claude/` | [#35](https://github.com/talvola/generic_poker/issues/35) |
+| 5.6 | Build "implement new game variant" skill | `.claude/` | [#35](https://github.com/talvola/generic_poker/issues/35) |
 | 5.7 | Fix known engine bugs (13 games, see STATUS.md) | `showdown_manager.py`, `evaluator.py` | DONE |
 
 **5.1 result:** `tests/game/test_all_variants_smoke.py` — parametrized smoke test for all configs.
@@ -249,8 +255,8 @@ Down in the Delta, Manila. Library grew from 192 → 211 configs. All pass smoke
 
 **Batch 2 (6 games) — DONE:** Added Sviten Special (Dramaha variant with optional draw),
 7-Card Draw, 2-7 Double Draw, Blind Hold'em, Blind Omaha, Round the World (Cincinnati variant).
-4 items (6.1.1, 6.1.3, 6.1.4, 6.1.5) already existed as configs. Iron Cross (6.1.2) deferred —
-requires evaluation constraint for horizontal/vertical community card line selection. Library at 223 configs.
+4 items (6.1.1, 6.1.3, 6.1.4, 6.1.5) already existed as configs. Iron Cross (6.1.2) was deferred here but has since shipped
+(`data/game_configs/iron_cross.json`). Library at 223 configs.
 Also converted 9-Card Omaha to `antes_only` flip format (no betting streets). All pass smoke tests.
 
 **Batch 3 (23 games) — DONE:** Added from Pagat/Ichabod801 analysis: Alabama Hold'em, Austin Hold'em,
@@ -340,19 +346,19 @@ Features prioritized by casino relevance and games unlocked. Each unlocks multip
 | 6.2.1 | Mixed Game Rotation (HORSE, 8 Game Mix, Dealer's Choice) | ~10 | Very High | Medium | DONE (HORSE + 8-Game Mix) |
 | 6.2.2 | Buy Your Card (pay chips to acquire/replace cards) | ~19 | Medium | Medium-Hard | DONE |
 | 6.2.3 | Dynamic Wild Cards (event-triggered wild changes) | ~12 | Medium | Hard | DONE |
-| 6.2.4 | Enhanced Pass Mechanics (multi-round, accept/reject) | ~8 | Low-Medium | Easy-Medium | TODO |
-| 6.2.5 | No Peek Mechanic (blind card reveal game mode) | ~4 | Low | Hard | TODO |
-| 6.2.6 | Inverted Visibility / Indian Poker (cards visible to opponents only) | ~2 | Very Low | Medium | TODO |
+| 6.2.4 | Enhanced Pass Mechanics (multi-round, accept/reject) | ~8 | Low-Medium | Easy-Medium | [#26](https://github.com/talvola/generic_poker/issues/26) |
+| 6.2.5 | No Peek Mechanic (blind card reveal game mode) | ~4 | Low | Hard | [#27](https://github.com/talvola/generic_poker/issues/27) |
+| 6.2.6 | Inverted Visibility / Indian Poker (cards visible to opponents only) | ~2 | Very Low | Medium | [#28](https://github.com/talvola/generic_poker/issues/28) |
 | 6.2.7 | Two-Dice Roll (2d6 sum, range 2-12) for Omaha X-or-Better | 1+ | Low | Easy-Medium | DONE |
-| 6.2.8 | Tommy Tutone "867-5309" sequence evaluation type | 1 | Very Low | Medium | TODO |
-| 6.2.9 | Single-Color evaluation (best poker hand from 5 cards of one color) for Dramaha Red/Black | 1 | Very Low | Medium | TODO |
+| 6.2.8 | Tommy Tutone "867-5309" sequence evaluation type | 1 | Very Low | Medium | [#33](https://github.com/talvola/generic_poker/issues/33) |
+| 6.2.9 | Single-Color evaluation (best poker hand from 5 cards of one color) for Dramaha Red/Black | 1 | Very Low | Medium | [#31](https://github.com/talvola/generic_poker/issues/31) |
 | 6.2.10 | Bomb Pot mechanic (everyone antes, no preflop action, deal straight to flop) | 3+ | Medium-High | Medium | DONE |
-| 6.2.11 | Cross-Board evaluation for Ultimate Bomb Pot / "Best Best" (best hand across any board) | 1+ | Low-Medium | Medium | TODO |
-| 6.2.12 | Captain mechanic (asymmetric dealing: button pays extra, gets extra cards, must discard) | 3+ | Low | Medium-Hard | TODO |
+| 6.2.11 | Cross-Board evaluation for Ultimate Bomb Pot / "Best Best" (best hand across any board) | 1+ | Low-Medium | Medium | [#29](https://github.com/talvola/generic_poker/issues/29) |
+| 6.2.12 | Captain mechanic (asymmetric dealing: button pays extra, gets extra cards, must discard) | 3+ | Low | Medium-Hard | [#30](https://github.com/talvola/generic_poker/issues/30) |
 | 6.2.13 | Betting cap (maximum loss per hand, configurable per table) | N/A | Medium | Easy-Medium | DONE |
-| 6.2.14 | Single-Color Low evaluation (best low hand from 5 cards of one color) for Red/Black Draw variants | 3+ | Very Low | Medium | TODO |
-| 6.2.15 | Ten-to-Ace Highball evaluation type (mirror of A-5 low: highest unpaired low card wins) | 1+ | Very Low | Medium | TODO |
-| 6.2.16 | Pass the Pips (board-matching discard, pip-count hi-lo, neighbor card passing) | 1 | Very Low | Very Hard | TODO |
+| 6.2.14 | Single-Color Low evaluation (best low hand from 5 cards of one color) for Red/Black Draw variants | 3+ | Very Low | Medium | [#31](https://github.com/talvola/generic_poker/issues/31) |
+| 6.2.15 | Ten-to-Ace Highball evaluation type (mirror of A-5 low: highest unpaired low card wins) | 1+ | Very Low | Medium | [#32](https://github.com/talvola/generic_poker/issues/32) |
+| 6.2.16 | Pass the Pips (board-matching discard, pip-count hi-lo, neighbor card passing) | 1 | Very Low | Very Hard | [#34](https://github.com/talvola/generic_poker/issues/34) |
 
 **6.2.1 result:** Implemented HORSE and 8-Game Mix rotation. Zero core engine changes — all rotation logic lives in `GameSession` (online platform layer).
 - **Config system:** New `data/mixed_game_configs/` directory with `horse.json` and `8_game_mix.json`. `MixedGameConfig` dataclass in `src/generic_poker/config/mixed_game_loader.py` loads rotation definitions.
@@ -439,9 +445,9 @@ Smarter variant-agnostic bot using Monte Carlo equity estimation. Design + resul
 | 6.6.2 | Phase 1: MC betting decisions (hold'em/omaha/stud + post-draw streets), SimpleBot fallback | DONE |
 | 6.6.3 | `tools/bot_arena.py` offline A/B CLI | DONE |
 | 6.6.4 | `BOT_TYPE` config (default `mc`), BotManager wiring | DONE |
-| 6.6.5 | Phase 2: in-rollout draw/discard policy (full draw-game coverage) | TODO |
-| 6.6.6 | Phase 3: MC-driven draw/discard/declare decisions for the bot itself | TODO |
-| 6.6.7 | Phase 4 (optional): crude opponent modeling | TODO |
+| 6.6.5 | Phase 2: in-rollout draw/discard policy (full draw-game coverage) | [#21](https://github.com/talvola/generic_poker/issues/21) |
+| 6.6.6 | Phase 3: MC-driven draw/discard/declare decisions for the bot itself | [#22](https://github.com/talvola/generic_poker/issues/22) |
+| 6.6.7 | Phase 4 (optional): crude opponent modeling | [#23](https://github.com/talvola/generic_poker/issues/23) |
 
 **6.6.2 result:** `mc_rollout.py` + `mc_policy.py` + `monte_carlo_bot.py`. Arena vs SimpleBot: +1099 BB/100 (NLHE HU),
 +349 (7-stud Limit 3-handed), +141 (Omaha 8 Limit), +95 (Dramaha Limit). 26 unit tests. The arena also surfaced
@@ -468,8 +474,8 @@ Goal: Make the app fully playable on phones and tablets.
 | # | Task | Status |
 |---|------|--------|
 | 7.1 | iPhone portrait optimization (375-430px breakpoint) | DONE |
-| 7.2 | Visual tuning of seat transforms per layout (2/6/9-max) on actual iPhone | TODO |
-| 7.3 | Touch-friendly card selection (draw/discard/expose/separate) on phone | TODO (hero cards enlarged 2026-06-10; verify on device) |
+| 7.2 | Visual tuning of seat transforms per layout (2/6/9-max) on actual iPhone | [#24](https://github.com/talvola/generic_poker/issues/24) |
+| 7.3 | Touch-friendly card selection (draw/discard/expose/separate) on phone | [#25](https://github.com/talvola/generic_poker/issues/25) (hero cards enlarged 2026-06-10; verify on device) |
 | 7.4 | Tablet optimization (768-1024px, portrait + landscape) | DONE |
 
 **7.4 result (UX findings M4+M5, 2026-06-10):** Dedicated tablet treatment since iPad is a
@@ -708,13 +714,13 @@ any of them.
 
 | # | Task | Original Req | Status |
 |---|------|--------------|--------|
-| 10.1 | Automated rules **generation**: JSON→markdown rules text for every variant, rules search/filtering API, regeneration + manual-override, config-hash caching, bookmarking. (Only the visual rules-*card* display from BACKLOG 8.1 exists today.) | Spec 22, 23, 9.1-9.6 | TODO |
-| 10.2 | Player statistics & reporting: per-player stats (win rate, hands played, by-variant performance), session/table-level reports. (Only admin routes touch stats today.) | Spec 8.2/8.3/8.6, 10.2 | TODO |
-| 10.3 | PHH (Poker Hand History) standard-format export — serialize hands to the [phh-std](https://github.com/uoftcprg/phh-std/) format with validation + batch export. No `phh` code exists yet. | Spec 9.5/9.7/9.8, 10.4 | TODO |
-| 10.4 | Security hardening: audit logging for all game actions, data encryption at rest, secure-RNG audit for shuffling. (Rate limiting from BACKLOG 4.5 is done; the rest is partial.) | Spec 11.1/11.3/11.4/11.5 | TODO |
-| 10.5 | Performance optimization + monitoring: DB query/index tuning, WebSocket message batching/compression, app performance monitoring, error tracking/alerting, health metrics dashboards. | Spec 12.x, 13.1/13.2 | TODO |
-| 10.6 | Admin interface — remaining modules beyond the shipped dashboard/user/table/variant management (BACKLOG 4.6): financial/transaction oversight, system-health & performance dashboard, reporting/analytics with scheduled reports + data export. | Spec 14.4/14.5/14.6 | TODO |
-| 10.7 | Docker containerization + deployment automation (DB migration/backup, health-check endpoints). Currently deploys via Render blueprint, not Docker. | Spec 15.2 | TODO |
+| 10.1 | Automated rules **generation**: JSON→markdown rules text for every variant, rules search/filtering API, regeneration + manual-override, config-hash caching, bookmarking. (Only the visual rules-*card* display from BACKLOG 8.1 exists today.) | Spec 22, 23, 9.1-9.6 | [#37](https://github.com/talvola/generic_poker/issues/37) |
+| 10.2 | Player statistics & reporting: per-player stats (win rate, hands played, by-variant performance), session/table-level reports. (Only admin routes touch stats today.) | Spec 8.2/8.3/8.6, 10.2 | [#38](https://github.com/talvola/generic_poker/issues/38) |
+| 10.3 | PHH (Poker Hand History) standard-format export — serialize hands to the [phh-std](https://github.com/uoftcprg/phh-std/) format with validation + batch export. No `phh` code exists yet. | Spec 9.5/9.7/9.8, 10.4 | [#39](https://github.com/talvola/generic_poker/issues/39) |
+| 10.4 | Security hardening: audit logging for all game actions, data encryption at rest, secure-RNG audit for shuffling. (Rate limiting from BACKLOG 4.5 is done; the rest is partial.) | Spec 11.1/11.3/11.4/11.5 | [#40](https://github.com/talvola/generic_poker/issues/40) |
+| 10.5 | Performance optimization + monitoring: DB query/index tuning, WebSocket message batching/compression, app performance monitoring, error tracking/alerting, health metrics dashboards. | Spec 12.x, 13.1/13.2 | [#41](https://github.com/talvola/generic_poker/issues/41) |
+| 10.6 | Admin interface — remaining modules beyond the shipped dashboard/user/table/variant management (BACKLOG 4.6): financial/transaction oversight, system-health & performance dashboard, reporting/analytics with scheduled reports + data export. | Spec 14.4/14.5/14.6 | [#42](https://github.com/talvola/generic_poker/issues/42) |
+| 10.7 | Docker containerization + deployment automation (DB migration/backup, health-check endpoints). Currently deploys via Render blueprint, not Docker. | Spec 15.2 | [#43](https://github.com/talvola/generic_poker/issues/43) |
 
 > Note: the original Kiro spec also listed many tasks as "[ ]" that are in fact **done** — bot
 > player system, advanced player actions (discard/expose/pass/separate/declare/choose), next-hand
@@ -731,12 +737,12 @@ foundation; tournaments layer lifecycle + payout logic on top.
 
 | # | Task | Difficulty | Status |
 |---|------|------------|--------|
-| 11.1 | Tournament core model: `Tournament` entity (buy-in, starting stack, blind schedule, payout structure, state machine registering→running→finished), registration/unregistration, bankroll debit on entry | Medium | TODO |
-| 11.2 | Blind level scheduler: timed blind/ante escalation driving the engine's forced-bet amounts between hands; on-screen level + next-level countdown | Medium | TODO |
-| 11.3 | Single-table sit-and-go: auto-start when N players registered, play down to a winner, elimination on bust (no rebuy), payout top finishers from prize pool, bots can fill | Medium | TODO |
-| 11.4 | Multi-table tournaments: table balancing (move players as tables shrink), table breaking, hand-for-hand near the bubble, final-table consolidation | Hard | TODO |
-| 11.5 | Tournament lobby UI: upcoming/running tournament list, registration flow, live standings/payouts view, blind-structure display | Medium | TODO |
-| 11.6 | Tournament extras: rebuys/add-ons, late registration, satellites, per-tournament variant or mixed-game rotation (reuse 9.3 mix configs) | Hard | TODO |
+| 11.1 | Tournament core model: `Tournament` entity (buy-in, starting stack, blind schedule, payout structure, state machine registering→running→finished), registration/unregistration, bankroll debit on entry | Medium | [#44](https://github.com/talvola/generic_poker/issues/44) |
+| 11.2 | Blind level scheduler: timed blind/ante escalation driving the engine's forced-bet amounts between hands; on-screen level + next-level countdown | Medium | [#45](https://github.com/talvola/generic_poker/issues/45) |
+| 11.3 | Single-table sit-and-go: auto-start when N players registered, play down to a winner, elimination on bust (no rebuy), payout top finishers from prize pool, bots can fill | Medium | [#46](https://github.com/talvola/generic_poker/issues/46) |
+| 11.4 | Multi-table tournaments: table balancing (move players as tables shrink), table breaking, hand-for-hand near the bubble, final-table consolidation | Hard | [#47](https://github.com/talvola/generic_poker/issues/47) |
+| 11.5 | Tournament lobby UI: upcoming/running tournament list, registration flow, live standings/payouts view, blind-structure display | Medium | [#48](https://github.com/talvola/generic_poker/issues/48) |
+| 11.6 | Tournament extras: rebuys/add-ons, late registration, satellites, per-tournament variant or mixed-game rotation (reuse 9.3 mix configs) | Hard | [#49](https://github.com/talvola/generic_poker/issues/49) |
 
 Design notes for whoever starts this:
 - Elimination conflicts with the cash-game assumption that a busted player can rebuy or leave

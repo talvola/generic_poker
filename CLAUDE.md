@@ -661,13 +661,14 @@ pip-audit                        # Check for dependency vulnerabilities
 
 | Document | Purpose |
 |----------|---------|
-| `docs/STATUS.md` | **Current project status**, open bugs, service quality, testing state |
-| `docs/BACKLOG.md` | **Prioritized task backlog** organized in phases |
+| **[GitHub Issues](https://github.com/talvola/generic_poker/issues)** | **Source of truth for open bugs and features.** `gh issue list` |
+| `docs/STATUS.md` | Historical: architecture reference + catalogue of bugs already fixed |
+| `docs/BACKLOG.md` | Historical: what was built, phase by phase, with design rationale |
 | `docs/GAME_VALIDATION.md` | **Game config feature matrix**, variant testing strategy, new game workflow |
-| `docs/UX_TEST_FINDINGS.md` | UX test report (2026-06) — open UI issues for testers |
+| `docs/UX_TEST_FINDINGS.md` | Historical: UX test report (2026-06), all findings fixed |
 | `docs/MONTE_CARLO_BOT_DESIGN.md` | MC bot design, audit findings, phase plan |
 | `DEVELOPMENT.md` | Development workflow, debugging tips |
 | `data/schemas/README.md` | Complete JSON config schema documentation |
 | `src/generic_poker/*-readme.md` | Component-specific API documentation |
 
-> **Note:** The original Kiro IDE spec (`.kiro/`) was removed 2026-06-26 — its open items were migrated to `docs/BACKLOG.md` Phase 10 and its requirements/design docs archived under `docs/archive/`. The current source of truth for status and tasks is `docs/STATUS.md` and `docs/BACKLOG.md`.
+> **Note:** On 2026-09-04 every still-open item in `docs/` was filed as a GitHub Issue (#16-#49) and the docs were re-framed as historical record; issue numbers are noted inline next to the migrated rows. File new work with `gh issue create`, not in `docs/BACKLOG.md`. The original Kiro IDE spec (`.kiro/`) was removed 2026-06-26 — its long-tail items became BACKLOG Phase 10 (now issues #37-#43) and its requirements/design docs are archived under `docs/archive/`.

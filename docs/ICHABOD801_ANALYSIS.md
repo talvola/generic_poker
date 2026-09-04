@@ -1,5 +1,9 @@
 # New Poker Variants Analysis
 
+> **Reference analysis — not a task list.**
+> Config-only variants from this analysis have been added (library is at 310 configs);
+> the engine features it identified are tracked in [GitHub Issues](https://github.com/talvola/generic_poker/issues).
+
 **Sources:**
 - https://www.ichabod801.com/poker_db/
 - https://patents.google.com/patent/US20060125180A1 (3-card hybrid patent)

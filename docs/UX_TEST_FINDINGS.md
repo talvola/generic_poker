@@ -1,5 +1,9 @@
 # UX Test Findings — New-Player Journey (2026-06-09)
 
+> **Historical — every finding in this report is fixed.** Kept as a record of the
+> new-player journey and what it turned up. Later UX work is tracked in
+> [GitHub Issues](https://github.com/talvola/generic_poker/issues) (see the `ux` label), not here.
+
 Method: drove the local site (same code as Render) in a real Chromium browser via Playwright
 at iPad Air dimensions (1180×820 landscape, 820×1180 portrait), acting as a brand-new player:
 register → lobby → read rules → create tables → buy in → play hands with bots → leave.

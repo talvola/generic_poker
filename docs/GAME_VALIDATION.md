@@ -1,5 +1,10 @@
 # Game Configuration Validation & New Variant Workflow
 
+> **Open work from this document is tracked in [GitHub Issues](https://github.com/talvola/generic_poker/issues).**
+> Missing-test coverage is [#36](https://github.com/talvola/generic_poker/issues/36); the variant-authoring skills are [#35](https://github.com/talvola/generic_poker/issues/35);
+> the unimplemented-feature items below are [#16](https://github.com/talvola/generic_poker/issues/16), [#17](https://github.com/talvola/generic_poker/issues/17) and [#18](https://github.com/talvola/generic_poker/issues/18).
+> The feature matrix and the workflows below are still current reference material.
+
 > How to validate that game configs work, assess whether a new game can be implemented,
 > and implement new variants.
 > Last updated: 2026-02-23
@@ -63,10 +68,15 @@ The game engine supports 12+ gameplay action types defined in the JSON schema. H
 
 These are defined in the JSON schema (`data/schemas/game.json`) but not implemented in the engine:
 
-1. **`separate.hand_comparison`** - Compare separated hands for ordering. No games use this.
-2. **`all_exposed` / `any_exposed` / `none_exposed` conditions** - `game.py:531` has placeholder returning True. No games use these.
-3. **Protection options** - Schema allows per-card protection during draw. Structure recognized but not enforced.
-4. **Player-scoped wild cards** - `scope: "player"` in schema but evaluator doesn't apply per-player.
+> Re-verified against the code 2026-09-04; two rows were stale and are corrected below.
+
+1. ~~**`separate.hand_comparison`**~~ - **implemented** (`player_action_handler.py:1152`,
+   with a re-arrangement retry loop). Used by `outhouse.json` and `cowpie.json`.
+2. **`all_exposed` / `any_exposed` / `none_exposed` conditions** - `game.py:591` has a placeholder returning True ([#16](https://github.com/talvola/generic_poker/issues/16)). The separate `conditional_state` deal path (`game.py:854`) *is* implemented. No config uses the broken path.
+3. ~~**Protection options**~~ - **implemented** (`PROTECTION_DECISION` state,
+   `DECLINE_PROTECTION` action, `player_action_handler._handle_protection_action`).
+4. **Player-scoped wild cards** - `scope: "player"` is read at `game.py:974` but only honored in the `last_community_card` branch ([#17](https://github.com/talvola/generic_poker/issues/17)). `low_hole_wild.json` and `texas_reach_around.json` declare it.
+5. **Wild-card `match: "suit"`** - accepted by the schema, no-op in the engine ([#18](https://github.com/talvola/generic_poker/issues/18)).
 
 ---
 
