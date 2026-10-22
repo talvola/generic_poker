@@ -468,6 +468,10 @@ added to a model needs a line in `migrate_schema.py`'s `ADD_COLUMNS`** — `crea
 creates missing tables but NEVER adds a column to an existing one. Prefer editing that
 script over adding inline python to `build.sh` (it used to hold 130 lines of it).
 
+`build.sh` first installs pip from `requirements-bootstrap.txt` (hash-pinned; Render's own pip is the one
+bundled with Python, 23.0.1) and fails the build unless the `emsign-guard:` check passes (#50). Bump pip by
+updating BOTH hashes from PyPI's JSON; the guard line in the build log is the deploy evidence.
+
 **Neon specifics that bite:**
 - `DATABASE_URL` is the **`-pooler`** host (PgBouncer, transaction mode): no session-level
   `pg_advisory_lock`, no `LISTEN/NOTIFY`, no session `SET` persistence. Nothing here uses
@@ -479,6 +483,9 @@ script over adding inline python to `build.sh` (it used to hold 130 lines of it)
   `wsgi.py` calls `psycogreen.eventlet.patch_psycopg()` — without it every query blocks the
   single eventlet worker (and therefore every other player) for the whole round trip. Keep
   that call above the `create_app` import.
+- TLS is verified in `_engine_options()` connect_args (`sslmode=verify-full`, `channel_binding=require`,
+  `sslrootcert=certifi.where()`, overriding the URL's `sslmode=require`). **Never `sslrootcert=system`**:
+  psycopg2-binary's bundled OpenSSL has a build-machine OPENSSLDIR, so it finds no roots and every connect fails.
 - Usage via the Neon MCP: `list_projects` → `quota_reset_at`, `describe_project` →
   `data_transfer_bytes`. **Those counters lag by hours** — an early 0 means "not aggregated
   yet", not "no usage". Quota (300 CU-h, 500 GB egress/mo, Launch plan) is SHARED with the
@@ -579,6 +586,10 @@ sends `player_busted` to that user (rebuy / reload / leave modal). CSS gotcha: `
 `/v1/services/<id>/deploys` explicitly. Always use the single-key form
 `/env-vars/<KEY>`; the array form replaces ALL vars and would rotate `SECRET_KEY`.
 
+Watching a deploy: use the Monitor tool polling `render deploys list` (a backgrounded Bash `sleep` loop exits
+early with no output), and report the deploy id + commit from real output only. Prod `DATABASE_URL`: GET the
+single-key `/env-vars/DATABASE_URL` and print only host + query params, never credentials.
+
 **Render CLI:**
 ```bash
 # Install: download from https://github.com/render-oss/cli/releases
@@ -591,6 +602,8 @@ render services --output json                              # List all services
 render deploys list srv-d6b0ik86fj8s73bppftg --output json # List deploys
 render deploys create srv-d6b0ik86fj8s73bppftg             # Trigger deploy
 render logs -r srv-d6b0ik86fj8s73bppftg --limit 100 --output json  # View logs
+render logs -r srv-d6b0ik86fj8s73bppftg --type build --text "<str>" --output json  # grep build logs (kept 30 days only)
+# --output json emits CONCATENATED objects, not a list; parse with json.JSONDecoder().raw_decode in a loop
 ```
 
 **IDs:**
