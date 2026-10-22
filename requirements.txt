@@ -9,6 +9,7 @@ Werkzeug==3.1.5
 # Database
 SQLAlchemy==2.0.42
 psycopg2-binary==2.9.11
+certifi==2026.10.19  # sslrootcert for Neon (config.py); this release drops emSign ECC G3
 
 # Auth
 bcrypt==4.3.0

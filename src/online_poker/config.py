@@ -2,6 +2,8 @@
 
 import os
 
+import certifi
+
 
 def _fix_database_url(url: str) -> str:
     """Fix Render's postgres:// URL to postgresql:// for SQLAlchemy 2.0+."""
@@ -32,6 +34,12 @@ def _engine_options(url: str) -> dict:
             "keepalives_idle": 30,
             "keepalives_interval": 10,
             "keepalives_count": 3,
+            # Verify Neon's certificate (the URL's sslmode=require accepts any cert).
+            # psycopg2-binary's bundled OpenSSL can't find the OS store, so
+            # sslrootcert=system fails; point it at certifi's bundle explicitly.
+            "sslmode": "verify-full",
+            "sslrootcert": certifi.where(),
+            "channel_binding": "require",
         },
     }
 
