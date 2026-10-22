@@ -28,6 +28,7 @@ bidict==0.23.1
 # Production server
 gunicorn==25.1.0
 eventlet==0.40.4
+greenlet==3.2.3  # eventlet is sensitive to greenlet minors; unpinned it would float to 3.5.x
 
 # Async DB (psycopg2 must cooperate with eventlet — see wsgi.py)
 psycogreen==1.0.2

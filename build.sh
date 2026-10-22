@@ -2,6 +2,24 @@
 # Render build script
 set -o errexit
 
+# emSign ECC Root CA - G3 compromise (2026-10-20): upgrade pip hash-verified, then make
+# every later TLS handshake use only pip's fixed bundle (Render's Debian 12 store is unverified).
+pip install --require-hashes -r requirements-bootstrap.txt
+export SSL_CERT_FILE="$(python -c 'from pip._vendor import certifi; print(certifi.where())')"
+export SSL_CERT_DIR=/nonexistent
+python - <<'EOF'
+import os, ssl, sys, pip
+from pip._vendor import certifi
+G3 = "emSign ECC Root CA - G3"
+bad = [p for p in {certifi.where(), os.environ["SSL_CERT_FILE"]} if G3 in open(p).read()]
+if os.path.exists(os.environ["SSL_CERT_DIR"]):
+    bad.append(os.environ["SSL_CERT_DIR"])
+if tuple(int(x) for x in pip.__version__.split(".")[:3]) < (26, 2, 2):
+    bad.append(f"pip {pip.__version__}")
+print(f"emsign-guard: pip {pip.__version__} paths={ssl.get_default_verify_paths()} bad={bad}")
+sys.exit(1 if bad else 0)
+EOF
+
 pip install -r requirements.txt
 pip install -e .
 
